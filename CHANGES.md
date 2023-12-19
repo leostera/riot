@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
 * Redo packaging to expose a single public library: `riot`
+=======
+* Fix issue with schedulers busy-waiting
+* Switch to `poll` to support kqueue on macOS
+>>>>>>> 64e925f (feat: io scheduler and kqueue support)
 
 ## 0.0.5
 
