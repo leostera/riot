@@ -22,7 +22,7 @@ type write = [ `Wrote of int | op ]
 let create () =
   {
     poll = Poll.create ();
-    poll_timeout = Poll.Timeout.immediate;
+    poll_timeout = Poll.Timeout.After 1_000L;
     poll_idx = 0;
     fds = Dashmap.create 1024;
     procs = Dashmap.create 1024;
