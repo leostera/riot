@@ -55,24 +55,17 @@ let rec accept ?(timeout = Infinity) (socket : Socket.listen_socket) =
 let controlling_process _socket ~new_owner:_ = Ok ()
 
 let rec receive ?(timeout = Infinity) ~len socket =
-  let bytes = Bytes.create len in
-  match Io.read socket bytes 0 len with
+  let buf = Bigstringaf.create len in
+  match Io.read ~fd:socket ~buf with
   | exception Fd.(Already_closed _) -> Error `Closed
   | `Abort reason -> Error (`Unix_error reason)
   | `Retry -> syscall "read" `r socket @@ receive ~timeout ~len
   | `Read 0 -> Error `Closed
-  | `Read len ->
-      let data = Bigstringaf.create len in
-      Bigstringaf.blit_from_bytes bytes ~src_off:0 data ~dst_off:0 ~len;
-      Ok data
+  | `Read _len -> Ok buf
 
 let rec send data socket =
   Logger.debug (fun f -> f "sending: %S" (Bigstringaf.to_string data));
-  let off = 0 in
-  let len = Bigstringaf.length data in
-  let bytes = Bytes.create len in
-  Bigstringaf.blit_to_bytes data ~src_off:off bytes ~dst_off:0 ~len;
-  match Io.write socket bytes off len with
+  match Io.write ~fd:socket ~data with
   | exception Fd.(Already_closed _) -> Error `Closed
   | `Abort reason -> Error (`Unix_error reason)
   | `Retry ->

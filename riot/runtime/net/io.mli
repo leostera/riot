@@ -38,5 +38,5 @@ val connect :
   [> `Abort of Unix.error | `Connected of Fd.t | `In_progress of Fd.t | `Retry ]
 
 val accept : t -> Fd.t -> accept
-val read : Fd.t -> bytes -> int -> int -> read
-val write : Fd.t -> bytes -> int -> int -> write
+val read : fd:Fd.t -> buf:Bigstringaf.t -> read
+val write : fd:Fd.t -> data:Bigstringaf.t -> write

@@ -178,16 +178,16 @@ let accept (_t : t) (socket : Fd.t) : accept =
   | exception Unix.(Unix_error ((EINTR | EAGAIN | EWOULDBLOCK), _, _)) -> `Retry
   | exception Unix.(Unix_error (reason, _, _)) -> `Abort reason
 
-let read (fd : Fd.t) buf off len : read =
+let read ~fd ~buf : read =
   Fd.use ~op_name:"read" fd @@ fun fd ->
-  match Unix.read fd buf off len with
+  match Io_vec.readv fd buf with
   | len -> `Read len
   | exception Unix.(Unix_error ((EINTR | EAGAIN | EWOULDBLOCK), _, _)) -> `Retry
   | exception Unix.(Unix_error (reason, _, _)) -> `Abort reason
 
-let write (fd : Fd.t) buf off len : write =
+let write ~fd ~data : write =
   Fd.use ~op_name:"write" fd @@ fun fd ->
-  match Unix.write fd buf off len with
+  match Io_vec.writev fd data with
   | len -> `Wrote len
   | exception Unix.(Unix_error ((EINTR | EAGAIN | EWOULDBLOCK), _, _)) -> `Retry
   | exception Unix.(Unix_error (reason, _, _)) -> `Abort reason
