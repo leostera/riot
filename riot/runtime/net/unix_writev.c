@@ -9,7 +9,7 @@
 CAMLprim value riot_unix_writev(value fd, value iovs, value count) {
     CAMLparam3(fd, iovs, count);
 
-    int len = Int_val(count);
+    size_t len = Int_val(count);
     struct iovec c_iovs[len];
 
     for (int i = 0; i < len; i++) {
@@ -18,8 +18,8 @@ CAMLprim value riot_unix_writev(value fd, value iovs, value count) {
         c_iovs[i].iov_len = Int_val(Field(iov, 1));
     }
 
-    int ret = writev(Int_val(fd), c_iovs, len);
+    size_t ret = writev(Int_val(fd), c_iovs, len);
     if (ret == -1) caml_failwith("writev failed");
 
-    CAMLreturn(Val_int(ret));
+    CAMLreturn(Val_long(ret));
 }

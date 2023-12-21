@@ -54,12 +54,11 @@ let rec accept ?(timeout = Infinity) (socket : Socket.listen_socket) =
 
 let controlling_process _socket ~new_owner:_ = Ok ()
 
-let rec receive ?(timeout = Infinity) ~len socket =
-  let buf = Bigstringaf.create len in
+let rec receive ?(timeout = Infinity) ~buf socket =
   match Io.read ~fd:socket ~buf with
   | exception Fd.(Already_closed _) -> Error `Closed
   | `Abort reason -> Error (`Unix_error reason)
-  | `Retry -> syscall "read" `r socket @@ receive ~timeout ~len
+  | `Retry -> syscall "read" `r socket @@ receive ~timeout ~buf
   | `Read 0 -> Error `Closed
   | `Read _len -> Ok buf
 
