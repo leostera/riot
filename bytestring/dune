@@ -1,0 +1,43 @@
+(library
+ (public_name bytestring)
+ (modules bytestring)
+ (libraries cstruct uutf))
+
+(library
+ (package bytestring)
+ (name bytepattern)
+ (modules bytepattern)
+ (preprocess
+  (pps sedlex.ppx ppxlib.metaquot))
+ (libraries compiler-libs ppxlib sedlex bytestring spices))
+
+(library
+ (public_name bytestring.ppx)
+ (name bytestring_ppx)
+ (modules ppx_bytestring)
+ (kind ppx_rewriter)
+ (libraries compiler-libs ppxlib bytepattern bytestring)
+ (preprocess
+  (pps ppxlib.metaquot)))
+
+(test
+ (package bytestring)
+ (name bytepattern_test)
+ (modules bytepattern_test)
+ (preprocess
+  (pps ppxlib.metaquot))
+ (libraries bytepattern))
+
+(executable
+ (name sub_bench)
+ (modules sub_bench)
+ (libraries bytestring scarab))
+
+(executable
+ (name concat_bench)
+ (modules concat_bench)
+ (libraries bytestring scarab))
+
+(cram
+ (deps
+  (package bytestring)))
