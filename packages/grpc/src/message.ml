@@ -2,6 +2,11 @@ open Std
 
 type t = { compressed : bool; payload : bytes }
 
+type decode_error =
+  | Incomplete_header of { have : int }
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+  | Incomplete_message of { need : int; have : int }
+
 (** Default maximum message size: 4MB
     This prevents DoS attacks while being large enough for most use cases *)
 let default_max_message_size = 4 * 1024 * 1024
@@ -9,7 +14,7 @@ let default_max_message_size = 4 * 1024 * 1024
 let validate_size size ~max_size =
   let limit = Option.value max_size ~default:default_max_message_size in
   if size > limit then
-    Error (format "Message size %d exceeds maximum %d" size limit)
+    Error (Message_size_exceeds_maximum { size; max_size = limit })
   else Ok ()
 
 let encode ~compressed ~payload =
@@ -31,7 +36,9 @@ let encode ~compressed ~payload =
   frame
 
 let peek_header data =
-  if Bytes.length data < 5 then Error "Incomplete message header (need 5 bytes)"
+  let have = Bytes.length data in
+  if have < 5 then
+    Error (Incomplete_header { have })
   else
     let compressed = Char.code (Bytes.get data 0) <> 0 in
 
@@ -48,8 +55,9 @@ let peek_header data =
 let decode data =
   let ( let* ) = Result.and_then in
 
-  if Bytes.length data < 5 then
-    Error "Incomplete message header (need at least 5 bytes)"
+  let have = Bytes.length data in
+  if have < 5 then
+    Error (Incomplete_header { have })
   else
     let* (compressed, length) = peek_header data in
 
@@ -57,11 +65,9 @@ let decode data =
     let* () = validate_size length ~max_size:None in
 
     let total_length = 5 + length in
-    if Bytes.length data < total_length then
-      Error
-        (format "Incomplete message: need %d bytes, have %d" total_length
-           (Bytes.length data))
+    if have < total_length then
+      Error (Incomplete_message { need = total_length; have })
     else
       let payload = Bytes.sub data 5 length in
-      let remaining = Bytes.sub data total_length (Bytes.length data - total_length) in
+      let remaining = Bytes.sub data total_length (have - total_length) in
       Ok ({ compressed; payload }, remaining)

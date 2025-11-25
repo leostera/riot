@@ -2,8 +2,8 @@ open Std
 
 type config = {
   max_message_size : int;
-  connect_timeout : float option;
-  default_timeout : Grpc.Metadata.timeout option;
+  connect_timeout : Time.Duration.t option;
+  default_timeout : Time.Duration.t option;
   user_agent : string;
 }
 
@@ -15,17 +15,49 @@ let default_config =
     user_agent = "Riot-Blink-GRPC/0.1.0";
   }
 
+type http2_protocol_error =
+  | Missing_preface
+  | Settings_not_acked
+  | Invalid_stream_state
+  | Flow_control_error
+  | Stream_closed
+
+type hpack_error =
+  | Invalid_header_index of int
+  | Invalid_name_index of int
+  | Unsupported_encoding
+  | Invalid_decoder_state
+  | Decode_failed of string
+
+type message_error =
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+  | Invalid_compression_flag of int
+  | Invalid_message_format of string
+
+type invalid_response_error =
+  | No_message_in_unary_response
+  | Multiple_messages_in_unary_response
+  | Multiple_messages_in_client_streaming_response
+  | No_message_in_client_streaming_response
+  | Not_awaiting_response
+  | No_active_stream
+  | Send_side_closed
+  | No_active_streaming_call
+  | Cannot_send_on_non_streaming_call
+  | Not_in_client_streaming_state
+  | Not_in_bidirectional_streaming_state
+
 type error =
   | Connection_failed of Net.error
   | Connection_closed
   | Http2_frame_error of Http.Http2.Parser_reader.parse_error
-  | Http2_protocol_error of string
-  | Hpack_decode_error of string
-  | Message_decode_error of string
+  | Http2_protocol_error of http2_protocol_error
+  | Hpack_decode_error of hpack_error
+  | Message_decode_error of message_error
   | Protobuf_decode_error of Protobuf.WireFormat.decode_error
   | GRPC_status of Grpc.Status.t * string
   | Timeout
-  | Invalid_response of string
+  | Invalid_response of invalid_response_error
 
 type 'a response = {
   headers : Grpc.Metadata.t;
@@ -221,6 +253,30 @@ let next_stream_id conn =
   Cell.set conn.next_stream_id (id + 2);  (* Client uses odd IDs *)
   id
 
+(** Convert Time.Duration.t to Grpc.Metadata.timeout *)
+let duration_to_grpc_timeout (duration : Time.Duration.t) : Grpc.Metadata.timeout =
+  let total_millis = Time.Duration.to_millis duration in
+  if total_millis < 1000 then
+    { value = total_millis; unit = `Milliseconds }
+  else
+    let total_secs = Time.Duration.to_secs duration in
+    if total_secs < 60 then
+      { value = total_secs; unit = `Seconds }
+    else if total_secs < 3600 then
+      { value = total_secs / 60; unit = `Minutes }
+    else
+      { value = total_secs / 3600; unit = `Hours }
+
+(** Convert Grpc.Message.decode_error to message_error *)
+let message_decode_error_to_message_error (e : Grpc.Message.decode_error) : message_error =
+  match e with
+  | Incomplete_header { have } ->
+      Invalid_message_format (format "Incomplete message header: have %d bytes, need 5" have)
+  | Message_size_exceeds_maximum { size; max_size } ->
+      Message_size_exceeds_maximum { size; max_size }
+  | Incomplete_message { need; have } ->
+      Invalid_message_format (format "Incomplete message: need %d bytes, have %d" need have)
+
 let call_unary conn ~service ~method_ ~request ?(timeout = conn.config.default_timeout)
     ?(metadata = []) () =
   let ( let* ) = Result.and_then in
@@ -243,7 +299,7 @@ let call_unary conn ~service ~method_ ~request ?(timeout = conn.config.default_t
 
   let headers =
     match timeout with
-    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | Some t -> headers @ [ Grpc.Metadata.timeout (duration_to_grpc_timeout t) ]
     | None -> headers
   in
 
@@ -326,7 +382,7 @@ let call_unary conn ~service ~method_ ~request ?(timeout = conn.config.default_t
             let* hdrs =
               match Http.Http2.Hpack.decode hpack_decoder header_bytes with
               | Ok hdrs -> Ok hdrs
-              | Error e -> Error (Hpack_decode_error e)
+              | Error e -> Error (Hpack_decode_error (Decode_failed e))
             in
 
             (* Check if this is trailers (has END_STREAM) or initial headers *)
@@ -357,7 +413,7 @@ let call_unary conn ~service ~method_ ~request ?(timeout = conn.config.default_t
               let* grpc_msg =
                 match Grpc.Message.decode data_bytes with
                 | Ok (msg, _remaining) -> Ok msg
-                | Error e -> Error (Message_decode_error e)
+                | Error e -> Error (Message_decode_error (message_decode_error_to_message_error e))
               in
 
               (* Decode protobuf payload *)
@@ -414,12 +470,12 @@ let call_unary conn ~service ~method_ ~request ?(timeout = conn.config.default_t
               Cell.set conn.state Connected;
               Ok { headers; message = msg; trailers; status = status_code }
           | [] ->
-              Error (Invalid_response "No message in unary response")
+              Error (Invalid_response No_message_in_unary_response)
           | _ ->
-              Error (Invalid_response "Multiple messages in unary response"))
+              Error (Invalid_response Multiple_messages_in_unary_response))
 
     | Connected ->
-        Error (Invalid_response "Not awaiting response")
+        Error (Invalid_response Not_awaiting_response)
     | Closed ->
         Error Connection_closed
   in
@@ -447,7 +503,7 @@ let call_server_streaming conn ~service ~method_ ~request ?timeout ?metadata () 
 
   let headers =
     match timeout with
-    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | Some t -> headers @ [ Grpc.Metadata.timeout (duration_to_grpc_timeout t) ]
     | None -> headers
   in
 
@@ -537,7 +593,7 @@ let receive_stream conn =
           let* hdrs =
             match Http.Http2.Hpack.decode hpack_decoder header_bytes with
             | Ok hdrs -> Ok hdrs
-            | Error e -> Error (Hpack_decode_error e)
+            | Error e -> Error (Hpack_decode_error (Decode_failed e))
           in
 
           if frame.flags.end_stream then (
@@ -594,7 +650,7 @@ let receive_stream conn =
             let* grpc_msg =
               match Grpc.Message.decode data_bytes with
               | Ok (msg, _remaining) -> Ok msg
-              | Error e -> Error (Message_decode_error e)
+              | Error e -> Error (Message_decode_error (Invalid_message_format e))
             in
 
             (* Decode protobuf *)
@@ -629,7 +685,7 @@ let receive_stream conn =
           })
 
   | Connected ->
-      Error (Invalid_response "No active stream")
+      Error (Invalid_response No_active_stream)
   | Closed ->
       Error Connection_closed
 
@@ -654,7 +710,7 @@ let call_client_streaming conn ~service ~method_ ?timeout ?metadata () =
 
   let headers =
     match timeout with
-    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | Some t -> headers @ [ Grpc.Metadata.timeout (duration_to_grpc_timeout t) ]
     | None -> headers
   in
 
@@ -726,11 +782,11 @@ let send_message conn message =
       send_frame conn data_frame
 
   | StreamingClient _ | StreamingBidi _ ->
-      Error (Invalid_response "Send side already closed")
+      Error (Invalid_response Send_side_closed)
   | Connected ->
-      Error (Invalid_response "No active streaming call")
+      Error (Invalid_response No_active_streaming_call)
   | AwaitingResponse _ ->
-      Error (Invalid_response "Cannot send on non-streaming call")
+      Error (Invalid_response Cannot_send_on_non_streaming_call)
   | Closed ->
       Error Connection_closed
 
@@ -772,7 +828,7 @@ let finish_client_stream conn =
               let* hdrs =
                 match Http.Http2.Hpack.decode hpack_decoder header_bytes with
                 | Ok hdrs -> Ok hdrs
-                | Error e -> Error (Hpack_decode_error e)
+                | Error e -> Error (Hpack_decode_error (Decode_failed e))
               in
 
               if frame.flags.end_stream then (
@@ -800,7 +856,7 @@ let finish_client_stream conn =
                 let* grpc_msg =
                   match Grpc.Message.decode data_bytes with
                   | Ok (msg, _remaining) -> Ok msg
-                  | Error e -> Error (Message_decode_error e)
+                  | Error e -> Error (Message_decode_error (Invalid_message_format e))
                 in
 
                 let* protobuf_msg =
@@ -852,17 +908,17 @@ let finish_client_stream conn =
                 Cell.set conn.state Connected;
                 Ok { headers; message = msg; trailers; status = status_code }
             | [] ->
-                Error (Invalid_response "No message in client streaming response")
+                Error (Invalid_response No_message_in_client_streaming_response)
             | _ ->
-                Error (Invalid_response "Multiple messages in client streaming response"))
+                Error (Invalid_response Multiple_messages_in_client_streaming_response))
       in
 
       receive_response ()
 
   | StreamingClient _ ->
-      Error (Invalid_response "Send side already closed")
+      Error (Invalid_response Send_side_closed)
   | _ ->
-      Error (Invalid_response "Not in client streaming state")
+      Error (Invalid_response Not_in_client_streaming_state)
 
 let call_bidi_streaming conn ~service ~method_ ?timeout ?metadata () =
   let ( let* ) = Result.and_then in
@@ -885,7 +941,7 @@ let call_bidi_streaming conn ~service ~method_ ?timeout ?metadata () =
 
   let headers =
     match timeout with
-    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | Some t -> headers @ [ Grpc.Metadata.timeout (duration_to_grpc_timeout t) ]
     | None -> headers
   in
 
@@ -954,7 +1010,7 @@ let receive_message conn =
           let* hdrs =
             match Http.Http2.Hpack.decode hpack_decoder header_bytes with
             | Ok hdrs -> Ok hdrs
-            | Error e -> Error (Hpack_decode_error e)
+            | Error e -> Error (Hpack_decode_error (Decode_failed e))
           in
 
           if frame.flags.end_stream then (
@@ -995,7 +1051,7 @@ let receive_message conn =
             let* grpc_msg =
               match Grpc.Message.decode data_bytes with
               | Ok (msg, _remaining) -> Ok msg
-              | Error e -> Error (Message_decode_error e)
+              | Error e -> Error (Message_decode_error (Invalid_message_format e))
             in
 
             let* protobuf_msg =
@@ -1020,7 +1076,7 @@ let receive_message conn =
       (* Stream already complete *)
       Ok None
   | _ ->
-      Error (Invalid_response "Not in bidirectional streaming state")
+      Error (Invalid_response Not_in_bidirectional_streaming_state)
 
 let close_send conn =
   let ( let* ) = Result.and_then in
@@ -1043,9 +1099,9 @@ let close_send conn =
       Ok ()
 
   | StreamingBidi _ ->
-      Error (Invalid_response "Send side already closed")
+      Error (Invalid_response Send_side_closed)
   | _ ->
-      Error (Invalid_response "Not in bidirectional streaming state")
+      Error (Invalid_response Not_in_bidirectional_streaming_state)
 
 let finish_bidi_stream conn =
   let ( let* ) = Result.and_then in
@@ -1071,7 +1127,7 @@ let finish_bidi_stream conn =
               let* hdrs =
                 match Http.Http2.Hpack.decode hpack_decoder header_bytes with
                 | Ok hdrs -> Ok hdrs
-                | Error e -> Error (Hpack_decode_error e)
+                | Error e -> Error (Hpack_decode_error (Decode_failed e))
               in
 
               Cell.set state_data.trailers hdrs;
@@ -1112,7 +1168,7 @@ let finish_bidi_stream conn =
       Ok (trailers, status))
 
   | _ ->
-      Error (Invalid_response "Not in bidirectional streaming state")
+      Error (Invalid_response Not_in_bidirectional_streaming_state)
 
 let close conn =
   Cell.set conn.state Closed;

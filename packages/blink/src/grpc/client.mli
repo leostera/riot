@@ -12,26 +12,63 @@ type t
 (** Connection configuration *)
 type config = {
   max_message_size : int;  (** Maximum message size (default: 4MB) *)
-  connect_timeout : float option;  (** Connection timeout in seconds *)
-  default_timeout : Grpc.Metadata.timeout option;  (** Default call timeout *)
+  connect_timeout : Time.Duration.t option;  (** Connection timeout *)
+  default_timeout : Time.Duration.t option;  (** Default call timeout *)
   user_agent : string;  (** User agent header *)
 }
 
 (** Default configuration *)
 val default_config : config
 
+(** HTTP/2 protocol errors *)
+type http2_protocol_error =
+  | Missing_preface  (** Missing or invalid HTTP/2 connection preface *)
+  | Settings_not_acked  (** SETTINGS frame not acknowledged *)
+  | Invalid_stream_state  (** Operation invalid for current stream state *)
+  | Flow_control_error  (** Flow control window exceeded *)
+  | Stream_closed  (** Operation on closed stream *)
+
+(** HPACK decoding errors *)
+type hpack_error =
+  | Invalid_header_index of int  (** Invalid dynamic table index *)
+  | Invalid_name_index of int  (** Invalid static table name index *)
+  | Unsupported_encoding  (** Unsupported huffman or encoding *)
+  | Invalid_decoder_state  (** Decoder in invalid state *)
+  | Decode_failed of string  (** Generic decode failure with details *)
+
+(** gRPC message decoding errors *)
+type message_error =
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+      (** Message exceeds configured maximum *)
+  | Invalid_compression_flag of int  (** Unknown compression flag *)
+  | Invalid_message_format of string  (** Malformed message with details *)
+
+(** Invalid response errors *)
+type invalid_response_error =
+  | No_message_in_unary_response  (** Unary call completed without message *)
+  | Multiple_messages_in_unary_response  (** Unary call received >1 messages *)
+  | Multiple_messages_in_client_streaming_response  (** Client streaming received >1 response messages *)
+  | No_message_in_client_streaming_response  (** Client streaming received no response *)
+  | Not_awaiting_response  (** Received response when not expecting one *)
+  | No_active_stream  (** Operation requires active stream *)
+  | Send_side_closed  (** Cannot send after closing send side *)
+  | No_active_streaming_call  (** No streaming call in progress *)
+  | Cannot_send_on_non_streaming_call  (** Send attempted on unary call *)
+  | Not_in_client_streaming_state  (** Operation invalid for current state *)
+  | Not_in_bidirectional_streaming_state  (** Operation invalid for current state *)
+
 (** Client errors *)
 type error =
   | Connection_failed of Net.error  (** TCP connection failed *)
   | Connection_closed  (** Connection closed unexpectedly *)
   | Http2_frame_error of Http.Http2.Parser_reader.parse_error  (** HTTP/2 frame parsing error *)
-  | Http2_protocol_error of string  (** HTTP/2 protocol violation *)
-  | Hpack_decode_error of string  (** HPACK decoding error *)
-  | Message_decode_error of string  (** gRPC message decoding error *)
+  | Http2_protocol_error of http2_protocol_error  (** HTTP/2 protocol violation *)
+  | Hpack_decode_error of hpack_error  (** HPACK decoding error *)
+  | Message_decode_error of message_error  (** gRPC message decoding error *)
   | Protobuf_decode_error of Protobuf.WireFormat.decode_error  (** Protobuf decoding error *)
   | GRPC_status of Grpc.Status.t * string  (** gRPC status from server *)
   | Timeout  (** Call timeout exceeded *)
-  | Invalid_response of string  (** Invalid response format *)
+  | Invalid_response of invalid_response_error  (** Invalid response *)
 
 (** Call response for unary calls *)
 type 'a response = {
@@ -73,7 +110,7 @@ val call_unary :
   service:string ->
   method_:string ->
   request:Protobuf.WireFormat.t ->
-  ?timeout:Grpc.Metadata.timeout ->
+  ?timeout:Time.Duration.t ->
   ?metadata:Grpc.Metadata.t ->
   unit ->
   (Protobuf.WireFormat.t response, error) Result.t
@@ -93,7 +130,7 @@ val call_server_streaming :
   service:string ->
   method_:string ->
   request:Protobuf.WireFormat.t ->
-  ?timeout:Grpc.Metadata.timeout ->
+  ?timeout:Time.Duration.t ->
   ?metadata:Grpc.Metadata.t ->
   unit ->
   (Protobuf.WireFormat.t stream_response, error) Result.t
@@ -121,7 +158,7 @@ val call_client_streaming :
   t ->
   service:string ->
   method_:string ->
-  ?timeout:Grpc.Metadata.timeout ->
+  ?timeout:Time.Duration.t ->
   ?metadata:Grpc.Metadata.t ->
   unit ->
   (unit, error) Result.t
@@ -165,7 +202,7 @@ val call_bidi_streaming :
   t ->
   service:string ->
   method_:string ->
-  ?timeout:Grpc.Metadata.timeout ->
+  ?timeout:Time.Duration.t ->
   ?metadata:Grpc.Metadata.t ->
   unit ->
   (unit, error) Result.t
