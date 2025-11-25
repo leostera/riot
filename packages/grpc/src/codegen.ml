@@ -154,14 +154,14 @@ let generate_service_module service =
 
 (** Main generation function *)
 let generate proto =
-  (* Build header *)
-  let header = [
-    tok SK.COMMENT "(* Generated gRPC client from protobuf service definitions *)";
+  (* Generate message/enum types using Protobuf.Codegen *)
+  let types_tree = Protobuf.Codegen.generate proto in
+  let types_children = Array.to_list types_tree.children in
+
+  (* Build header for services *)
+  let service_header = [
     nl ();
-    nl ();
-    tok SK.OPEN_STMT "open";
-    ws ();
-    tok SK.IDENT_EXPR "Std";
+    tok SK.COMMENT "(* Generated gRPC service clients *)";
     nl ();
     nl ()
   ] in
@@ -177,7 +177,15 @@ let generate proto =
   let spaced_services = List.map (fun svc -> [svc; nl ()]) services in
   let all_svcs = List.flatten spaced_services in
 
+  (* Combine types and services *)
+  let all_children =
+    if List.length services = 0 then
+      types_children  (* No services, just return types *)
+    else
+      types_children @ service_header @ all_svcs
+  in
+
   (* Build source file *)
   Green.make_node
     ~kind:SK.SOURCE_FILE
-    ~children:(Array.of_list (header @ all_svcs))
+    ~children:(Array.of_list all_children)
