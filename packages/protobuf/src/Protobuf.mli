@@ -54,3 +54,5 @@ module Wire_format_reader : sig
   val decode : state -> IO.Reader.t -> decode_result
   val reset : state -> unit
 end
+
+module Codegen : module type of Codegen

@@ -149,3 +149,6 @@ module Call : sig
   val with_compression : call_config -> Metadata.encoding -> call_config
   val method_path : method_def -> string
 end
+
+(** Code generation from protobuf services *)
+module Codegen : module type of Codegen
