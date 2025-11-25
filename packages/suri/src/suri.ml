@@ -4,3 +4,4 @@ module WebServer = Web_server
 module Middleware = Middleware
 module Channel = Channel
 module LiveView = Liveview
+module GRPC = Grpc

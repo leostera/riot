@@ -25,3 +25,6 @@ module Channel = Channel
 
 module LiveView = Liveview
 (** Server-rendered components with live DOM updates over WebSocket *)
+
+module GRPC = Grpc
+(** gRPC server implementation over HTTP/2 *)
