@@ -120,6 +120,59 @@ let generate_rpc_signature rpc =
     nl ()
   ]
 
+(** Generate client implementation for an RPC *)
+let generate_rpc_client_impl service_name rpc =
+  let method_name = to_lowercase_ident rpc.name in
+  let client_func = match (rpc.input_stream, rpc.output_stream) with
+    | false, false -> "call_unary"
+    | false, true -> "call_server_streaming"
+    | true, false -> "call_client_streaming"
+    | true, true -> "call_bidi_streaming"
+  in
+
+  (* Parameter name depends on streaming type *)
+  let param_name = if rpc.input_stream then "requests" else "request" in
+
+  [
+    nl ();
+    indent 1;
+    tok SK.IDENT_EXPR "let"; ws ();
+    tok SK.IDENT_EXPR method_name; ws ();
+    tok SK.IDENT_EXPR "conn"; ws ();
+    tok SK.IDENT_EXPR param_name; ws ();
+    tok SK.IDENT_EXPR "="; nl ();
+    indent 2;
+    tok SK.IDENT_EXPR "Blink"; tok SK.IDENT_EXPR ".";
+    tok SK.IDENT_EXPR "GRPC"; tok SK.IDENT_EXPR ".";
+    tok SK.IDENT_EXPR "Client"; tok SK.IDENT_EXPR ".";
+    tok SK.IDENT_EXPR client_func; ws ();
+    tok SK.IDENT_EXPR "conn"; nl ();
+    indent 3; tok SK.IDENT_EXPR "~service"; tok SK.IDENT_EXPR ":";
+    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" service_name); nl ();
+    indent 3; tok SK.IDENT_EXPR "~method_"; tok SK.IDENT_EXPR ":";
+    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" rpc.name); nl ();
+    indent 3; tok SK.IDENT_EXPR "~"; tok SK.IDENT_EXPR param_name; nl ();
+    indent 3; tok SK.IDENT_EXPR "()"; nl ()
+  ]
+
+(** Generate client module for a service *)
+let generate_service_client service =
+  let module_name = to_module_name service.name ^ "Client" in
+
+  (* Generate client implementations for each RPC *)
+  let rpc_impls = List.map (generate_rpc_client_impl service.name) service.rpcs in
+  let all_impls = List.flatten rpc_impls in
+
+  (* Build module *)
+  node SK.MODULE_DECL ([
+    tok SK.IDENT_EXPR "module"; ws ();
+    tok SK.IDENT_EXPR module_name; ws ();
+    tok SK.IDENT_EXPR "="; ws ();
+    tok SK.IDENT_EXPR "struct"; nl ()
+  ] @ all_impls @ [
+    tok SK.IDENT_EXPR "end"; nl ()
+  ])
+
 (** Generate a module type signature for a service *)
 let generate_service_signature service =
   let module_name = to_module_name service.name in
@@ -145,31 +198,47 @@ let generate proto =
   let types_tree = Protobuf.Codegen.generate proto in
   let types_children = Array.to_list types_tree.children in
 
-  (* Build header for services *)
-  let service_header = [
+  (* Extract all services from definitions *)
+  let services = List.filter_map (fun def ->
+    match def with
+    | Service svc -> Some svc
+    | _ -> None
+  ) proto.definitions in
+
+  (* Generate client implementations *)
+  let client_header = [
     nl ();
-    tok SK.COMMENT "(* Generated gRPC service signatures *)";
+    tok SK.COMMENT "(* Generated gRPC client implementations *)";
+    nl ();
+    tok SK.COMMENT "(* These modules provide ready-to-use client functions that call Blink.GRPC.Client *)";
     nl ();
     nl ()
   ] in
 
-  (* Process all service definitions *)
-  let services = List.filter_map (fun def ->
-    match def with
-    | Service svc -> Some (generate_service_signature svc)
-    | _ -> None
-  ) proto.definitions in
+  let client_modules = List.map generate_service_client services in
+  let spaced_clients = List.map (fun client -> [client; nl ()]) client_modules in
+  let all_clients = List.flatten spaced_clients in
 
-  (* Add spacing between services *)
-  let spaced_services = List.map (fun svc -> [svc; nl ()]) services in
-  let all_svcs = List.flatten spaced_services in
+  (* Generate server signatures *)
+  let signature_header = [
+    nl ();
+    tok SK.COMMENT "(* Generated gRPC service signatures *)";
+    nl ();
+    tok SK.COMMENT "(* Implement these module types to create gRPC servers *)";
+    nl ();
+    nl ()
+  ] in
 
-  (* Combine types and services *)
+  let signature_modules = List.map generate_service_signature services in
+  let spaced_signatures = List.map (fun sig_ -> [sig_; nl ()]) signature_modules in
+  let all_sigs = List.flatten spaced_signatures in
+
+  (* Combine types, clients, and signatures *)
   let all_children =
     if List.length services = 0 then
       types_children  (* No services, just return types *)
     else
-      types_children @ service_header @ all_svcs
+      types_children @ client_header @ all_clients @ signature_header @ all_sigs
   in
 
   (* Build source file *)
