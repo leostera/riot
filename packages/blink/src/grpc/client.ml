@@ -53,6 +53,24 @@ type connection_state =
       status : Grpc.Status.t option Cell.t;
       end_stream_received : bool Cell.t;
     }
+  | StreamingClient of {
+      stream_id : int;
+      send_closed : bool Cell.t;  (** Whether send side is closed *)
+      headers : Grpc.Metadata.t Cell.t;
+      messages : Protobuf.WireFormat.t list Cell.t;
+      trailers : Grpc.Metadata.t Cell.t;
+      status : Grpc.Status.t option Cell.t;
+      end_stream_received : bool Cell.t;
+    }
+  | StreamingBidi of {
+      stream_id : int;
+      send_closed : bool Cell.t;
+      headers : Grpc.Metadata.t Cell.t;
+      messages : Protobuf.WireFormat.t list Cell.t;
+      trailers : Grpc.Metadata.t Cell.t;
+      status : Grpc.Status.t option Cell.t;
+      end_stream_received : bool Cell.t;
+    }
   | Closed
 
 type t = {
@@ -614,6 +632,487 @@ let receive_stream conn =
       Error (Invalid_response "No active stream")
   | Closed ->
       Error Connection_closed
+
+let call_client_streaming conn ~service ~method_ ?timeout ?metadata () =
+  let ( let* ) = Result.and_then in
+
+  (* Allocate stream ID *)
+  let stream_id = next_stream_id conn in
+
+  (* Build request headers *)
+  let headers =
+    [
+      (":method", "POST");
+      (":scheme", if Net.Uri.scheme conn.uri = Some "https" then "https" else "http");
+      (":path", "/" ^ service ^ "/" ^ method_);
+      (":authority", Net.Uri.host conn.uri |> Option.unwrap_or ~default:"localhost");
+      ("content-type", "application/grpc+proto");
+      ("te", "trailers");
+      ("user-agent", conn.config.user_agent);
+    ]
+  in
+
+  let headers =
+    match timeout with
+    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | None -> headers
+  in
+
+  let headers =
+    match metadata with
+    | Some md -> headers @ md
+    | None -> headers
+  in
+
+  (* Encode and send HEADERS frame (no END_STREAM - will send messages later) *)
+  let hpack_encoder = Http.Http2.Hpack.create_encoder () in
+  let header_block = Http.Http2.Hpack.encode hpack_encoder headers in
+
+  let headers_frame =
+    Http.Http2.Frame.{
+      length = String.length header_block;
+      frame_type = Headers;
+      flags = { end_stream = false; end_headers = true; padded = false; priority = false; ack = false };
+      stream_id;
+      payload =
+        HeadersPayload {
+          pad_length = None;
+          stream_dependency = None;
+          weight = None;
+          exclusive = false;
+          header_block_fragment = header_block;
+        };
+    }
+  in
+
+  let* () = send_frame conn headers_frame in
+
+  (* Setup client streaming state *)
+  Cell.set conn.state
+    (StreamingClient {
+      stream_id;
+      send_closed = Cell.create false;
+      headers = Cell.create [];
+      messages = Cell.create [];
+      trailers = Cell.create [];
+      status = Cell.create None;
+      end_stream_received = Cell.create false;
+    });
+
+  Ok ()
+
+let send_message conn message =
+  let ( let* ) = Result.and_then in
+
+  match Cell.get conn.state with
+  | StreamingClient state_data | StreamingBidi state_data when not (Cell.get state_data.send_closed) ->
+      (* Encode protobuf message *)
+      let message_bytes = Protobuf.WireFormat.encode message in
+
+      (* Encode gRPC message *)
+      let grpc_message = Grpc.Message.encode ~compressed:false ~payload:message_bytes in
+
+      (* Send DATA frame (without END_STREAM - stream still open) *)
+      let data_frame =
+        Http.Http2.Frame.{
+          length = Bytes.length grpc_message;
+          frame_type = Data;
+          flags = { end_stream = false; end_headers = false; padded = false; priority = false; ack = false };
+          stream_id = state_data.stream_id;
+          payload = DataPayload { data = Bytes.to_string grpc_message; pad_length = None };
+        }
+      in
+
+      send_frame conn data_frame
+
+  | StreamingClient _ | StreamingBidi _ ->
+      Error (Invalid_response "Send side already closed")
+  | Connected ->
+      Error (Invalid_response "No active streaming call")
+  | AwaitingResponse _ ->
+      Error (Invalid_response "Cannot send on non-streaming call")
+  | Closed ->
+      Error Connection_closed
+
+let finish_client_stream conn =
+  let ( let* ) = Result.and_then in
+
+  match Cell.get conn.state with
+  | StreamingClient state_data when not (Cell.get state_data.send_closed) ->
+      (* Send empty DATA frame with END_STREAM to close send side *)
+      let data_frame =
+        Http.Http2.Frame.{
+          length = 0;
+          frame_type = Data;
+          flags = { end_stream = true; end_headers = false; padded = false; priority = false; ack = false };
+          stream_id = state_data.stream_id;
+          payload = DataPayload { data = ""; pad_length = None };
+        }
+      in
+
+      let* () = send_frame conn data_frame in
+      Cell.set state_data.send_closed true;
+
+      (* Now receive single response *)
+      let rec receive_response () =
+        if not (Cell.get state_data.end_stream_received) then (
+          let* frame = receive_frame conn in
+
+          match frame.frame_type with
+          | Http.Http2.Frame.Headers -> (
+              let header_block =
+                match frame.payload with
+                | Http.Http2.Frame.HeadersPayload { header_block_fragment; _ } -> header_block_fragment
+                | _ -> ""
+              in
+
+              let hpack_decoder = Http.Http2.Hpack.create_decoder () in
+              let header_bytes = Bytes.of_string header_block in
+
+              let* hdrs =
+                match Http.Http2.Hpack.decode hpack_decoder header_bytes with
+                | Ok hdrs -> Ok hdrs
+                | Error e -> Error (Hpack_decode_error e)
+              in
+
+              if frame.flags.end_stream then (
+                Cell.set state_data.trailers hdrs;
+                Cell.set state_data.end_stream_received true)
+              else
+                Cell.set state_data.headers hdrs;
+
+              receive_response ())
+
+          | Http.Http2.Frame.Data -> (
+              let data_payload =
+                match frame.payload with
+                | Http.Http2.Frame.DataPayload { data; _ } -> data
+                | _ -> ""
+              in
+
+              if data_payload = "" then (
+                if frame.flags.end_stream then
+                  Cell.set state_data.end_stream_received true;
+                receive_response ())
+              else (
+                let data_bytes = Bytes.of_string data_payload in
+
+                let* grpc_msg =
+                  match Grpc.Message.decode data_bytes with
+                  | Ok (msg, _remaining) -> Ok msg
+                  | Error e -> Error (Message_decode_error e)
+                in
+
+                let* protobuf_msg =
+                  match Protobuf.WireFormat.decode grpc_msg.payload with
+                  | Ok msg -> Ok msg
+                  | Error e -> Error (Protobuf_decode_error e)
+                in
+
+                let msgs = Cell.get state_data.messages in
+                Cell.set state_data.messages (msgs @ [protobuf_msg]);
+
+                if frame.flags.end_stream then
+                  Cell.set state_data.end_stream_received true;
+
+                receive_response ()))
+
+          | _ ->
+              receive_response ())
+        else (
+          (* END_STREAM received, extract response *)
+          let headers = Cell.get state_data.headers in
+          let messages = Cell.get state_data.messages in
+          let trailers = Cell.get state_data.trailers in
+
+          let status_code =
+            List.find_map
+              (fun (name, value) ->
+                if name = "grpc-status" then
+                  match int_of_string_opt value with
+                  | Some code -> Grpc.Status.of_int code
+                  | None -> None
+                else None)
+              trailers
+            |> Option.unwrap_or ~default:Grpc.Status.OK
+          in
+
+          let status_message =
+            List.find_map
+              (fun (name, value) -> if name = "grpc-message" then Some value else None)
+              trailers
+            |> Option.unwrap_or ~default:""
+          in
+
+          if status_code <> Grpc.Status.OK then
+            Error (GRPC_status (status_code, status_message))
+          else
+            match messages with
+            | [ msg ] ->
+                Cell.set conn.state Connected;
+                Ok { headers; message = msg; trailers; status = status_code }
+            | [] ->
+                Error (Invalid_response "No message in client streaming response")
+            | _ ->
+                Error (Invalid_response "Multiple messages in client streaming response"))
+      in
+
+      receive_response ()
+
+  | StreamingClient _ ->
+      Error (Invalid_response "Send side already closed")
+  | _ ->
+      Error (Invalid_response "Not in client streaming state")
+
+let call_bidi_streaming conn ~service ~method_ ?timeout ?metadata () =
+  let ( let* ) = Result.and_then in
+
+  (* Allocate stream ID *)
+  let stream_id = next_stream_id conn in
+
+  (* Build request headers *)
+  let headers =
+    [
+      (":method", "POST");
+      (":scheme", if Net.Uri.scheme conn.uri = Some "https" then "https" else "http");
+      (":path", "/" ^ service ^ "/" ^ method_);
+      (":authority", Net.Uri.host conn.uri |> Option.unwrap_or ~default:"localhost");
+      ("content-type", "application/grpc+proto");
+      ("te", "trailers");
+      ("user-agent", conn.config.user_agent);
+    ]
+  in
+
+  let headers =
+    match timeout with
+    | Some t -> headers @ [ Grpc.Metadata.timeout t ]
+    | None -> headers
+  in
+
+  let headers =
+    match metadata with
+    | Some md -> headers @ md
+    | None -> headers
+  in
+
+  (* Encode and send HEADERS frame *)
+  let hpack_encoder = Http.Http2.Hpack.create_encoder () in
+  let header_block = Http.Http2.Hpack.encode hpack_encoder headers in
+
+  let headers_frame =
+    Http.Http2.Frame.{
+      length = String.length header_block;
+      frame_type = Headers;
+      flags = { end_stream = false; end_headers = true; padded = false; priority = false; ack = false };
+      stream_id;
+      payload =
+        HeadersPayload {
+          pad_length = None;
+          stream_dependency = None;
+          weight = None;
+          exclusive = false;
+          header_block_fragment = header_block;
+        };
+    }
+  in
+
+  let* () = send_frame conn headers_frame in
+
+  (* Setup bidirectional streaming state *)
+  Cell.set conn.state
+    (StreamingBidi {
+      stream_id;
+      send_closed = Cell.create false;
+      headers = Cell.create [];
+      messages = Cell.create [];
+      trailers = Cell.create [];
+      status = Cell.create None;
+      end_stream_received = Cell.create false;
+    });
+
+  Ok ()
+
+let receive_message conn =
+  let ( let* ) = Result.and_then in
+
+  match Cell.get conn.state with
+  | StreamingBidi state_data when not (Cell.get state_data.end_stream_received) -> (
+      (* Non-blocking receive attempt *)
+      let* frame = receive_frame conn in
+
+      match frame.frame_type with
+      | Http.Http2.Frame.Headers -> (
+          let header_block =
+            match frame.payload with
+            | Http.Http2.Frame.HeadersPayload { header_block_fragment; _ } -> header_block_fragment
+            | _ -> ""
+          in
+
+          let hpack_decoder = Http.Http2.Hpack.create_decoder () in
+          let header_bytes = Bytes.of_string header_block in
+
+          let* hdrs =
+            match Http.Http2.Hpack.decode hpack_decoder header_bytes with
+            | Ok hdrs -> Ok hdrs
+            | Error e -> Error (Hpack_decode_error e)
+          in
+
+          if frame.flags.end_stream then (
+            Cell.set state_data.trailers hdrs;
+            Cell.set state_data.end_stream_received true;
+
+            let status_code =
+              List.find_map
+                (fun (name, value) ->
+                  if name = "grpc-status" then
+                    match int_of_string_opt value with
+                    | Some code -> Grpc.Status.of_int code
+                    | None -> None
+                  else None)
+                hdrs
+              |> Option.unwrap_or ~default:Grpc.Status.OK
+            in
+            Cell.set state_data.status (Some status_code))
+          else
+            Cell.set state_data.headers hdrs;
+
+          Ok None  (* Headers received, no message yet *))
+
+      | Http.Http2.Frame.Data -> (
+          let data_payload =
+            match frame.payload with
+            | Http.Http2.Frame.DataPayload { data; _ } -> data
+            | _ -> ""
+          in
+
+          if data_payload = "" then (
+            if frame.flags.end_stream then
+              Cell.set state_data.end_stream_received true;
+            Ok None)
+          else (
+            let data_bytes = Bytes.of_string data_payload in
+
+            let* grpc_msg =
+              match Grpc.Message.decode data_bytes with
+              | Ok (msg, _remaining) -> Ok msg
+              | Error e -> Error (Message_decode_error e)
+            in
+
+            let* protobuf_msg =
+              match Protobuf.WireFormat.decode grpc_msg.payload with
+              | Ok msg -> Ok msg
+              | Error e -> Error (Protobuf_decode_error e)
+            in
+
+            let msgs = Cell.get state_data.messages in
+            Cell.set state_data.messages (msgs @ [protobuf_msg]);
+
+            if frame.flags.end_stream then
+              Cell.set state_data.end_stream_received true;
+
+            Ok (Some protobuf_msg)))
+
+      | _ ->
+          (* Ignore other frames *)
+          Ok None)
+
+  | StreamingBidi state_data ->
+      (* Stream already complete *)
+      Ok None
+  | _ ->
+      Error (Invalid_response "Not in bidirectional streaming state")
+
+let close_send conn =
+  let ( let* ) = Result.and_then in
+
+  match Cell.get conn.state with
+  | StreamingBidi state_data when not (Cell.get state_data.send_closed) ->
+      (* Send empty DATA frame with END_STREAM *)
+      let data_frame =
+        Http.Http2.Frame.{
+          length = 0;
+          frame_type = Data;
+          flags = { end_stream = true; end_headers = false; padded = false; priority = false; ack = false };
+          stream_id = state_data.stream_id;
+          payload = DataPayload { data = ""; pad_length = None };
+        }
+      in
+
+      let* () = send_frame conn data_frame in
+      Cell.set state_data.send_closed true;
+      Ok ()
+
+  | StreamingBidi _ ->
+      Error (Invalid_response "Send side already closed")
+  | _ ->
+      Error (Invalid_response "Not in bidirectional streaming state")
+
+let finish_bidi_stream conn =
+  let ( let* ) = Result.and_then in
+
+  match Cell.get conn.state with
+  | StreamingBidi state_data -> (
+      (* Wait for END_STREAM if not received yet *)
+      let rec wait_for_trailers () =
+        if not (Cell.get state_data.end_stream_received) then (
+          let* frame = receive_frame conn in
+
+          match frame.frame_type with
+          | Http.Http2.Frame.Headers when frame.flags.end_stream -> (
+              let header_block =
+                match frame.payload with
+                | Http.Http2.Frame.HeadersPayload { header_block_fragment; _ } -> header_block_fragment
+                | _ -> ""
+              in
+
+              let hpack_decoder = Http.Http2.Hpack.create_decoder () in
+              let header_bytes = Bytes.of_string header_block in
+
+              let* hdrs =
+                match Http.Http2.Hpack.decode hpack_decoder header_bytes with
+                | Ok hdrs -> Ok hdrs
+                | Error e -> Error (Hpack_decode_error e)
+              in
+
+              Cell.set state_data.trailers hdrs;
+              Cell.set state_data.end_stream_received true;
+
+              let status_code =
+                List.find_map
+                  (fun (name, value) ->
+                    if name = "grpc-status" then
+                      match int_of_string_opt value with
+                      | Some code -> Grpc.Status.of_int code
+                      | None -> None
+                    else None)
+                  hdrs
+                |> Option.unwrap_or ~default:Grpc.Status.OK
+              in
+              Cell.set state_data.status (Some status_code);
+
+              wait_for_trailers ())
+
+          | Http.Http2.Frame.Data when frame.flags.end_stream ->
+              Cell.set state_data.end_stream_received true;
+              wait_for_trailers ()
+
+          | _ ->
+              wait_for_trailers ())
+        else
+          Ok ()
+      in
+
+      let* () = wait_for_trailers () in
+
+      let trailers = Cell.get state_data.trailers in
+      let status = Cell.get state_data.status |> Option.unwrap_or ~default:Grpc.Status.OK in
+
+      Cell.set conn.state Connected;
+
+      Ok (trailers, status))
+
+  | _ ->
+      Error (Invalid_response "Not in bidirectional streaming state")
 
 let close conn =
   Cell.set conn.state Closed;

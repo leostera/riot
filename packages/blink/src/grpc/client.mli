@@ -106,5 +106,102 @@ val call_server_streaming :
 val receive_stream :
   t -> (Protobuf.WireFormat.t stream_response, error) Result.t
 
+(** Start a client streaming call
+
+    Sends headers only, allowing multiple messages to be sent afterward.
+
+    @param conn The connection
+    @param service Service name
+    @param method_ Method name
+    @param timeout Optional timeout
+    @param metadata Optional metadata
+    @return Unit on success or error
+*)
+val call_client_streaming :
+  t ->
+  service:string ->
+  method_:string ->
+  ?timeout:Grpc.Metadata.timeout ->
+  ?metadata:Grpc.Metadata.t ->
+  unit ->
+  (unit, error) Result.t
+
+(** Send a message on a streaming call
+
+    Works for both client streaming and bidirectional streaming.
+
+    @param conn The connection
+    @param message Message to send
+    @return Unit on success or error
+*)
+val send_message :
+  t ->
+  Protobuf.WireFormat.t ->
+  (unit, error) Result.t
+
+(** Finish client streaming and receive response
+
+    Closes the send side with END_STREAM and waits for single response.
+
+    @param conn The connection
+    @return Response with message or error
+*)
+val finish_client_stream :
+  t ->
+  (Protobuf.WireFormat.t response, error) Result.t
+
+(** Start a bidirectional streaming call
+
+    Sends headers only, allowing interleaved sending and receiving.
+
+    @param conn The connection
+    @param service Service name
+    @param method_ Method name
+    @param timeout Optional timeout
+    @param metadata Optional metadata
+    @return Unit on success or error
+*)
+val call_bidi_streaming :
+  t ->
+  service:string ->
+  method_:string ->
+  ?timeout:Grpc.Metadata.timeout ->
+  ?metadata:Grpc.Metadata.t ->
+  unit ->
+  (unit, error) Result.t
+
+(** Receive a single message from bidirectional streaming
+
+    Non-blocking: returns None if no message available yet.
+
+    @param conn The connection
+    @return Some message, None if no message yet, or error
+*)
+val receive_message :
+  t ->
+  (Protobuf.WireFormat.t option, error) Result.t
+
+(** Close the send side of bidirectional stream
+
+    Sends END_STREAM flag but keeps receiving.
+
+    @param conn The connection
+    @return Unit on success or error
+*)
+val close_send :
+  t ->
+  (unit, error) Result.t
+
+(** Finish bidirectional streaming
+
+    Waits for trailers and status after both sides are closed.
+
+    @param conn The connection
+    @return Final status and trailers or error
+*)
+val finish_bidi_stream :
+  t ->
+  (Grpc.Metadata.t * Grpc.Status.t, error) Result.t
+
 (** Close the connection *)
 val close : t -> unit
