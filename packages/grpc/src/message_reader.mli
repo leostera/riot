@@ -17,11 +17,16 @@ type state
 (** Create new parser state *)
 val create : ?max_message_size:int -> unit -> state
 
+(** Parse errors *)
+type parse_error =
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+      (** Message payload size exceeds configured maximum *)
+
 (** Parse result *)
 type parse_result =
   | Message of Message.t  (** Successfully parsed complete message *)
   | Need_more  (** Need more data - call again when available *)
-  | Error of string  (** Parse error *)
+  | Error of parse_error  (** Parse error *)
 
 (** Parse the next message from reader.
 

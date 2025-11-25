@@ -22,7 +22,17 @@ type state = {
   phase : parse_phase Cell.t;
 }
 
-type parse_result = Frame of Frame.t | Need_more | Error of string
+type parse_error =
+  | Incomplete_frame_header
+  | Frame_size_exceeds_maximum of { size : int; max_size : int }
+  | Unknown_frame_type of int
+  | Invalid_payload_length of { frame_type : string; expected : int; actual : int }
+  | Incomplete_settings_payload
+
+type parse_result =
+  | Frame of Frame.t
+  | Need_more
+  | Error of parse_error
 
 let create ?(config = default_config) () =
   {
@@ -53,7 +63,7 @@ let read_n_bytes reader buffer n =
 
 (** Parse 9-byte frame header from buffer *)
 let parse_frame_header_bytes config data =
-  if String.length data < 9 then Error "Incomplete frame header"
+  if String.length data < 9 then Error Incomplete_frame_header
   else
     (* Read length (24-bit big-endian) *)
     let b0 = Char.code data.[0] in
@@ -63,8 +73,7 @@ let parse_frame_header_bytes config data =
 
     (* Security: Validate frame size *)
     if length > config.max_frame_size then
-      Error
-        (format "Frame size %d exceeds maximum %d" length config.max_frame_size)
+      Error (Frame_size_exceeds_maximum { size = length; max_size = config.max_frame_size })
     else
       (* Read type *)
       let type_byte = Char.code data.[3] in
@@ -84,7 +93,7 @@ let parse_frame_header_bytes config data =
       in
 
       match frame_type_opt with
-      | None -> Error (format "Unknown frame type: 0x%x" type_byte)
+      | None -> Error (Unknown_frame_type type_byte)
       | Some frame_type ->
           (* Read flags *)
           let flags_byte = Char.code data.[4] in
@@ -146,7 +155,7 @@ let parse_payload frame payload_data =
       let rec parse_settings offset acc =
         if offset >= String.length payload_data then Ok (List.rev acc)
         else if offset + 6 > String.length payload_data then
-          Error "Incomplete SETTINGS payload"
+          Error Incomplete_settings_payload
         else
           let id =
             (Char.code payload_data.[offset] lsl 8)
@@ -176,11 +185,11 @@ let parse_payload frame payload_data =
       Ok { frame with payload = Frame.SettingsPayload settings }
   | Frame.Ping ->
       if String.length payload_data <> 8 then
-        Error "PING payload must be 8 bytes"
+        Error (Invalid_payload_length { frame_type = "PING"; expected = 8; actual = String.length payload_data })
       else Ok { frame with payload = Frame.PingPayload payload_data }
   | Frame.WindowUpdate ->
       if String.length payload_data <> 4 then
-        Error "WINDOW_UPDATE payload must be 4 bytes"
+        Error (Invalid_payload_length { frame_type = "WINDOW_UPDATE"; expected = 4; actual = String.length payload_data })
       else
         let increment =
           (Char.code payload_data.[0] lsl 24)
@@ -192,7 +201,7 @@ let parse_payload frame payload_data =
         Ok { frame with payload = Frame.WindowUpdatePayload increment }
   | Frame.RstStream ->
       if String.length payload_data <> 4 then
-        Error "RST_STREAM payload must be 4 bytes"
+        Error (Invalid_payload_length { frame_type = "RST_STREAM"; expected = 4; actual = String.length payload_data })
       else
         let code =
           (Char.code payload_data.[0] lsl 24)
@@ -220,7 +229,8 @@ let parse_payload frame payload_data =
         in
         Ok { frame with payload = Frame.RstStreamPayload error_code }
   | Frame.Goaway ->
-      if String.length payload_data < 8 then Error "GOAWAY payload too short"
+      if String.length payload_data < 8 then
+        Error (Invalid_payload_length { frame_type = "GOAWAY"; expected = 8; actual = String.length payload_data })
       else
         let last_stream_id =
           ((Char.code payload_data.[0] lsl 24)

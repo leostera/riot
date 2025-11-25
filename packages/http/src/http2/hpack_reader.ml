@@ -25,7 +25,16 @@ type decoder = {
   accumulated_headers : Hpack.header list Cell.t;
 }
 
-type decode_result = Headers of Hpack.header list | Need_more | Error of string
+type decode_error =
+  | Invalid_header_index of int
+  | Invalid_name_index of int
+  | Unsupported_encoding
+  | Invalid_decoder_state
+
+type decode_result =
+  | Headers of Hpack.header list
+  | Need_more
+  | Error of decode_error
 
 let create ?(max_dynamic_table_size = 4096) () =
   {
@@ -108,7 +117,7 @@ let decode decoder reader =
                     Cell.set decoder.phase WaitingForHeader;
                     decode_next ()
                 | None ->
-                    Error (format "Invalid header index: %d" index)
+                    Error (Invalid_header_index index)
             else if first_byte land 0x40 <> 0 then
               (* Literal with Incremental Indexing: 01xxxxxx *)
               let* (name_index, _, _) =
@@ -164,10 +173,10 @@ let decode decoder reader =
                                  should_index = true;
                                });
                           decode_next ()))
-                | None -> Error (format "Invalid name index: %d" name_index)
+                | None -> Error (Invalid_name_index name_index)
             else
               (* Other encodings: simplified for now *)
-              Error "Unsupported HPACK encoding")
+              Error Unsupported_encoding)
     | ReadingLiteralName { name_length; bytes_read; buffer } ->
         let remaining = name_length - bytes_read in
         (match read_n_bytes reader remaining with
@@ -225,6 +234,6 @@ let decode decoder reader =
               Cell.set decoder.accumulated_headers [];
               Headers result
             else decode_next ())
-    | _ -> Error "Invalid decoder state"
+    | _ -> Error Invalid_decoder_state
   in
   decode_next ()

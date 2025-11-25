@@ -23,11 +23,21 @@ type state
 (** Create a new parser state *)
 val create : ?config:config -> unit -> state
 
+(** Parse errors *)
+type parse_error =
+  | Incomplete_frame_header  (** Frame header has fewer than 9 bytes *)
+  | Frame_size_exceeds_maximum of { size : int; max_size : int }
+      (** Frame payload size exceeds configured maximum *)
+  | Unknown_frame_type of int  (** Unknown HTTP/2 frame type byte *)
+  | Invalid_payload_length of { frame_type : string; expected : int; actual : int }
+      (** Payload length doesn't match frame type requirements *)
+  | Incomplete_settings_payload  (** SETTINGS payload is not multiple of 6 bytes *)
+
 (** Parse result *)
 type parse_result =
   | Frame of Frame.t  (** Successfully parsed a complete frame *)
   | Need_more  (** Need more data - call again with more bytes in reader *)
-  | Error of string  (** Parse error *)
+  | Error of parse_error  (** Parse error *)
 
 (** Parse the next frame from the reader.
 

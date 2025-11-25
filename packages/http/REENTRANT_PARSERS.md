@@ -34,10 +34,16 @@ type state
 val create : unit -> state
 val parse : state -> IO.Reader.t -> parse_result
 
+type parse_error =
+  | Frame_size_exceeds_maximum of { size : int; max_size : int }
+  | Unknown_frame_type of int
+  | Invalid_payload_length of { frame_type : string; expected : int; actual : int }
+  (* ... other typed errors ... *)
+
 type parse_result =
   | Frame of Frame.t      (* Complete *)
   | Need_more             (* Call again with more data *)
-  | Error of string       (* Parse error *)
+  | Error of parse_error  (* Well-typed parse error *)
 
 (* Benefits:
    - Incremental parsing
@@ -52,6 +58,16 @@ type parse_result =
 ### 1. HTTP/2 Frame Parser
 
 **Module**: `Http.Http2.Parser_reader`
+
+**Error Types**:
+```ocaml
+type parse_error =
+  | Incomplete_frame_header
+  | Frame_size_exceeds_maximum of { size : int; max_size : int }
+  | Unknown_frame_type of int
+  | Invalid_payload_length of { frame_type : string; expected : int; actual : int }
+  | Incomplete_settings_payload
+```
 
 **State Machine**:
 ```
@@ -77,8 +93,12 @@ let rec read_frames () =
   | Need_more ->
       yield ();  (* Wait for more data *)
       read_frames ()
+  | Error (Frame_size_exceeds_maximum { size; max_size }) ->
+      log_error (format "Frame too large: %d > %d" size max_size)
+  | Error (Unknown_frame_type typ) ->
+      log_error (format "Unknown frame type: 0x%x" typ)
   | Error e ->
-      handle_error e
+      handle_parse_error e
 ```
 
 **State Tracking**:
@@ -90,6 +110,15 @@ let rec read_frames () =
 ### 2. HPACK Decoder
 
 **Module**: `Http.Http2.Hpack_reader`
+
+**Error Types**:
+```ocaml
+type decode_error =
+  | Invalid_header_index of int
+  | Invalid_name_index of int
+  | Unsupported_encoding
+  | Invalid_decoder_state
+```
 
 **State Machine**:
 ```
@@ -119,8 +148,10 @@ match Http.Http2.Hpack_reader.decode decoder reader with
 | Need_more ->
     (* Need CONTINUATION frame or more data *)
     wait_for_data ()
+| Error (Invalid_header_index idx) ->
+    log_error (format "Invalid header index: %d" idx)
 | Error e ->
-    handle_error e
+    handle_decode_error e
 ```
 
 **Features**:
@@ -132,6 +163,12 @@ match Http.Http2.Hpack_reader.decode decoder reader with
 ### 3. gRPC Message Parser
 
 **Module**: `Grpc.Message_reader`
+
+**Error Types**:
+```ocaml
+type parse_error =
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+```
 
 **State Machine**:
 ```
@@ -159,8 +196,11 @@ let rec read_messages () =
   | Need_more ->
       yield ();
       read_messages ()
+  | Error (Message_size_exceeds_maximum { size; max_size }) ->
+      log_error (format "Message too large: %d > %d" size max_size);
+      close_stream ()
   | Error e ->
-      handle_error e
+      handle_parse_error e
 ```
 
 **Features**:
@@ -322,6 +362,34 @@ loop ()
 | Partial data handling | Manual buffering required | Automatic |
 | State management | Manual | Built-in |
 | Composability | Low | High |
+
+## Typed Error Handling
+
+All parsers use well-typed error variants instead of `Error of string`:
+
+**Benefits**:
+- **Type safety**: Exhaustive pattern matching catches unhandled errors at compile time
+- **Better debugging**: Structured error data instead of string formatting
+- **Machine-readable**: Easy to log, metrics, and programmatic error handling
+- **Self-documenting**: Error types document all possible failure modes
+
+**Example pattern matching**:
+```ocaml
+match Parser_reader.parse parser reader with
+| Frame frame -> process_frame frame
+| Need_more -> wait_for_data ()
+| Error (Frame_size_exceeds_maximum { size; max_size }) ->
+    (* Handle oversized frame specifically *)
+    send_goaway_frame (FrameSizeError);
+    close_connection ()
+| Error (Unknown_frame_type typ) ->
+    (* Ignore unknown frame types per RFC 9113 *)
+    log_warning (format "Ignoring unknown frame type: 0x%x" typ);
+    continue ()
+| Error e ->
+    (* Handle other errors *)
+    handle_protocol_error e
+```
 
 ## Future Enhancements
 

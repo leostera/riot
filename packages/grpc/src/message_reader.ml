@@ -17,7 +17,13 @@ type state = {
   phase : parse_phase Cell.t;
 }
 
-type parse_result = Message of Message.t | Need_more | Error of string
+type parse_error =
+  | Message_size_exceeds_maximum of { size : int; max_size : int }
+
+type parse_result =
+  | Message of Message.t
+  | Need_more
+  | Error of parse_error
 
 let create ?(max_message_size = Message.default_max_message_size) () =
   {
@@ -74,9 +80,7 @@ let parse state reader =
         (* Validate size *)
         if length > state.max_message_size then (
           reset state;
-          Error
-            (format "Message size %d exceeds maximum %d" length
-               state.max_message_size))
+          Error (Message_size_exceeds_maximum { size = length; max_size = state.max_message_size }))
         else if length = 0 then (
           (* Zero-length message *)
           reset state;
