@@ -7,6 +7,15 @@ type 'a parse_result =
   | Need_more
   | Error of string
 
+(* RFC 9113: SETTINGS_MAX_FRAME_SIZE default is 16384, max is 16777215 *)
+(* For security, we enforce a configurable maximum *)
+let default_max_frame_size = 16384 (* 16 KB *)
+let absolute_max_frame_size = 16777215 (* ~16 MB, RFC maximum *)
+
+type config = { max_frame_size : int }
+
+let default_config = { max_frame_size = default_max_frame_size }
+
 let read_uint24_be data offset =
   if offset + 3 > String.length data then None
   else
@@ -60,12 +69,18 @@ let parse_flags frame_type flags_byte =
   in
   { Frame.end_stream; end_headers; padded; priority; ack }
 
-let parse_frame_header data =
+let parse_frame_header ?(config = default_config) data =
   if String.length data < 9 then Need_more
   else
     match read_uint24_be data 0 with
     | None -> Error "Failed to read length"
     | Some length -> (
+        (* Security fix: Validate frame size to prevent memory exhaustion DoS *)
+        if length > config.max_frame_size then
+          Error
+            (format "Frame size %d exceeds maximum allowed %d" length
+               config.max_frame_size)
+        else (
         match read_uint8 data 3 with
         | None -> Error "Failed to read frame type"
         | Some type_byte -> (
@@ -85,7 +100,7 @@ let parse_frame_header data =
                             value = (length, frame_type, flags, stream_id);
                             remaining =
                               String.sub data 9 (String.length data - 9);
-                          }))))
+                          })))))
 
 let parse_data_payload length flags data =
   let has_padding = flags.Frame.padded in

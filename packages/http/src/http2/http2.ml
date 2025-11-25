@@ -3,3 +3,5 @@
 module Frame = Frame
 module Parser = Parser
 module Serializer = Serializer
+module Hpack = Hpack
+module Connection = Connection
