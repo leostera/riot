@@ -22,133 +22,120 @@ let indent n = tok SK.WHITESPACE (String.make (n * 2) ' ')
 let to_lowercase_ident s = String.lowercase_ascii s
 let to_module_name s = String.capitalize_ascii s
 
-(** Generate a comment describing an RPC method *)
-let generate_rpc_comment rpc =
+(** Generate a val signature for an RPC method *)
+let generate_rpc_signature rpc =
+  let method_name = to_lowercase_ident rpc.name in
+  let req_type = to_lowercase_ident rpc.input_type in
+  let res_type = to_lowercase_ident rpc.output_type in
+
   let pattern = match (rpc.input_stream, rpc.output_stream) with
     | false, false -> "Unary"
     | false, true -> "Server streaming"
     | true, false -> "Client streaming"
     | true, true -> "Bidirectional streaming"
   in
-  tok SK.COMMENT (Format.sprintf "(** %s RPC: %s -> %s *)" pattern rpc.input_type rpc.output_type)
 
-(** Generate client function for unary RPC *)
-let generate_unary_rpc service_name rpc =
-  let method_name = to_lowercase_ident rpc.name in
+  (* Build return type based on streaming pattern *)
+  let return_type = match (rpc.input_stream, rpc.output_stream) with
+    | false, false ->
+        (* Unary: request -> (response, error) Result.t *)
+        [
+          tok SK.IDENT_EXPR "(";
+          tok SK.IDENT_EXPR res_type;
+          tok SK.IDENT_EXPR ","; ws ();
+          tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "t"; ws ();
+          tok SK.IDENT_EXPR "*"; ws ();
+          tok SK.IDENT_EXPR "string";
+          tok SK.IDENT_EXPR ")"; ws ();
+          tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
+        ]
+    | false, true ->
+        (* Server streaming: request -> (response Iter.t, error) Result.t *)
+        [
+          tok SK.IDENT_EXPR "(";
+          tok SK.IDENT_EXPR res_type; ws ();
+          tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
+          tok SK.IDENT_EXPR ","; ws ();
+          tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "t"; ws ();
+          tok SK.IDENT_EXPR "*"; ws ();
+          tok SK.IDENT_EXPR "string";
+          tok SK.IDENT_EXPR ")"; ws ();
+          tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
+        ]
+    | true, false ->
+        (* Client streaming: request Iter.t -> (response, error) Result.t *)
+        [
+          tok SK.IDENT_EXPR "(";
+          tok SK.IDENT_EXPR res_type;
+          tok SK.IDENT_EXPR ","; ws ();
+          tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "t"; ws ();
+          tok SK.IDENT_EXPR "*"; ws ();
+          tok SK.IDENT_EXPR "string";
+          tok SK.IDENT_EXPR ")"; ws ();
+          tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
+        ]
+    | true, true ->
+        (* Bidirectional: request Iter.t -> (response Iter.t, error) Result.t *)
+        [
+          tok SK.IDENT_EXPR "(";
+          tok SK.IDENT_EXPR res_type; ws ();
+          tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
+          tok SK.IDENT_EXPR ","; ws ();
+          tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
+          tok SK.IDENT_EXPR "t"; ws ();
+          tok SK.IDENT_EXPR "*"; ws ();
+          tok SK.IDENT_EXPR "string";
+          tok SK.IDENT_EXPR ")"; ws ();
+          tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
+        ]
+  in
+
+  (* Build parameter type *)
+  let param_type = if rpc.input_stream then
+    [tok SK.IDENT_EXPR req_type; ws (); tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"]
+  else
+    [tok SK.IDENT_EXPR req_type]
+  in
+
   [
-    generate_rpc_comment rpc; nl ();
-    tok SK.IDENT_EXPR "let"; ws ();
-    tok SK.IDENT_EXPR method_name; ws ();
-    tok SK.IDENT_EXPR "conn"; ws ();
-    tok SK.IDENT_EXPR "request"; ws ();
-    tok SK.IDENT_EXPR "="; nl ();
+    nl ();
     indent 1;
-    tok SK.IDENT_EXPR "Blink"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "GRPC"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "Client"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "call_unary"; ws ();
-    tok SK.IDENT_EXPR "conn"; nl ();
-    indent 2; tok SK.IDENT_EXPR "~service"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" service_name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~method_"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" rpc.name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~request"; ws ();
-    tok SK.IDENT_EXPR "()"; nl ()
+    tok SK.COMMENT (Format.sprintf "(** %s: %s -> %s *)" pattern rpc.input_type rpc.output_type);
+    nl ();
+    indent 1;
+    tok SK.IDENT_EXPR "val"; ws ();
+    tok SK.IDENT_EXPR method_name; ws ();
+    tok SK.IDENT_EXPR ":"; ws ()
+  ] @ param_type @ [
+    ws ();
+    tok SK.IDENT_EXPR "->"; ws ()
+  ] @ return_type @ [
+    nl ()
   ]
 
-(** Generate client function for server streaming RPC *)
-let generate_server_streaming_rpc service_name rpc =
-  let method_name = to_lowercase_ident rpc.name in
-  [
-    generate_rpc_comment rpc; nl ();
-    tok SK.IDENT_EXPR "let"; ws ();
-    tok SK.IDENT_EXPR method_name; ws ();
-    tok SK.IDENT_EXPR "conn"; ws ();
-    tok SK.IDENT_EXPR "request"; ws ();
-    tok SK.IDENT_EXPR "="; nl ();
-    indent 1;
-    tok SK.IDENT_EXPR "Blink"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "GRPC"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "Client"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "call_server_streaming"; ws ();
-    tok SK.IDENT_EXPR "conn"; nl ();
-    indent 2; tok SK.IDENT_EXPR "~service"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" service_name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~method_"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" rpc.name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~request"; ws ();
-    tok SK.IDENT_EXPR "()"; nl ()
-  ]
-
-(** Generate client function for client streaming RPC *)
-let generate_client_streaming_rpc service_name rpc =
-  let method_name = to_lowercase_ident rpc.name in
-  [
-    generate_rpc_comment rpc; nl ();
-    tok SK.IDENT_EXPR "let"; ws ();
-    tok SK.IDENT_EXPR method_name; ws ();
-    tok SK.IDENT_EXPR "conn"; ws ();
-    tok SK.IDENT_EXPR "="; nl ();
-    indent 1;
-    tok SK.IDENT_EXPR "Blink"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "GRPC"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "Client"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "call_client_streaming"; ws ();
-    tok SK.IDENT_EXPR "conn"; nl ();
-    indent 2; tok SK.IDENT_EXPR "~service"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" service_name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~method_"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" rpc.name); nl ();
-    indent 2; tok SK.IDENT_EXPR "()"; nl ()
-  ]
-
-(** Generate client function for bidirectional streaming RPC *)
-let generate_bidi_streaming_rpc service_name rpc =
-  let method_name = to_lowercase_ident rpc.name in
-  [
-    generate_rpc_comment rpc; nl ();
-    tok SK.IDENT_EXPR "let"; ws ();
-    tok SK.IDENT_EXPR method_name; ws ();
-    tok SK.IDENT_EXPR "conn"; ws ();
-    tok SK.IDENT_EXPR "="; nl ();
-    indent 1;
-    tok SK.IDENT_EXPR "Blink"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "GRPC"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "Client"; tok SK.IDENT_EXPR ".";
-    tok SK.IDENT_EXPR "call_bidi_streaming"; ws ();
-    tok SK.IDENT_EXPR "conn"; nl ();
-    indent 2; tok SK.IDENT_EXPR "~service"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" service_name); nl ();
-    indent 2; tok SK.IDENT_EXPR "~method_"; tok SK.IDENT_EXPR ":";
-    tok SK.STRING_LITERAL (Format.sprintf "\"%s\"" rpc.name); nl ();
-    indent 2; tok SK.IDENT_EXPR "()"; nl ()
-  ]
-
-(** Generate client function for an RPC based on streaming pattern *)
-let generate_rpc_function service_name rpc =
-  match (rpc.input_stream, rpc.output_stream) with
-  | false, false -> generate_unary_rpc service_name rpc
-  | false, true -> generate_server_streaming_rpc service_name rpc
-  | true, false -> generate_client_streaming_rpc service_name rpc
-  | true, true -> generate_bidi_streaming_rpc service_name rpc
-
-(** Generate a module for a service *)
-let generate_service_module service =
+(** Generate a module type signature for a service *)
+let generate_service_signature service =
   let module_name = to_module_name service.name in
 
-  (* Generate all RPC functions *)
-  let rpc_functions = List.map (fun rpc ->
-    nl () :: generate_rpc_function service.name rpc
-  ) service.rpcs in
-  let all_rpcs = List.flatten rpc_functions in
+  (* Generate val signatures for each RPC *)
+  let rpc_sigs = List.map generate_rpc_signature service.rpcs in
+  let all_sigs = List.flatten rpc_sigs in
 
-  (* Build module *)
-  node SK.MODULE_DECL ([
+  (* Build module type *)
+  node SK.MODULE_TYPE_DECL ([
     tok SK.IDENT_EXPR "module"; ws ();
+    tok SK.IDENT_EXPR "type"; ws ();
     tok SK.IDENT_EXPR module_name; ws ();
     tok SK.IDENT_EXPR "="; ws ();
-    tok SK.IDENT_EXPR "struct"; nl ()
-  ] @ all_rpcs @ [
+    tok SK.IDENT_EXPR "sig"; nl ()
+  ] @ all_sigs @ [
     tok SK.IDENT_EXPR "end"; nl ()
   ])
 
@@ -161,7 +148,7 @@ let generate proto =
   (* Build header for services *)
   let service_header = [
     nl ();
-    tok SK.COMMENT "(* Generated gRPC service clients *)";
+    tok SK.COMMENT "(* Generated gRPC service signatures *)";
     nl ();
     nl ()
   ] in
@@ -169,7 +156,7 @@ let generate proto =
   (* Process all service definitions *)
   let services = List.filter_map (fun def ->
     match def with
-    | Service svc -> Some (generate_service_module svc)
+    | Service svc -> Some (generate_service_signature svc)
     | _ -> None
   ) proto.definitions in
 
