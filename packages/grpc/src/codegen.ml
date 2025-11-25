@@ -52,11 +52,11 @@ let generate_rpc_signature rpc =
           tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
         ]
     | false, true ->
-        (* Server streaming: request -> (response Iter.t, error) Result.t *)
+        (* Server streaming: request -> (response MutIterator.t, error) Result.t *)
         [
           tok SK.IDENT_EXPR "(";
           tok SK.IDENT_EXPR res_type; ws ();
-          tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
+          tok SK.IDENT_EXPR "MutIterator"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
           tok SK.IDENT_EXPR ","; ws ();
           tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
           tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
@@ -67,7 +67,7 @@ let generate_rpc_signature rpc =
           tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
         ]
     | true, false ->
-        (* Client streaming: request Iter.t -> (response, error) Result.t *)
+        (* Client streaming: request MutIterator.t -> (response, error) Result.t *)
         [
           tok SK.IDENT_EXPR "(";
           tok SK.IDENT_EXPR res_type;
@@ -81,11 +81,11 @@ let generate_rpc_signature rpc =
           tok SK.IDENT_EXPR "Result"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"
         ]
     | true, true ->
-        (* Bidirectional: request Iter.t -> (response Iter.t, error) Result.t *)
+        (* Bidirectional: request MutIterator.t -> (response MutIterator.t, error) Result.t *)
         [
           tok SK.IDENT_EXPR "(";
           tok SK.IDENT_EXPR res_type; ws ();
-          tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
+          tok SK.IDENT_EXPR "MutIterator"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t";
           tok SK.IDENT_EXPR ","; ws ();
           tok SK.IDENT_EXPR "Grpc"; tok SK.IDENT_EXPR ".";
           tok SK.IDENT_EXPR "Status"; tok SK.IDENT_EXPR ".";
@@ -99,7 +99,7 @@ let generate_rpc_signature rpc =
 
   (* Build parameter type *)
   let param_type = if rpc.input_stream then
-    [tok SK.IDENT_EXPR req_type; ws (); tok SK.IDENT_EXPR "Iter"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"]
+    [tok SK.IDENT_EXPR req_type; ws (); tok SK.IDENT_EXPR "MutIterator"; tok SK.IDENT_EXPR "."; tok SK.IDENT_EXPR "t"]
   else
     [tok SK.IDENT_EXPR req_type]
   in

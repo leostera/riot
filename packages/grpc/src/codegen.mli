@@ -25,9 +25,9 @@ open Std
       - Each service gets a module type named ServiceName
       - Val signatures for each RPC method with correct types:
         - Unary: request -> (response, error) Result.t
-        - Server streaming: request -> (response Iter.t, error) Result.t
-        - Client streaming: request Iter.t -> (response, error) Result.t
-        - Bidirectional: request Iter.t -> (response Iter.t, error) Result.t
+        - Server streaming: request -> (response MutIterator.t, error) Result.t
+        - Client streaming: request MutIterator.t -> (response, error) Result.t
+        - Bidirectional: request MutIterator.t -> (response MutIterator.t, error) Result.t
 
     @param proto Protobuf file AST
     @return Ceibo green tree (syntax tree root)
