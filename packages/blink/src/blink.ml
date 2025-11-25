@@ -1,6 +1,7 @@
 open Std
 module Connection = Connection
 module WebSocket = Websocket
+module GRPC = Grpc
 
 type error = Connection.error
 type message = Connection.message
