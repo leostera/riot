@@ -30,3 +30,9 @@ module Response = Response
 
 module Http1 = Http1_handler
 (** HTTP/1.1 protocol handler *)
+
+module Http2 = Http2_handler
+(** HTTP/2 protocol handler *)
+
+module ProtocolDetector = Protocol_detector
+(** Auto-detect HTTP/1.1 vs HTTP/2 and switch handlers *)
