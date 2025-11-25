@@ -10,5 +10,6 @@ open Std
 
 module Status = Status
 module Message = Message
+module Message_reader = Message_reader
 module Metadata = Metadata
 module Call = Call
