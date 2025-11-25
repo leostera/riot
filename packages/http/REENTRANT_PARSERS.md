@@ -5,7 +5,7 @@
 
 ## Overview
 
-All HTTP/2 and gRPC parsers have been refactored to use `Std.IO.Reader` and be fully reentrant. This enables:
+All HTTP/2, gRPC, and Protobuf parsers have been refactored to use `Std.IO.Reader` and be fully reentrant. This enables:
 
 - **Streaming I/O**: Parse data as it arrives without buffering entire frames/messages
 - **Non-blocking**: Parsers return `Need_more` when data is incomplete
@@ -208,6 +208,62 @@ let rec read_messages () =
 - Handles compressed flag
 - Zero-copy payload extraction
 - Configurable max message size
+
+### 4. Protobuf Wire Format Decoder
+
+**Module**: `Protobuf.Wire_format_reader`
+
+**Error Types**:
+```ocaml
+type decode_error =
+  | Unexpected_eof_reading_varint
+  | Unexpected_eof_reading_i32
+  | Unexpected_eof_reading_i64
+  | Unexpected_eof_reading_length_delimited of int
+  | Invalid_wire_type of int
+  | Mismatched_group_end_tag of { expected : int; actual : int }
+  | Unexpected_group_end_tag
+  | Unsupported_encoding
+```
+
+**State Machine**:
+```
+ReadingTag (varint: field_number + wire_type)
+         │
+         ├─ WtVarint → ReadingVarint → record → ReadingTag
+         ├─ WtI32 → ReadingI32 (4 bytes) → record → ReadingTag
+         ├─ WtI64 → ReadingI64 (8 bytes) → record → ReadingTag
+         ├─ WtLen → ReadingLenLength → ReadingLenData (N bytes) → record → ReadingTag
+         ├─ WtSgroup → Error (Unsupported_encoding)
+         └─ WtEgroup → Error (Unexpected_group_end_tag)
+
+When ReadingTag and no more data → MessageComplete
+```
+
+**Usage**:
+```ocaml
+let decoder = Protobuf.Wire_format_reader.create () in
+let reader = IO.Reader.create stream in
+
+match Protobuf.Wire_format_reader.decode decoder reader with
+| Message records ->
+    (* Got complete protobuf message *)
+    handle_protobuf_message records
+| Need_more ->
+    yield ();
+    retry ()
+| Error (Invalid_wire_type typ) ->
+    log_error (format "Invalid wire type: %d" typ)
+| Error e ->
+    handle_decode_error e
+```
+
+**Features**:
+- Incremental varint decoding (multi-byte accumulation)
+- Handles nested messages (length-delimited recursion)
+- Validates wire types before processing
+- Groups not supported (deprecated in proto3)
+- Zero-length fields handled correctly
 
 ## Benefits
 

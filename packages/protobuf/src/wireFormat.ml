@@ -34,6 +34,15 @@ and record = { field_number : int; value : value }
 
 type t = record list
 
+type decode_error =
+  | Unexpected_eof_reading_varint
+  | Unexpected_eof_reading_i32
+  | Unexpected_eof_reading_i64
+  | Unexpected_eof_reading_length_delimited of int
+  | Invalid_wire_type of int
+  | Mismatched_group_end_tag of { expected : int; actual : int }
+  | Unexpected_group_end_tag
+
 module ByteCursor = struct
   type t = { source : bytes; mutable pos : int; length : int }
 
@@ -64,7 +73,7 @@ module Decoder = struct
   let decode_varint cursor =
     let rec loop acc shift =
       match ByteCursor.read_byte cursor with
-      | None -> Error "Unexpected EOF while reading varint"
+      | None -> Error Unexpected_eof_reading_varint
       | Some byte ->
           let b = Char.code byte in
           let value = Int64.of_int (b land 0x7F) in
@@ -92,11 +101,11 @@ module Decoder = struct
         | 3 -> Ok (field_number, WtSgroup)
         | 4 -> Ok (field_number, WtEgroup)
         | 5 -> Ok (field_number, WtI32)
-        | _ -> Error ("Invalid wire type: " ^ string_of_int wire_type_int))
+        | _ -> Error (Invalid_wire_type wire_type_int))
 
   let decode_i32 cursor =
     match ByteCursor.read_bytes cursor 4 with
-    | None -> Error "Unexpected EOF while reading i32"
+    | None -> Error Unexpected_eof_reading_i32
     | Some bytes ->
         let b0 = Int32.of_int (Char.code (Stdlib.Bytes.get bytes 0)) in
         let b1 = Int32.of_int (Char.code (Stdlib.Bytes.get bytes 1)) in
@@ -112,7 +121,7 @@ module Decoder = struct
 
   let decode_i64 cursor =
     match ByteCursor.read_bytes cursor 8 with
-    | None -> Error "Unexpected EOF while reading i64"
+    | None -> Error Unexpected_eof_reading_i64
     | Some bytes ->
         let b0 = Int64.of_int (Char.code (Stdlib.Bytes.get bytes 0)) in
         let b1 = Int64.of_int (Char.code (Stdlib.Bytes.get bytes 1)) in
@@ -171,7 +180,7 @@ module Decoder = struct
                 let len = Int64.to_int len_val in
                 match ByteCursor.read_bytes cursor len with
                 | None ->
-                    Error "Unexpected EOF while reading length-delimited field"
+                    Error (Unexpected_eof_reading_length_delimited len)
                 | Some data -> (
                     let nested_cursor = ByteCursor.create data in
                     match decode_message nested_cursor with
@@ -186,7 +195,7 @@ module Decoder = struct
               | Error e -> Error e
               | Ok (fn, WtEgroup) ->
                   if fn = field_number then Ok (Cell.get records)
-                  else Error "Mismatched group end tag"
+                  else Error (Mismatched_group_end_tag { expected = field_number; actual = fn })
               | Ok _ -> (
                   match decode_record cursor with
                   | Error e -> Error e
@@ -197,7 +206,7 @@ module Decoder = struct
             match read_group () with
             | Error e -> Error e
             | Ok recs -> Ok { field_number; value = Group recs })
-        | WtEgroup -> Error "Unexpected group end tag")
+        | WtEgroup -> Error Unexpected_group_end_tag)
 
   let decode bytes =
     let cursor = ByteCursor.create bytes in
