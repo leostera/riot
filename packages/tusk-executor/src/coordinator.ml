@@ -5,14 +5,6 @@ open Tusk_model
 open Tusk_planner
 open Telemetry_events
 
-(** Coordinator currently owns workspace/package orchestration only.
-    Action-level dependency scheduling and cache decisions are delegated to
-    [Package_builder] -> [Action_executor].
-
-    Stage-4 target shape (RFD0012) is to lift action readiness to workspace
-    scope; until that lands, this module enforces a single concurrency budget
-    by avoiding an additional package worker pool. *)
-
 type workspace_result = {
   results : Package_builder.build_result list;
   total_duration : Time.Duration.t;
@@ -22,23 +14,65 @@ type workspace_result = {
   package_graph : Package_graph.t;
 }
 
-let run_package ~workspace ~toolchain ~store ~package_graph ~build_ctx
-    (node : Package_graph.package_node) =
-  let package = Package_graph.get_package node in
-  let result =
-    Package_builder.build ~workspace ~toolchain ~store ~package_graph
-      ~package_key:(Package_graph.get_key node) ~package ~build_ctx
+type package_runtime = {
+  package_key : Package.key;
+  package : Package.t;
+  hash : Crypto.hash;
+  depset : Dependency.t list;
+  module_graph : Module_node.t Graph.SimpleGraph.t;
+  action_graph : Action_graph.t;
+  sandbox : Sandbox.t;
+  action_queue : Action_queue.t;
+  completed_actions :
+    (Graph.SimpleGraph.Node_id.t, Action_executor.execution_result) HashMap.t;
+  export_entries : Tusk_store.Store.export_entry list;
+  target_dir : Path.t;
+  total_actions : int;
+  mutable active : bool;
+  mutable compilation_started : bool;
+}
+
+let action_error_to_package_error = function
+  | Action_executor.ExecutionFailed { message } ->
+      Package_builder.ActionExecutionFailed { message }
+  | Action_executor.OutputsNotCreated { missing } ->
+      Package_builder.ActionOutputsNotCreated { missing }
+  | Action_executor.DependenciesFailed { failed } ->
+      Package_builder.ActionDependenciesFailed { failed }
+
+let compute_export_entries (action_graph : Action_graph.t) :
+    Tusk_store.Store.export_entry list =
+  let entries =
+    Action_graph.nodes action_graph
+    |> List.concat_map (fun (node : Action_node.t) ->
+           let action_hash_hex = Crypto.Digest.hex (Action_node.get_hash node) in
+           List.map
+             (fun out_path ->
+               Tusk_store.Store.
+                 {
+                   name = Path.basename out_path;
+                   path = out_path;
+                   action_hash = action_hash_hex;
+                 })
+             node.value.outs)
   in
-  let status =
-    match result.status with
-    | Cached _ -> "cached"
-    | Built _ -> "built"
-    | Failed _ -> "failed"
+  let seen = HashSet.create () in
+  List.filter_map
+    (fun (entry : Tusk_store.Store.export_entry) ->
+      if HashSet.contains seen entry.name then None
+      else (
+        let _ = HashSet.insert seen entry.name in
+        Some entry))
+    entries
+
+let artifact_from_exports ~package_hash
+    (exports : Tusk_store.Store.export_entry list) =
+  let files =
+    List.map
+      (fun (entry : Tusk_store.Store.export_entry) -> Path.v entry.name)
+      exports
   in
-  Log.info
-    ("Package " ^ result.package.Package.name ^ ": " ^ status ^ " ("
-    ^ Int.to_string (Time.Duration.to_millis result.duration) ^ "ms)");
-  result
+  Tusk_store.Artifact.{ hash = package_hash; files }
 
 let summarize_results ~package_graph
     (results : Package_builder.build_result list) =
@@ -59,6 +93,397 @@ let summarize_results ~package_graph
     failed_count;
     package_graph;
   }
+
+let result_is_success (result : Package_builder.build_result) =
+  match result.status with
+  | Package_builder.Built _ | Cached _ -> true
+  | Failed _ -> false
+
+let result_is_failed (result : Package_builder.build_result) =
+  match result.status with
+  | Package_builder.Failed _ -> true
+  | Cached _ | Built _ -> false
+
+let dependency_keys package_graph package_key =
+  match Package_graph.get_node_by_key package_graph package_key with
+  | None -> []
+  | Some node ->
+      Package_graph.get_dependencies_for_node package_graph node
+      |> List.map Package_graph.get_key
+
+let mark_package_failed_in_graph package_graph ~package ~package_key ~hash ~error =
+  match Package_graph.get_node_by_key package_graph package_key with
+  | None -> ()
+  | Some node ->
+      node.value <-
+        Package_graph.Failed
+          {
+            package;
+            scope = Package_graph.get_scope node.value;
+            hash;
+            error;
+          }
+
+let mark_package_built_in_graph package_graph ~runtime ~artifact ~status =
+  match Package_graph.get_node_by_key package_graph runtime.package_key with
+  | None -> ()
+  | Some node ->
+      node.value <-
+        Package_graph.Built
+          {
+            package = runtime.package;
+            scope = Package_graph.get_scope node.value;
+            module_graph = runtime.module_graph;
+            action_graph = runtime.action_graph;
+            hash = runtime.hash;
+            artifact;
+            status;
+            depset = runtime.depset;
+          }
+
+let finalize_package_success ~session_id ~store ~runtime =
+  let _ =
+    Tusk_store.Store.save_package_exports store ~package:runtime.package.name
+      ~profile:(Path.basename (Path.dirname (Path.dirname runtime.target_dir)))
+      ~target:(Path.basename (Path.dirname runtime.target_dir))
+      ~exports:runtime.export_entries
+    |> Result.expect
+         ~msg:
+           ("Failed to save package export manifest for " ^ runtime.package.name)
+  in
+  Tusk_store.Store.materialize_package_exports store ~exports:runtime.export_entries
+    ~target_dir:runtime.target_dir
+  |> Result.expect
+       ~msg:
+         ("Failed to materialize package exports for " ^ runtime.package.name);
+  let artifact = artifact_from_exports ~package_hash:runtime.hash runtime.export_entries in
+  let all_cached =
+    HashMap.into_iter runtime.completed_actions
+    |> Iter.Iterator.to_list
+    |> List.for_all (fun (_, r) ->
+           match r.Action_executor.status with
+           | Action_executor.Cached _ -> true
+           | Action_executor.Executed | Failed _ | Skipped -> false)
+  in
+  let status =
+    if all_cached then `Cached else `Fresh
+  in
+  Telemetry.emit
+    (BuildCompleted
+       {
+         session_id;
+         package = runtime.package;
+         target = Workspace_planner.Package runtime.package.name;
+         status;
+         duration = Time.Duration.zero;
+       });
+  match status with
+  | `Cached -> Package_builder.Cached artifact
+  | `Fresh -> Built artifact
+
+let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
+    ~build_ctx ~session_id ~nodes =
+  let profile_name = build_ctx.Build_ctx.profile.name in
+  let target_triple_str =
+    Kernel.System.Host.to_string (Build_ctx.target_triplet build_ctx)
+  in
+  let runtimes : (Package.key, package_runtime) HashMap.t = HashMap.create () in
+  let package_results : (Package.key, Package_builder.build_result) HashMap.t =
+    HashMap.create ()
+  in
+  let action_ready_queue : (Package.key * Action_node.t) Queue.t = Queue.create () in
+
+  let materialize_initial_failure package_key package status =
+    let result =
+      Package_builder.
+        {
+          package_key;
+          package;
+          status;
+          duration = Time.Duration.zero;
+        }
+    in
+    let _ = HashMap.insert package_results package_key result in
+    result
+  in
+
+  List.iter
+    (fun package_node ->
+      let package = Package_graph.get_package package_node in
+      let package_key = Package_graph.get_key package_node in
+      match
+        Tusk_planner.plan_package_with_graph ~workspace ~toolchain ~store
+          ~package_graph ~package_key ~package ~build_ctx
+      with
+      | Error err ->
+          let _ =
+            materialize_initial_failure package_key package
+              (Package_builder.Failed (PlanningFailed err))
+          in
+          ()
+      | Ok (MissingDependencies { missing; _ }) ->
+          let names = List.map (fun p -> p.Package.name) missing in
+          let _ =
+            materialize_initial_failure package_key package
+              (Package_builder.Failed
+                 (ExecutionFailed
+                    {
+                      message = "Missing dependencies: " ^ String.concat ", " names;
+                    }))
+          in
+          ()
+      | Ok (FailedDependencies { failed; _ }) ->
+          let names = List.map (fun p -> p.Package.name) failed in
+          let _ =
+            materialize_initial_failure package_key package
+              (Package_builder.Failed
+                 (ExecutionFailed
+                    {
+                      message = "Failed dependencies: " ^ String.concat ", " names;
+                    }))
+          in
+          ()
+      | Ok
+          (Planned
+            {
+              package_key;
+              hash;
+              depset;
+              module_graph;
+              action_graph;
+              _;
+            }) ->
+          let inputs =
+            List.concat
+              [
+                package.sources.src;
+                package.sources.native;
+                package.sources.tests;
+              ]
+          in
+          let target_dir =
+            Path.(
+              Tusk_dirs.out_dir_with_target ~workspace_root:workspace.root
+                ~profile:profile_name ~target:target_triple_str
+              / Path.v package.name)
+          in
+          let sandbox = Sandbox.create ~workspace ~package_name:package.name in
+          Sandbox.prepare ~sandbox ~package ~inputs ~depset ~store;
+          let action_queue = Action_queue.create () in
+          let action_nodes = Action_graph.nodes action_graph in
+          List.iter (Action_queue.queue action_queue) action_nodes;
+          let runtime =
+            {
+              package_key;
+              package;
+              hash;
+              depset;
+              module_graph;
+              action_graph;
+              sandbox;
+              action_queue;
+              completed_actions = action_queue.completed;
+              export_entries = compute_export_entries action_graph;
+              target_dir;
+              total_actions = List.length action_nodes;
+              active = false;
+              compilation_started = false;
+            }
+          in
+          let _ = HashMap.insert runtimes package_key runtime in
+          (match Package_graph.get_node_by_key package_graph package_key with
+          | Some node ->
+              node.value <-
+                Package_graph.Planned
+                  {
+                    package;
+                    scope = Package_graph.get_scope node.value;
+                    module_graph;
+                    action_graph;
+                    hash;
+                  }
+          | None -> ()))
+    nodes;
+
+  let activate_ready_packages () =
+    HashMap.iter
+      (fun package_key runtime ->
+        if runtime.active then ()
+        else if Option.is_some (HashMap.get package_results package_key) then ()
+        else
+          let dep_keys = dependency_keys package_graph package_key in
+          let deps_failed =
+            List.exists
+              (fun dep_key ->
+                match HashMap.get package_results dep_key with
+                | Some result -> result_is_failed result
+                | None -> false)
+              dep_keys
+          in
+          if deps_failed then (
+            let reason = "needs failed dependencies" in
+            Telemetry.emit
+              (BuildSkipped
+                 {
+                   session_id;
+                   package = runtime.package;
+                   target = Workspace_planner.Package runtime.package.name;
+                   reason;
+                 });
+            let result =
+              Package_builder.
+                {
+                  package_key;
+                  package = runtime.package;
+                  status =
+                    Failed
+                      (ExecutionFailed
+                         {
+                           message =
+                             "Skipped " ^ runtime.package.name ^ " (" ^ reason ^ ")";
+                         });
+                  duration = Time.Duration.zero;
+                }
+            in
+            let _ = HashMap.insert package_results package_key result in
+            mark_package_failed_in_graph package_graph ~package:runtime.package
+              ~package_key ~hash:runtime.hash ~error:reason;
+            Sandbox.cleanup runtime.sandbox)
+          else
+            let deps_satisfied =
+              List.for_all
+                (fun dep_key ->
+                  match HashMap.get package_results dep_key with
+                  | Some result -> result_is_success result
+                  | None -> false)
+                dep_keys
+            in
+            if deps_satisfied then (
+              runtime.active <- true;
+              Telemetry.emit
+                (BuildStarted
+                   {
+                     session_id;
+                     package = runtime.package;
+                     target = Workspace_planner.Package runtime.package.name;
+                   });
+              match Action_queue.next runtime.action_queue with
+              | Some node -> Queue.push action_ready_queue (package_key, node)
+              | None -> ()))
+      runtimes
+  in
+
+  let finalize_if_complete package_key runtime =
+    if
+      Option.is_none (HashMap.get package_results package_key)
+      && Action_queue.is_complete runtime.action_queue
+           ~total_nodes:runtime.total_actions
+    then
+      let failures =
+        HashMap.into_iter runtime.completed_actions
+        |> Iter.Iterator.to_list
+        |> List.filter_map (fun (_, r) ->
+               match r.Action_executor.status with
+               | Failed err -> Some err
+               | Cached _ | Executed | Skipped -> None)
+      in
+      match failures with
+      | first_failure :: _ ->
+          let pkg_err = action_error_to_package_error first_failure in
+          let result =
+            Package_builder.
+              {
+                package_key;
+                package = runtime.package;
+                status = Failed pkg_err;
+                duration = Time.Duration.zero;
+              }
+          in
+          let _ = HashMap.insert package_results package_key result in
+          mark_package_failed_in_graph package_graph ~package:runtime.package
+            ~package_key ~hash:runtime.hash
+            ~error:(Package_builder.package_error_to_string pkg_err);
+          Telemetry.emit
+            (BuildFailed
+               {
+                 session_id;
+                 package = runtime.package;
+                 target = Workspace_planner.Package runtime.package.name;
+                 error = pkg_err;
+               });
+          Sandbox.cleanup runtime.sandbox
+      | [] ->
+          let status = finalize_package_success ~session_id ~store ~runtime in
+          let build_status =
+            match status with
+            | Package_builder.Cached artifact ->
+                mark_package_built_in_graph package_graph ~runtime ~artifact
+                  ~status:Package_graph.Cached;
+                Cached artifact
+            | Built artifact ->
+                mark_package_built_in_graph package_graph ~runtime ~artifact
+                  ~status:Package_graph.Fresh;
+                Built artifact
+            | Failed _ ->
+                panic "Unexpected failed status during success finalization"
+          in
+          let result =
+            Package_builder.
+              {
+                package_key;
+                package = runtime.package;
+                status = build_status;
+                duration = Time.Duration.zero;
+              }
+          in
+          let _ = HashMap.insert package_results package_key result in
+          Sandbox.cleanup runtime.sandbox
+  in
+
+  let total_packages = List.length nodes in
+  let rec loop () =
+    if HashMap.len package_results = total_packages then ()
+    else (
+      activate_ready_packages ();
+      match Queue.pop action_ready_queue with
+      | None ->
+          (* No actions available yet; either dependency-gated packages remain or
+             all remaining packages were completed by activation. *)
+          if HashMap.len package_results = total_packages then ()
+          else loop ()
+      | Some (package_key, action_node) -> (
+          match HashMap.get runtimes package_key with
+          | None -> loop ()
+          | Some runtime ->
+              if
+                (not runtime.compilation_started)
+                && (match action_node.value.actions with [] -> false | _ -> true)
+              then (
+                runtime.compilation_started <- true;
+                Telemetry.emit
+                  (CompilationStarted
+                     {
+                       session_id;
+                       package = runtime.package;
+                       target = Workspace_planner.Package runtime.package.name;
+                     }));
+              let sandbox_dir = Sandbox.get_dir runtime.sandbox in
+              let action_result =
+                Action_executor.execute_node ~completed:runtime.completed_actions
+                  ~store ~session_id toolchain sandbox_dir action_node
+              in
+              Action_queue.mark_completed runtime.action_queue action_result;
+              (match Action_queue.next runtime.action_queue with
+              | Some next_node -> Queue.push action_ready_queue (package_key, next_node)
+              | None -> ());
+              finalize_if_complete package_key runtime;
+              loop ()))
+  in
+  loop ();
+  package_results
+  |> HashMap.into_iter
+  |> Iter.Iterator.to_list
+  |> List.map (fun (_, result) -> result)
 
 let build_workspace ~workspace ~toolchain ~store ~target ~scope ~concurrency
     ~build_ctx ~session_id =
@@ -81,9 +506,8 @@ let build_workspace ~workspace ~toolchain ~store ~target ~scope ~concurrency
           Error (Workspace_planner.CycleDetected { cycle })
       | nodes ->
           let results =
-            List.map
-              (run_package ~workspace ~toolchain ~store ~package_graph ~build_ctx)
-              nodes
+            build_workspace_actions ~workspace ~toolchain ~store ~package_graph
+              ~build_ctx ~session_id ~nodes
           in
           let result = summarize_results ~package_graph results in
           let total_duration =
