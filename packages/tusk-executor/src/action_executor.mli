@@ -4,20 +4,20 @@ open Tusk_planner
 module G = Graph.SimpleGraph
 
 (** Errors that can occur during action execution *)
-type action_error =
+type action_error = Action_queue.action_error =
   | ExecutionFailed of { message : string }
   | OutputsNotCreated of { missing : Path.t list }
   | DependenciesFailed of { failed : G.Node_id.t list }
 
 (** Status of an executed action *)
-type action_status =
+type action_status = Action_queue.action_status =
   | Cached of Crypto.hash
   | Executed
   | Failed of action_error
   | Skipped
 
 (** Result of executing a single action *)
-type execution_result = {
+type execution_result = Action_queue.execution_result = {
   node_id : G.Node_id.t;
   status : action_status;
   duration : Time.Duration.t;
