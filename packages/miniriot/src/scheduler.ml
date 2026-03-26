@@ -877,35 +877,6 @@ let poll_io t =
           | _ -> ()))
     events
 
-let reactor_loop t =
-  Domain.DLS.set current_context
-    (Some { scheduler = t; worker_id = None; current_process = None });
-  while (not (Atomic.get t.stop)) || has_pending_reactor_commands t do
-    List.iter (handle_reactor_command t) (drain_reactor_commands t);
-    process_timers t;
-    if not (Atomic.get t.stop) then poll_io t
-  done
-
-let worker_loop t worker =
-  let ctx =
-    {
-      scheduler = t;
-      worker_id = Some worker.id;
-      current_process = None;
-    }
-  in
-  Domain.DLS.set current_context (Some ctx);
-  while not (Atomic.get t.stop) do
-    match pop_local worker with
-    | Some proc -> step_process t ctx proc
-    | None ->
-        if not (attempt_steal t worker) then
-          match wait_for_local_work t worker with
-          | None -> ()
-          | Some proc -> step_process t ctx proc
-  done;
-  ctx.current_process <- None
-
 (* Internal runtime split used by RFD0010:
    - [Runtime] owns runtime-wide state and cross-worker operations
    - [Reactor] owns timer/I/O command processing and polling loop
@@ -940,12 +911,26 @@ module Reactor = struct
     Scheduler_reactor.Make (struct
       type runtime = t
       type command = reactor_command
+      type context = domain_context
 
       let add_timer = add_timer
       let cancel_timer = cancel_timer
       let register_io = register_io
       let deregister_io = deregister_io
-      let loop = reactor_loop
+      let make_context scheduler =
+        {
+          scheduler;
+          worker_id = None;
+          current_process = None;
+        }
+
+      let set_context ctx = Domain.DLS.set current_context ctx
+      let should_stop scheduler = Atomic.get scheduler.stop
+      let has_pending_commands = has_pending_reactor_commands
+      let drain_commands = drain_reactor_commands
+      let handle_command = handle_reactor_command
+      let process_timers = process_timers
+      let poll_io = poll_io
     end)
 end
 
@@ -954,9 +939,23 @@ module Worker = struct
     Scheduler_worker.Make (struct
       type runtime = t
       type state = worker
+      type slot = process_slot
+      type context = domain_context
 
-      let loop = worker_loop
+      let make_context scheduler worker =
+        {
+          scheduler;
+          worker_id = Some worker.id;
+          current_process = None;
+        }
+
+      let set_context ctx = Domain.DLS.set current_context ctx
+      let clear_current_process ctx = ctx.current_process <- None
+      let should_stop scheduler = Atomic.get scheduler.stop
+      let pop_local = pop_local
+      let step_process = step_process
       let attempt_steal = attempt_steal
+      let wait_for_local_work = wait_for_local_work
     end)
 end
 
