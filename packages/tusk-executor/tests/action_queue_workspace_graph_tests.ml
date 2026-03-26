@@ -3,10 +3,9 @@ open Std
 module Test = Std.Test
 module G = Graph.SimpleGraph
 
-let test_toolchain =
-  lazy
-    (Tusk_toolchain.init ~config:Tusk_model.Toolchain_config.default
-    |> Result.expect ~msg:"failed to initialize toolchain")
+let test_toolchain () =
+  Tusk_toolchain.init ~config:Tusk_model.Toolchain_config.default
+  |> Result.expect ~msg:"failed to initialize toolchain"
 
 let make_test_package name =
   Tusk_model.Package.
@@ -28,10 +27,13 @@ let make_test_package name =
 
 let make_action_node ?(deps = []) ?(outs = []) ?(actions = []) package_name =
   let package = make_test_package package_name in
-  Tusk_planner.Action_node.make ~actions ~outs ~srcs:[] ~package
-    ~toolchain:(Lazy.force test_toolchain)
-    ~dependency_hashes:(fun _ -> Crypto.hash_string "dep")
-    ~deps
+  let spec =
+    Tusk_planner.Action_node.make ~actions ~outs ~srcs:[] ~package
+      ~toolchain:(test_toolchain ())
+      ~dependency_hashes:(fun _ -> Crypto.hash_string "dep")
+      ~deps
+  in
+  Tusk_planner.Action_graph.add_node (Tusk_planner.Action_graph.create ()) spec
 
 let executed_result node_id =
   let now = Time.Instant.now () in
