@@ -249,6 +249,61 @@ let test_find_package_export_path_rejects_absolute_export_paths () =
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_find_package_export_path_returns_none_when_name_missing () =
+  match
+    Fs.with_tempdir ~prefix:"store_find_export_missing_name_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let exports =
+          [
+            Tusk_store.Store.
+              { name = "existing"; path = Path.v "bin/existing"; action_hash = "abc" };
+          ]
+        in
+        let _ =
+          Tusk_store.Store.save_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~exports
+          |> Result.expect ~msg:"save_package_exports should succeed"
+        in
+        match
+          Tusk_store.Store.find_package_export_path store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~name:"missing"
+        with
+        | None -> Ok ()
+        | Some _ -> Error "expected missing export name to resolve to None")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
+let test_load_package_exports_returns_none_for_malformed_payload () =
+  match
+    Fs.with_tempdir ~prefix:"store_load_exports_malformed_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let exports_path =
+          Path.(
+            Tusk_model.Tusk_dirs.cache_dir ~workspace_root:tmpdir
+            / Path.v "exports" / Path.v "debug" / Path.v "x86_64-test"
+            / Path.v "pkg.json")
+        in
+        let _ =
+          Fs.create_dir_all (Path.dirname exports_path)
+          |> Result.expect ~msg:"create exports dir should succeed"
+        in
+        let _ =
+          Fs.write "{\"version\":1,\"exports\":\"not-an-array\"}" exports_path
+          |> Result.expect ~msg:"write malformed export manifest should succeed"
+        in
+        match
+          Tusk_store.Store.load_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test"
+        with
+        | None -> Ok ()
+        | Some _ -> Error "expected malformed export manifest to return None")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
 let tests =
   Test.
     [
@@ -262,6 +317,10 @@ let tests =
         test_find_package_export_path_round_trip;
       case "find package export path rejects absolute paths"
         test_find_package_export_path_rejects_absolute_export_paths;
+      case "find package export path returns none when name missing"
+        test_find_package_export_path_returns_none_when_name_missing;
+      case "load package exports returns none for malformed payload"
+        test_load_package_exports_returns_none_for_malformed_payload;
     ]
 
 let name = "Tusk Store Tests"
