@@ -65,7 +65,15 @@ module Process = struct
     let t = Scheduler.get_scheduler () in
     Scheduler.with_relations_lock t (fun () ->
         let current = Scheduler.get_current_process t in
-        Proc.demonitor current ref)
+        let monitored_pid = Proc.monitored_pid_for_ref current ref in
+        Proc.demonitor current ref;
+        match monitored_pid with
+        | None -> ()
+        | Some pid -> (
+            match Scheduler.get_process t pid with
+            | None -> ()
+            | Some target ->
+                Proc.remove_monitored_by target (Proc.pid current) ref))
 end
 
 let run ~main ~args ?config () =

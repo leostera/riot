@@ -15,5 +15,8 @@ val equal : t -> t -> bool
 val compare : t -> t -> int
 (** Compare PIDs for ordering *)
 
+val to_int : t -> int
+(** Convert PID to its underlying integer identifier. *)
+
 val to_string : t -> string
 (** Convert PID to string representation *)

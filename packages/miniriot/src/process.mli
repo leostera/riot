@@ -105,6 +105,12 @@ val has_messages : t -> bool
 val message_count : t -> int
 (** Get total number of messages in mailbox *)
 
+val mailbox_count : t -> int
+(** Get the number of messages currently in the main mailbox queue. *)
+
+val save_queue_count : t -> int
+(** Get the number of messages currently in the selective-receive save queue. *)
+
 val mark_as_running : t -> unit
 (** Mark process as currently running *)
 
@@ -127,13 +133,16 @@ val set_cont : t -> (unit, exit_reason) result Proc_state.t -> unit
 (** Set process continuation *)
 
 val next_message : t -> Message.envelope option
-(** Get next message from process mailbox *)
+(** Get next message, prioritizing saved selective-receive messages first. *)
+
+val next_saved_message : t -> Message.envelope option
+(** Get next message from the selective-receive save queue only. *)
+
+val next_mailbox_message : t -> Message.envelope option
+(** Get next message from the main mailbox queue only. *)
 
 val add_to_save_queue : t -> Message.envelope -> unit
 (** Add message to save queue *)
-
-val read_save_queue : t -> unit
-(** Start reading from save queue *)
 
 val send_message : t -> Message.t -> unit
 (** Send a message to the process *)
@@ -212,6 +221,9 @@ val monitor : t -> Pid.t -> monitor_ref
 
 val demonitor : t -> monitor_ref -> unit
 (** Remove a monitor *)
+
+val monitored_pid_for_ref : t -> monitor_ref -> Pid.t option
+(** Lookup the monitored PID associated with a monitor reference. *)
 
 val get_links : t -> Pid.t list
 (** Get list of linked processes *)

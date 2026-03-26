@@ -3,14 +3,6 @@ open Kernel.Collections
 open Kernel.Sync
 open Kernel.Sync.Cell
 
-type Message.t +=
-  | EXIT of { from : Pid.t; reason : (unit, Process.exit_reason) result }
-  | DOWN of {
-      ref : Process.monitor_ref;
-      pid : Pid.t;
-      reason : (unit, Process.exit_reason) result;
-    }
-
 type worker = {
   id : Scheduler_id.t;
   queue : Process.t Queue.t;
@@ -41,12 +33,21 @@ type reactor_command =
     }
   | Deregister_io of Async.Source.t
 
+type process_shard = {
+  lock : Mutex.t;
+  processes : (Pid.t, Process.t) HashMap.t;
+}
+
+type process_registry = {
+  shards : process_shard array;
+  size : int Atomic.t;
+}
+
 type t = {
   stop : bool Atomic.t;
   status : int Atomic.t;
   workers : worker array;
-  processes : (Pid.t, Process.t) HashMap.t;
-  processes_lock : Mutex.t;
+  processes : process_registry;
   relations_lock : Mutex.t;
   reactor_commands : reactor_command Queue.t;
   reactor_lock : Mutex.t;
@@ -73,7 +74,7 @@ let make_response () =
     value = None;
   }
 
-let with_response response f =
+let with_response (response : 'a response) f =
   Mutex.lock response.lock;
   try
     let result = f () in
@@ -99,16 +100,6 @@ let await_response response =
       in
       wait ())
 
-let with_processes t f =
-  Mutex.lock t.processes_lock;
-  try
-    let result = f () in
-    Mutex.unlock t.processes_lock;
-    result
-  with exn ->
-    Mutex.unlock t.processes_lock;
-    raise exn
-
 let with_reactor_commands t f =
   Mutex.lock t.reactor_lock;
   try
@@ -131,6 +122,45 @@ let default_worker_count config =
   let requested = Config.worker_count config in
   if requested < 1 then 1 else requested
 
+let process_shard_count worker_count =
+  let desired = Int.max 4 (worker_count * 2) in
+  let rec next_pow2 n =
+    if n >= desired then
+      n
+    else
+      next_pow2 (n * 2)
+  in
+  next_pow2 1
+
+let create_process_registry worker_count =
+  let shard_count = process_shard_count worker_count in
+  let shards =
+    Array.init shard_count (fun _ ->
+        {
+          lock = Mutex.create ();
+          processes = HashMap.with_capacity 64;
+        })
+  in
+  {
+    shards;
+    size = Atomic.make 0;
+  }
+
+let shard_for_pid registry pid =
+  let idx = Pid.to_int pid mod Array.length registry.shards in
+  registry.shards.(idx)
+
+let with_process_shard registry pid f =
+  let shard = shard_for_pid registry pid in
+  Mutex.lock shard.lock;
+  try
+    let result = f shard in
+    Mutex.unlock shard.lock;
+    result
+  with exn ->
+    Mutex.unlock shard.lock;
+    raise exn
+
 let create ~config =
   match Async.Poll.make () with
   | Ok io_poll ->
@@ -144,8 +174,7 @@ let create ~config =
         stop = Atomic.make false;
         status = Atomic.make 0;
         workers;
-        processes = HashMap.with_capacity 128;
-        processes_lock = Mutex.create ();
+        processes = create_process_registry worker_count;
         relations_lock = Mutex.create ();
         reactor_commands = Queue.create ();
         reactor_lock = Mutex.create ();
@@ -236,18 +265,23 @@ let wake_process_from_message t proc =
     enqueue_owned_process t proc
 
 let get_process t pid =
-  with_processes t (fun () -> HashMap.get t.processes pid)
+  with_process_shard t.processes pid (fun shard ->
+      HashMap.get shard.processes pid)
 
 let add_process t proc =
-  with_processes t (fun () ->
-      HashMap.insert t.processes (Process.pid proc) proc |> ignore)
+  let pid = Process.pid proc in
+  with_process_shard t.processes pid (fun shard ->
+      let replaced = HashMap.insert shard.processes pid proc in
+      if Option.is_none replaced then
+        ignore (Atomic.fetch_and_add t.processes.size 1))
 
 let remove_process t pid =
-  with_processes t (fun () ->
-      HashMap.remove t.processes pid |> ignore)
+  with_process_shard t.processes pid (fun shard ->
+      let removed = HashMap.remove shard.processes pid in
+      if Option.is_some removed then
+        ignore (Atomic.fetch_and_add t.processes.size (-1)))
 
-let process_count t =
-  with_processes t (fun () -> HashMap.len t.processes)
+let process_count t = Atomic.get t.processes.size
 
 let maybe_shutdown_if_empty t =
   if process_count t = 0 then request_shutdown t ~status:(Atomic.get t.status)
@@ -395,20 +429,32 @@ let handle_receive k t proc ~selector ~timeout =
   else if Process.has_empty_mailbox proc then
     park_for_receive ()
   else
-    let rec scan remaining =
+    let rec scan_saved remaining =
+      if remaining = 0 then
+        scan_mailbox (Process.mailbox_count proc)
+      else
+        match Process.next_saved_message proc with
+        | None -> scan_mailbox (Process.mailbox_count proc)
+        | Some msg -> (
+            match selector Message.(msg.msg) with
+            | `select selected -> k (Continue selected)
+            | `skip ->
+                Process.add_to_save_queue proc msg;
+                scan_saved (remaining - 1))
+    and scan_mailbox remaining =
       if remaining = 0 then
         park_for_receive ()
       else
-        match Process.next_message proc with
+        match Process.next_mailbox_message proc with
         | None -> park_for_receive ()
         | Some msg -> (
             match selector Message.(msg.msg) with
             | `select selected -> k (Continue selected)
             | `skip ->
                 Process.add_to_save_queue proc msg;
-                scan (remaining - 1))
+                scan_mailbox (remaining - 1))
     in
-    scan (Process.message_count proc)
+    scan_saved (Process.save_queue_count proc)
 
 let handle_syscall k t proc name interest source timeout =
   let open Proc_state in
@@ -479,7 +525,7 @@ let handle_exit_proc t proc reason =
       | None -> ()
       | Some monitor_proc ->
           Process.send_message monitor_proc
-            (DOWN { ref = monitor_ref; pid; reason });
+            (Process.Messages.DOWN { ref = monitor_ref; pid; reason });
           wake_process t monitor_proc)
     (Process.get_monitored_by proc);
 
@@ -489,7 +535,8 @@ let handle_exit_proc t proc reason =
       | None -> ()
       | Some linked_proc -> (
           if Process.get_trap_exit linked_proc then (
-            Process.send_message linked_proc (EXIT { from = pid; reason });
+            Process.send_message linked_proc
+              (Process.Messages.EXIT { from = pid; reason });
             wake_process t linked_proc)
           else
             match reason with

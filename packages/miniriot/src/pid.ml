@@ -17,4 +17,5 @@ let next () =
 
 let equal = Int.equal
 let compare = Int.compare
+let to_int t = t
 let to_string t = "pid<" ^ (Int.to_string t)^ ">"

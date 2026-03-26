@@ -45,7 +45,6 @@ type t = {
   mutable fn : (unit -> (unit, exit_reason) result) option;
   mailbox : Mailbox.t;
   save_queue : Mailbox.t;
-  mutable read_save_queue : bool;
   mutable ready_tokens : (Async.Token.t * Async.Source.t) list;
   mutable receive_timeout : Timer_id.t option;
   mutable syscall_timeout : Timer_id.t option;
@@ -82,7 +81,6 @@ let make fn =
     lock = Mutex.create ();
     mailbox = Mailbox.create ();
     save_queue = Mailbox.create ();
-    read_save_queue = false;
     ready_tokens = [];
     receive_timeout = None;
     syscall_timeout = None;
@@ -147,6 +145,8 @@ let has_empty_mailbox t =
 let has_messages t = not (has_empty_mailbox t)
 let message_count t =
   with_lock t (fun () -> Mailbox.size t.mailbox + Mailbox.size t.save_queue)
+let mailbox_count t = with_lock t (fun () -> Mailbox.size t.mailbox)
+let save_queue_count t = with_lock t (fun () -> Mailbox.size t.save_queue)
 let mark_as_running t = if is_alive t then Sync.Atomic.set t.state Running
 let mark_as_runnable t = if is_alive t then Sync.Atomic.set t.state Runnable
 let mark_as_awaiting_message t = if is_alive t then Sync.Atomic.set t.state Waiting_message
@@ -159,19 +159,18 @@ let set_cont t c = t.cont <- Some c
 
 let next_message t =
   with_lock t (fun () ->
-      if t.read_save_queue then (
-        match Mailbox.next t.save_queue with
-        | Some m -> Some m
-        | None ->
-            t.read_save_queue <- false;
-            None)
-      else match Mailbox.next t.mailbox with Some m -> Some m | None -> None)
+      match Mailbox.next t.save_queue with
+      | Some msg -> Some msg
+      | None -> Mailbox.next t.mailbox)
+
+let next_saved_message t =
+  with_lock t (fun () -> Mailbox.next t.save_queue)
+
+let next_mailbox_message t =
+  with_lock t (fun () -> Mailbox.next t.mailbox)
 
 let add_to_save_queue t msg =
   with_lock t (fun () -> Mailbox.queue t.save_queue msg)
-
-let read_save_queue t =
-  with_lock t (fun () -> t.read_save_queue <- true)
 
 let send_message t msg =
   if is_alive t then (
@@ -268,8 +267,19 @@ let demonitor proc ref =
         List.filter
           (fun (r, _) ->
             match (ref, r) with
-            | Monitor_ref id1, Monitor_ref id2 -> id1 != id2)
+            | Monitor_ref id1, Monitor_ref id2 -> not (Int.equal id1 id2))
           proc.monitors)
+
+let monitored_pid_for_ref proc ref =
+  with_lock proc (fun () ->
+      let rec find = function
+        | [] -> None
+        | (r, pid) :: rest -> (
+            match (ref, r) with
+            | Monitor_ref id1, Monitor_ref id2 ->
+                if Int.equal id1 id2 then Some pid else find rest)
+      in
+      find proc.monitors)
 
 let set_flags proc flags =
   with_lock proc (fun () ->
