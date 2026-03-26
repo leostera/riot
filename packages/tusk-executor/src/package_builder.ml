@@ -184,7 +184,11 @@ let compute_export_entries (action_graph : Action_graph.t) :
 
 let artifact_from_exports ~package_hash
     (exports : Tusk_store.Store.export_entry list) =
-  let files = List.map (fun entry -> Path.v entry.name) exports in
+  let files =
+    List.map
+      (fun (entry : Tusk_store.Store.export_entry) -> Path.v entry.name)
+      exports
+  in
   Tusk_store.Artifact.{ hash = package_hash; files }
 
 let build ~workspace ~toolchain ~store ~package_graph ~package_key
