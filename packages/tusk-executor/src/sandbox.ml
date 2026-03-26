@@ -40,12 +40,18 @@ let copy_object_files ~store ~sandbox ~package ~depset =
           entries
           |> List.filter (fun path ->
                  String.ends_with ~suffix:".o" (Path.to_string path))
-          |> List.iter (fun abs_path ->
-                 let dest = Path.(sandbox.dir / v (Path.basename abs_path)) in
-                 Fs.copy ~src:abs_path ~dst:dest
-                 |> Result.expect
-                      ~msg:
-                        ("Failed to copy .o file " ^ Path.to_string abs_path)))
+          |> List.iter (fun entry ->
+                 let src =
+                   if Path.is_absolute entry then entry
+                   else Path.(dep.Tusk_planner.Dependency.artifact_dir / entry)
+                 in
+                 let dest = Path.(sandbox.dir / v (Path.basename entry)) in
+                 match Fs.copy ~src ~dst:dest with
+                 | Ok () -> ()
+                 | Error _ ->
+                     Log.warn
+                       ("Skipping unavailable dependency object file "
+                      ^ Path.to_string src)))
     depset
 
 let copy_inputs ~sandbox ~package ~inputs =

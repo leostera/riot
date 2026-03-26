@@ -168,35 +168,18 @@ let finalize_package_success ~session_id ~store ~runtime =
   |> Result.expect
        ~msg:
          ("Failed to materialize package exports for " ^ runtime.package.name);
-  let compatibility_dir =
-    Path.(Sandbox.get_dir runtime.sandbox / Path.v "__package_compat")
-  in
-  Fs.create_dir_all compatibility_dir
-  |> Result.expect
-       ~msg:
-         ("Failed to create package compatibility dir for "
-        ^ runtime.package.name);
-  Action_graph.nodes runtime.action_graph
-  |> List.iter (fun (node : Action_node.t) ->
-         Tusk_store.Store.promote store (Action_node.get_hash node)
-           ~target_dir:compatibility_dir
-         |> Result.expect
-              ~msg:
-                ("Failed to materialize action artifact for compatibility snapshot: "
-               ^ Graph.SimpleGraph.Node_id.to_string node.id));
-  let compatibility_outs =
-    Action_graph.nodes runtime.action_graph
-    |> List.concat_map (fun (node : Action_node.t) ->
-           List.map
-             (fun out -> Path.(compatibility_dir / out))
-             node.value.outs)
+  let package_outs =
+    List.map
+      (fun (entry : Tusk_store.Store.export_entry) ->
+        Path.(runtime.target_dir / Path.v entry.name))
+      runtime.export_entries
   in
   let _ =
     Tusk_store.Store.save store ~package:runtime.package.name ~hash:runtime.hash
-      ~sandbox_dir:compatibility_dir ~outs:compatibility_outs
+      ~sandbox_dir:runtime.target_dir ~outs:package_outs
     |> Result.expect
          ~msg:
-           ("Failed to save compatibility package artifact for "
+           ("Failed to save package hash artifact for "
           ^ runtime.package.name)
   in
   let artifact = artifact_from_exports ~package_hash:runtime.hash runtime.export_entries in
@@ -224,7 +207,7 @@ let finalize_package_success ~session_id ~store ~runtime =
   | `Cached -> Package_builder.Cached artifact
   | `Fresh -> Built artifact
 
-let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
+let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~package_graph
     ~build_ctx ~session_id ~nodes =
   let profile_name = build_ctx.Build_ctx.profile.name in
   let target_triple_str =
@@ -232,6 +215,10 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
   in
   let runtimes : (Package.key, package_runtime) HashMap.t = HashMap.create () in
   let package_results : (Package.key, Package_builder.build_result) HashMap.t =
+    HashMap.create ()
+  in
+  let pending_planning :
+      (Package.key, Package_graph.package_node) HashMap.t =
     HashMap.create ()
   in
   let action_ready_queue : (Package.key * Action_node.t) Queue.t = Queue.create () in
@@ -250,107 +237,207 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
     result
   in
 
-  List.iter
-    (fun package_node ->
-      let package = Package_graph.get_package package_node in
-      let package_key = Package_graph.get_key package_node in
-      match
-        Tusk_planner.plan_package_with_graph ~workspace ~toolchain ~store
-          ~package_graph ~package_key ~package ~build_ctx
-      with
-      | Error err ->
-          let _ =
-            materialize_initial_failure package_key package
-              (Package_builder.Failed (PlanningFailed err))
-          in
-          ()
-      | Ok (MissingDependencies { missing; _ }) ->
-          let names = List.map (fun p -> p.Package.name) missing in
-          let _ =
-            materialize_initial_failure package_key package
-              (Package_builder.Failed
-                 (ExecutionFailed
-                    {
-                      message = "Missing dependencies: " ^ String.concat ", " names;
-                    }))
-          in
-          ()
-      | Ok (FailedDependencies { failed; _ }) ->
-          let names = List.map (fun p -> p.Package.name) failed in
-          let _ =
-            materialize_initial_failure package_key package
-              (Package_builder.Failed
-                 (ExecutionFailed
-                    {
-                      message = "Failed dependencies: " ^ String.concat ", " names;
-                    }))
-          in
-          ()
-      | Ok
-          (Planned
+  let stage_runtime ~package_key ~(package : Package.t) ~hash ~depset ~module_graph
+      ~action_graph =
+    let inputs =
+      List.concat
+        [
+          package.sources.src;
+          package.sources.native;
+          package.sources.tests;
+        ]
+    in
+    let target_dir =
+      Path.(
+        Tusk_dirs.out_dir_with_target ~workspace_root:workspace.root
+          ~profile:profile_name ~target:target_triple_str
+        / Path.v package.name)
+    in
+    let sandbox = Sandbox.create ~workspace ~package_name:package.name in
+    Sandbox.prepare ~sandbox ~package ~inputs ~depset ~store;
+    let action_queue = Action_queue.create () in
+    let action_nodes = Action_graph.nodes action_graph in
+    List.iter (Action_queue.queue action_queue) action_nodes;
+    let runtime =
+      {
+        package_key;
+        package;
+        hash;
+        depset;
+        module_graph;
+        action_graph;
+        sandbox;
+        action_queue;
+        completed_actions = action_queue.completed;
+        export_entries = compute_export_entries action_graph;
+        target_dir;
+        profile_name;
+        target_name = target_triple_str;
+        total_actions = List.length action_nodes;
+        active = false;
+        compilation_started = false;
+      }
+    in
+    let _ = HashMap.insert runtimes package_key runtime in
+    match Package_graph.get_node_by_key package_graph package_key with
+    | Some node ->
+        node.value <-
+          Package_graph.Planned
             {
-              package_key;
-              hash;
-              depset;
-              module_graph;
-              action_graph;
-              _;
-            }) ->
-          let inputs =
-            List.concat
-              [
-                package.sources.src;
-                package.sources.native;
-                package.sources.tests;
-              ]
-          in
-          let target_dir =
-            Path.(
-              Tusk_dirs.out_dir_with_target ~workspace_root:workspace.root
-                ~profile:profile_name ~target:target_triple_str
-              / Path.v package.name)
-          in
-          let sandbox = Sandbox.create ~workspace ~package_name:package.name in
-          Sandbox.prepare ~sandbox ~package ~inputs ~depset ~store;
-          let action_queue = Action_queue.create () in
-          let action_nodes = Action_graph.nodes action_graph in
-          List.iter (Action_queue.queue action_queue) action_nodes;
-          let runtime =
-            {
-              package_key;
               package;
-              hash;
-              depset;
+              scope = Package_graph.get_scope node.value;
               module_graph;
               action_graph;
-              sandbox;
-              action_queue;
-              completed_actions = action_queue.completed;
-              export_entries = compute_export_entries action_graph;
-              target_dir;
-              profile_name;
-              target_name = target_triple_str;
-              total_actions = List.length action_nodes;
-              active = false;
-              compilation_started = false;
+              hash;
             }
+    | None -> ()
+  in
+
+  let rec plan_pass pending_nodes =
+    if pending_nodes = [] then ()
+    else
+      let progressed = ref false in
+      let still_pending = vec[] in
+      List.iter
+        (fun package_node ->
+          let package = Package_graph.get_package package_node in
+          let package_key = Package_graph.get_key package_node in
+          match
+            Tusk_planner.plan_package_with_graph ~workspace ~toolchain ~store
+              ~package_graph ~package_key ~package ~build_ctx
+          with
+          | Error err ->
+              let _ =
+                materialize_initial_failure package_key package
+                  (Package_builder.Failed (PlanningFailed err))
+              in
+              ()
+          | Ok (MissingDependencies _) | Ok (FailedDependencies _) ->
+              Vector.push still_pending package_node
+          | Ok
+              (Planned
+                {
+                  package_key;
+                  hash;
+                  depset;
+                  module_graph;
+                  action_graph;
+                  _;
+                }) ->
+              progressed := true;
+              stage_runtime ~package_key ~package ~hash ~depset ~module_graph
+                ~action_graph)
+        pending_nodes;
+      let next_pending = Vector.into_iter still_pending |> Iter.Iterator.to_list in
+      if next_pending = [] then ()
+      else if !progressed then plan_pass next_pending
+      else
+        List.iter
+          (fun package_node ->
+            let package_key = Package_graph.get_key package_node in
+            let _ = HashMap.insert pending_planning package_key package_node in
+            ())
+          next_pending
+  in
+  plan_pass nodes;
+
+  let try_plan_pending_packages () =
+    let pending_entries = HashMap.to_list pending_planning in
+    List.iter
+      (fun (package_key, package_node) ->
+        if Option.is_some (HashMap.get package_results package_key) then
+          let _ = HashMap.remove pending_planning package_key in
+          ()
+        else if Option.is_some (HashMap.get runtimes package_key) then
+          let _ = HashMap.remove pending_planning package_key in
+          ()
+        else
+          let package = Package_graph.get_package package_node in
+          let dep_keys = dependency_keys package_graph package_key in
+          let deps_failed =
+            List.exists
+              (fun dep_key ->
+                match HashMap.get package_results dep_key with
+                | Some result -> result_is_failed result
+                | None -> false)
+              dep_keys
           in
-          let _ = HashMap.insert runtimes package_key runtime in
-          (match Package_graph.get_node_by_key package_graph package_key with
-          | Some node ->
-              node.value <-
-                Package_graph.Planned
-                  {
-                    package;
-                    scope = Package_graph.get_scope node.value;
-                    module_graph;
-                    action_graph;
-                    hash;
-                  }
-          | None -> ()))
-    nodes;
+          if deps_failed then (
+            let names =
+              List.filter_map
+                (fun dep_key ->
+                  match HashMap.get package_results dep_key with
+                  | Some result when result_is_failed result ->
+                      Some result.package.Package.name
+                  | _ -> None)
+                dep_keys
+            in
+            let _ =
+              materialize_initial_failure package_key package
+                (Package_builder.Failed
+                   (ExecutionFailed
+                      {
+                        message =
+                          "Failed dependencies: " ^ String.concat ", " names;
+                      }))
+            in
+            let _ = HashMap.remove pending_planning package_key in
+            ())
+          else
+            let deps_satisfied =
+              List.for_all
+                (fun dep_key ->
+                  match HashMap.get package_results dep_key with
+                  | Some result -> result_is_success result
+                  | None -> false)
+                dep_keys
+            in
+            if deps_satisfied then
+              match
+                Tusk_planner.plan_package_with_graph ~workspace ~toolchain ~store
+                  ~package_graph ~package_key ~package ~build_ctx
+              with
+              | Error err ->
+                  let _ =
+                    materialize_initial_failure package_key package
+                      (Package_builder.Failed (PlanningFailed err))
+                  in
+                  let _ = HashMap.remove pending_planning package_key in
+                  ()
+              | Ok (MissingDependencies _) -> ()
+              | Ok (FailedDependencies { failed; _ }) ->
+                  let names = List.map (fun p -> p.Package.name) failed in
+                  let _ =
+                    materialize_initial_failure package_key package
+                      (Package_builder.Failed
+                         (ExecutionFailed
+                            {
+                              message =
+                                "Failed dependencies: "
+                                ^ String.concat ", " names;
+                            }))
+                  in
+                  let _ = HashMap.remove pending_planning package_key in
+                  ()
+              | Ok
+                  (Planned
+                    {
+                      package_key;
+                      hash;
+                      depset;
+                      module_graph;
+                      action_graph;
+                      _;
+                    }) ->
+                  stage_runtime ~package_key ~package ~hash ~depset
+                    ~module_graph ~action_graph;
+                  let _ = HashMap.remove pending_planning package_key in
+                  ())
+      pending_entries
+  in
 
   let activate_ready_packages () =
+    try_plan_pending_packages ();
     HashMap.iter
       (fun package_key runtime ->
         if runtime.active then ()

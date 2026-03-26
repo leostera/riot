@@ -410,6 +410,20 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
               |> Result.expect
                    ~msg:
                      ("Failed to materialize package exports for " ^ package.name);
+              let package_outs =
+                List.map
+                  (fun (entry : Tusk_store.Store.export_entry) ->
+                    Path.(target_dir / Path.v entry.name))
+                  export_entries
+              in
+              let _ =
+                Tusk_store.Store.save store ~package:package.name
+                  ~hash:package_hash ~sandbox_dir:target_dir ~outs:package_outs
+                |> Result.expect
+                     ~msg:
+                       ("Failed to save package hash artifact for "
+                      ^ package.name)
+              in
 
               (* Mark as Built with Fresh status *)
               (match

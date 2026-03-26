@@ -295,6 +295,52 @@ let has_failed_dependencies completed (node : Action_node.t) =
       | _ -> false)
     node.deps
 
+let resolve_source_for_copy ~(package : Tusk_model.Package.t) ~src_path =
+  let pkg_dir = package.path in
+  let workspace_root_candidate =
+    let pkg_path_str = Path.to_string package.path in
+    let rel_path_str = Path.to_string package.relative_path in
+    if
+      String.length rel_path_str > 0
+      && String.ends_with ~suffix:rel_path_str pkg_path_str
+    then
+      let root_len = String.length pkg_path_str - String.length rel_path_str in
+      let raw_root = String.sub pkg_path_str 0 root_len in
+      let normalized_root =
+        if String.ends_with ~suffix:"/" raw_root then
+          String.sub raw_root 0 (String.length raw_root - 1)
+        else raw_root
+      in
+      if String.length normalized_root = 0 then Some (Path.v ".")
+      else Some (Path.v normalized_root)
+    else None
+  in
+  let candidates =
+    if Path.is_absolute src_path then [ src_path ]
+    else
+      let base = [ Path.join pkg_dir src_path ] in
+      let with_workspace =
+        match workspace_root_candidate with
+        | Some root -> base @ [ Path.join root src_path ]
+        | None -> base
+      in
+      with_workspace @ [ src_path ]
+  in
+  let rec first_existing = function
+    | [] -> None
+    | p :: rest -> (
+        match Fs.exists p with
+        | Ok true -> Some p
+        | Ok false | Error _ -> first_existing rest)
+  in
+  match first_existing candidates with
+  | Some p -> Ok p
+  | None ->
+      Error
+        ("source not found for " ^ Path.to_string src_path ^ " (checked "
+       ^ String.concat ", " (List.map Path.to_string candidates)
+       ^ ")")
+
 let execute_node ~completed ~store ~session_id toolchain sandbox_dir
     (node : Action_node.t) =
   let start = Instant.now () in
@@ -369,31 +415,33 @@ let execute_node ~completed ~store ~session_id toolchain sandbox_dir
             package = node.value.package;
             action = node;
           });
-    let copy_result =
+    let copy_result : (unit, string) Result.t =
       List.fold_left
         (fun acc src_path ->
           match acc with
           | Error _ -> acc
           | Ok () ->
-              let pkg_dir = node.value.package.path in
-              let abs_src = Path.join pkg_dir src_path in
-              let abs_dst = Path.join sandbox_dir src_path in
-              Log.debug
-                ("[EXECUTOR] Copying source: " ^ Path.to_string src_path ^ " from "
-               ^ Path.to_string abs_src);
-              (match Path.parent abs_dst with
-              | Some dst_dir -> (
-                  match Fs.create_dir_all dst_dir with
-                  | Ok () | Error _ -> ())
-              | None -> ());
-              Fs.copy ~src:abs_src ~dst:abs_dst)
+              match resolve_source_for_copy ~package:node.value.package ~src_path with
+              | Error msg -> Error msg
+              | Ok abs_src ->
+                  let abs_dst = Path.join sandbox_dir src_path in
+                  Log.debug
+                    ("[EXECUTOR] Copying source: " ^ Path.to_string src_path
+                   ^ " from " ^ Path.to_string abs_src);
+                  (match Path.parent abs_dst with
+                  | Some dst_dir -> (
+                      match Fs.create_dir_all dst_dir with
+                      | Ok () | Error _ -> ())
+                  | None -> ());
+                  (match Fs.copy ~src:abs_src ~dst:abs_dst with
+                  | Ok () -> Ok ()
+                  | Error err -> Error (IO.error_message err)))
         (Ok ()) sources
     in
     let completed_at = Instant.now () in
     let duration = Instant.duration_since ~earlier:start completed_at in
     match copy_result with
-    | Error err ->
-        let msg = IO.error_message err in
+    | Error msg ->
         {
           node_id = node.id;
           status = Failed (ExecutionFailed { message = "Failed to copy sources: " ^ msg });

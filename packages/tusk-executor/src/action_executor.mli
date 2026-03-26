@@ -35,7 +35,10 @@ type t = { completed : (G.Node_id.t, execution_result) HashMap.t }
     workspace-level action scheduling).
 
     [completed] is the dependency result table for the action graph this node
-    belongs to; it is consulted to implement dependency-failure skipping. *)
+    belongs to; it is consulted to implement dependency-failure skipping.
+
+    Source staging supports both package-relative and workspace-relative source
+    paths to stay compatible with serialized plans loaded from cache. *)
 val execute_node :
   completed:(G.Node_id.t, execution_result) HashMap.t ->
   store:Tusk_store.Store.t ->
