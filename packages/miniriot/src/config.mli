@@ -14,7 +14,7 @@ val default_scheduler_count : int
 (** Default number of worker schedulers.
 
     The default is `max 1 (System.available_parallelism - 1)`, reserving one
-    core for non-worker runtime work in a future reactor split. *)
+    core for the dedicated reactor domain that owns timer and I/O polling. *)
 
 val worker_count : t -> int
 (** Get the number of runnable workers configured for this runtime. *)

@@ -1,4 +1,5 @@
-(** Miniriot - Minimal single-core actor runtime *)
+(** Miniriot - multicore actor runtime with per-worker queues, work stealing,
+    and a dedicated reactor domain for timers and async I/O. *)
 open Kernel
 
 module Exception : sig
@@ -80,7 +81,7 @@ module Process : sig
   (** Check if process has messages in its mailbox *)
 
   val send_message : t -> Message.t -> unit
-  (** Send a message to the process *)
+  (** Send a message to the process from any scheduler domain. *)
 
   val mark_as_awaiting_io :
     t -> name:string -> Kernel.Async.Token.t -> Kernel.Async.Source.t -> unit
@@ -172,7 +173,7 @@ val run :
   unit ->
   unit
 (** Start the runtime with optional configuration. Defaults to millisecond timer
-    resolution. *)
+    resolution and [Config.default_scheduler_count] workers. *)
 
 val enable_trace : unit -> unit
 (** Enable debug tracing *)
