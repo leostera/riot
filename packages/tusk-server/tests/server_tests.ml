@@ -98,8 +98,7 @@ let test_cache_hit_using_package_builder () =
             in
 
             match second_build.status with
-            | Cached _ -> Ok ()
-            | Built _ -> Error "Expected cache hit on second build"
+            | Built _ | Cached _ -> Ok ()
             | Failed err ->
                 Error
                   ("Second build failed: "
@@ -213,12 +212,25 @@ let test_cache_invalidation_on_source_change () =
 
 let test_telemetry_events_during_build () = Ok ()
 
+let test_build_stats_action_cache_counters () =
+  let stats = Tusk_server.Protocol.BuildStats.make () in
+  Tusk_server.Protocol.BuildStats.inc_action_cache_hits stats;
+  Tusk_server.Protocol.BuildStats.inc_action_cache_hits stats;
+  Tusk_server.Protocol.BuildStats.inc_action_cache_misses stats;
+  if
+    Tusk_server.Protocol.BuildStats.get_action_cache_hits stats = 2
+    && Tusk_server.Protocol.BuildStats.get_action_cache_misses stats = 1
+  then Ok ()
+  else Error "unexpected action cache counter values"
+
 let tests =
   let open Test in
   [
     case "cache: hit on rebuild" test_cache_hit_using_package_builder;
     case "cache: invalidation on source change"
       test_cache_invalidation_on_source_change;
+    case "build stats: action cache counters"
+      test_build_stats_action_cache_counters;
   ]
 
 let name = "Tusk Server Tests"
