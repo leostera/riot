@@ -262,6 +262,68 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
     result
   in
 
+  let target_dir_for package_name =
+    Path.(
+      Tusk_dirs.out_dir_with_target ~workspace_root:workspace.root
+        ~profile:profile_name ~target:target_triple_str
+      / Path.v package_name)
+  in
+
+  let maybe_short_circuit_cached_package ~package_key ~(package : Package.t) ~hash
+      ~depset ~module_graph ~action_graph =
+    match Tusk_store.Store.get store hash with
+    | None -> false
+    | Some artifact -> (
+        match
+          Tusk_store.Store.load_package_exports store ~package:package.name
+            ~profile:profile_name ~target:target_triple_str
+        with
+        | None -> false
+        | Some exports -> (
+            let target_dir = target_dir_for package.name in
+            match
+              Tusk_store.Store.materialize_package_exports store ~exports
+                ~target_dir
+            with
+            | Error _ -> false
+            | Ok () ->
+                let result =
+                  Package_builder.
+                    {
+                      package_key;
+                      package;
+                      status = Cached artifact;
+                      duration = Time.Duration.zero;
+                    }
+                in
+                let _ = HashMap.insert package_results package_key result in
+                (match Package_graph.get_node_by_key package_graph package_key with
+                | None -> ()
+                | Some node ->
+                    node.value <-
+                      Package_graph.Built
+                        {
+                          package;
+                          scope = Package_graph.get_scope node.value;
+                          module_graph;
+                          action_graph;
+                          hash;
+                          artifact;
+                          status = Package_graph.Cached;
+                          depset;
+                        });
+                Telemetry.emit
+                  (BuildCompleted
+                     {
+                       session_id;
+                       package;
+                       target = Workspace_planner.Package package.name;
+                       status = `Cached;
+                       duration = Time.Duration.zero;
+                     });
+                true))
+  in
+
   let stage_runtime ~package_key ~(package : Package.t) ~hash ~depset ~module_graph
       ~action_graph =
     let inputs =
@@ -272,12 +334,7 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
           package.sources.tests;
         ]
     in
-    let target_dir =
-      Path.(
-        Tusk_dirs.out_dir_with_target ~workspace_root:workspace.root
-          ~profile:profile_name ~target:target_triple_str
-        / Path.v package.name)
-    in
+    let target_dir = target_dir_for package.name in
     let sandbox = Sandbox.create ~workspace ~package_name:package.name in
     Sandbox.prepare ~sandbox ~package ~inputs ~depset ~store;
     let action_queue = Action_queue.create () in
@@ -350,8 +407,13 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
                   _;
                 }) ->
               progressed := true;
-              stage_runtime ~package_key ~package ~hash ~depset ~module_graph
-                ~action_graph)
+              if
+                not
+                  (maybe_short_circuit_cached_package ~package_key ~package
+                     ~hash ~depset ~module_graph ~action_graph)
+              then
+                stage_runtime ~package_key ~package ~hash ~depset ~module_graph
+                  ~action_graph)
         pending_nodes;
       let next_pending = Vector.into_iter still_pending |> Iter.Iterator.to_list in
       if next_pending = [] then ()
@@ -454,8 +516,13 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
                       action_graph;
                       _;
                     }) ->
-                  stage_runtime ~package_key ~package ~hash ~depset
-                    ~module_graph ~action_graph;
+                  if
+                    not
+                      (maybe_short_circuit_cached_package ~package_key ~package
+                         ~hash ~depset ~module_graph ~action_graph)
+                  then
+                    stage_runtime ~package_key ~package ~hash ~depset
+                      ~module_graph ~action_graph;
                   let _ = HashMap.remove pending_planning package_key in
                   ())
       pending_entries
