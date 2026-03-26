@@ -464,7 +464,33 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
           (* No actions available yet; either dependency-gated packages remain or
              all remaining packages were completed by activation. *)
           if HashMap.len package_results = total_packages then ()
-          else loop ()
+          else (
+            let before = HashMap.len package_results in
+            HashMap.iter
+              (fun package_key runtime -> finalize_if_complete package_key runtime)
+              runtimes;
+            let after = HashMap.len package_results in
+            if after = before then
+              HashMap.iter
+                (fun package_key runtime ->
+                  if Option.is_none (HashMap.get package_results package_key) then (
+                    let error = "No ready actions remaining for package" in
+                    let result =
+                      Package_builder.
+                        {
+                          package_key;
+                          package = runtime.package;
+                          status = Failed (ExecutionFailed { message = error });
+                          duration = Time.Duration.zero;
+                        }
+                    in
+                    let _ = HashMap.insert package_results package_key result in
+                    mark_package_failed_in_graph package_graph
+                      ~package:runtime.package ~package_key ~hash:runtime.hash
+                      ~error;
+                    Sandbox.cleanup runtime.sandbox))
+                runtimes;
+            loop ())
       | Some (package_key, action_node) -> (
           match HashMap.get runtimes package_key with
           | None -> loop ()
