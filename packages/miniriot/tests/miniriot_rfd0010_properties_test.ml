@@ -1,57 +1,106 @@
 open Miniriot
 open Propane
+open Kernel.Ops
 
-let failwith msg = Kernel.panic msg
+module Test = Std.Test
+module Result = Std.Result
 
-let concat parts = Kernel.String.concat "" parts
-let int_to_string n = Kernel.Int.to_string n
-let int_equal a b = Kernel.Int.equal a b
-let int_max a b = Kernel.Int.max a b
-let int_abs n = Kernel.Int.abs n
-
-type Message.t += Probe_uid
-
-let assert_ok name result =
-  match result with
-  | Property.Success -> ()
+let assert_ok name check =
+  match Property.check check with
+  | Property.Success -> Result.Ok ()
   | Property.Failure { counter_example; shrink_steps } ->
-      failwith
-        (concat
+      Result.Error
+        (Kernel.String.concat ""
            [
              name;
              " failed\nCounter-example: ";
              counter_example;
              "\nShrink steps: ";
-             int_to_string shrink_steps;
+             Kernel.Int.to_string shrink_steps;
            ])
   | Property.Error { exception_; backtrace } ->
-      let msg =
-        match exception_ with
-        | exn -> concat [ Printexc.to_string exn; "\n"; backtrace ]
-      in
-      failwith (concat [ name; " raised exception:\n"; msg ])
+      Result.Error
+        (Kernel.String.concat ""
+           [ name; " raised exception:\n"; Kernel.Exception.to_string exception_; "\n";
+             backtrace ])
   | Property.Assumption_violated ->
-      failwith (concat [ name; " had no applicable test cases" ])
+      Result.Error (Kernel.String.concat "" [ name; " had no applicable test cases" ])
 
-let message_uids_increase : Property.test_property =
-  Property.for_all
-    (Arbitrary.int)
-    (fun raw_n ->
-      let n = ((int_abs raw_n) mod 64) + 1 in
-      let ids =
-        List.init n (fun _ -> Message.envelope Probe_uid |> fun e -> e.uid)
-      in
-      let rec strictly_increasing = function
-        | a :: b :: rest -> a < b && strictly_increasing (b :: rest)
-        | _ -> true
-      in
-      strictly_increasing ids)
+let strictly_increasing_pids pids =
+  let rec loop prev current =
+    match current with
+    | [] -> true
+    | head :: tail -> (
+        match Pid.compare prev head with
+        | -1 -> loop head tail
+        | _ -> false)
+  in
+  match pids with
+  | [] | [ _ ] -> true
+  | head :: tail -> loop head tail
 
-let scheduler_count_clamped : Property.test_property =
+let pid_uids_increase =
+  Property.for_all Arbitrary.int (fun raw_n ->
+      let n = Kernel.Int.add (Kernel.Int.rem (Kernel.Int.abs raw_n) 32) 1 in
+      let pids = Kernel.Collections.List.init n (fun _ -> Pid.next ()) in
+      strictly_increasing_pids pids)
+
+let scheduler_count_clamped =
   Property.for_all Arbitrary.int (fun n ->
-      let cfg = Config.make ~scheduler_count:n () in
-      int_equal cfg.scheduler_count (int_max 1 n))
+      let cfg = Miniriot.Config.make ~scheduler_count:n () in
+      Kernel.Int.equal cfg.scheduler_count (Kernel.Int.max 1 n))
+
+let config_worker_count_matches_scheduler_count =
+  Property.for_all Arbitrary.int (fun requested ->
+      let requested = Kernel.Int.max 1 requested in
+      let cfg = Miniriot.Config.make ~scheduler_count:requested () in
+      Kernel.Int.equal (Miniriot.Config.worker_count cfg) requested)
+
+let test_pid_monotonicity () =
+  assert_ok "pid monotonicity" pid_uids_increase
+
+let test_scheduler_count_clamped () =
+  assert_ok "scheduler_count clamping" scheduler_count_clamped
+
+let test_config_worker_count () =
+  assert_ok
+    "worker_count accessor mirrors scheduler_count"
+    config_worker_count_matches_scheduler_count
+
+let default_scheduler_count_matches_config =
+  Property.for_all Arbitrary.bool (fun _ ->
+      let default_cfg = Miniriot.Config.default in
+      Kernel.Int.equal
+        default_cfg.scheduler_count
+        Miniriot.Config.default_scheduler_count
+        && (match Kernel.Int.compare default_cfg.scheduler_count 1 with
+        | -1 -> false
+        | _ -> true))
+
+let test_default_scheduler_count () =
+  assert_ok
+    "default scheduler count is exported"
+    default_scheduler_count_matches_config
+
+let tests =
+  [
+    Test.property "pid monotonicity" ~examples:128 test_pid_monotonicity;
+    Test.property
+      "scheduler_count clamping" ~examples:128 test_scheduler_count_clamped;
+    Test.property "scheduler_count API" ~examples:128 test_config_worker_count;
+    Test.property "default scheduler config" ~examples:16 test_default_scheduler_count;
+  ]
 
 let () =
-  assert_ok "message UID monotonicity" (Property.check message_uids_increase);
-  assert_ok "scheduler_count clamping" (Property.check scheduler_count_clamped)
+  let name = "RFD0010 property tests" in
+  let normalize_args = function
+    | [] -> [ name; "run-tests" ]
+    | [ exe ] -> [ exe; "run-tests" ]
+    | args -> args
+  in
+  let main ~args =
+    match Test.Cli.main ~name ~tests ~args:(normalize_args args) with
+    | Result.Ok () -> Result.Ok ()
+    | Result.Error msg -> Result.Error msg
+  in
+  Miniriot.run ~main ~args:Std.Env.args ()

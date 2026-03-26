@@ -1,4 +1,7 @@
-
+open Miniriot
+open Miniriot.Exception
+module Result = Std.Result
+module Test = Std.Test
 
 type Message.t += Task of int | WorkerReady | TaskComplete of int
 
@@ -11,61 +14,79 @@ let worker coordinator =
           ~selector:(function Task n -> `select n | _ -> `skip)
           ~timeout:0.5 ()
       in
-      println ("  Worker: Processing task " ^ string_of_int task);
-      Process.sleep 0.1;
+      Kernel.println
+        (Kernel.String.concat "" [ "  Worker: Processing task "; Kernel.Int.to_string task ]);
       send coordinator (TaskComplete task);
       send coordinator WorkerReady;
       loop ()
     with Receive_timeout ->
-      println "  Worker: Timeout, sending ready signal";
+      Kernel.println "  Worker: Timeout, sending ready signal";
       send coordinator WorkerReady;
       loop ()
   in
   loop ()
 
-let main ~args:_ =
-  println "Testing worker pool with timeout...";
+let test () =
+  Kernel.println "Testing worker pool with timeout...";
 
   let coord_pid = self () in
   let worker_pid = spawn (fun () -> worker coord_pid) in
 
-  (* Wait for initial ready signal (should timeout and send ready) *)
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
       ~timeout:1.0 ()
   in
-  println "✓ Worker sent initial ready signal via timeout";
+  let () = Kernel.println "✓ Worker sent initial ready signal via timeout" in
 
-  (* Send a task *)
   send worker_pid (Task 42);
 
-  (* Wait for task completion *)
   let result =
     receive
       ~selector:(function TaskComplete n -> `select n | _ -> `skip)
       ~timeout:1.0 ()
   in
-  println ("✓ Task completed: " ^ string_of_int result);
+  let () =
+    Kernel.println
+      (Kernel.String.concat "" [ "✓ Task completed: "; Kernel.Int.to_string result ])
+  in
 
-  (* Wait for ready signal after task *)
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
       ~timeout:1.0 ()
   in
-  println "✓ Worker sent ready signal after task";
+  let () = Kernel.println "✓ Worker sent ready signal after task" in
 
-  (* Don't send any more tasks, wait for timeout-based ready signal *)
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
       ~timeout:1.0 ()
   in
-  println "✓ Worker sent another ready signal via timeout (heartbeat)";
+  let () = Kernel.println "✓ Worker sent another ready signal via timeout (heartbeat)" in
 
-  println "\n✓ All tests passed! Worker pool timeout mechanism works!";
+  Kernel.println "\n✓ All tests passed! Worker pool timeout mechanism works!";
 
-  Ok ()
+  if Kernel.Int.equal result 42 then Result.Ok ()
+  else Result.Error "Unexpected task completion result"
 
-let () = Miniriot.run ~main ~args:Env.args ()
+let test_case () =
+  try test () with
+  | exn -> Result.Error (Kernel.Exception.to_string exn)
+
+let () =
+  let tests = [ Test.case "worker pool timeout heartbeat" test_case ] in
+  let normalize_args = function
+    | [] -> [ "timer_worker_pool_tests"; "run-tests" ]
+    | [ exe ] -> [ exe; "run-tests" ]
+    | args -> args
+  in
+  let main ~args =
+    match
+      Test.Cli.main ~name:"timer_worker_pool_tests" ~tests
+        ~args:(normalize_args args)
+    with
+    | Result.Ok () -> Result.Ok ()
+    | Result.Error msg -> Result.Error msg
+  in
+  Miniriot.run ~main ~args:Std.Env.args ()

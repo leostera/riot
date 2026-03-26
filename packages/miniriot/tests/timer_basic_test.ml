@@ -1,43 +1,74 @@
 
+open Miniriot
+open Miniriot.Exception
+module Result = Std.Result
+module Test = Std.Test
 
 type Message.t += Ping | Timeout_test
 
-let main ~args:_ =
+let test () =
   let my_pid = self () in
-
   (* Test 1: send_after works *)
   let _ = Timer.send_after my_pid Ping ~after:0.1 in
 
   let msg = receive_any () in
   (match msg with
-  | Ping -> println "✓ Test 1 passed: Received Ping after delay"
-  | _ -> println "✗ Test 1 failed: Expected Ping");
+  | Ping -> ()
+  | _ -> Kernel.panic "Test 1 failed: Expected Ping");
 
   (* Test 2: receive timeout works *)
-  (try
-     let _ =
-       receive
-         ~selector:(function Timeout_test -> `select () | _ -> `skip)
-         ~timeout:0.05 ()
-     in
-     println "✗ Test 2 failed: Should have timed out"
-   with Receive_timeout ->
-     println "✓ Test 2 passed: Receive timed out as expected");
+  let got_timeout =
+    match
+      try
+        Some
+          (receive
+            ~selector:(function Timeout_test -> `select () | _ -> `skip)
+            ~timeout:0.05 ())
+      with
+      | Receive_timeout -> None
+  with
+    | Some _ -> Kernel.panic "Test 2 failed: expected timeout"
+    | None -> ()
+  in
+  let () = got_timeout in
 
-  (* Test 3: Timer cancellation *)
-  let timer_id = Timer.send_after my_pid Timeout_test ~after:1.0 in
+  (* Test 3: timer cancellation *)
+  let timer_id =
+    Timer.send_after
+      my_pid Timeout_test ~after:1.0
+  in
   Timer.cancel timer_id;
+  let cancelled_timeout =
+    match
+      try
+        Some
+          (receive
+            ~selector:(function Timeout_test -> `select () | _ -> `skip)
+            ~timeout:0.1 ())
+      with
+      | Receive_timeout -> None
+  with
+    | Some _ -> Kernel.panic "Test 3 failed: expected timeout after cancel"
+    | None -> ()
+  in
+  let () = cancelled_timeout in
 
-  (try
-     let _ =
-       receive
-         ~selector:(function Timeout_test -> `select () | _ -> `skip)
-         ~timeout:0.1 ()
-     in
-     println "✗ Test 3 failed: Should have timed out (timer was cancelled)"
-   with Receive_timeout ->
-     println "✓ Test 3 passed: Cancelled timer didn't fire");
+  Result.Ok ()
 
-  Ok ()
+let test_case () =
+  try test () with
+  | exn -> Result.Error (Kernel.Exception.to_string exn)
 
-let () = Miniriot.run ~main ~args:Env.args ()
+let () =
+  let tests = [ Test.case "timer basic tests" test_case ] in
+  let normalize_args = function
+    | [] -> [ "timer_basic_tests"; "run-tests" ]
+    | [ exe ] -> [ exe; "run-tests" ]
+    | args -> args
+  in
+  let main ~args =
+    match Test.Cli.main ~name:"timer_basic_tests" ~tests ~args:(normalize_args args) with
+    | Result.Ok () -> Result.Ok ()
+    | Result.Error msg -> Result.Error msg
+  in
+  Miniriot.run ~main ~args:Std.Env.args ()

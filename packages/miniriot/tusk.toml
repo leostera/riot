@@ -16,3 +16,32 @@ kernel = { path = "../kernel" }
 
 [build-dependencies]
 tusk-fix-api = { path = "../tusk-fix-api" }
+
+[dev-dependencies]
+propane = { path = "../propane" }
+std = { path = "../std" }
+
+# Test binaries
+[[bin]]
+name = "miniriot_rfd0010_properties_tests"
+path = "tests/miniriot_rfd0010_properties_test.ml"
+
+[[bin]]
+name = "timer_basic_tests"
+path = "tests/timer_basic_test.ml"
+
+[[bin]]
+name = "timer_interval_tests"
+path = "tests/timer_interval_test.ml"
+
+[[bin]]
+name = "timer_multiple_tests"
+path = "tests/timer_multiple_test.ml"
+
+[[bin]]
+name = "timer_worker_pool_tests"
+path = "tests/timer_worker_pool_test.ml"
+
+[[bin]]
+name = "scheduler_workers_tests"
+path = "tests/scheduler_workers_test.ml"

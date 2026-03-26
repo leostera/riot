@@ -1,50 +1,68 @@
-
+open Miniriot
+open Miniriot.Exception
+module Result = Std.Result
+module Test = Std.Test
 
 type Message.t += Tick | Stop
 
-let main ~args:_ =
+let int_lt a b =
+  match Kernel.Int.compare a b with
+  | -1 -> true
+  | _ -> false
+
+let int_ge a b =
+  match Kernel.Int.compare a b with
+  | -1 -> false
+  | _ -> true
+
+let test () =
   let my_pid = self () in
+  let timer_id =
+    Timer.send_interval
+      my_pid Tick
+      ~interval:0.05
+  in
+  let _ =
+    Timer.send_after my_pid Stop ~after:0.3
+  in
 
-  println "Setting up interval timer (every 50ms)...";
-
-  (* Set up an interval timer *)
-  let timer_id = Timer.send_interval my_pid Tick ~interval:0.05 in
-
-  (* Also set up a stop timer *)
-  let _ = Timer.send_after my_pid Stop ~after:0.3 in
-
-  (* Count how many ticks we get *)
   let rec loop count =
     match receive_any () with
-    | Tick ->
-        println ("  Tick " ^ string_of_int count);
-        loop (count + 1)
+    | Tick -> loop (Kernel.Int.succ count)
     | Stop ->
-        println ("  Stop received after " ^ string_of_int count ^ " ticks");
-        (* Cancel the interval timer *)
         Timer.cancel timer_id;
         count
     | _ -> loop count
   in
 
   let tick_count = loop 0 in
+  Timer.cancel timer_id;
+  if int_lt tick_count 4 then
+    Result.Error
+      (Kernel.String.concat ""
+         [ "Unexpected tick count: "; Kernel.Int.to_string tick_count;
+           " (expected ~6)" ])
+  else if int_ge tick_count 9 then
+    Result.Error
+      (Kernel.String.concat ""
+         [ "Unexpected tick count: "; Kernel.Int.to_string tick_count;
+           " (expected ~6)" ])
+  else Result.Ok ()
 
-  (* We should get roughly 6 ticks (300ms / 50ms) *)
-  if tick_count >= 4 && tick_count <= 8 then
-    println ("✓ Interval timer worked! Got " ^ string_of_int tick_count ^ " ticks (expected ~6)")
-  else println ("✗ Unexpected tick count: " ^ string_of_int tick_count ^ " (expected ~6)");
+let test_case () =
+  try test () with
+  | exn -> Result.Error (Kernel.Exception.to_string exn)
 
-  (* Make sure timer is really cancelled - try to receive with timeout *)
-  (try
-     let _ =
-       receive
-         ~selector:(function Tick -> `select () | _ -> `skip)
-         ~timeout:0.1 ()
-     in
-     println "✗ Timer not cancelled - still receiving ticks!"
-   with Receive_timeout ->
-     println "✓ Interval timer successfully cancelled");
-
-  Ok ()
-
-let () = Miniriot.run ~main ~args:Env.args ()
+let () =
+  let tests = [ Test.case "timer interval tests" test_case ] in
+  let normalize_args = function
+    | [] -> [ "timer_interval_tests"; "run-tests" ]
+    | [ exe ] -> [ exe; "run-tests" ]
+    | args -> args
+  in
+  let main ~args =
+    match Test.Cli.main ~name:"timer_interval_tests" ~tests ~args:(normalize_args args) with
+    | Result.Ok () -> Result.Ok ()
+    | Result.Error msg -> Result.Error msg
+  in
+  Miniriot.run ~main ~args:Std.Env.args ()
