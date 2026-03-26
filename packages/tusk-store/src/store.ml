@@ -184,7 +184,7 @@ let save store ~package ~hash ~sandbox_dir ~outs =
 
 (** Promote cached artifacts to target directory *)
 let promote_artifact store artifact ~target_dir =
-  promote store Artifact.(artifact.hash) target_dir
+  promote store Artifact.(artifact.hash) ~target_dir
 
 (** Get absolute paths to artifact files in immutable cache *)
 let get_artifact_paths store artifact =
@@ -291,8 +291,9 @@ let load_package_exports store ~package ~profile ~target =
 let find_package_export_path store ~package ~profile ~target ~name =
   match load_package_exports store ~package ~profile ~target with
   | None -> None
-  | Some exports ->
-      List.find_opt (fun entry -> String.equal entry.name name) exports
-      |> Option.bind (fun entry ->
-             if Path.is_absolute entry.path then None
-             else Some Path.(store.root_dir / Path.v entry.action_hash / entry.path))
+  | Some exports -> (
+      match List.find_opt (fun entry -> String.equal entry.name name) exports with
+      | None -> None
+      | Some entry ->
+          if Path.is_absolute entry.path then None
+          else Some Path.(store.root_dir / Path.v entry.action_hash / entry.path))
