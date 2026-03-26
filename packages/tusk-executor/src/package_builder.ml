@@ -152,6 +152,36 @@ let summarize_package_names names =
       in
       shown_str ^ ", and " ^ hidden_label
 
+let compute_export_entries (action_graph : Action_graph.t) :
+    Tusk_store.Store.export_entry list =
+  (* Package export manifests are name-addressable (used by FindArtifact / run),
+     while action cache entries are hash-addressable. We keep the mapping small
+     by deduplicating on export name and keeping the first producer, which
+     matches current package semantics where binary/library output names are
+     unique per package/target/profile. *)
+  let entries =
+    Action_graph.nodes action_graph
+    |> List.concat_map (fun (node : Action_node.t) ->
+           let action_hash_hex = Crypto.Digest.hex (Action_node.get_hash node) in
+           List.map
+             (fun out_path ->
+               Tusk_store.Store.
+                 {
+                   name = Path.basename out_path;
+                   path = out_path;
+                   action_hash = action_hash_hex;
+                 })
+             node.value.outs)
+  in
+  let seen = HashSet.create () in
+  List.filter_map
+    (fun (entry : Tusk_store.Store.export_entry) ->
+      if HashSet.contains seen entry.name then None
+      else (
+        let _ = HashSet.insert seen entry.name in
+        Some entry))
+    entries
+
 let build ~workspace ~toolchain ~store ~package_graph ~package_key
     ~(package : Package.t)
     ~build_ctx =
@@ -313,13 +343,15 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
 
             match failed_actions with
             | first_error :: _ -> Error (convert_action_error first_error)
-            | [] -> (
-                (* All actions succeeded, save the artifacts *)
+            | [] ->
+                let export_entries = compute_export_entries action_graph in
+                (* Keep package-level artifact witness for compatibility, but
+                   authoritative cache reuse now happens at action level. *)
                 match
                   Tusk_store.Store.save store ~package:package.name
                     ~hash:package_hash ~sandbox_dir ~outs:outputs
                 with
-                | Ok artifact -> Ok artifact
+                | Ok artifact -> Ok (artifact, export_entries)
                 | Error msg ->
                     Error
                       (ExecutionFailed
@@ -327,7 +359,7 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
                            message =
                              "Failed to save artifacts for " ^ package.name ^ ": " ^
                                msg;
-                         }))
+                         })
           in
 
           match
@@ -364,7 +396,16 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
                      error;
                    });
               { package_key = planned_key; package; status = Failed error; duration }
-          | Ok artifact ->
+          | Ok (artifact, export_entries) ->
+              let _ =
+                Tusk_store.Store.save_package_exports store ~package:package.name
+                  ~profile:profile_name ~target:target_triple_str
+                  ~exports:export_entries
+                |> Result.expect
+                     ~msg:
+                       ("Failed to save package export manifest for "
+                      ^ package.name)
+              in
               Tusk_store.Store.promote store package_hash ~target_dir
               |> Result.expect
                    ~msg:

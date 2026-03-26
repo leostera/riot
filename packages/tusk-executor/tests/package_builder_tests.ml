@@ -163,6 +163,83 @@ let test_package_error_variants () =
   | PlanningFailed _, ExecutionFailed _ -> Ok ()
   | _ -> Error "Error variants don't match expected types"
 
+let test_build_writes_package_export_manifest () =
+  match
+    Fs.with_tempdir ~prefix:"pkg_builder_export_manifest_test" (fun tmpdir ->
+        let package_dir = Path.(tmpdir / Path.v "pkg") in
+        let src_dir = Path.(package_dir / Path.v "src") in
+        let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
+        let _ =
+          Fs.write "let answer = 42\n" Path.(src_dir / Path.v "lib.ml")
+          |> Result.expect ~msg:"write source failed"
+        in
+        let package =
+          Tusk_model.Package.
+            {
+              name = "pkg";
+              path = package_dir;
+              relative_path = Path.v "pkg";
+              dependencies = [];
+              dev_dependencies = [];
+              build_dependencies = [];
+              foreign_dependencies = [];
+              binaries = [];
+              library = Some { path = Path.v "src/lib.ml" };
+              sources = { src = []; native = []; tests = []; examples = []; bench = [] };
+              compiler = { profile_overrides = []; target_overrides = [] };
+              commands = [];
+              fix_providers = [];
+            }
+        in
+        let workspace =
+          Tusk_model.Workspace.
+            {
+              root = tmpdir;
+              target_dir_root = Path.(tmpdir / Path.v "target");
+              packages = [ package ];
+              profile_overrides = [];
+            }
+        in
+        let store = Tusk_store.Store.create ~workspace in
+        let package_graph =
+          Tusk_planner.Package_graph.create ~scope:Tusk_planner.Package_graph.Runtime workspace
+          |> Result.unwrap
+        in
+        let build_ctx =
+          let session_id = Tusk_model.Session_id.make () in
+          Tusk_model.Build_ctx.make ~session_id ~profile:Tusk_model.Profile.debug ()
+        in
+        let result =
+          Tusk_executor.Package_builder.build ~workspace ~toolchain:test_toolchain
+            ~store ~package_graph
+            ~package_key:
+              (Tusk_planner.Package_graph.package_key ~package_name:package.name
+                 Tusk_planner.Package_graph.Runtime)
+            ~package ~build_ctx
+        in
+        match result.status with
+        | Tusk_executor.Package_builder.Failed err ->
+            Error
+              ("build failed: "
+              ^ Tusk_executor.Package_builder.package_error_to_string err)
+        | Tusk_executor.Package_builder.Built _
+        | Tusk_executor.Package_builder.Cached _ ->
+            let target =
+              Kernel.System.Host.to_string
+                (Tusk_model.Build_ctx.target_triplet build_ctx)
+            in
+            (match
+               Tusk_store.Store.load_package_exports store ~package:package.name
+                 ~profile:"debug" ~target
+             with
+            | None -> Error "expected package export manifest to be saved"
+            | Some exports ->
+                if List.length exports > 0 then Ok ()
+                else Error "expected at least one exported output entry"))
+  with
+  | Ok r -> r
+  | Error _ -> Error "Tempdir creation failed"
+
 let tests =
   Test.
     [
@@ -170,6 +247,8 @@ let tests =
         test_collect_source_files;
       case "build_result: status variants" test_build_result_status_variants;
       case "package_error: variants" test_package_error_variants;
+      case "build writes package export manifest"
+        test_build_writes_package_export_manifest;
     ]
 
 let name = "Package Builder Tests"
