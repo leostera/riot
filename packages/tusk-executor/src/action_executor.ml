@@ -321,7 +321,8 @@ let execute_node ~completed ~store ~session_id toolchain sandbox_dir
                 hash = action_hash;
               });
         let _ =
-          Tusk_store.Store.promote_artifact store artifact ~target_dir:sandbox_dir
+          Tusk_store.Store.promote store artifact.Tusk_store.Artifact.hash
+            ~target_dir:sandbox_dir
           |> Result.expect
                ~msg:
                  ("Failed to materialize cached action artifact: "
