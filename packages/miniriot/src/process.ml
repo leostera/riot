@@ -36,8 +36,6 @@ type state =
 type t = {
   pid : Pid.t;
   state : state atomic_ref;
-  queued : bool atomic_ref;
-  owner_worker : Scheduler_id.t atomic_ref;
   receive_timeout_fired : bool atomic_ref;
   syscall_timeout_fired : bool atomic_ref;
   lock : Mutex.t;
@@ -74,8 +72,6 @@ let make fn =
     cont = None;
     fn = Some fn;
     state = Sync.Atomic.make Uninitialized;
-    queued = Sync.Atomic.make false;
-    owner_worker = Sync.Atomic.make Scheduler_id.zero;
     receive_timeout_fired = Sync.Atomic.make false;
     syscall_timeout_fired = Sync.Atomic.make false;
     lock = Mutex.create ();
@@ -130,14 +126,6 @@ let try_mark_awaiting_message t =
 let try_mark_runnable_from_waiting_message t =
   Sync.Atomic.compare_and_set t.state Waiting_message Runnable
 
-let owner_worker t = Sync.Atomic.get t.owner_worker
-let set_owner_worker t worker_id = Sync.Atomic.set t.owner_worker worker_id
-
-let is_queued t = Sync.Atomic.get t.queued
-let mark_as_dequeued t = Sync.Atomic.set t.queued false
-let mark_as_queued t = Sync.Atomic.set t.queued true
-let try_mark_queued t = Sync.Atomic.compare_and_set t.queued false true
-
 let has_empty_mailbox t =
   with_lock t (fun () ->
       Mailbox.is_empty t.save_queue && Mailbox.is_empty t.mailbox)
@@ -151,9 +139,7 @@ let mark_as_running t = if is_alive t then Sync.Atomic.set t.state Running
 let mark_as_runnable t = if is_alive t then Sync.Atomic.set t.state Runnable
 let mark_as_awaiting_message t = if is_alive t then Sync.Atomic.set t.state Waiting_message
 let mark_as_exited t reason = if not (is_exited t) then Sync.Atomic.set t.state (Exited reason)
-let mark_as_finalized t =
-  Sync.Atomic.set t.state Finalized;
-  Sync.Atomic.set t.queued false
+let mark_as_finalized t = Sync.Atomic.set t.state Finalized
 let cont t = Option.unwrap t.cont
 let set_cont t c = t.cont <- Some c
 

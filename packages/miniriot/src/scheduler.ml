@@ -3,9 +3,19 @@ open Kernel.Collections
 open Kernel.Sync
 open Kernel.Sync.Cell
 
+type process_slot = {
+  process : Process.t;
+  (* Runtime-owned scheduling metadata.
+     Process continuations/mailboxes live on [Process.t], while ownership and
+     queue membership live here so workers can transfer slots without mutating
+     process internals. *)
+  owner_worker : Scheduler_id.t Atomic.t;
+  queued : bool Atomic.t;
+}
+
 type worker = {
   id : Scheduler_id.t;
-  queue : Process.t Queue.t;
+  queue : process_slot Queue.t;
   lock : Mutex.t;
   cond : Condition.t;
 }
@@ -35,7 +45,7 @@ type reactor_command =
 
 type process_shard = {
   lock : Mutex.t;
-  processes : (Pid.t, Process.t) HashMap.t;
+  processes : (Pid.t, process_slot) HashMap.t;
 }
 
 type process_registry = {
@@ -172,6 +182,20 @@ let create_process_registry worker_count =
     size = Atomic.make 0;
   }
 
+let create_process_slot proc ~owner_worker =
+  {
+    process = proc;
+    owner_worker = Atomic.make owner_worker;
+    queued = Atomic.make false;
+  }
+
+let slot_process slot = slot.process
+let slot_pid slot = Process.pid slot.process
+let slot_owner_worker slot = Atomic.get slot.owner_worker
+let set_slot_owner_worker slot worker_id = Atomic.set slot.owner_worker worker_id
+let mark_slot_dequeued slot = Atomic.set slot.queued false
+let try_mark_slot_queued slot = Atomic.compare_and_set slot.queued false true
+
 let shard_for_pid registry pid =
   let idx = Pid.to_int pid mod Array.length registry.shards in
   registry.shards.(idx)
@@ -276,39 +300,43 @@ let request_shutdown t ~status =
 
 let shutdown t ~status = request_shutdown t ~status
 
-let enqueue_on_worker t worker_id proc =
+let enqueue_on_worker t worker_id slot =
+  (* The slot-level queued flag enforces "at most one runnable-queue entry per
+     process" across wakeups, local reschedules, and steals. *)
   if is_valid_worker_id t worker_id then
-    if Process.try_mark_queued proc then (
+    if try_mark_slot_queued slot then (
       let worker = worker_by_id t worker_id in
       Mutex.lock worker.lock;
-      Queue.push worker.queue proc;
+      Queue.push worker.queue slot;
       Condition.signal worker.cond;
       Mutex.unlock worker.lock)
-    else if Process.is_runnable proc then (
+    else if Process.is_runnable (slot_process slot) then (
       increment t.counters.duplicate_enqueue_races;
       trace
         (Kernel.String.concat ""
            [ "duplicate enqueue prevented pid=";
-             Pid.to_string (Process.pid proc) ]))
+             Pid.to_string (slot_pid slot) ]))
 
-let enqueue_owned_process t proc =
-  let owner = Process.owner_worker proc in
+let enqueue_owned_process t slot =
+  let owner = slot_owner_worker slot in
   let worker_id = if is_valid_worker_id t owner then owner else Scheduler_id.zero in
-  enqueue_on_worker t worker_id proc
+  enqueue_on_worker t worker_id slot
 
 let current_worker_id_opt () =
   match Domain.DLS.get current_context with
   | Some { worker_id; _ } -> worker_id
   | None -> None
 
-let wake_process t proc =
+let wake_process t slot =
+  let proc = slot_process slot in
   if Process.try_set_runnable_if_waiting proc then
-    enqueue_owned_process t proc
+    enqueue_owned_process t slot
   else if Process.is_runnable proc then
-    enqueue_owned_process t proc
+    enqueue_owned_process t slot
 
-let wake_process_from_message t proc =
-  let owner = Process.owner_worker proc in
+let wake_process_from_message t slot =
+  let proc = slot_process slot in
+  let owner = slot_owner_worker slot in
   let remote_wakeup =
     match current_worker_id_opt () with
     | Some worker_id -> not (Scheduler_id.equal worker_id owner)
@@ -316,23 +344,28 @@ let wake_process_from_message t proc =
   in
   if Process.try_mark_runnable_from_waiting_message proc then (
     if remote_wakeup then increment t.counters.remote_wakeups;
-    enqueue_owned_process t proc)
+    enqueue_owned_process t slot)
   else if Process.is_runnable proc then (
     if remote_wakeup then increment t.counters.remote_wakeups;
-    enqueue_owned_process t proc)
+    enqueue_owned_process t slot)
 
-let get_process t pid =
+let get_process_slot t pid =
   with_process_shard t.processes pid (fun shard ->
       HashMap.get shard.processes pid)
 
-let add_process t proc =
-  let pid = Process.pid proc in
+let get_process t pid =
+  match get_process_slot t pid with
+  | None -> None
+  | Some slot -> Some (slot_process slot)
+
+let add_process_slot t slot =
+  let pid = slot_pid slot in
   with_process_shard t.processes pid (fun shard ->
-      let replaced = HashMap.insert shard.processes pid proc in
+      let replaced = HashMap.insert shard.processes pid slot in
       if Option.is_none replaced then
         ignore (Atomic.fetch_and_add t.processes.size 1))
 
-let remove_process t pid =
+let remove_process_slot t pid =
   with_process_shard t.processes pid (fun shard ->
       let removed = HashMap.remove shard.processes pid in
       if Option.is_some removed then
@@ -380,20 +413,21 @@ let register_io t ~token ~interest ~source =
 let deregister_io t source = push_reactor_command t (Deregister_io source)
 
 let send_internal t pid msg =
-  match get_process t pid with
+  match get_process_slot t pid with
   | None -> ()
-  | Some proc ->
+  | Some slot ->
+      let proc = slot_process slot in
       Process.send_message proc msg;
-      wake_process_from_message t proc
+      wake_process_from_message t slot
 
 let send pid msg = send_internal (get_scheduler ()) pid msg
 
 let spawn_on_worker t ~worker_id fn =
   let proc = Process.make fn in
-  let pid = Process.pid proc in
-  Process.set_owner_worker proc worker_id;
-  add_process t proc;
-  enqueue_on_worker t worker_id proc;
+  let slot = create_process_slot proc ~owner_worker:worker_id in
+  let pid = slot_pid slot in
+  add_process_slot t slot;
+  enqueue_on_worker t worker_id slot;
   pid
 
 let spawn t fn =
@@ -576,32 +610,36 @@ let perform t proc =
 let handle_exit_proc t proc reason =
   let pid = Process.pid proc in
 
-  List.iter
-    (fun (monitor_pid, monitor_ref) ->
-      match get_process t monitor_pid with
-      | None -> ()
-      | Some monitor_proc ->
-          Process.send_message monitor_proc
-            (Process.Messages.DOWN { ref = monitor_ref; pid; reason });
-          wake_process t monitor_proc)
-    (Process.get_monitored_by proc);
+  with_relations_lock t (fun () ->
+      List.iter
+        (fun (monitor_pid, monitor_ref) ->
+          match get_process_slot t monitor_pid with
+          | None -> ()
+          | Some monitor_slot ->
+              let monitor_proc = slot_process monitor_slot in
+              Process.send_message monitor_proc
+                (Process.Messages.DOWN { ref = monitor_ref; pid; reason });
+              wake_process t monitor_slot)
+        (Process.get_monitored_by proc);
 
-  List.iter
-    (fun linked_pid ->
-      match get_process t linked_pid with
-      | None -> ()
-      | Some linked_proc -> (
-          if Process.get_trap_exit linked_proc then (
-            Process.send_message linked_proc
-              (Process.Messages.EXIT { from = pid; reason });
-            wake_process t linked_proc)
-          else
-            match reason with
-            | Ok () -> ()
-            | Error exn ->
-                Process.mark_as_exited linked_proc (Error exn);
-                wake_process t linked_proc))
-    (Process.get_links proc);
+      List.iter
+        (fun linked_pid ->
+          match get_process_slot t linked_pid with
+          | None -> ()
+          | Some linked_slot ->
+              let linked_proc = slot_process linked_slot in
+              if Process.get_trap_exit linked_proc then (
+                Process.send_message linked_proc
+                  (Process.Messages.EXIT { from = pid; reason });
+                wake_process t linked_slot)
+              else
+                match reason with
+                | Ok () -> ()
+                | Error exn ->
+                    Process.mark_as_exited linked_proc (Error exn);
+                    enqueue_owned_process t linked_slot)
+        (Process.get_links proc))
+  ;
 
   (match Process.state proc with
   | Waiting_io { source; _ } ->
@@ -610,7 +648,7 @@ let handle_exit_proc t proc reason =
   | _ -> ());
   clear_receive_timeout t proc;
 
-  remove_process t pid;
+  remove_process_slot t pid;
   Process.mark_as_finalized proc;
 
   if Process.is_main proc then (
@@ -619,7 +657,8 @@ let handle_exit_proc t proc reason =
   else
     maybe_shutdown_if_empty t
 
-let handle_run_proc t ctx proc =
+let handle_run_proc t ctx slot =
+  let proc = slot_process slot in
   let pid_str = Pid.to_string (Process.pid proc) in
   Process.mark_as_running proc;
   ctx.current_process <- Some proc;
@@ -651,45 +690,46 @@ let handle_run_proc t ctx proc =
   | _ ->
       if Process.is_alive proc then (
         Process.mark_as_runnable proc;
-        enqueue_owned_process t proc)
+        enqueue_owned_process t slot)
 
-let step_process t ctx proc =
+let step_process t ctx slot =
+  let proc = slot_process slot in
   match Process.state proc with
   | Uninitialized ->
       Process.init proc;
-      handle_run_proc t ctx proc
+      handle_run_proc t ctx slot
   | Finalized -> ()
   | Waiting_message ->
       if Process.has_messages proc
          && Process.try_mark_runnable_from_waiting_message proc
       then
-        handle_run_proc t ctx proc
+        handle_run_proc t ctx slot
   | Waiting_io _ -> ()
   | Exited reason -> handle_exit_proc t proc reason
-  | Running | Runnable -> handle_run_proc t ctx proc
+  | Running | Runnable -> handle_run_proc t ctx slot
 
 let pop_local (worker : worker) =
   Mutex.lock worker.lock;
-  let proc = Queue.pop worker.queue in
+  let slot = Queue.pop worker.queue in
   Mutex.unlock worker.lock;
-  match proc with
+  match slot with
   | None -> None
-  | Some p ->
-      Process.mark_as_dequeued p;
-      Some p
+  | Some slot ->
+      mark_slot_dequeued slot;
+      Some slot
 
 let wait_for_local_work t (worker : worker) =
   Mutex.lock worker.lock;
   while Queue.is_empty worker.queue && not (Atomic.get t.stop) do
     Condition.wait worker.cond worker.lock
   done;
-  let proc = if Atomic.get t.stop then None else Queue.pop worker.queue in
+  let slot = if Atomic.get t.stop then None else Queue.pop worker.queue in
   Mutex.unlock worker.lock;
-  match proc with
+  match slot with
   | None -> None
-  | Some p ->
-      Process.mark_as_dequeued p;
-      Some p
+  | Some slot ->
+      mark_slot_dequeued slot;
+      Some slot
 
 let steal_batch (victim : worker) =
   Mutex.lock victim.lock;
@@ -729,7 +769,9 @@ let attempt_steal t (worker : worker) =
         if List.is_empty batch then
           scan start_offset (seen + 1)
         else (
-          List.iter (fun proc -> Process.set_owner_worker proc worker.id) batch;
+          (* Ownership transfer happens before enqueuing locally so future
+             remote wakeups route to the stealing worker. *)
+          List.iter (fun slot -> set_slot_owner_worker slot worker.id) batch;
           push_batch worker batch;
           true)
   in
@@ -769,7 +811,10 @@ let process_timers t =
               Process.mark_receive_timeout_fired proc;
             if Process.has_syscall_timeout_id proc timer_id then
               Process.mark_syscall_timeout_fired proc;
-            if Process.is_alive proc then wake_process t proc
+            if Process.is_alive proc then (
+              match get_process_slot t (Process.pid proc) with
+              | None -> ()
+              | Some slot -> wake_process t slot)
         | Timer.Send_message (target_pid, msg) ->
             send_internal t target_pid msg);
         match timer.mode with
@@ -814,19 +859,22 @@ let poll_io t =
     (fun event ->
       let token = Async.Event.token event in
       let proc : Process.t = Async.Token.unsafe_to_value token in
-      match Process.state proc with
-      | Waiting_io { source; _ } ->
-          (match Async.Poll.deregister t.io_poll source with
-          | Ok () -> ()
-          | Error err ->
-              eprintln
-                ("[Scheduler] WARN: Failed to deregister I/O for process "
-               ^ Pid.to_string (Process.pid proc)
-               ^ ": " ^ IO.error_message err));
-          if Process.is_alive proc then (
-            Process.add_ready_token proc token source;
-            wake_process t proc)
-      | _ -> ())
+      match get_process_slot t (Process.pid proc) with
+      | None -> ()
+      | Some slot -> (
+          match Process.state proc with
+          | Waiting_io { source; _ } ->
+              (match Async.Poll.deregister t.io_poll source with
+              | Ok () -> ()
+              | Error err ->
+                  eprintln
+                    ("[Scheduler] WARN: Failed to deregister I/O for process "
+                   ^ Pid.to_string (Process.pid proc)
+                   ^ ": " ^ IO.error_message err));
+              if Process.is_alive proc then (
+                Process.add_ready_token proc token source;
+                wake_process t slot)
+          | _ -> ()))
     events
 
 let reactor_loop t =

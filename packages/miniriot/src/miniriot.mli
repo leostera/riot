@@ -36,6 +36,7 @@ module Process : sig
   (** Process management *)
 
   type exit_reason = exn
+  type flag = TrapExit of bool
   
   type monitor_ref
 
@@ -113,6 +114,9 @@ module Process : sig
 
   val demonitor : Monitor.t -> unit
   (** Stop monitoring a process *)
+
+  val set_flags : flag list -> unit
+  (** Set flags for the currently running process. *)
 end
 
 module Timer_id = Timer_id

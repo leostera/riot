@@ -78,24 +78,6 @@ val try_mark_awaiting_message : t -> bool
 val try_mark_runnable_from_waiting_message : t -> bool
 (** Transition [Waiting_message] to [Runnable] atomically. *)
 
-val owner_worker : t -> Scheduler_id.t
-(** Read the current worker owner ID for this process. *)
-
-val set_owner_worker : t -> Scheduler_id.t -> unit
-(** Update the current worker owner ID for this process. *)
-
-val is_queued : t -> bool
-(** Check if process is currently enqueued in a worker run queue. *)
-
-val mark_as_queued : t -> unit
-(** Mark process as queued in a worker run queue. *)
-
-val mark_as_dequeued : t -> unit
-(** Mark process as no longer queued in a worker run queue. *)
-
-val try_mark_queued : t -> bool
-(** Attempt to transition the queue-membership flag from false to true. *)
-
 val has_empty_mailbox : t -> bool
 (** Check if process mailbox is empty *)
 
