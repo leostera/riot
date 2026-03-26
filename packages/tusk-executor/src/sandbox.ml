@@ -28,26 +28,24 @@ let create ~workspace ~package_name =
 let get_dir t = t.dir
 
 let copy_object_files ~store ~sandbox ~package ~depset =
+  let _ = store in
+  let _ = package in
   let depset = Tusk_planner.Dependency.transitive_closure depset in
   List.iter
     (fun dep ->
-      let abs_paths =
-        Tusk_store.Store.get_artifact_paths store
-          dep.Tusk_planner.Dependency.artifact
-      in
-      let o_files =
-        List.filter
-          (fun path -> String.ends_with ~suffix:".o" (Path.to_string path))
-          abs_paths
-      in
-      List.iter
-        (fun abs_path ->
-          let dest = Path.(sandbox.dir / v (Path.basename abs_path)) in
-          Fs.copy ~src:abs_path ~dst:dest
-          |> Result.expect
-               ~msg:
-                 ("Failed to copy .o file " ^ Path.to_string abs_path))
-        o_files)
+      match Fs.read_dir dep.Tusk_planner.Dependency.artifact_dir with
+      | Error _ -> ()
+      | Ok reader ->
+          let entries = Std.Iter.MutIterator.to_list reader in
+          entries
+          |> List.filter (fun path ->
+                 String.ends_with ~suffix:".o" (Path.to_string path))
+          |> List.iter (fun abs_path ->
+                 let dest = Path.(sandbox.dir / v (Path.basename abs_path)) in
+                 Fs.copy ~src:abs_path ~dst:dest
+                 |> Result.expect
+                      ~msg:
+                        ("Failed to copy .o file " ^ Path.to_string abs_path)))
     depset
 
 let copy_inputs ~sandbox ~package ~inputs =

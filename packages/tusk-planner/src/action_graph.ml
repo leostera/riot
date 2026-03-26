@@ -352,8 +352,7 @@ let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_un
   (* Extract dependency cache include paths - no file copying needed! *)
   let dep_cache_includes =
     List.map
-      (fun (dep : Dependency.t) ->
-        Tusk_store.Store.get_artifact_dir store dep.artifact)
+      (fun (dep : Dependency.t) -> dep.artifact_dir)
       transitive_deps
   in
 

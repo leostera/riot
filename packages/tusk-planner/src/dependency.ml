@@ -2,24 +2,17 @@ open Std
 open Std.Collections
 open Std.Iter
 open Tusk_model
-open Tusk_store
 
 type t = {
   package : Package.t;
-  artifact : Artifact.t;
+  artifact_dir : Path.t;
   depset : t list;
   hash : Crypto.hash;
 }
 
 let library_cmxa (dep : t) : Path.t =
-  List.find_opt
-    (fun path ->
-      match Path.extension path with Some ".cmxa" -> true | _ -> false)
-    dep.artifact.files
-  |> Option.expect
-       ~msg:
-         ("No .cmxa file found in artifact for package " ^
-            dep.package.name)
+  let cmxa = Module_name.(of_string dep.package.name |> cmxa) in
+  Path.(dep.artifact_dir / cmxa)
 
 let transitive_closure deps =
   let seen = HashSet.create () in

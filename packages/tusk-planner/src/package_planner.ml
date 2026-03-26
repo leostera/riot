@@ -87,7 +87,7 @@ let compute_input_hash ~package ~depset ~workspace ~profile ~build_ctx =
 
   H.finish state
 
-let check_dependencies_built ~package_graph ~package_key =
+let check_dependencies_built ~store ~package_graph ~package_key =
   let current_package_name, current_scope =
     match Package_graph.get_node_by_key package_graph package_key with
     | Some node ->
@@ -101,48 +101,61 @@ let check_dependencies_built ~package_graph ~package_key =
     | None -> []
   in
 
-  let depset : Dependency.t vec = vec [] in
   let unplanned = ref [] in
   let failed = ref [] in
 
-  let process_node node =
-    let pkg = Package_graph.get_package node in
+  let rec summarize_dependency (node : Package_graph.package_node G.node) :
+      Dependency.t option =
+    let pkg = Package_graph.get_package node.value in
     let is_ordering_only_self_dependency =
       String.equal pkg.Package.name current_package_name
       &&
-      match (current_scope, Package_graph.get_scope node) with
+      match (current_scope, Package_graph.get_scope node.value) with
       | Package_graph.Runtime, Package_graph.Build -> true
       | _ -> false
     in
-    match node with
+    match node.value with
     | Package_graph.Unplanned _ ->
         (* Not yet planned - unplanned dependency *)
         unplanned := pkg :: !unplanned
-    | Package_graph.Planned _ ->
-        (* Planned but not built yet - treat as unplanned *)
-        unplanned := pkg :: !unplanned
+        ;
+        None
+    | Package_graph.Planned { package; hash; _ }
+    | Package_graph.Built { package; hash; _ } ->
+        if is_ordering_only_self_dependency then None
+        else
+          let dep_nodes = Package_graph.get_dependencies_for_node package_graph node in
+          let dep_depset = List.filter_map summarize_dependency dep_nodes in
+          Some
+            Dependency.
+              {
+                package;
+                artifact_dir = Tusk_store.Store.hash_dir_of store hash;
+                depset = dep_depset;
+                hash;
+              }
     | Package_graph.Failed _ ->
         (* Dependency failed to build *)
         failed := pkg :: !failed
+        ;
+        None
     | Package_graph.Skipped _ ->
         (* Dependency was skipped - treat as failed *)
         failed := pkg :: !failed
-    | Package_graph.Built { package; artifact; depset = dep_depset; hash; _ } ->
-        if not is_ordering_only_self_dependency then
-          let dep = Dependency.{ package; artifact; depset = dep_depset; hash } in
-          Vector.push depset dep
+        ;
+        None
   in
 
-  List.iter process_node deps;
+  let depset = List.filter_map summarize_dependency deps in
 
   (* Check the sets in order: failed takes precedence *)
   if !failed != [] then Error (Failed !failed)
   else if !unplanned != [] then Error (Missing !unplanned)
-  else Ok (Vector.into_iter depset |> Iterator.to_list)
+  else Ok depset
 
 let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
     ~package ~build_ctx =
-  match check_dependencies_built ~package_graph ~package_key with
+  match check_dependencies_built ~store ~package_graph ~package_key with
   | Error (Failed failed) -> Ok (FailedDependencies { package; failed })
   | Error (Missing missing) -> Ok (MissingDependencies { package; missing })
   | Ok depset ->

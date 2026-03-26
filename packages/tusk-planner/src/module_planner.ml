@@ -111,8 +111,7 @@ let plan_node input =
     (* Add cache directories from dependencies to includes *)
     let dep_cache_dirs =
       List.map
-        (fun (dep : Dependency.t) ->
-          Tusk_store.Store.get_artifact_dir input.store dep.artifact)
+        (fun (dep : Dependency.t) -> dep.artifact_dir)
         transitive_deps
     in
 
