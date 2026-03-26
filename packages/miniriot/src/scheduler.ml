@@ -229,6 +229,12 @@ let wake_process t proc =
   else if Process.is_runnable proc then
     enqueue_owned_process t proc
 
+let wake_process_from_message t proc =
+  if Process.try_mark_runnable_from_waiting_message proc then
+    enqueue_owned_process t proc
+  else if Process.is_runnable proc then
+    enqueue_owned_process t proc
+
 let get_process t pid =
   with_processes t (fun () -> HashMap.get t.processes pid)
 
@@ -287,7 +293,7 @@ let send_internal t pid msg =
   | None -> ()
   | Some proc ->
       Process.send_message proc msg;
-      wake_process t proc
+      wake_process_from_message t proc
 
 let send pid msg = send_internal (get_scheduler ()) pid msg
 
@@ -351,13 +357,22 @@ let install_syscall_timeout t proc secs =
 let handle_receive k t proc ~selector ~timeout =
   let open Proc_state in
 
-  let timed_out =
+  let timeout_fired =
     match Process.receive_timeout proc with
     | None -> false
     | Some timer_id ->
-        Process.clear_receive_timeout proc;
-        cancel_timer t timer_id;
-        Process.has_empty_mailbox proc
+        if Process.take_receive_timeout_fired proc then (
+          Process.clear_receive_timeout proc;
+          cancel_timer t timer_id;
+          true)
+        else if Process.has_empty_mailbox proc then
+          false
+        else (
+          (* A message woke this process before the timer fired.
+             Cancel the timeout and keep receiving. *)
+          Process.clear_receive_timeout proc;
+          cancel_timer t timer_id;
+          false)
   in
 
   let park_for_receive () =
@@ -375,7 +390,7 @@ let handle_receive k t proc ~selector ~timeout =
       k Delay
   in
 
-  if timed_out then
+  if timeout_fired && Process.has_empty_mailbox proc then
     k (Discontinue Effects.Exception.Receive_timeout)
   else if Process.has_empty_mailbox proc then
     park_for_receive ()
@@ -398,38 +413,47 @@ let handle_receive k t proc ~selector ~timeout =
 let handle_syscall k t proc name interest source timeout =
   let open Proc_state in
 
-  let timed_out =
+  let timeout_state =
     match Process.syscall_timeout proc with
-    | None -> false
+    | None -> `none
     | Some timer_id ->
-        Process.clear_syscall_timeout proc;
-        cancel_timer t timer_id;
-        Process.has_no_ready_tokens proc
+        if Process.take_syscall_timeout_fired proc then (
+          Process.clear_syscall_timeout proc;
+          cancel_timer t timer_id;
+          `fired)
+        else
+          `armed
   in
 
-  if timed_out then
-    k (Discontinue Effects.Exception.Syscall_timeout)
-  else
-    match Process.get_ready_token proc with
-    | Some _ ->
-        clear_syscall_timeout t proc;
-        k (Continue ())
-    | None ->
-        let token = Async.Token.make proc in
-        Process.mark_as_awaiting_io proc ~name token source;
-        (match register_io t ~token ~interest ~source with
-        | Ok () ->
-            (match timeout with
-            | `infinity -> ()
-            | `after secs -> install_syscall_timeout t proc secs);
-            k Suspend
-        | Error err ->
-            eprintln
-              ("[Scheduler] ERROR: Failed to register I/O for process "
-             ^ Pid.to_string (Process.pid proc)
-             ^ ": " ^ IO.error_message err);
-            Process.mark_as_runnable proc;
-            k (Discontinue (Failure "Failed to register I/O")))
+  match Process.get_ready_token proc with
+  | Some _ ->
+      (match timeout_state with
+      | `armed -> clear_syscall_timeout t proc
+      | `fired | `none -> ());
+      k (Continue ())
+  | None -> (
+      match timeout_state with
+      | `fired ->
+          k (Discontinue Effects.Exception.Syscall_timeout)
+      | `armed ->
+          (* Spurious wakeup while still waiting on a registered syscall. *)
+          k Suspend
+      | `none ->
+          let token = Async.Token.make proc in
+          Process.mark_as_awaiting_io proc ~name token source;
+          (match register_io t ~token ~interest ~source with
+          | Ok () ->
+              (match timeout with
+              | `infinity -> ()
+              | `after secs -> install_syscall_timeout t proc secs);
+              k Suspend
+          | Error err ->
+              eprintln
+                ("[Scheduler] ERROR: Failed to register I/O for process "
+               ^ Pid.to_string (Process.pid proc)
+               ^ ": " ^ IO.error_message err);
+              Process.mark_as_runnable proc;
+              k (Discontinue (Failure "Failed to register I/O"))))
 
 let perform t proc =
   let open Proc_state in
@@ -625,8 +649,13 @@ let process_timers t =
     let expired = Timer_wheel.tick t.timer_wheel ~now in
     List.iter
       (fun timer ->
+        let timer_id = timer.Timer.id in
         (match timer.Timer.action with
         | Timer.Wake_process proc ->
+            if Process.has_receive_timeout_id proc timer_id then
+              Process.mark_receive_timeout_fired proc;
+            if Process.has_syscall_timeout_id proc timer_id then
+              Process.mark_syscall_timeout_fired proc;
             if Process.is_alive proc then wake_process t proc
         | Timer.Send_message (target_pid, msg) ->
             send_internal t target_pid msg);

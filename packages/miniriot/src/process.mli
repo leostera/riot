@@ -173,6 +173,24 @@ val clear_syscall_timeout : t -> unit
 val syscall_timeout : t -> Timer_id.t option
 (** Get the current syscall timeout timer ID, if any *)
 
+val has_receive_timeout_id : t -> Timer_id.t -> bool
+(** Check if the current receive-timeout registration matches a timer ID. *)
+
+val has_syscall_timeout_id : t -> Timer_id.t -> bool
+(** Check if the current syscall-timeout registration matches a timer ID. *)
+
+val mark_receive_timeout_fired : t -> unit
+(** Mark the currently registered receive timeout as fired. *)
+
+val mark_syscall_timeout_fired : t -> unit
+(** Mark the currently registered syscall timeout as fired. *)
+
+val take_receive_timeout_fired : t -> bool
+(** Atomically read-and-clear receive-timeout fired state. *)
+
+val take_syscall_timeout_fired : t -> bool
+(** Atomically read-and-clear syscall-timeout fired state. *)
+
 (** {1 Process Flags} *)
 
 val set_flags : t -> flag list -> unit

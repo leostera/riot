@@ -38,6 +38,8 @@ type t = {
   state : state atomic_ref;
   queued : bool atomic_ref;
   owner_worker : Scheduler_id.t atomic_ref;
+  receive_timeout_fired : bool atomic_ref;
+  syscall_timeout_fired : bool atomic_ref;
   lock : Mutex.t;
   mutable cont : (unit, exit_reason) result Proc_state.t option;
   mutable fn : (unit -> (unit, exit_reason) result) option;
@@ -75,6 +77,8 @@ let make fn =
     state = Sync.Atomic.make Uninitialized;
     queued = Sync.Atomic.make false;
     owner_worker = Sync.Atomic.make Scheduler_id.zero;
+    receive_timeout_fired = Sync.Atomic.make false;
+    syscall_timeout_fired = Sync.Atomic.make false;
     lock = Mutex.create ();
     mailbox = Mailbox.create ();
     save_queue = Mailbox.create ();
@@ -199,22 +203,47 @@ let has_no_ready_tokens t = with_lock t (fun () -> List.is_empty t.ready_tokens)
 
 (* Timer timeout management *)
 let set_receive_timeout t timer_id =
+  Sync.Atomic.set t.receive_timeout_fired false;
   with_lock t (fun () -> t.receive_timeout <- Some timer_id)
 
 let clear_receive_timeout t =
+  Sync.Atomic.set t.receive_timeout_fired false;
   with_lock t (fun () -> t.receive_timeout <- None)
 
 let receive_timeout t =
   with_lock t (fun () -> t.receive_timeout)
 
 let set_syscall_timeout t timer_id =
+  Sync.Atomic.set t.syscall_timeout_fired false;
   with_lock t (fun () -> t.syscall_timeout <- Some timer_id)
 
 let clear_syscall_timeout t =
+  Sync.Atomic.set t.syscall_timeout_fired false;
   with_lock t (fun () -> t.syscall_timeout <- None)
 
 let syscall_timeout t =
   with_lock t (fun () -> t.syscall_timeout)
+
+let has_receive_timeout_id t timer_id =
+  with_lock t (fun () ->
+      match t.receive_timeout with
+      | Some current -> Timer_id.equal current timer_id
+      | None -> false)
+
+let has_syscall_timeout_id t timer_id =
+  with_lock t (fun () ->
+      match t.syscall_timeout with
+      | Some current -> Timer_id.equal current timer_id
+      | None -> false)
+
+let mark_receive_timeout_fired t = Sync.Atomic.set t.receive_timeout_fired true
+let mark_syscall_timeout_fired t = Sync.Atomic.set t.syscall_timeout_fired true
+
+let take_receive_timeout_fired t =
+  Sync.Atomic.exchange t.receive_timeout_fired false
+
+let take_syscall_timeout_fired t =
+  Sync.Atomic.exchange t.syscall_timeout_fired false
 
 (* Process links and monitors *)
 let link proc target_pid =
