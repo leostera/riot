@@ -120,6 +120,9 @@ let projected_package scope pkg =
   | Runtime -> Package.for_scope Package.Normal pkg
   | Dev -> Package.for_scope Package.Dev pkg
 
+let needs_build_scope_node (pkg : Package.t) =
+  List.length pkg.build_dependencies > 0
+
 let create ~scope (workspace : Workspace.t) : (t, create_error) result =
   let graph = G.make () in
   let name_to_node = HashMap.create () in
@@ -135,9 +138,18 @@ let create ~scope (workspace : Workspace.t) : (t, create_error) result =
     ()
   in
 
-  List.iter
-    (fun (pkg : Package.t) -> insert_node (projected_package Build pkg) Build)
-    workspace.packages;
+  (match scope with
+  | Build ->
+      List.iter
+        (fun (pkg : Package.t) ->
+          insert_node (projected_package Build pkg) Build)
+        workspace.packages
+  | Runtime | Dev ->
+      List.iter
+        (fun (pkg : Package.t) ->
+          if needs_build_scope_node pkg then
+            insert_node (projected_package Build pkg) Build)
+        workspace.packages);
 
   (match scope with
   | Build -> ()
@@ -192,10 +204,13 @@ let create ~scope (workspace : Workspace.t) : (t, create_error) result =
           G.add_edge dev_node ~depends_on:runtime_node
       | _ -> ());
       (* Build-phase dependencies are for build-tooling surfaces such as fused
-         tusk-fix providers and future build scripts. Plain workspace
-         build/test graphs should still preserve pkg.build -> pkg.runtime
-         ordering, but they should not pull build-time libraries into the
-         normal runtime graph or we recreate cycles like:
+         tusk-fix providers and future build scripts. Runtime/dev scopes only
+         materialize pkg.build nodes for packages that declare
+         build_dependencies, avoiding needless duplicate package planning while
+         still preserving build-dependency ordering.
+
+         They should not pull build-time libraries into the normal runtime graph
+         or we recreate cycles like:
 
            std.runtime -> std.build -> tusk-fix-api.runtime -> syn.runtime -> std.runtime
 

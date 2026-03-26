@@ -75,14 +75,13 @@ let runtime_scope_wires_workspace_like_graph () =
     Package_graph.create ~scope:Runtime workspace
     |> Result.expect ~msg:"expected runtime graph"
   in
-  Test.assert_equal ~expected:(List.length packages * 2)
+  Test.assert_equal ~expected:(List.length packages)
     ~actual:(Package_graph.size graph);
   let server_runtime = node_for graph "tusk-server" Runtime in
   assert_same_keys
     ~expected:
       (package_keys_for_scope Runtime
-         [ "std"; "tusk-model"; "tusk-planner"; "tusk-executor"; "tusk-store" ]
-      @ package_keys_for_scope Build [ "tusk-server" ])
+         [ "std"; "tusk-model"; "tusk-planner"; "tusk-executor"; "tusk-store" ])
     ~actual:(dependency_keys_for_node graph server_runtime);
   Ok ()
 
@@ -192,9 +191,14 @@ let topological_sort_places_dependencies_before_dependents () =
   Test.assert_true (position_of miniriot_runtime < position_of app_runtime);
   Ok ()
 
-let runtime_nodes_depend_on_their_own_build_nodes () =
+let runtime_nodes_with_build_dependencies_depend_on_their_build_nodes () =
   let packages =
-    [ make_package "std"; make_package ~dependencies:[ "std" ] "app" ]
+    [
+      make_package "std";
+      make_package "codegen";
+      make_package ~dependencies:[ "std" ] ~build_dependencies:[ "codegen" ]
+        "app";
+    ]
   in
   let workspace = make_workspace packages in
   let graph =
@@ -230,8 +234,8 @@ let scope_node_counts_match_expected_projection () =
     |> Result.expect ~msg:"expected dev graph"
   in
   Test.assert_equal ~expected:3 ~actual:(Package_graph.size build_graph);
-  Test.assert_equal ~expected:6 ~actual:(Package_graph.size runtime_graph);
-  Test.assert_equal ~expected:9 ~actual:(Package_graph.size dev_graph);
+  Test.assert_equal ~expected:3 ~actual:(Package_graph.size runtime_graph);
+  Test.assert_equal ~expected:6 ~actual:(Package_graph.size dev_graph);
   Ok ()
 
 let filter_for_unknown_package_returns_empty_graph () =
@@ -292,8 +296,8 @@ let tests =
         filter_for_package_keeps_only_transitive_dependencies;
       case "topological sort places dependencies before dependents"
         topological_sort_places_dependencies_before_dependents;
-      case "runtime nodes depend on their own build nodes"
-        runtime_nodes_depend_on_their_own_build_nodes;
+      case "runtime nodes with build dependencies depend on their own build nodes"
+        runtime_nodes_with_build_dependencies_depend_on_their_build_nodes;
       case "scope node counts match expected projection"
         scope_node_counts_match_expected_projection;
       case "filter_for_unknown_package returns empty graph"
