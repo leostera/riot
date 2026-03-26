@@ -14,6 +14,15 @@ type t
 
 type error = string
 
+type export_entry = {
+  (** Public export name looked up by CLI flows such as `tusk run`. *)
+  name : string;
+  (** Relative path within the producing action artifact directory. *)
+  path : Std.Path.t;
+  (** Hex-encoded action hash that owns [path] in immutable cache storage. *)
+  action_hash : string;
+}
+
 (** {1 Store Management} *)
 
 val create : workspace:Workspace.t -> t
@@ -73,3 +82,36 @@ val save_plan_bundle :
 
 val load_plan_bundle : t -> hash:Std.Crypto.hash -> Std.Data.Json.t option
 (** Load a cached package planning bundle by package input hash. *)
+
+val save_package_exports :
+  t ->
+  package:string ->
+  profile:string ->
+  target:string ->
+  exports:export_entry list ->
+  (unit, error) result
+(** Save package export manifest metadata for artifact discovery.
+
+    This metadata intentionally does not duplicate artifact contents. It only
+    maps package/profile/target + export name to an action hash and relative
+    path so callers can resolve immutable store paths lazily. *)
+
+val load_package_exports :
+  t -> package:string -> profile:string -> target:string -> export_entry list option
+(** Load package export manifest metadata for artifact discovery.
+
+    Returns [None] when no manifest is present or the stored payload is
+    invalid. *)
+
+val find_package_export_path :
+  t ->
+  package:string ->
+  profile:string ->
+  target:string ->
+  name:string ->
+  Std.Path.t option
+(** Resolve a named export from package export metadata into immutable store
+    path.
+
+    Returns [None] when no matching export exists, when metadata is malformed,
+    or when the export path is not relative. *)

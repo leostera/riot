@@ -9,6 +9,7 @@ module Manifest = Manifest
 
 type t = { root_dir : Path.t (* Root directory for the store *) }
 type error = string
+type export_entry = { name : string; path : Path.t; action_hash : string }
 
 (** Create a new store for the given workspace *)
 let create ~(workspace : Workspace.t) =
@@ -28,6 +29,13 @@ let plans_dir store = Path.(store.root_dir / Path.v "plans")
 
 let plan_path store hash =
   Path.(plans_dir store / Path.v (Std.Crypto.Digest.hex hash ^ ".json"))
+
+let exports_dir store = Path.(store.root_dir / Path.v "exports")
+
+let package_exports_path store ~package ~profile ~target =
+  Path.(
+    exports_dir store / Path.v profile / Path.v target
+    / Path.v (package ^ ".json"))
 
 (** Check if artifacts for a given hash exist in the store *)
 let exists store hash =
@@ -223,3 +231,68 @@ let load_plan_bundle store ~hash =
       | Ok json -> Some json
       | Error _ -> None)
   | Error _ -> None
+
+let export_entry_to_json (entry : export_entry) =
+  Std.Data.Json.Object
+    [
+      ("name", Std.Data.Json.String entry.name);
+      ("path", Std.Data.Json.String (Path.to_string entry.path));
+      ("action_hash", Std.Data.Json.String entry.action_hash);
+    ]
+
+let export_entry_of_json json =
+  match json with
+  | Std.Data.Json.Object fields -> (
+      match
+        ( List.assoc_opt "name" fields,
+          List.assoc_opt "path" fields,
+          List.assoc_opt "action_hash" fields )
+      with
+      | Some (Std.Data.Json.String name), Some (Std.Data.Json.String path), Some (Std.Data.Json.String action_hash) ->
+          Some { name; path = Path.v path; action_hash }
+      | _ -> None)
+  | _ -> None
+
+let save_package_exports store ~package ~profile ~target ~exports =
+  let path = package_exports_path store ~package ~profile ~target in
+  let parent = Path.dirname path in
+  Fs.create_dir_all parent
+  |> Result.expect
+       ~msg:
+         ("Failed to create package export directory: " ^ Path.to_string parent);
+  let payload =
+    Std.Data.Json.Object
+      [
+        ("version", Std.Data.Json.Int 1);
+        ("package", Std.Data.Json.String package);
+        ("profile", Std.Data.Json.String profile);
+        ("target", Std.Data.Json.String target);
+        ("exports", Std.Data.Json.Array (List.map export_entry_to_json exports));
+      ]
+  in
+  match Fs.write (Std.Data.Json.to_string payload) path with
+  | Ok () -> Ok ()
+  | Error _ -> Error "Failed to write package export manifest"
+
+let load_package_exports store ~package ~profile ~target =
+  let path = package_exports_path store ~package ~profile ~target in
+  match Fs.read path with
+  | Error _ -> None
+  | Ok content -> (
+      match Std.Data.Json.of_string content with
+      | Error _ -> None
+      | Ok (Std.Data.Json.Object fields) -> (
+          match List.assoc_opt "exports" fields with
+          | Some (Std.Data.Json.Array entries) ->
+              Some (List.filter_map export_entry_of_json entries)
+          | _ -> None)
+      | Ok _ -> None)
+
+let find_package_export_path store ~package ~profile ~target ~name =
+  match load_package_exports store ~package ~profile ~target with
+  | None -> None
+  | Some exports ->
+      List.find_opt (fun entry -> String.equal entry.name name) exports
+      |> Option.bind (fun entry ->
+             if Path.is_absolute entry.path then None
+             else Some Path.(store.root_dir / Path.v entry.action_hash / entry.path))

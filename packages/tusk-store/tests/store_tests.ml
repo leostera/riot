@@ -149,6 +149,106 @@ let test_plan_bundle_round_trip () =
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_package_exports_round_trip () =
+  match
+    Fs.with_tempdir ~prefix:"store_exports_round_trip_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let hash = Crypto.hash_string "exports-hash" in
+        let exports =
+          [
+            Tusk_store.Store.
+              {
+                name = "foo.cmxa";
+                path = Path.v "lib/foo.cmxa";
+                action_hash = Crypto.Digest.hex hash;
+              };
+            Tusk_store.Store.
+              {
+                name = "foo.cmxs";
+                path = Path.v "lib/foo.cmxs";
+                action_hash = Crypto.Digest.hex hash;
+              };
+          ]
+        in
+        let _ =
+          Tusk_store.Store.save_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~exports
+          |> Result.expect ~msg:"save_package_exports should succeed"
+        in
+        match
+          Tusk_store.Store.load_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test"
+        with
+        | None -> Error "expected saved package exports"
+        | Some loaded ->
+            if List.length loaded = 2 then Ok ()
+            else Error "expected two package export entries")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
+let test_find_package_export_path_round_trip () =
+  match
+    Fs.with_tempdir ~prefix:"store_find_export_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let hash = Crypto.hash_string "find-export-hash" in
+        let action_hash = Crypto.Digest.hex hash in
+        let rel_path = Path.v "bin/tool" in
+        let exports =
+          [ Tusk_store.Store.{ name = "tool"; path = rel_path; action_hash } ]
+        in
+        let _ =
+          Tusk_store.Store.save_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~exports
+          |> Result.expect ~msg:"save_package_exports should succeed"
+        in
+        let expected = Path.(Tusk_store.Store.hash_dir_of store hash / rel_path) in
+        match
+          Tusk_store.Store.find_package_export_path store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~name:"tool"
+        with
+        | None -> Error "expected to resolve package export path"
+        | Some resolved ->
+            if Path.to_string resolved = Path.to_string expected then Ok ()
+            else Error "resolved export path did not match expected immutable path")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
+let test_find_package_export_path_rejects_absolute_export_paths () =
+  match
+    Fs.with_tempdir ~prefix:"store_find_export_absolute_path_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let exports =
+          [
+            Tusk_store.Store.
+              {
+                name = "tool";
+                path = Path.v "/tmp/not-allowed";
+                action_hash = "deadbeef";
+              };
+          ]
+        in
+        let _ =
+          Tusk_store.Store.save_package_exports store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~exports
+          |> Result.expect ~msg:"save_package_exports should succeed"
+        in
+        match
+          Tusk_store.Store.find_package_export_path store ~package:"pkg"
+            ~profile:"debug" ~target:"x86_64-test" ~name:"tool"
+        with
+        | None -> Ok ()
+        | Some _ ->
+            Error
+              "absolute export paths should be rejected when resolving immutable path")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
 let tests =
   Test.
     [
@@ -157,6 +257,11 @@ let tests =
       case "exists requires manifest" test_exists_requires_manifest_file;
       case "put-if-absent keeps first writer" test_put_if_absent_keeps_first_writer;
       case "plan bundle round trip" test_plan_bundle_round_trip;
+      case "package exports round trip" test_package_exports_round_trip;
+      case "find package export path round trip"
+        test_find_package_export_path_round_trip;
+      case "find package export path rejects absolute paths"
+        test_find_package_export_path_rejects_absolute_export_paths;
     ]
 
 let name = "Tusk Store Tests"
