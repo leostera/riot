@@ -209,6 +209,77 @@ let runtime_nodes_depend_on_their_own_build_nodes () =
        dependency_keys);
   Ok ()
 
+let scope_node_counts_match_expected_projection () =
+  let packages =
+    [
+      make_package "std";
+      make_package ~dependencies:[ "std" ] "kernel";
+      make_package ~dependencies:[ "kernel" ] "app";
+    ]
+  in
+  let workspace = make_workspace packages in
+  let build_graph =
+    Package_graph.create ~scope:Build workspace
+    |> Result.expect ~msg:"expected build graph"
+  in
+  let runtime_graph =
+    Package_graph.create ~scope:Runtime workspace
+    |> Result.expect ~msg:"expected runtime graph"
+  in
+  let dev_graph =
+    Package_graph.create ~scope:Dev workspace
+    |> Result.expect ~msg:"expected dev graph"
+  in
+  Test.assert_equal ~expected:3 ~actual:(Package_graph.size build_graph);
+  Test.assert_equal ~expected:6 ~actual:(Package_graph.size runtime_graph);
+  Test.assert_equal ~expected:9 ~actual:(Package_graph.size dev_graph);
+  Ok ()
+
+let filter_for_unknown_package_returns_empty_graph () =
+  let packages = [ make_package "std"; make_package ~dependencies:[ "std" ] "app" ] in
+  let workspace = make_workspace packages in
+  let graph =
+    Package_graph.create ~scope:Runtime workspace
+    |> Result.expect ~msg:"expected runtime graph"
+  in
+  let filtered = Package_graph.filter_for_package graph "does-not-exist" in
+  Test.assert_equal ~expected:0 ~actual:(Package_graph.size filtered);
+  Ok ()
+
+let get_unplanned_dependencies_only_reports_unplanned_runtime_dependencies () =
+  let std = make_package "std" in
+  let kernel = make_package ~dependencies:[ "std" ] "kernel" in
+  let app = make_package ~dependencies:[ "kernel" ] "app" in
+  let workspace = make_workspace [ std; kernel; app ] in
+  let graph =
+    Package_graph.create ~scope:Runtime workspace
+    |> Result.expect ~msg:"expected runtime graph"
+  in
+  let std_runtime_key = Package_graph.package_key ~package_name:"std" Runtime in
+  Package_graph.mark_planned graph std_runtime_key
+    ~module_graph:(Graph.SimpleGraph.make ()) ~action_graph:(Tusk_planner.Action_graph.create ())
+    ~hash:(Crypto.hash_string "std-runtime");
+  let unplanned = Package_graph.get_unplanned_dependencies graph app in
+  Test.assert_equal ~expected:[ "kernel" ]
+    ~actual:(List.map (fun (pkg : Package.t) -> pkg.name) unplanned);
+  Ok ()
+
+let build_scope_wires_declared_build_dependencies () =
+  let packages = [ make_package "codegen"; make_package ~build_dependencies:[ "codegen" ] "app" ] in
+  let workspace = make_workspace packages in
+  let graph =
+    Package_graph.create ~scope:Build workspace
+    |> Result.expect ~msg:"expected build graph"
+  in
+  let app_build = node_for graph "app" Build in
+  let deps = dependency_keys_for_node graph app_build in
+  Test.assert_true
+    (List.exists
+       (String.equal
+          (Package_graph.package_key ~package_name:"codegen" Runtime))
+       deps);
+  Ok ()
+
 let tests =
   Test.
     [
@@ -224,6 +295,14 @@ let tests =
         topological_sort_places_dependencies_before_dependents;
       case "runtime nodes depend on their own build nodes"
         runtime_nodes_depend_on_their_own_build_nodes;
+      case "scope node counts match expected projection"
+        scope_node_counts_match_expected_projection;
+      case "filter_for_unknown_package returns empty graph"
+        filter_for_unknown_package_returns_empty_graph;
+      case "get_unplanned_dependencies only reports unplanned runtime dependencies"
+        get_unplanned_dependencies_only_reports_unplanned_runtime_dependencies;
+      case "build scope wires declared build dependencies"
+        build_scope_wires_declared_build_dependencies;
     ]
 
 let name = "tusk-planner:workspace-like-graph"
