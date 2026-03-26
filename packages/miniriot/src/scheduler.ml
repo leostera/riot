@@ -912,43 +912,52 @@ let worker_loop t worker =
    - [Worker] owns process execution and steal/park loop
 *)
 module Runtime = struct
-  type runtime = t
-  type slot = process_slot
+  include
+    Scheduler_runtime.Make (struct
+      type runtime = t
+      type slot = process_slot
 
-  let create = create
-  let request_shutdown = request_shutdown
-  let shutdown = shutdown
-  let worker_count = worker_count
-  let with_relations_lock = with_relations_lock
-  let get_process = get_process
-  let get_process_slot = get_process_slot
-  let get_current_process = get_current_process
-  let spawn_on_worker = spawn_on_worker
-  let spawn = spawn
-  let send_internal = send_internal
-  let enqueue_on_worker = enqueue_on_worker
-  let enqueue_owned_process = enqueue_owned_process
-  let wake_process = wake_process
-  let wake_process_from_message = wake_process_from_message
+      let create = create
+      let request_shutdown = request_shutdown
+      let shutdown = shutdown
+      let worker_count = worker_count
+      let with_relations_lock = with_relations_lock
+      let get_process = get_process
+      let get_process_slot = get_process_slot
+      let get_current_process = get_current_process
+      let spawn_on_worker = spawn_on_worker
+      let spawn = spawn
+      let send_internal = send_internal
+      let enqueue_on_worker = enqueue_on_worker
+      let enqueue_owned_process = enqueue_owned_process
+      let wake_process = wake_process
+      let wake_process_from_message = wake_process_from_message
+    end)
 end
 
 module Reactor = struct
-  type runtime = t
-  type command = reactor_command
+  include
+    Scheduler_reactor.Make (struct
+      type runtime = t
+      type command = reactor_command
 
-  let add_timer = add_timer
-  let cancel_timer = cancel_timer
-  let register_io = register_io
-  let deregister_io = deregister_io
-  let loop = reactor_loop
+      let add_timer = add_timer
+      let cancel_timer = cancel_timer
+      let register_io = register_io
+      let deregister_io = deregister_io
+      let loop = reactor_loop
+    end)
 end
 
 module Worker = struct
-  type runtime = t
-  type state = worker
+  include
+    Scheduler_worker.Make (struct
+      type runtime = t
+      type state = worker
 
-  let loop = worker_loop
-  let attempt_steal = attempt_steal
+      let loop = worker_loop
+      let attempt_steal = attempt_steal
+    end)
 end
 
 let run ~config ~main =
