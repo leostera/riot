@@ -49,3 +49,11 @@ path = "tests/scheduler_workers_test.ml"
 [[bin]]
 name = "multicore_wakeup_tests"
 path = "tests/multicore_wakeup_test.ml"
+
+[[bin]]
+name = "selective_receive_tests"
+path = "tests/selective_receive_tests.ml"
+
+[[bin]]
+name = "monitor_multicore_tests"
+path = "tests/monitor_multicore_tests.ml"
