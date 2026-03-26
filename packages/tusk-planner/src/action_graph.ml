@@ -1,6 +1,7 @@
 open Std
 open Std.Sync
 open Std.Collections
+open Std.Iter
 open Tusk_model
 module G = Std.Graph.SimpleGraph
 
