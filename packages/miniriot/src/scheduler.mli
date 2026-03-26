@@ -10,6 +10,14 @@ open Kernel
 type t
 (** Opaque scheduler runtime. *)
 
+type trace_counters = {
+  steals : int;
+  failed_steals : int;
+  remote_wakeups : int;
+  duplicate_enqueue_races : int;
+}
+(** Snapshot of runtime scheduler counters used for multicore tracing. *)
+
 val get_scheduler : unit -> t
 (** Return the scheduler runtime bound to the current domain context. *)
 
@@ -55,3 +63,9 @@ val enable_trace : unit -> unit
 
 val disable_trace : unit -> unit
 (** Disable scheduler trace logging. *)
+
+val trace_counters : t -> trace_counters
+(** Return a point-in-time snapshot of scheduler counters for this runtime. *)
+
+val reset_trace_counters : t -> unit
+(** Reset scheduler counters to zero for this runtime. *)

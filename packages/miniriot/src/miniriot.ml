@@ -125,3 +125,24 @@ module Timer_id = Timer_id
 
 let enable_trace () = Scheduler.enable_trace ()
 let disable_trace () = Scheduler.disable_trace ()
+
+type trace_counters = {
+  steals : int;
+  failed_steals : int;
+  remote_wakeups : int;
+  duplicate_enqueue_races : int;
+}
+
+let trace_counters () =
+  let scheduler = Scheduler.get_scheduler () in
+  let counters = Scheduler.trace_counters scheduler in
+  {
+    steals = counters.steals;
+    failed_steals = counters.failed_steals;
+    remote_wakeups = counters.remote_wakeups;
+    duplicate_enqueue_races = counters.duplicate_enqueue_races;
+  }
+
+let reset_trace_counters () =
+  let scheduler = Scheduler.get_scheduler () in
+  Scheduler.reset_trace_counters scheduler

@@ -19,7 +19,14 @@ let current_context = Scheduler_types.current_context
 let has_run = Cell.create false
 let trace_enabled = Atomic.make false
 
-let create_counters () =
+type trace_counters = {
+  steals : int;
+  failed_steals : int;
+  remote_wakeups : int;
+  duplicate_enqueue_races : int;
+}
+
+let create_counters () : runtime_counters =
   {
     steals = Atomic.make 0;
     failed_steals = Atomic.make 0;
@@ -33,8 +40,24 @@ let trace msg =
   if Atomic.get trace_enabled then
     eprintln ("[Scheduler.Trace] " ^ msg)
 
+let snapshot_counters (counters : runtime_counters) =
+  {
+    steals = Atomic.get counters.steals;
+    failed_steals = Atomic.get counters.failed_steals;
+    remote_wakeups = Atomic.get counters.remote_wakeups;
+    duplicate_enqueue_races = Atomic.get counters.duplicate_enqueue_races;
+  }
+
 let enable_trace () = Atomic.set trace_enabled true
 let disable_trace () = Atomic.set trace_enabled false
+
+let trace_counters t = snapshot_counters t.counters
+
+let reset_trace_counters t =
+  Atomic.set t.counters.steals 0;
+  Atomic.set t.counters.failed_steals 0;
+  Atomic.set t.counters.remote_wakeups 0;
+  Atomic.set t.counters.duplicate_enqueue_races 0
 
 let ensure_can_run_once () =
   if !has_run then
@@ -221,16 +244,16 @@ let with_relations_lock t f =
 let request_shutdown t ~status =
   if Atomic.compare_and_set t.stop false true then Atomic.set t.status status
   else if not (Int.equal status 0) then Atomic.set t.status status;
+  let counters = snapshot_counters t.counters in
   if Atomic.get trace_enabled then
     trace
       (Kernel.String.concat ""
          [ "shutdown status="; Int.to_string status; " steals=";
-           Int.to_string (Atomic.get t.counters.steals); " failed_steals=";
-           Int.to_string (Atomic.get t.counters.failed_steals);
-           " remote_wakeups=";
-           Int.to_string (Atomic.get t.counters.remote_wakeups);
+           Int.to_string counters.steals; " failed_steals=";
+           Int.to_string counters.failed_steals; " remote_wakeups=";
+           Int.to_string counters.remote_wakeups;
            " duplicate_enqueue_races=";
-           Int.to_string (Atomic.get t.counters.duplicate_enqueue_races) ]);
+           Int.to_string counters.duplicate_enqueue_races ]);
   Array.iter
     (fun (worker : worker) ->
       Mutex.lock worker.lock;

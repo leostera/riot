@@ -180,3 +180,17 @@ val enable_trace : unit -> unit
 
 val disable_trace : unit -> unit
 (** Disable debug tracing *)
+
+type trace_counters = {
+  steals : int;
+  failed_steals : int;
+  remote_wakeups : int;
+  duplicate_enqueue_races : int;
+}
+(** Snapshot of runtime multicore scheduler counters. *)
+
+val trace_counters : unit -> trace_counters
+(** Return the current scheduler counter snapshot for the running runtime. *)
+
+val reset_trace_counters : unit -> unit
+(** Reset scheduler counters for the running runtime. *)
