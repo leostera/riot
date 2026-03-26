@@ -111,7 +111,10 @@ let init ~(workspace : Workspace.t) ~load_errors ~toolchain ~store ~concurrency 
       | None -> None
     in
     
-    let build_ctx = Build_ctx.make ~session_id ~profile ?target () in
+    let build_ctx =
+      Build_ctx.make ~session_id ~profile ?target
+        ~available_parallelism:concurrency ()
+    in
     Log.info ("Build context created: target_platform=" ^ (Build_ctx.target_platform_name build_ctx) ^ 
               ", host_platform=" ^ (Build_ctx.host_platform_name build_ctx));
     

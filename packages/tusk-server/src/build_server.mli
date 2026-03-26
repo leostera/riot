@@ -17,4 +17,7 @@ val start :
   unit
 (** Start a build in a spawned worker process. This function returns immediately
     after spawning the worker. The worker will send results directly to the
-    client_pid. *)
+    client_pid.
+
+    The [concurrency] parameter is the single build concurrency budget and is
+    propagated into [Build_ctx.available_parallelism] for action execution. *)
