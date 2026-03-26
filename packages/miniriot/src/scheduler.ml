@@ -906,6 +906,51 @@ let worker_loop t worker =
   done;
   ctx.current_process <- None
 
+(* Internal runtime split used by RFD0010:
+   - [Runtime] owns runtime-wide state and cross-worker operations
+   - [Reactor] owns timer/I/O command processing and polling loop
+   - [Worker] owns process execution and steal/park loop
+*)
+module Runtime = struct
+  type runtime = t
+  type slot = process_slot
+
+  let create = create
+  let request_shutdown = request_shutdown
+  let shutdown = shutdown
+  let worker_count = worker_count
+  let with_relations_lock = with_relations_lock
+  let get_process = get_process
+  let get_process_slot = get_process_slot
+  let get_current_process = get_current_process
+  let spawn_on_worker = spawn_on_worker
+  let spawn = spawn
+  let send_internal = send_internal
+  let enqueue_on_worker = enqueue_on_worker
+  let enqueue_owned_process = enqueue_owned_process
+  let wake_process = wake_process
+  let wake_process_from_message = wake_process_from_message
+end
+
+module Reactor = struct
+  type runtime = t
+  type command = reactor_command
+
+  let add_timer = add_timer
+  let cancel_timer = cancel_timer
+  let register_io = register_io
+  let deregister_io = deregister_io
+  let loop = reactor_loop
+end
+
+module Worker = struct
+  type runtime = t
+  type state = worker
+
+  let loop = worker_loop
+  let attempt_steal = attempt_steal
+end
+
 let run ~config ~main =
   if !has_run then
     panic
@@ -913,17 +958,17 @@ let run ~config ~main =
        in a separate executable.";
   has_run := true;
 
-  let t = create ~config in
-  ignore (spawn_on_worker t ~worker_id:Scheduler_id.zero main);
+  let t = Runtime.create ~config in
+  ignore (Runtime.spawn_on_worker t ~worker_id:Scheduler_id.zero main);
 
-  let reactor_domain = Domain.spawn (fun () -> reactor_loop t) in
+  let reactor_domain = Domain.spawn (fun () -> Reactor.loop t) in
   let worker_domains =
-    Array.init (worker_count t - 1) (fun idx ->
+    Array.init (Runtime.worker_count t - 1) (fun idx ->
         let worker = t.workers.(idx + 1) in
-        Domain.spawn (fun () -> worker_loop t worker))
+        Domain.spawn (fun () -> Worker.loop t worker))
   in
 
-  worker_loop t t.workers.(0);
+  Worker.loop t t.workers.(0);
 
   Array.iter Domain.join worker_domains;
   Domain.join reactor_domain;
