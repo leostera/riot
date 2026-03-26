@@ -271,57 +271,64 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
 
   let maybe_short_circuit_cached_package ~package_key ~(package : Package.t) ~hash
       ~depset ~module_graph ~action_graph =
+    let export_entries = compute_export_entries action_graph in
+    let target_dir = target_dir_for package.name in
+    let all_exports_present =
+      List.for_all
+        (fun (entry : Tusk_store.Store.export_entry) ->
+          let dst = Path.(target_dir / Path.v entry.name) in
+          match Fs.exists dst with
+          | Ok true -> true
+          | Ok false | Error _ -> false)
+        export_entries
+    in
     match Tusk_store.Store.get store hash with
     | None -> false
-    | Some artifact -> (
-        match
-          Tusk_store.Store.load_package_exports store ~package:package.name
-            ~profile:profile_name ~target:target_triple_str
-        with
-        | None -> false
-        | Some exports -> (
-            let target_dir = target_dir_for package.name in
-            match
-              Tusk_store.Store.materialize_package_exports store ~exports
-                ~target_dir
-            with
-            | Error _ -> false
-            | Ok () ->
-                let result =
-                  Package_builder.
+    | Some artifact ->
+        let materialized =
+          if all_exports_present then Ok ()
+          else
+            Tusk_store.Store.materialize_package_exports store
+              ~exports:export_entries ~target_dir
+        in
+        (match materialized with
+        | Error _ -> false
+        | Ok () ->
+            let result =
+              Package_builder.
+                {
+                  package_key;
+                  package;
+                  status = Cached artifact;
+                  duration = Time.Duration.zero;
+                }
+            in
+            let _ = HashMap.insert package_results package_key result in
+            (match Package_graph.get_node_by_key package_graph package_key with
+            | None -> ()
+            | Some node ->
+                node.value <-
+                  Package_graph.Built
                     {
-                      package_key;
                       package;
-                      status = Cached artifact;
-                      duration = Time.Duration.zero;
-                    }
-                in
-                let _ = HashMap.insert package_results package_key result in
-                (match Package_graph.get_node_by_key package_graph package_key with
-                | None -> ()
-                | Some node ->
-                    node.value <-
-                      Package_graph.Built
-                        {
-                          package;
-                          scope = Package_graph.get_scope node.value;
-                          module_graph;
-                          action_graph;
-                          hash;
-                          artifact;
-                          status = Package_graph.Cached;
-                          depset;
-                        });
-                Telemetry.emit
-                  (BuildCompleted
-                     {
-                       session_id;
-                       package;
-                       target = Workspace_planner.Package package.name;
-                       status = `Cached;
-                       duration = Time.Duration.zero;
-                     });
-                true))
+                      scope = Package_graph.get_scope node.value;
+                      module_graph;
+                      action_graph;
+                      hash;
+                      artifact;
+                      status = Package_graph.Cached;
+                      depset;
+                    });
+            Telemetry.emit
+              (BuildCompleted
+                 {
+                   session_id;
+                   package;
+                   target = Workspace_planner.Package package.name;
+                   status = `Cached;
+                   duration = Time.Duration.zero;
+                 });
+            true)
   in
 
   let stage_runtime ~package_key ~(package : Package.t) ~hash ~depset ~module_graph
