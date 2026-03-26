@@ -193,24 +193,10 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
       
       let input_hash = compute_input_hash ~package ~depset ~workspace ~profile ~build_ctx in
 
-      if Tusk_store.Store.exists store input_hash then (
-        (* Cache hit! Skip expensive planning - use dummy graphs *)
-        Log.info
-          ("Package " ^ package.name ^ ": fast path (input hash exists in cache, skipping \
-           ocamldep)");
-        Ok
-          (Planned
-             {
-               package_key;
-               package;
-               module_graph = G.make ();
-               action_graph = Action_graph.create ();
-               hash = input_hash;
-               depset;
-             }))
-      else (
-        (* Cache miss - do full planning *)
-        Log.info ("Package " ^ package.name ^ ": slow path (computing full hash with ocamldep)");
+      (* Always produce a concrete plan graph. The old fast path returned dummy
+         empty graphs keyed off package-level artifact existence, which made
+         planning correctness depend on execution-time cache state. *)
+      Log.info ("Package " ^ package.name ^ ": computing plan graph");
 
         let plan_input =
           Module_planner.
@@ -283,4 +269,4 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
                    action_graph;
                    hash = input_hash;
                    depset;
-                 }))
+                 })
