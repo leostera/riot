@@ -11,3 +11,31 @@ tusk-model = "*"
 tusk-planner = "*"
 tusk-toolchain = "*"
 tusk-store = "*"
+
+[[bin]]
+name = "action_executor_tests"
+path = "tests/action_executor_tests.ml"
+
+[[bin]]
+name = "caching_tests"
+path = "tests/caching_tests.ml"
+
+[[bin]]
+name = "coordinator_tests"
+path = "tests/coordinator_tests.ml"
+
+[[bin]]
+name = "executor_behavior_tests"
+path = "tests/executor_behavior_tests.ml"
+
+[[bin]]
+name = "integration_caching_tests"
+path = "tests/integration_caching_tests.ml"
+
+[[bin]]
+name = "package_builder_tests"
+path = "tests/package_builder_tests.ml"
+
+[[bin]]
+name = "sandbox_tests"
+path = "tests/sandbox_tests.ml"

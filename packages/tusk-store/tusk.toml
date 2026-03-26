@@ -8,3 +8,7 @@ path = "src/tusk_store.ml"
 [dependencies]
 std = "*"
 tusk-model = "*"
+
+[[bin]]
+name = "store_tests"
+path = "tests/store_tests.ml"
