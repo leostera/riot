@@ -303,7 +303,8 @@ let module_graph_of_json json =
           | Error e -> Error e
           | Ok () ->
               Vector.into_iter pending_deps
-              |> Iterator.iter (fun (node, dep_ids) ->
+              |> Iterator.to_list
+              |> List.iter (fun (node, dep_ids) ->
                      List.iter
                        (fun dep_id ->
                          match HashMap.get id_to_node dep_id with
@@ -311,7 +312,8 @@ let module_graph_of_json json =
                          | None -> ())
                        dep_ids);
               Vector.into_iter pending_opens
-              |> Iterator.iter (fun (node, open_ids) ->
+              |> Iterator.to_list
+              |> List.iter (fun (node, open_ids) ->
                      let opens =
                        List.filter_map
                          (fun open_id -> HashMap.get id_to_node open_id)

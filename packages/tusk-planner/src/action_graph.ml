@@ -572,7 +572,8 @@ let from_json json =
       | Error err -> Error err
       | Ok () ->
           Vector.into_iter dependencies_to_wire
-          |> Iterator.iter (fun (node, dependency_ids) ->
+          |> Iterator.to_list
+          |> List.iter (fun (node, dependency_ids) ->
                  List.iter
                    (fun dep_id ->
                      match HashMap.get id_to_node dep_id with
