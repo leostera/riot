@@ -186,7 +186,7 @@ let pick_spawn_worker t =
   if total = 1 then
     Scheduler_id.zero
   else
-    Scheduler_id.of_int (Random.int total)
+    Scheduler_id.of_int (Kernel.Random.int total)
 
 let with_relations_lock t f =
   Mutex.lock t.relations_lock;
