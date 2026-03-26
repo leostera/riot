@@ -5,6 +5,14 @@ open Tusk_model
 open Tusk_planner
 open Telemetry_events
 
+(** Coordinator currently owns workspace/package orchestration only.
+    Action-level dependency scheduling and cache decisions are delegated to
+    [Package_builder] -> [Action_executor].
+
+    Stage-4 target shape (RFD0012) is to lift action readiness to workspace
+    scope; until that lands, this module enforces a single concurrency budget
+    by avoiding an additional package worker pool. *)
+
 type workspace_result = {
   results : Package_builder.build_result list;
   total_duration : Time.Duration.t;
