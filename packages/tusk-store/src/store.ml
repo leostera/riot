@@ -317,7 +317,8 @@ let materialize_package_exports store ~exports ~target_dir =
                  "Failed to copy export: " ^ Path.to_string src ^ " -> "
                  ^ Path.to_string dst)
       | Ok false | Error _ ->
-          Error ("Export source not found in store: " ^ Path.to_string src)
+          Log.warn ("Export source not found in store: " ^ Path.to_string src);
+          Ok ()
   in
   List.fold_left
     (fun acc entry ->

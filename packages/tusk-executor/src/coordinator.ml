@@ -27,6 +27,8 @@ type package_runtime = {
     (Graph.SimpleGraph.Node_id.t, Action_executor.execution_result) HashMap.t;
   export_entries : Tusk_store.Store.export_entry list;
   target_dir : Path.t;
+  profile_name : string;
+  target_name : string;
   total_actions : int;
   mutable active : bool;
   mutable compilation_started : bool;
@@ -155,8 +157,7 @@ let mark_package_built_in_graph package_graph ~runtime ~artifact ~status =
 let finalize_package_success ~session_id ~store ~runtime =
   let _ =
     Tusk_store.Store.save_package_exports store ~package:runtime.package.name
-      ~profile:(Path.basename (Path.dirname (Path.dirname runtime.target_dir)))
-      ~target:(Path.basename (Path.dirname runtime.target_dir))
+      ~profile:runtime.profile_name ~target:runtime.target_name
       ~exports:runtime.export_entries
     |> Result.expect
          ~msg:
@@ -296,6 +297,8 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
               completed_actions = action_queue.completed;
               export_entries = compute_export_entries action_graph;
               target_dir;
+              profile_name;
+              target_name = target_triple_str;
               total_actions = List.length action_nodes;
               active = false;
               compilation_started = false;
