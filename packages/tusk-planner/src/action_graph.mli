@@ -57,10 +57,18 @@ val nodes : t -> Action_node.t list
 val graph : t -> Action_node.action_spec G.t
 val to_action_list : t -> Action.t list
 val to_json : t -> Data.Json.t
-(** Convert action graph to JSON with sorted nodes for deterministic output *)
+(** Convert action graph to JSON with sorted nodes for deterministic output.
+
+    The JSON representation is used as a persisted plan artifact for warm builds.
+    It includes node-level package path context and the precomputed node hash so
+    cache-key identity is stable across process boundaries. *)
 
 val from_json : Data.Json.t -> (t, string) Result.t
-(** Reconstruct action graph from JSON for comparison *)
+(** Reconstruct action graph from JSON for warm-build execution.
+
+    This function preserves each node's serialized hash and package path
+    metadata rather than recomputing them. Recomputing can diverge from the
+    original Merkle graph and break action-cache lookup. *)
 
 val equal : t -> t -> bool
 (** Compare two action graphs structurally by comparing topologically sorted nodes *)

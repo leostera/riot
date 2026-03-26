@@ -433,7 +433,30 @@ let check_dependencies_built ~store ~package_graph ~package_key =
         unplanned := pkg :: !unplanned
         ;
         None
-    | Package_graph.Planned { package; hash; _ }
+    | Package_graph.Planned { package; hash; _ } ->
+        if is_ordering_only_self_dependency then None
+        else if Tusk_store.Store.exists store hash then
+          let dep_nodes =
+            match
+              Package_graph.get_node_by_key package_graph
+                (Package_graph.get_key node_value)
+            with
+            | Some node ->
+                Package_graph.get_dependencies_for_node package_graph node
+            | None -> []
+          in
+          let dep_depset = List.filter_map summarize_dependency dep_nodes in
+          Some
+            Dependency.
+              {
+                package;
+                artifact_dir = Tusk_store.Store.hash_dir_of store hash;
+                depset = dep_depset;
+                hash;
+              }
+        else (
+          unplanned := pkg :: !unplanned;
+          None)
     | Package_graph.Built { package; hash; _ } ->
         if is_ordering_only_self_dependency then None
         else

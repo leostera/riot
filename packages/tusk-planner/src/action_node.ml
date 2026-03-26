@@ -94,6 +94,9 @@ let to_json (node : t) =
       ( "sources",
         array (List.map (fun p -> string (Path.to_string p)) spec.srcs) );
       ("package", string spec.package.Package.name);
+      ("package_path", string (Path.to_string spec.package.Package.path));
+      ( "package_relative_path",
+        string (Path.to_string spec.package.Package.relative_path) );
       ("hash", string (Crypto.Digest.hex spec.hash));
       ( "dependencies",
         array (List.map (fun dep -> int (G.Node_id.to_int dep)) node.deps) );

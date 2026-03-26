@@ -449,6 +449,33 @@ let to_json t =
 
 let from_json json =
   let open Data.Json in
+  let parse_hash hash_json =
+    let module Byte_buf = IO.Bytes in
+    let hex_value c =
+      if c >= '0' && c <= '9' then Some (Char.code c - Char.code '0')
+      else if c >= 'a' && c <= 'f' then Some (10 + Char.code c - Char.code 'a')
+      else if c >= 'A' && c <= 'F' then Some (10 + Char.code c - Char.code 'A')
+      else None
+    in
+    match hash_json with
+    | String hex ->
+        let len = String.length hex in
+        if not (len mod 2 = 0) then Error "hash must have even-length hex"
+        else
+          let out = Byte_buf.create (len / 2) in
+          let rec fill i =
+            if i >= len then Ok (Crypto.Hash.of_bytes out)
+            else
+              match (hex_value hex.[i], hex_value hex.[i + 1]) with
+              | Some hi, Some lo ->
+                  let byte = Char.chr ((hi lsl 4) lor lo) in
+                  Byte_buf.set out (i / 2) byte;
+                  fill (i + 2)
+              | _ -> Error "hash contains non-hex characters"
+          in
+          fill 0
+    | _ -> Error "hash must be string"
+  in
   match get_field "nodes" json with
   | None -> Error "Missing 'nodes' field"
   | Some (Array node_jsons) -> (
@@ -504,33 +531,50 @@ let from_json json =
             | Ok () -> (
                 match
                   ( get_field "package" node_json,
+                    get_field "package_path" node_json,
+                    get_field "package_relative_path" node_json,
                     get_field "actions" node_json,
                     get_field "outputs" node_json,
                     get_field "sources" node_json,
+                    get_field "hash" node_json,
                     get_field "id" node_json,
                     get_field "dependencies" node_json )
                 with
                 | ( Some (String pkg_name),
+                    pkg_path_json,
+                    pkg_rel_path_json,
                     Some actions_json,
                     Some outputs_json,
                     Some sources_json,
+                    Some hash_json,
                     Some (Int legacy_id),
                     Some deps_json ) -> (
                     match parse_actions actions_json with
                     | Error err -> Error err
                     | Ok actions -> (
                         match
-                          ( parse_paths outputs_json,
+                          ( parse_hash hash_json,
+                            parse_paths outputs_json,
                             parse_paths sources_json,
                             parse_dependencies deps_json )
                         with
-                        | Ok outputs, Ok sources, Ok dependency_ids ->
+                        | Ok hash, Ok outputs, Ok sources, Ok dependency_ids ->
+                            let package_path =
+                              match pkg_path_json with
+                              | Some (String p) -> Path.v p
+                              | _ -> Path.v "."
+                            in
+                            let package_relative_path =
+                              match pkg_rel_path_json with
+                              | Some (String p) -> Path.v p
+                              | _ -> package_path
+                            in
                             let package =
                               Package.
                 {
                   name = pkg_name;
-                  path = Path.v ".";
-                  relative_path = Path.v ".";
+                  path = package_path;
+                  relative_path = package_relative_path;
                   dependencies = [];
                   dev_dependencies = [];
                   build_dependencies = [];
@@ -550,21 +594,25 @@ let from_json json =
                               |> Result.expect
                                    ~msg:"Failed to initialize toolchain"
                             in
-                            let action_spec =
-                              Action_node.make ~actions ~outs:outputs
-                                ~srcs:sources ~package ~toolchain
-                                ~dependency_hashes:(fun _ ->
-                                  Crypto.hash_string "")
-                                ~deps:[]
+                            let action_spec : Action_node.action_spec =
+                              {
+                                actions;
+                                outs = outputs;
+                                srcs = sources;
+                                package;
+                                toolchain;
+                                hash;
+                              }
                             in
                             let node = add_node graph action_spec in
                             let _ = HashMap.insert id_to_node legacy_id node in
                             Vector.push dependencies_to_wire
                               (node, dependency_ids);
                             Ok ()
-                        | Error err, _, _
-                        | _, Error err, _
-                        | _, _, Error err ->
+                        | Error err, _, _, _
+                        | _, Error err, _, _
+                        | _, _, Error err, _
+                        | _, _, _, Error err ->
                             Error err))
                 | _ -> Error "Missing required node fields"))
           (Ok ()) node_jsons

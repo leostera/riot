@@ -316,8 +316,8 @@ let to_json action =
 
 let from_json json =
   let open Data.Json in
-  let parse_outputs json =
-    match get_field "outputs" json with
+  let parse_path_list field json =
+    match get_field field json with
     | Some (Array arr) ->
         Some
           (List.filter_map
@@ -325,71 +325,155 @@ let from_json json =
              arr)
     | _ -> None
   in
+  let parse_string_list field json =
+    match get_field field json with
+    | Some (Array arr) ->
+        Some
+          (List.filter_map
+             (function String s -> Some s | _ -> None)
+             arr)
+    | _ -> None
+  in
+  let parse_flags json =
+    let rec go acc = function
+      | [] -> List.rev acc
+      | "-open" :: mod_name :: rest -> go (Tusk_toolchain.Ocamlc.Open mod_name :: acc) rest
+      | "-no-alias-deps" :: rest -> go (Tusk_toolchain.Ocamlc.NoAliasDeps :: acc) rest
+      | "-nostdlib" :: rest -> go (Tusk_toolchain.Ocamlc.NoStdlib :: acc) rest
+      | "-nopervasives" :: rest -> go (Tusk_toolchain.Ocamlc.NoPervasives :: acc) rest
+      | "-linkall" :: rest -> go (Tusk_toolchain.Ocamlc.LinkAll :: acc) rest
+      | "-impl" :: file :: rest ->
+          go (Tusk_toolchain.Ocamlc.Impl (Path.v file) :: acc) rest
+      | "-w" :: warning :: rest ->
+          let warning_flag =
+            if String.equal warning "-a" then
+              Tusk_toolchain.Ocamlc.Warning [ Tusk_toolchain.Ocamlc.All ]
+            else if String.equal warning "-49" then
+              Tusk_toolchain.Ocamlc.Warning [ Tusk_toolchain.Ocamlc.NoCmiFile ]
+            else Tusk_toolchain.Ocamlc.Warning []
+          in
+          go (warning_flag :: acc) rest
+      | _ :: rest -> go acc rest
+    in
+    match parse_string_list "flags" json with
+    | Some raw -> Some (go [] raw)
+    | None -> Some []
+  in
   match get_field "type" json with
   | None -> Error "Missing type field"
   | Some (String "CompileInterface") -> (
-      match (get_field "source" json, parse_outputs json) with
-      | Some (String src), Some outs ->
+      match
+        ( get_field "source" json,
+          parse_path_list "outputs" json,
+          parse_path_list "includes" json,
+          parse_flags json )
+      with
+      | Some (String src), Some outs, Some includes, Some flags ->
           Ok
             (CompileInterface
                {
                  source = Path.v src;
                  outputs = outs;
-                 includes = [];
-                 flags = [];
+                 includes;
+                 flags;
                })
       | _ -> Error "Invalid CompileInterface")
   | Some (String "CompileImplementation") -> (
-      match (get_field "source" json, parse_outputs json) with
-      | Some (String src), Some outs ->
+      match
+        ( get_field "source" json,
+          parse_path_list "outputs" json,
+          parse_path_list "includes" json,
+          parse_flags json )
+      with
+      | Some (String src), Some outs, Some includes, Some flags ->
           Ok
             (CompileImplementation
                {
                  source = Path.v src;
                  outputs = outs;
-                 includes = [];
-                 flags = [];
+                 includes;
+                 flags;
                })
       | _ -> Error "Invalid CompileImplementation")
   | Some (String "GenerateInterface") -> (
-      match (get_field "source" json, parse_outputs json) with
-      | Some (String src), Some outs ->
+      match
+        ( get_field "source" json,
+          parse_path_list "outputs" json,
+          parse_path_list "includes" json,
+          parse_flags json )
+      with
+      | Some (String src), Some outs, Some includes, Some flags ->
           Ok
             (GenerateInterface
                {
                  source = Path.v src;
                  outputs = outs;
-                 includes = [];
-                 flags = [];
+                 includes;
+                 flags;
                })
       | _ -> Error "Invalid GenerateInterface")
   | Some (String "CompileC") -> (
-      match (get_field "source" json, parse_outputs json) with
+      match (get_field "source" json, parse_path_list "outputs" json) with
       | Some (String src), Some outs ->
-          let ccflags = match get_field "ccflags" json with
-            | Some (Array arr) -> List.filter_map (function String s -> Some s | _ -> None) arr
-            | _ -> []
+          let ccflags =
+            match parse_string_list "ccflags" json with Some flags -> flags | None -> []
           in
           Ok (CompileC { source = Path.v src; outputs = outs; ccflags })
       | _ -> Error "Invalid CompileC")
   | Some (String "CreateLibrary") -> (
-      match parse_outputs json with
-      | Some outs ->
-          Ok (CreateLibrary { outputs = outs; objects = []; includes = [] })
+      match
+        ( parse_path_list "outputs" json,
+          parse_path_list "objects" json,
+          parse_path_list "includes" json )
+      with
+      | Some outs, Some objects, Some includes ->
+          Ok (CreateLibrary { outputs = outs; objects; includes })
       | _ -> Error "Invalid CreateLibrary")
   | Some (String "CreateExecutable") -> (
-      match parse_outputs json with
-      | Some outs ->
+      match
+        ( parse_path_list "outputs" json,
+          parse_path_list "objects" json,
+          parse_path_list "libraries" json,
+          parse_path_list "includes" json,
+          parse_path_list "cclibs" json,
+          parse_string_list "ccopt_flags" json,
+          parse_string_list "cclib_flags" json )
+      with
+      | Some outs, Some objects, Some libraries, Some includes, Some cclibs, Some ccopt_flags, Some cclib_flags ->
           Ok
             (CreateExecutable
-               { outputs = outs; objects = []; libraries = []; includes = []; cclibs = []; ccopt_flags = []; cclib_flags = [] })
+               {
+                 outputs = outs;
+                 objects;
+                 libraries;
+                 includes;
+                 cclibs;
+                 ccopt_flags;
+                 cclib_flags;
+               })
       | _ -> Error "Invalid CreateExecutable")
   | Some (String "CreateSharedLibrary") -> (
-      match parse_outputs json with
-      | Some outs ->
+      match
+        ( parse_path_list "outputs" json,
+          parse_path_list "objects" json,
+          parse_path_list "libraries" json,
+          parse_path_list "includes" json,
+          parse_path_list "cclibs" json,
+          parse_string_list "ccopt_flags" json,
+          parse_string_list "cclib_flags" json )
+      with
+      | Some outs, Some objects, Some libraries, Some includes, Some cclibs, Some ccopt_flags, Some cclib_flags ->
           Ok
             (CreateSharedLibrary
-               { outputs = outs; objects = []; libraries = []; includes = []; cclibs = []; ccopt_flags = []; cclib_flags = [] })
+               {
+                 outputs = outs;
+                 objects;
+                 libraries;
+                 includes;
+                 cclibs;
+                 ccopt_flags;
+                 cclib_flags;
+               })
       | _ -> Error "Invalid CreateSharedLibrary")
   | Some (String "CopyFile") -> (
       match (get_field "source" json, get_field "destination" json) with
@@ -416,7 +500,12 @@ let from_json json =
               fields
         | _ -> []
       in
-      match (get_field "name" json, get_field "path" json, parse_build_cmd json, parse_outputs json) with
+      match
+        ( get_field "name" json,
+          get_field "path" json,
+          parse_build_cmd json,
+          parse_path_list "outputs" json )
+      with
       | Some (String name), Some (String path), Some build_cmd, Some outs ->
           let env = parse_env json in
           Ok (BuildForeignDependency { name; path = Path.v path; build_cmd; outputs = outs; env })

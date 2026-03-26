@@ -43,16 +43,16 @@ let node_for graph package_name scope =
 let dependency_keys_for_node graph node =
   Package_graph.get_dependencies_for_node graph node
   |> List.map Package_graph.get_key
-  |> List.sort String.compare
+  |> List.sort Package.key_compare
 
 let package_keys_for_scope scope names =
   names
   |> List.map (fun name -> Package_graph.package_key ~package_name:name scope)
-  |> List.sort String.compare
+  |> List.sort Package.key_compare
 
 let assert_same_keys ~expected ~actual =
-  Test.assert_equal ~expected:(List.sort String.compare expected)
-    ~actual:(List.sort String.compare actual)
+  Test.assert_equal ~expected:(List.sort Package.key_compare expected)
+    ~actual:(List.sort Package.key_compare actual)
 
 let runtime_scope_wires_workspace_like_graph () =
   let packages =
@@ -175,8 +175,9 @@ let topological_sort_places_dependencies_before_dependents () =
     |> List.map Package_graph.get_key
   in
   let position_of key =
-    List.find_index (String.equal key) sorted
-    |> Option.expect ~msg:("missing key in topo sort: " ^ key)
+    List.find_index (Package.key_equal key) sorted
+    |> Option.expect
+         ~msg:("missing key in topo sort: " ^ Package.key_to_string key)
   in
   let std_runtime = Package_graph.package_key ~package_name:"std" Runtime in
   let kernel_runtime =
@@ -202,11 +203,9 @@ let runtime_nodes_depend_on_their_own_build_nodes () =
   in
   let app_runtime = node_for graph "app" Runtime in
   let dependency_keys = dependency_keys_for_node graph app_runtime in
+  let app_build_key = Package_graph.package_key ~package_name:"app" Build in
   Test.assert_true
-    (List.exists
-       (String.equal
-          (Package_graph.package_key ~package_name:"app" Build))
-       dependency_keys);
+    (List.exists (Package.key_equal app_build_key) dependency_keys);
   Ok ()
 
 let scope_node_counts_match_expected_projection () =
@@ -273,11 +272,11 @@ let build_scope_wires_declared_build_dependencies () =
   in
   let app_build = node_for graph "app" Build in
   let deps = dependency_keys_for_node graph app_build in
+  let codegen_runtime_key =
+    Package_graph.package_key ~package_name:"codegen" Runtime
+  in
   Test.assert_true
-    (List.exists
-       (String.equal
-          (Package_graph.package_key ~package_name:"codegen" Runtime))
-       deps);
+    (List.exists (Package.key_equal codegen_runtime_key) deps);
   Ok ()
 
 let tests =

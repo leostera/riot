@@ -10,11 +10,3 @@ std = { path = "../std" }
 tusk-model = { path = "../tusk-model" }
 tusk-store = { path = "../tusk-store" }
 tusk-toolchain = { path = "../tusk-toolchain" }
-
-[[bin]]
-name = "workspace_like_graph_tests"
-path = "tests/workspace_like_graph_tests.ml"
-
-[[bin]]
-name = "workspace_planner_target_tests"
-path = "tests/workspace_planner_target_tests.ml"
