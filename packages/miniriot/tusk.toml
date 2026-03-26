@@ -61,3 +61,7 @@ path = "tests/monitor_multicore_tests.ml"
 [[bin]]
 name = "link_multicore_tests"
 path = "tests/link_multicore_tests.ml"
+
+[[bin]]
+name = "mailbox_ordering_tests"
+path = "tests/mailbox_ordering_test.ml"
