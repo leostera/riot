@@ -11,6 +11,8 @@ type server_state = {
   concurrency : int;
   package_graph : Tusk_planner.Package_graph.t;
   load_errors : Workspace_manager.load_error list;
+  active_profile : string;
+  active_target : string;
 }
 
 let build_state ~(workspace : Workspace.t) ~config =
@@ -63,6 +65,8 @@ let build_state ~(workspace : Workspace.t) ~config =
     concurrency = System.available_parallelism;
     package_graph;
     load_errors;
+    active_profile = "debug";
+    active_target = Tusk_model.Tusk_dirs.host_target ();
   }
 
 (** Main server loop - handle all incoming requests *)
@@ -353,8 +357,8 @@ and handle_find_artifact state client_pid package kind name =
             Protocol.ServerResponse
               (Protocol.ArtifactFound { path = promoted_artifact_path })
         | _ ->
-            let profile = "debug" in
-            let target = Tusk_model.Tusk_dirs.host_target () in
+            let profile = state.active_profile in
+            let target = state.active_target in
             (match
                Tusk_store.Store.find_package_export_path state.store
                  ~package:pkg.name ~profile ~target ~name
@@ -540,6 +544,21 @@ and handle_build state client_pid target scope target_arch session_id =
         Tusk_planner.Package_graph.create ~scope:Tusk_planner.Package_graph.Runtime ws |> Result.expect ~msg:"Failed to create empty package graph"
   in
   let updated_state = { state with workspace; package_graph; load_errors } in
+  let active_profile =
+    Tusk_model.Profile.(
+      apply_overrides debug workspace.profile_overrides |> fun p -> p.name)
+  in
+  let active_target =
+    match target_arch with
+    | Some arch -> (
+        match Kernel.System.Host.from_string arch with
+        | Ok target_triplet -> Kernel.System.Host.to_string target_triplet
+        | Error _ -> Tusk_model.Tusk_dirs.host_target ())
+    | None -> Tusk_model.Tusk_dirs.host_target ()
+  in
+  let updated_state =
+    { updated_state with active_profile; active_target }
+  in
 
   let server_pid = self () in
   Build_server.start ~workspace:updated_state.workspace ~load_errors:updated_state.load_errors
