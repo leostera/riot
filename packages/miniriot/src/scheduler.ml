@@ -43,11 +43,19 @@ type process_registry = {
   size : int Atomic.t;
 }
 
+type runtime_counters = {
+  steals : int Atomic.t;
+  failed_steals : int Atomic.t;
+  remote_wakeups : int Atomic.t;
+  duplicate_enqueue_races : int Atomic.t;
+}
+
 type t = {
   stop : bool Atomic.t;
   status : int Atomic.t;
   workers : worker array;
   processes : process_registry;
+  counters : runtime_counters;
   relations_lock : Mutex.t;
   reactor_commands : reactor_command Queue.t;
   reactor_lock : Mutex.t;
@@ -66,6 +74,24 @@ let current_context : domain_context option Domain.DLS.key =
   Domain.DLS.new_key (fun () -> None)
 
 let has_run = Cell.create false
+let trace_enabled = Atomic.make false
+
+let create_counters () =
+  {
+    steals = Atomic.make 0;
+    failed_steals = Atomic.make 0;
+    remote_wakeups = Atomic.make 0;
+    duplicate_enqueue_races = Atomic.make 0;
+  }
+
+let increment counter = ignore (Atomic.fetch_and_add counter 1)
+
+let trace msg =
+  if Atomic.get trace_enabled then
+    eprintln ("[Scheduler.Trace] " ^ msg)
+
+let enable_trace () = Atomic.set trace_enabled true
+let disable_trace () = Atomic.set trace_enabled false
 
 let make_response () =
   {
@@ -175,6 +201,7 @@ let create ~config =
         status = Atomic.make 0;
         workers;
         processes = create_process_registry worker_count;
+        counters = create_counters ();
         relations_lock = Mutex.create ();
         reactor_commands = Queue.create ();
         reactor_lock = Mutex.create ();
@@ -230,6 +257,16 @@ let with_relations_lock t f =
 let request_shutdown t ~status =
   if Atomic.compare_and_set t.stop false true then Atomic.set t.status status
   else if not (Int.equal status 0) then Atomic.set t.status status;
+  if Atomic.get trace_enabled then
+    trace
+      (Kernel.String.concat ""
+         [ "shutdown status="; Int.to_string status; " steals=";
+           Int.to_string (Atomic.get t.counters.steals); " failed_steals=";
+           Int.to_string (Atomic.get t.counters.failed_steals);
+           " remote_wakeups=";
+           Int.to_string (Atomic.get t.counters.remote_wakeups);
+           " duplicate_enqueue_races=";
+           Int.to_string (Atomic.get t.counters.duplicate_enqueue_races) ]);
   Array.iter
     (fun (worker : worker) ->
       Mutex.lock worker.lock;
@@ -240,17 +277,29 @@ let request_shutdown t ~status =
 let shutdown t ~status = request_shutdown t ~status
 
 let enqueue_on_worker t worker_id proc =
-  if is_valid_worker_id t worker_id && Process.try_mark_queued proc then (
-    let worker = worker_by_id t worker_id in
-    Mutex.lock worker.lock;
-    Queue.push worker.queue proc;
-    Condition.signal worker.cond;
-    Mutex.unlock worker.lock)
+  if is_valid_worker_id t worker_id then
+    if Process.try_mark_queued proc then (
+      let worker = worker_by_id t worker_id in
+      Mutex.lock worker.lock;
+      Queue.push worker.queue proc;
+      Condition.signal worker.cond;
+      Mutex.unlock worker.lock)
+    else if Process.is_runnable proc then (
+      increment t.counters.duplicate_enqueue_races;
+      trace
+        (Kernel.String.concat ""
+           [ "duplicate enqueue prevented pid=";
+             Pid.to_string (Process.pid proc) ]))
 
 let enqueue_owned_process t proc =
   let owner = Process.owner_worker proc in
   let worker_id = if is_valid_worker_id t owner then owner else Scheduler_id.zero in
   enqueue_on_worker t worker_id proc
+
+let current_worker_id_opt () =
+  match Domain.DLS.get current_context with
+  | Some { worker_id; _ } -> worker_id
+  | None -> None
 
 let wake_process t proc =
   if Process.try_set_runnable_if_waiting proc then
@@ -259,10 +308,18 @@ let wake_process t proc =
     enqueue_owned_process t proc
 
 let wake_process_from_message t proc =
-  if Process.try_mark_runnable_from_waiting_message proc then
-    enqueue_owned_process t proc
-  else if Process.is_runnable proc then
-    enqueue_owned_process t proc
+  let owner = Process.owner_worker proc in
+  let remote_wakeup =
+    match current_worker_id_opt () with
+    | Some worker_id -> not (Scheduler_id.equal worker_id owner)
+    | None -> true
+  in
+  if Process.try_mark_runnable_from_waiting_message proc then (
+    if remote_wakeup then increment t.counters.remote_wakeups;
+    enqueue_owned_process t proc)
+  else if Process.is_runnable proc then (
+    if remote_wakeup then increment t.counters.remote_wakeups;
+    enqueue_owned_process t proc)
 
 let get_process t pid =
   with_process_shard t.processes pid (fun shard ->
@@ -680,7 +737,12 @@ let attempt_steal t (worker : worker) =
     false
   else
     let start_offset = 1 + Kernel.Random.int (total - 1) in
-    scan start_offset 0
+    let did_steal = scan start_offset 0 in
+    if did_steal then
+      increment t.counters.steals
+    else
+      increment t.counters.failed_steals;
+    did_steal
 
 let reactor_poll_timeout_nanos t =
   let configured = Config.resolution_to_nanos t.config.timer_resolution in

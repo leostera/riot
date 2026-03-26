@@ -123,5 +123,5 @@ include Effects
 
 module Timer_id = Timer_id
 
-let enable_trace () = ()  (* TODO: implement tracing *)
-let disable_trace () = ()  (* TODO: implement tracing *)
+let enable_trace () = Scheduler.enable_trace ()
+let disable_trace () = Scheduler.disable_trace ()

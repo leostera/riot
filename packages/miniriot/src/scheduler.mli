@@ -49,3 +49,9 @@ val get_process : t -> Pid.t -> Process.t option
 
 val with_relations_lock : t -> (unit -> 'a) -> 'a
 (** Serialize link/monitor relation updates that span multiple processes. *)
+
+val enable_trace : unit -> unit
+(** Enable scheduler trace logging and runtime counter emission. *)
+
+val disable_trace : unit -> unit
+(** Disable scheduler trace logging. *)
