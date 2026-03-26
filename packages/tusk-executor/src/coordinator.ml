@@ -168,15 +168,32 @@ let finalize_package_success ~session_id ~store ~runtime =
   |> Result.expect
        ~msg:
          ("Failed to materialize package exports for " ^ runtime.package.name);
+  let compatibility_dir =
+    Path.(Sandbox.get_dir runtime.sandbox / Path.v "__package_compat")
+  in
+  Fs.create_dir_all compatibility_dir
+  |> Result.expect
+       ~msg:
+         ("Failed to create package compatibility dir for "
+        ^ runtime.package.name);
+  Action_graph.nodes runtime.action_graph
+  |> List.iter (fun (node : Action_node.t) ->
+         Tusk_store.Store.promote store (Action_node.get_hash node)
+           ~target_dir:compatibility_dir
+         |> Result.expect
+              ~msg:
+                ("Failed to materialize action artifact for compatibility snapshot: "
+               ^ Graph.SimpleGraph.Node_id.to_string node.id));
   let compatibility_outs =
-    List.map
-      (fun (entry : Tusk_store.Store.export_entry) ->
-        Path.(runtime.target_dir / Path.v entry.name))
-      runtime.export_entries
+    Action_graph.nodes runtime.action_graph
+    |> List.concat_map (fun (node : Action_node.t) ->
+           List.map
+             (fun out -> Path.(compatibility_dir / out))
+             node.value.outs)
   in
   let _ =
     Tusk_store.Store.save store ~package:runtime.package.name ~hash:runtime.hash
-      ~sandbox_dir:runtime.target_dir ~outs:compatibility_outs
+      ~sandbox_dir:compatibility_dir ~outs:compatibility_outs
     |> Result.expect
          ~msg:
            ("Failed to save compatibility package artifact for "
