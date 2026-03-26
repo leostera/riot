@@ -254,53 +254,8 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
           (BuildStarted
              { session_id; package; target = Workspace_planner.Package package.name });
 
-      match Tusk_store.Store.get store package_hash with
-      | Some artifact ->
-          Log.info
-            ("Package " ^ package.name ^ ": CACHE HIT - skipping execution");
-
-          let _ =
-            Tusk_store.Store.promote store package_hash ~target_dir
-            |> Result.expect
-                 ~msg:
-                   ("Failed to promote cached artifacts for " ^
-                      package.name)
-          in
-
-          (* Mark as Built with Cached status *)
-          (match Tusk_planner.Package_graph.get_node_by_key package_graph planned_key with
-          | Some node ->
-              node.value <-
-                Tusk_planner.Package_graph.Built
-                  {
-                    package;
-                    scope = Tusk_planner.Package_graph.get_scope node.value;
-                    module_graph;
-                    action_graph;
-                    hash = package_hash;
-                    artifact;
-                    status = Tusk_planner.Package_graph.Cached;
-                    depset;
-                  }
-          | None -> ());
-
-          let duration =
-            Instant.duration_since ~earlier:start (Instant.now ())
-          in
-          if emit_visible_progress then
-            Telemetry.emit
-              (BuildCompleted
-                 {
-                   session_id;
-                   package;
-                   target = Workspace_planner.Package package.name;
-                   status = `Cached;
-                   duration;
-                 });
-          { package_key = planned_key; package; status = Cached artifact; duration }
-       | None -> (
-          Log.info
-            ("Package " ^ package.name ^ ": CACHE MISS - executing action graph");
+      Log.info
+        ("Package " ^ package.name ^ ": executing action graph");
           Log.info
             ("Package " ^ package.name ^ ": executing action graph with "
             ^ Int.to_string (List.length (Action_graph.nodes action_graph))
@@ -477,4 +432,4 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
                      target = Workspace_planner.Package package.name;
                      error = err;
                    });
-              { package_key = planned_key; package; status = Failed err; duration }))
+              { package_key = planned_key; package; status = Failed err; duration })
