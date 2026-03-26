@@ -154,7 +154,7 @@ let check_dependencies_built ~store ~package_graph ~package_key =
         None
   in
 
-  let depset = List.filter_map (fun node -> summarize_dependency node.value) deps in
+  let depset = List.filter_map summarize_dependency deps in
 
   (* Check the sets in order: failed takes precedence *)
   if !failed != [] then Error (Failed !failed)
