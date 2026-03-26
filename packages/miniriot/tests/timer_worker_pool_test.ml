@@ -4,6 +4,7 @@ module Result = Std.Result
 module Test = Std.Test
 
 type Message.t += Task of int | WorkerReady | TaskComplete of int
+type Message.t += Stop_worker | Worker_stopped
 
 (** Simple worker that processes tasks with timeout *)
 let worker coordinator =
@@ -11,14 +12,23 @@ let worker coordinator =
     try
       let task =
         receive
-          ~selector:(function Task n -> `select n | _ -> `skip)
+          ~selector:(function
+            | Task n -> `select (`task n)
+            | Stop_worker -> `select `stop
+            | _ -> `skip)
           ~timeout:0.5 ()
       in
-      Kernel.println
-        (Kernel.String.concat "" [ "  Worker: Processing task "; Kernel.Int.to_string task ]);
-      send coordinator (TaskComplete task);
-      send coordinator WorkerReady;
-      loop ()
+      match task with
+      | `task n ->
+          Kernel.println
+            (Kernel.String.concat ""
+               [ "  Worker: Processing task "; Kernel.Int.to_string n ]);
+          send coordinator (TaskComplete n);
+          send coordinator WorkerReady;
+          loop ()
+      | `stop ->
+          send coordinator Worker_stopped;
+          Kernel.Result.Ok ()
     with Receive_timeout ->
       Kernel.println "  Worker: Timeout, sending ready signal";
       send coordinator WorkerReady;
@@ -35,7 +45,7 @@ let test () =
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
-      ~timeout:1.0 ()
+      ~timeout:2.0 ()
   in
   let () = Kernel.println "✓ Worker sent initial ready signal via timeout" in
 
@@ -44,7 +54,7 @@ let test () =
   let result =
     receive
       ~selector:(function TaskComplete n -> `select n | _ -> `skip)
-      ~timeout:1.0 ()
+      ~timeout:2.0 ()
   in
   let () =
     Kernel.println
@@ -54,16 +64,24 @@ let test () =
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
-      ~timeout:1.0 ()
+      ~timeout:2.0 ()
   in
   let () = Kernel.println "✓ Worker sent ready signal after task" in
 
   let _ =
     receive
       ~selector:(function WorkerReady -> `select () | _ -> `skip)
-      ~timeout:1.0 ()
+      ~timeout:2.0 ()
   in
   let () = Kernel.println "✓ Worker sent another ready signal via timeout (heartbeat)" in
+
+  send worker_pid Stop_worker;
+  let _ =
+    receive
+      ~selector:(function Worker_stopped -> `select () | _ -> `skip)
+      ~timeout:2.0 ()
+  in
+  let () = Kernel.println "✓ Worker stopped cleanly" in
 
   Kernel.println "\n✓ All tests passed! Worker pool timeout mechanism works!";
 

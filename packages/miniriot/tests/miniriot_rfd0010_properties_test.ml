@@ -82,6 +82,15 @@ let test_default_scheduler_count () =
     "default scheduler count is exported"
     default_scheduler_count_matches_config
 
+let scheduler_id_roundtrip =
+  Property.for_all Arbitrary.int (fun raw ->
+      let normalized = Kernel.Int.abs raw mod 1024 in
+      let id = Miniriot.Scheduler_id.of_int normalized in
+      Kernel.Int.equal (Miniriot.Scheduler_id.to_int id) normalized)
+
+let test_scheduler_id_roundtrip () =
+  assert_ok "scheduler id roundtrip" scheduler_id_roundtrip
+
 let tests =
   [
     Test.property "pid monotonicity" ~examples:128 test_pid_monotonicity;
@@ -89,6 +98,7 @@ let tests =
       "scheduler_count clamping" ~examples:128 test_scheduler_count_clamped;
     Test.property "scheduler_count API" ~examples:128 test_config_worker_count;
     Test.property "default scheduler config" ~examples:16 test_default_scheduler_count;
+    Test.property "scheduler_id roundtrip" ~examples:128 test_scheduler_id_roundtrip;
   ]
 
 let () =

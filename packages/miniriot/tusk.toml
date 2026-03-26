@@ -45,3 +45,7 @@ path = "tests/timer_worker_pool_test.ml"
 [[bin]]
 name = "scheduler_workers_tests"
 path = "tests/scheduler_workers_test.ml"
+
+[[bin]]
+name = "multicore_wakeup_tests"
+path = "tests/multicore_wakeup_test.ml"
