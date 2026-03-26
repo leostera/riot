@@ -59,3 +59,17 @@ val hash_dir_of : t -> Std.Crypto.hash -> Std.Path.t
 
     This is useful for planning and dependency summaries that need a stable
     output location before execution materializes artifacts. *)
+
+val save_plan_bundle :
+  t ->
+  hash:Std.Crypto.hash ->
+  plan:Std.Data.Json.t ->
+  (unit, error) result
+(** Save a package planning bundle keyed by package input hash.
+
+    Plan bundles are persisted in a planner-specific namespace, separate from
+    artifact directories, so planning cache writes do not interfere with
+    artifact cache atomicity. *)
+
+val load_plan_bundle : t -> hash:Std.Crypto.hash -> Std.Data.Json.t option
+(** Load a cached package planning bundle by package input hash. *)

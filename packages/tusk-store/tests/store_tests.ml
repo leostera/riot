@@ -120,6 +120,35 @@ let test_put_if_absent_keeps_first_writer () =
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_plan_bundle_round_trip () =
+  match
+    Fs.with_tempdir ~prefix:"store_plan_bundle_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let hash = Crypto.hash_string "plan-bundle" in
+        let plan =
+          Std.Data.Json.Object
+            [
+              ("version", Std.Data.Json.Int 1);
+              ("package", Std.Data.Json.String "pkg");
+              ( "action_graph",
+                Std.Data.Json.Object [ ("nodes", Std.Data.Json.Array []) ] );
+            ]
+        in
+        let _ =
+          Tusk_store.Store.save_plan_bundle store ~hash ~plan
+          |> Result.expect ~msg:"save_plan_bundle should succeed"
+        in
+        match Tusk_store.Store.load_plan_bundle store ~hash with
+        | None -> Error "expected saved plan bundle"
+        | Some loaded ->
+            if String.equal (Std.Data.Json.to_string loaded) (Std.Data.Json.to_string plan) then
+              Ok ()
+            else Error "loaded plan bundle should match saved bundle")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
 let tests =
   Test.
     [
@@ -127,6 +156,7 @@ let tests =
       case "get preserves relative paths" test_get_preserves_relative_paths;
       case "exists requires manifest" test_exists_requires_manifest_file;
       case "put-if-absent keeps first writer" test_put_if_absent_keeps_first_writer;
+      case "plan bundle round trip" test_plan_bundle_round_trip;
     ]
 
 let name = "Tusk Store Tests"

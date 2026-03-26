@@ -24,6 +24,10 @@ let get_hash_dir store hash =
   Path.(store.root_dir / Path.v (Std.Crypto.Digest.hex hash))
 
 let manifest_path hash_dir = Path.(hash_dir / Path.v "manifest.json")
+let plans_dir store = Path.(store.root_dir / Path.v "plans")
+
+let plan_path store hash =
+  Path.(plans_dir store / Path.v (Std.Crypto.Digest.hex hash ^ ".json"))
 
 (** Check if artifacts for a given hash exist in the store *)
 let exists store hash =
@@ -186,3 +190,36 @@ let get_artifact_dir store artifact =
   get_hash_dir store Artifact.(artifact.hash)
 
 let hash_dir_of store hash = get_hash_dir store hash
+
+let save_plan_bundle store ~hash ~plan =
+  let plans_root = plans_dir store in
+  Fs.create_dir_all plans_root
+  |> Result.expect
+       ~msg:
+         ("Failed to create plan cache directory: " ^ Path.to_string plans_root);
+  let destination = plan_path store hash in
+  let temp_path =
+    let nanos = Time.SystemTime.duration_since_epoch () |> Time.Duration.to_nanos in
+    Path.(
+      plans_root
+      / Path.v
+          (Std.Crypto.Digest.hex hash ^ ".tmp." ^ Int64.to_string nanos ^ ".json"))
+  in
+  let content = Std.Data.Json.to_string plan in
+  match Fs.write content temp_path with
+  | Error _ -> Error "Failed to write temporary plan bundle"
+  | Ok () -> (
+      match Fs.rename ~src:temp_path ~dst:destination with
+      | Ok () -> Ok ()
+      | Error _ ->
+          let _ = Fs.remove_file temp_path in
+          Error "Failed to commit plan bundle")
+
+let load_plan_bundle store ~hash =
+  let path = plan_path store hash in
+  match Fs.read path with
+  | Ok content -> (
+      match Std.Data.Json.of_string content with
+      | Ok json -> Some json
+      | Error _ -> None)
+  | Error _ -> None

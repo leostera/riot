@@ -27,12 +27,12 @@ val plan_package :
 (** Plan a package:
 
     1. Check if all package dependencies are planned in the package_graph 2. If
-    not → return MissingDependencies 3. If yes → build module graph and action
-    graph 4. Compute hash including dependency hashes 5. Return Planned with all
-    artifacts
+    not → return MissingDependencies 3. Compute package input hash 4. Try to
+    load a cached plan bundle by that hash 5. On miss, build module/action
+    graphs and persist the bundle 6. Return Planned
 
     The hash includes:
     - Package metadata (name, dependencies, binaries)
-    - Source file contents
-    - Action graph structure
+    - Build profile and target context
+    - Source-level package metadata
     - Hashes of all direct dependencies (transitive cache invalidation) *)

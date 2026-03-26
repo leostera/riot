@@ -20,6 +20,27 @@ type plan_result =
 
 type check_deps_error = Missing of Package.t list | Failed of Package.t list
 
+let plan_bundle_to_json ~(package : Package.t) ~(action_graph : Action_graph.t) =
+  Std.Data.Json.Object
+    [
+      ("version", Std.Data.Json.Int 1);
+      ("package", Std.Data.Json.String package.name);
+      ("action_graph", Action_graph.to_json action_graph);
+    ]
+
+let plan_bundle_of_json ~(package : Package.t) json =
+  let open Std.Data.Json in
+  match json with
+  | Object fields -> (
+      match
+        (List.assoc_opt "version" fields, List.assoc_opt "package" fields, List.assoc_opt "action_graph" fields)
+      with
+      | Some (Int 1), Some (String pkg_name), Some action_graph_json
+        when String.equal pkg_name package.name ->
+          Action_graph.from_json action_graph_json
+      | _ -> Error "invalid plan bundle shape")
+  | _ -> Error "plan bundle must be a JSON object"
+
 (** Compute input hash - fast path that doesn't require ocamldep.
 
     This hash includes:
@@ -193,6 +214,101 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
       
       let input_hash = compute_input_hash ~package ~depset ~workspace ~profile ~build_ctx in
 
+      (match Tusk_store.Store.load_plan_bundle store ~hash:input_hash with
+      | Some json -> (
+          match plan_bundle_of_json ~package json with
+          | Ok action_graph ->
+              Log.info ("Package " ^ package.name ^ ": plan bundle cache hit");
+              Ok
+                (Planned
+                   {
+                     package_key;
+                     package;
+                     module_graph = G.make ();
+                     action_graph;
+                     hash = input_hash;
+                     depset;
+                   })
+          | Error _ ->
+              Log.warn
+                ("Package " ^ package.name
+               ^ ": plan bundle parse failed, rebuilding plan graph");
+              let plan_input =
+                Module_planner.
+                  {
+                    package;
+                    profile;
+                    ctx = build_ctx;
+                    toolchain;
+                    workspace;
+                    planning_root = Path.v "src";
+                    depset;
+                    store;
+                  }
+              in
+
+              match Module_planner.plan_node plan_input with
+              | Error err -> Error err
+              | Ok { sources; module_graph; action_graph } ->
+                  (* Add foreign dependency build actions and make all other nodes depend on them *)
+                  let foreign_nodes = List.map (fun (fdep : Package.foreign_dependency) ->
+                    Log.info ("[PACKAGE_PLANNER] Adding foreign dependency: " ^ fdep.name ^ " with " ^ Int.to_string (List.length fdep.inputs) ^ " input files");
+                    let foreign_action = Action.BuildForeignDependency {
+                      name = fdep.name;
+                      path = fdep.path;
+                      build_cmd = fdep.build_cmd;
+                      outputs = fdep.outputs;
+                      env = fdep.env;
+                    } in
+                    let foreign_node = Action_node.make
+                      ~actions:[foreign_action]
+                      ~outs:fdep.outputs
+                      ~srcs:[]  (* Foreign inputs are NOT copied to sandbox - they stay in their directory *)
+                      ~package
+                      ~toolchain
+                      ~dependency_hashes:(fun _ -> Crypto.hash_string "")
+                      ~deps:[]
+                    in
+                    Action_graph.add_node action_graph foreign_node
+                  ) package.foreign_dependencies in
+
+                  (* Make all existing nodes depend on foreign dependency nodes *)
+                  if List.length foreign_nodes > 0 then (
+                    let foreign_node_ids = List.map (fun (node : Action_node.t) -> node.id) foreign_nodes in
+                    Log.info ("[PACKAGE_PLANNER] Making all action nodes depend on " ^ Int.to_string (List.length foreign_nodes) ^ " foreign dependencies");
+                    let all_nodes = Action_graph.nodes action_graph in
+                    Log.info ("[PACKAGE_PLANNER] Total action nodes (including foreign): " ^ Int.to_string (List.length all_nodes));
+
+                    let dep_count = ref 0 in
+                    List.iter (fun (node : Action_node.t) ->
+                      (* Skip foreign dependency nodes themselves *)
+                      let is_foreign_node = List.mem node.id foreign_node_ids in
+                      if not is_foreign_node then (
+                        (* Make this node depend on all foreign nodes *)
+                        List.iter (fun foreign_node ->
+                          Action_graph.add_dependency action_graph node ~depends_on:foreign_node;
+                          dep_count := !dep_count + 1
+                        ) foreign_nodes
+                      )
+                    ) all_nodes;
+                    Log.info ("[PACKAGE_PLANNER] Added " ^ Int.to_string !dep_count ^ " dependency edges to foreign nodes")
+                  );
+
+                  let _ =
+                    Tusk_store.Store.save_plan_bundle store ~hash:input_hash
+                      ~plan:(plan_bundle_to_json ~package ~action_graph)
+                  in
+                  Ok
+                    (Planned
+                       {
+                         package_key;
+                         package;
+                         module_graph;
+                         action_graph;
+                         hash = input_hash;
+                         depset;
+                       }))
+      | None ->
       (* Always produce a concrete plan graph. The old fast path returned dummy
          empty graphs keyed off package-level artifact existence, which made
          planning correctness depend on execution-time cache state. *)
@@ -260,6 +376,10 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
             );
 
             (* Use input_hash as the package hash - it's deterministic and sufficient *)
+            let _ =
+              Tusk_store.Store.save_plan_bundle store ~hash:input_hash
+                ~plan:(plan_bundle_to_json ~package ~action_graph)
+            in
             Ok
               (Planned
                  {
@@ -269,4 +389,4 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
                    action_graph;
                    hash = input_hash;
                    depset;
-                 })
+                 }))
