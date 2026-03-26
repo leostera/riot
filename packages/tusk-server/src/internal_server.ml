@@ -272,6 +272,13 @@ and handle_find_artifact state client_pid package kind name =
           (Protocol.ArtifactNotFound
              { error = "Package '" ^ package ^ "' not found" })
     | Some pkg ->
+        (* Artifact resolution order:
+           1) promoted package outputs in out/ (fast path for current command flow)
+           2) package export manifest -> immutable action artifact path
+           3) legacy package-hash artifact lookup fallback
+
+           This keeps compatibility while making export manifests the primary
+           package-level discovery metadata. *)
         let resolve_from_package_hash () =
           let package_node_opt =
             Tusk_planner.Package_graph.get_package_node state.package_graph pkg
