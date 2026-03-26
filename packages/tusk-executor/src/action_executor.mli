@@ -28,6 +28,23 @@ type execution_result = {
 (** Collection of execution results *)
 type t = { completed : (G.Node_id.t, execution_result) HashMap.t }
 
+(** Execute a single planned action node.
+
+    This low-level primitive is used by higher-level schedulers that need
+    explicit control over global readiness/dispatch policy (for example,
+    workspace-level action scheduling).
+
+    [completed] is the dependency result table for the action graph this node
+    belongs to; it is consulted to implement dependency-failure skipping. *)
+val execute_node :
+  completed:(G.Node_id.t, execution_result) HashMap.t ->
+  store:Tusk_store.Store.t ->
+  session_id:Tusk_model.Session_id.t ->
+  Tusk_toolchain.t ->
+  Path.t ->
+  Action_node.t ->
+  execution_result
+
 (** Execute an action graph with dependency-aware parallelism.
 
     Passing `concurrency = 1` uses the same code path with serialized
