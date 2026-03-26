@@ -659,24 +659,28 @@ let push_batch (worker : worker) batch =
 let attempt_steal t (worker : worker) =
   let total = worker_count t in
   let self_idx = Scheduler_id.to_int worker.id in
-  let rec scan offset =
-    if offset = total then
+  let rec scan start_offset seen =
+    if seen >= total - 1 then
       false
     else
-      let victim_idx = (self_idx + offset) mod total in
-      if victim_idx = self_idx then
-        scan (offset + 1)
+      let victim_idx = (self_idx + start_offset + seen) mod total in
+      if Int.equal victim_idx self_idx then
+        scan start_offset (seen + 1)
       else
         let victim = t.workers.(victim_idx) in
         let batch = steal_batch victim in
         if List.is_empty batch then
-          scan (offset + 1)
+          scan start_offset (seen + 1)
         else (
           List.iter (fun proc -> Process.set_owner_worker proc worker.id) batch;
           push_batch worker batch;
           true)
   in
-  if total <= 1 then false else scan 1
+  if total <= 1 then
+    false
+  else
+    let start_offset = 1 + Kernel.Random.int (total - 1) in
+    scan start_offset 0
 
 let reactor_poll_timeout_nanos t =
   let configured = Config.resolution_to_nanos t.config.timer_resolution in
