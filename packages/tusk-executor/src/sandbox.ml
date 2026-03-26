@@ -70,6 +70,13 @@ let copy_inputs ~sandbox ~package ~inputs =
                 (Path.to_string dest)))
     inputs
 
+let prepare ~sandbox ~package ~inputs ~depset ~store =
+  (* No longer copy dependencies wholesale - dependencies are resolved via
+     include directories in immutable cache paths, with only required object
+     files copied into the sandbox for linker compatibility. *)
+  copy_inputs ~sandbox ~package ~inputs;
+  copy_object_files ~store ~sandbox ~package ~depset
+
 let cleanup sandbox =
   let _ = Fs.remove_dir_all sandbox.dir in
   ()
@@ -77,8 +84,7 @@ let cleanup sandbox =
 let with_sandbox ~workspace ~package ~inputs ~depset ~store ~expected_outputs f
     =
   let sandbox = create ~workspace ~package_name:package.Package.name in
-  (* No longer copy dependencies - they're accessed via -I flags pointing to cache *)
-  copy_inputs ~sandbox ~package ~inputs;
-  copy_object_files ~store ~sandbox ~package ~depset;
+  let _ = expected_outputs in
+  prepare ~sandbox ~package ~inputs ~depset ~store;
   let result = f sandbox in
   result
