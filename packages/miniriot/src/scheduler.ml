@@ -26,6 +26,9 @@ let default_worker_count config =
 type t = {
   mutable stop : bool;
   mutable status : int;
+  (* One runnable queue per worker to keep local scheduling decisions cheap.
+     `process_workers` stores the current owner for each PID so wakeups can
+     route directly to the destination worker queue. *)
   workers : worker array;
   mutable next_worker : int;
   process_workers : (Pid.t, int) HashMap.t;
@@ -77,6 +80,8 @@ let pick_spawn_worker t =
   if worker_count t = 1 then 0 else Random.int (worker_count t)
 
 let worker_for_pid t pid =
+  (* Fallback to worker 0 if we observe a PID without assignment yet.
+     This is intentionally conservative while keeping wakeup/send paths total. *)
   match HashMap.get t.process_workers pid with
   | Some worker_id -> worker_id
   | None -> 0
@@ -480,6 +485,9 @@ let run_next_runnable t =
     if offset = total_workers then
       None
     else
+      (* The current implementation uses global round-robin scan as a
+         deterministic single-thread fallback for work balancing. This provides
+         idle-worker progress without adding a separate steal queue. *)
       let worker_idx = (t.next_worker + offset) mod total_workers in
       match Queue.pop t.workers.(worker_idx).queue with
       | None -> scan (offset + 1)
