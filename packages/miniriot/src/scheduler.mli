@@ -1,37 +1,33 @@
-(** Process scheduler for Miniriot.
+(** Multicore scheduler/runtime entrypoint for Miniriot.
 
-    A scheduler owns a process registry plus one local runnable queue per worker.
-    `Config.scheduler_count` determines how many runnable worker queues are
-    created for one runtime invocation.
+    The runtime owns:
+    - a process registry shared by all workers
+    - one runnable queue per scheduler worker
+    - a dedicated reactor domain that owns timers and async I/O polling
 *)
 open Kernel
 
 type t
-(** Opaque scheduler type *)
+(** Opaque scheduler runtime. *)
 
 val get_scheduler : unit -> t
-(** Get the current scheduler (must be called within a running scheduler) *)
+(** Return the scheduler runtime bound to the current domain context. *)
 
 val spawn : t -> (unit -> (unit, Process.exit_reason) result) -> Pid.t
-(** Spawn a new process with the given function.
-
-    The parent process no longer directly implies same-worker placement.
-    Newly spawned processes are assigned to a worker chosen by the scheduler and
-    enqueued directly onto that worker's runnable queue. *)
+(** Spawn a process on a scheduler chosen by runtime placement policy. *)
 
 val self : unit -> Pid.t
-(** Get the PID of the currently running process *)
+(** Return the PID of the currently running process in this domain context. *)
 
 val send : Pid.t -> Message.t -> unit
-(** Send a message to a process *)
+(** Send a message by PID through the runtime-wide process registry. *)
 
 val shutdown : t -> status:int -> unit
-(** Shutdown the scheduler with given exit status *)
+(** Request runtime-wide shutdown with an exit status. *)
 
 val run :
   config:Config.t -> main:(unit -> (unit, Process.exit_reason) result) -> int
-(** Run the scheduler with the given configuration and main function. Returns
-    exit status. Can only be called once per process. *)
+(** Start worker domains + reactor and run until shutdown. *)
 
 val add_timer :
   t ->
@@ -40,13 +36,16 @@ val add_timer :
   mode:Timer.mode ->
   action:Timer.action ->
   Timer.id
-(** Add a timer to the scheduler's timer wheel *)
+(** Register a timer in the reactor-owned timer wheel. *)
 
 val cancel_timer : t -> Timer.id -> unit
-(** Cancel a timer in the scheduler's timer wheel *)
+(** Cancel a timer in the reactor-owned timer wheel. *)
 
 val get_current_process : t -> Process.t
-(** Get the currently running process *)
+(** Return the current process for the calling worker domain context. *)
 
 val get_process : t -> Pid.t -> Process.t option
-(** Get a process by PID. Returns None if process not found. *)
+(** Runtime-wide process lookup by PID. *)
+
+val with_relations_lock : t -> (unit -> 'a) -> 'a
+(** Serialize link/monitor relation updates that span multiple processes. *)

@@ -25,6 +25,8 @@ module Runtime : sig
 end
 
 module Pid = Pid
+module Scheduler_id = Scheduler_id
+(** Opaque worker/scheduler identifier type used by runtime internals. *)
 
 module Message : sig
   type t = ..

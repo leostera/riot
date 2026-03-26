@@ -2,6 +2,7 @@ open Kernel
 
 module Runtime = Runtime
 module Pid = Pid
+module Scheduler_id = Scheduler_id
 module Message = Message
 module Proc = Process
 module Config = Config
@@ -25,42 +26,46 @@ module Process = struct
 
   let link pid =
     let t = Scheduler.get_scheduler () in
-    let current = Scheduler.get_current_process t in
-    match Scheduler.get_process t pid with
-    | None ->
-        panic
-          ("Cannot link to non-existent process "
-             ^ (Pid.to_string pid))
-    | Some target ->
-        Proc.link current pid;
-        Proc.link target (Proc.pid current)
+    Scheduler.with_relations_lock t (fun () ->
+        let current = Scheduler.get_current_process t in
+        match Scheduler.get_process t pid with
+        | None ->
+            panic
+              ("Cannot link to non-existent process "
+             ^ Pid.to_string pid)
+        | Some target ->
+            Proc.link current pid;
+            Proc.link target (Proc.pid current))
 
   let unlink pid =
     let t = Scheduler.get_scheduler () in
-    let current = Scheduler.get_current_process t in
-    match Scheduler.get_process t pid with
-    | None -> ()
-    | Some target ->
-        Proc.unlink current pid;
-        Proc.unlink target (Proc.pid current)
+    Scheduler.with_relations_lock t (fun () ->
+        let current = Scheduler.get_current_process t in
+        match Scheduler.get_process t pid with
+        | None -> ()
+        | Some target ->
+            Proc.unlink current pid;
+            Proc.unlink target (Proc.pid current))
 
   let monitor pid =
     let t = Scheduler.get_scheduler () in
-    let current = Scheduler.get_current_process t in
-    match Scheduler.get_process t pid with
-    | None ->
-        panic
-          ("Cannot monitor non-existent processs "
-             ^ (Pid.to_string pid))
-    | Some target ->
-        let ref = Proc.monitor current pid in
-        Proc.add_monitored_by target (Proc.pid current) ref;
-        ref
+    Scheduler.with_relations_lock t (fun () ->
+        let current = Scheduler.get_current_process t in
+        match Scheduler.get_process t pid with
+        | None ->
+            panic
+              ("Cannot monitor non-existent processs "
+             ^ Pid.to_string pid)
+        | Some target ->
+            let ref = Proc.monitor current pid in
+            Proc.add_monitored_by target (Proc.pid current) ref;
+            ref)
 
   let demonitor ref =
     let t = Scheduler.get_scheduler () in
-    let current = Scheduler.get_current_process t in
-    Proc.demonitor current ref
+    Scheduler.with_relations_lock t (fun () ->
+        let current = Scheduler.get_current_process t in
+        Proc.demonitor current ref)
 end
 
 let run ~main ~args ?config () =
