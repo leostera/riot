@@ -759,6 +759,14 @@ let reactor_poll_timeout_nanos t =
   else
     max_timeout
 
+let deregister_io_in_reactor t source ~context =
+  match Async.Poll.deregister t.io_poll source with
+  | Ok () -> ()
+  | Error err ->
+      eprintln
+        ("[Scheduler] WARN: Failed to deregister I/O " ^ context ^ ": "
+       ^ IO.error_message err)
+
 let process_timers t =
   if Timer_wheel.size t.timer_wheel = 0 then
     ()
@@ -772,8 +780,18 @@ let process_timers t =
         | Timer.Wake_process proc ->
             if Process.has_receive_timeout_id proc timer_id then
               Process.mark_receive_timeout_fired proc;
-            if Process.has_syscall_timeout_id proc timer_id then
+            if Process.has_syscall_timeout_id proc timer_id then (
               Process.mark_syscall_timeout_fired proc;
+              match Process.state proc with
+              | Waiting_io { source; _ } ->
+                  (* Syscall timeout resumes the waiting process with
+                     [Syscall_timeout]. The wait registration must be removed
+                     first so a subsequent syscall can reregister cleanly. *)
+                  deregister_io_in_reactor t source
+                    ~context:
+                      ("for timed out process "
+                     ^ Pid.to_string (Process.pid proc))
+              | _ -> ());
             if Process.is_alive proc then (
               match get_process_slot t (Process.pid proc) with
               | None -> ()
@@ -827,13 +845,9 @@ let poll_io t =
       | Some slot -> (
           match Process.state proc with
           | Waiting_io { source; _ } ->
-              (match Async.Poll.deregister t.io_poll source with
-              | Ok () -> ()
-              | Error err ->
-                  eprintln
-                    ("[Scheduler] WARN: Failed to deregister I/O for process "
-                   ^ Pid.to_string (Process.pid proc)
-                   ^ ": " ^ IO.error_message err));
+              deregister_io_in_reactor t source
+                ~context:
+                  ("for process " ^ Pid.to_string (Process.pid proc));
               if Process.is_alive proc then (
                 Process.add_ready_token proc token source;
                 wake_process t slot)
