@@ -224,11 +224,7 @@ let module_graph_to_json (module_graph : Module_node.t G.t) =
         ("kind", module_kind_to_json node.value.kind);
         ( "deps",
           Array (List.map (fun dep -> Int (G.Node_id.to_int dep)) node.deps) );
-        ( "opens",
-          Array
-            (List.map
-               (fun open_node -> Int (G.Node_id.to_int open_node.id))
-               node.value.open_modules) );
+        ("opens", Array []);
       ]
   in
   Object [ ("nodes", Array (List.map node_to_json nodes)) ]
@@ -242,7 +238,6 @@ let module_graph_of_json json =
           let graph = G.make () in
           let id_to_node : (int, Module_node.t G.node) HashMap.t = HashMap.create () in
           let pending_deps : (Module_node.t G.node * int list) vec = vec [] in
-          let pending_opens : (Module_node.t G.node * int list) vec = vec [] in
           let parse_int_array = function
             | Array xs ->
                 List.fold_left
@@ -267,33 +262,26 @@ let module_graph_of_json json =
                           ( List.assoc_opt "id" node_fields,
                             List.assoc_opt "file" node_fields,
                             List.assoc_opt "kind" node_fields,
-                            List.assoc_opt "deps" node_fields,
-                            List.assoc_opt "opens" node_fields )
+                            List.assoc_opt "deps" node_fields )
                         with
                         | ( Some (Int legacy_id),
                             Some file_json,
                             Some kind_json,
-                            Some deps_json,
-                            Some opens_json ) -> (
+                            Some deps_json ) -> (
                             match
                               ( file_of_json file_json,
                                 module_kind_of_json kind_json,
-                                parse_int_array deps_json,
-                                parse_int_array opens_json )
+                                parse_int_array deps_json )
                             with
-                            | Ok file, Ok kind, Ok deps, Ok opens ->
+                            | Ok file, Ok kind, Ok deps ->
                                 let node_value : Module_node.t =
                                   { file; open_modules = []; kind }
                                 in
                                 let node = G.add_node graph node_value in
                                 let _ = HashMap.insert id_to_node legacy_id node in
                                 Vector.push pending_deps (node, deps);
-                                Vector.push pending_opens (node, opens);
                                 Ok ()
-                            | Error e, _, _, _
-                            | _, Error e, _, _
-                            | _, _, Error e, _
-                            | _, _, _, Error e ->
+                            | Error e, _, _ | _, Error e, _ | _, _, Error e ->
                                 Error e)
                         | _ -> Error "invalid module node payload")
                     | _ -> Error "module node must be an object"))
@@ -311,15 +299,6 @@ let module_graph_of_json json =
                          | Some dep_node -> G.add_edge node ~depends_on:dep_node
                          | None -> ())
                        dep_ids);
-              Vector.into_iter pending_opens
-              |> Iterator.to_list
-              |> List.iter (fun (node, open_ids) ->
-                     let opens =
-                       List.filter_map
-                         (fun open_id -> HashMap.get id_to_node open_id)
-                         open_ids
-                     in
-                     node.value.open_modules <- opens);
               Ok graph)
       | _ -> Error "missing module graph nodes")
   | _ -> Error "module graph payload must be an object"
