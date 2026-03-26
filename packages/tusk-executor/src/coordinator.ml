@@ -16,10 +16,10 @@ type workspace_result = {
 
 let run_package ~workspace ~toolchain ~store ~package_graph ~build_ctx
     (node : Package_graph.package_node) =
-  let package = Package_graph.get_package node.value in
+  let package = Package_graph.get_package node in
   let result =
     Package_builder.build ~workspace ~toolchain ~store ~package_graph
-      ~package_key:(Package_graph.get_key node.value) ~package ~build_ctx
+      ~package_key:(Package_graph.get_key node) ~package ~build_ctx
   in
   let status =
     match result.status with
