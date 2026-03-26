@@ -430,12 +430,12 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
             | Package_builder.Cached artifact ->
                 mark_package_built_in_graph package_graph ~runtime ~artifact
                   ~status:Package_graph.Cached;
-                Cached artifact
-            | Built artifact ->
+                Package_builder.Cached artifact
+            | Package_builder.Built artifact ->
                 mark_package_built_in_graph package_graph ~runtime ~artifact
                   ~status:Package_graph.Fresh;
-                Built artifact
-            | Failed _ ->
+                Package_builder.Built artifact
+            | Package_builder.Failed _ ->
                 panic "Unexpected failed status during success finalization"
           in
           let result =
