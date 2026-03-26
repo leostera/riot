@@ -468,29 +468,33 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
             let before = HashMap.len package_results in
             HashMap.into_iter runtimes
             |> Iter.Iterator.to_list
-            |> List.iter (fun (package_key, runtime) ->
-                   finalize_if_complete package_key runtime);
+            |> List.iter
+                 (fun ((package_key, pkg_runtime) :
+                        Package.key * package_runtime) ->
+                   finalize_if_complete package_key pkg_runtime);
             let after = HashMap.len package_results in
             if after = before then
               (HashMap.into_iter runtimes
               |> Iter.Iterator.to_list
-              |> List.iter (fun (package_key, runtime) ->
+              |> List.iter (fun ((package_key, pkg_runtime) :
+                                   Package.key * package_runtime) ->
                      if Option.is_none (HashMap.get package_results package_key) then (
                        let error = "No ready actions remaining for package" in
                        let result =
                          Package_builder.
                            {
                              package_key;
-                             package = runtime.package;
+                             package = pkg_runtime.package;
                              status = Failed (ExecutionFailed { message = error });
                              duration = Time.Duration.zero;
                            }
                        in
                        let _ = HashMap.insert package_results package_key result in
                        mark_package_failed_in_graph package_graph
-                         ~package:runtime.package ~package_key ~hash:runtime.hash
+                         ~package:pkg_runtime.package ~package_key
+                         ~hash:pkg_runtime.hash
                          ~error;
-                       Sandbox.cleanup runtime.sandbox)));
+                       Sandbox.cleanup pkg_runtime.sandbox)));
             loop ())
       | Some (package_key, action_node) -> (
           match HashMap.get runtimes package_key with
