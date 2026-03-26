@@ -20,11 +20,315 @@ type plan_result =
 
 type check_deps_error = Missing of Package.t list | Failed of Package.t list
 
-let plan_bundle_to_json ~(package : Package.t) ~(action_graph : Action_graph.t) =
+let file_to_json (file : Module_node.file) =
+  let open Std.Data.Json in
+  match file with
+  | Module_node.Concrete path ->
+      Object
+        [
+          ("kind", String "concrete");
+          ("path", String (Path.to_string path));
+        ]
+  | Module_node.Generated { path; contents } ->
+      Object
+        [
+          ("kind", String "generated");
+          ("path", String (Path.to_string path));
+          ("contents", String contents);
+        ]
+
+let file_of_json json =
+  let open Std.Data.Json in
+  match json with
+  | Object fields -> (
+      match
+        ( List.assoc_opt "kind" fields,
+          List.assoc_opt "path" fields,
+          List.assoc_opt "contents" fields )
+      with
+      | Some (String "concrete"), Some (String path), _ ->
+          Ok (Module_node.Concrete (Path.v path))
+      | Some (String "generated"), Some (String path), Some (String contents) ->
+          Ok (Module_node.Generated { path = Path.v path; contents })
+      | _ -> Error "invalid module file payload")
+  | _ -> Error "module file must be an object"
+
+let module_kind_to_json (kind : Module_node.kind) =
+  let open Std.Data.Json in
+  match kind with
+  | Module_node.ML mod_ ->
+      let ns =
+        Module.module_name mod_ |> Module_name.namespace |> Namespace.to_list
+      in
+      Object
+        [
+          ("kind", String "ml");
+          ("filename", String (Path.to_string (Module.filename mod_)));
+          ("namespace", Array (List.map (fun s -> String s) ns));
+        ]
+  | Module_node.MLI mod_ ->
+      let ns =
+        Module.module_name mod_ |> Module_name.namespace |> Namespace.to_list
+      in
+      Object
+        [
+          ("kind", String "mli");
+          ("filename", String (Path.to_string (Module.filename mod_)));
+          ("namespace", Array (List.map (fun s -> String s) ns));
+        ]
+  | Module_node.C -> Object [ ("kind", String "c") ]
+  | Module_node.H -> Object [ ("kind", String "h") ]
+  | Module_node.Other s -> Object [ ("kind", String "other"); ("value", String s) ]
+  | Module_node.Root -> Object [ ("kind", String "root") ]
+  | Module_node.Native { files } ->
+      Object
+        [
+          ("kind", String "native");
+          ("files", Array (List.map (fun p -> String (Path.to_string p)) files));
+        ]
+  | Module_node.Library { name; includes } ->
+      Object
+        [
+          ("kind", String "library");
+          ("name", String name);
+          ( "includes",
+            Array (List.map (fun p -> String (Path.to_string p)) includes) );
+        ]
+  | Module_node.Binary { name; source; libraries; includes } ->
+      Object
+        [
+          ("kind", String "binary");
+          ("name", String name);
+          ("source", String (Path.to_string source));
+          ( "libraries",
+            Array (List.map (fun p -> String (Path.to_string p)) libraries) );
+          ( "includes",
+            Array (List.map (fun p -> String (Path.to_string p)) includes) );
+        ]
+
+let parse_string_array = function
+  | Std.Data.Json.Array xs ->
+      List.fold_left
+        (fun acc item ->
+          match (acc, item) with
+          | Error e, _ -> Error e
+          | Ok items, Std.Data.Json.String s -> Ok (s :: items)
+          | Ok _, _ -> Error "expected string array")
+        (Ok []) xs
+      |> Result.map List.rev
+  | _ -> Error "expected array"
+
+let module_kind_of_json json =
+  let open Std.Data.Json in
+  match json with
+  | Object fields -> (
+      match List.assoc_opt "kind" fields with
+      | Some (String "ml") -> (
+          match
+            ( List.assoc_opt "filename" fields,
+              List.assoc_opt "namespace" fields )
+          with
+          | Some (String filename), Some namespace_json -> (
+              match parse_string_array namespace_json with
+              | Ok ns ->
+                  let mod_ =
+                    Module.make ~namespace:(Namespace.of_list ns)
+                      ~filename:(Path.v filename)
+                  in
+                  Ok (Module_node.ML mod_)
+              | Error e -> Error e)
+          | _ -> Error "invalid ml kind payload")
+      | Some (String "mli") -> (
+          match
+            ( List.assoc_opt "filename" fields,
+              List.assoc_opt "namespace" fields )
+          with
+          | Some (String filename), Some namespace_json -> (
+              match parse_string_array namespace_json with
+              | Ok ns ->
+                  let mod_ =
+                    Module.make ~namespace:(Namespace.of_list ns)
+                      ~filename:(Path.v filename)
+                  in
+                  Ok (Module_node.MLI mod_)
+              | Error e -> Error e)
+          | _ -> Error "invalid mli kind payload")
+      | Some (String "c") -> Ok Module_node.C
+      | Some (String "h") -> Ok Module_node.H
+      | Some (String "other") -> (
+          match List.assoc_opt "value" fields with
+          | Some (String v) -> Ok (Module_node.Other v)
+          | _ -> Error "invalid other kind payload")
+      | Some (String "root") -> Ok Module_node.Root
+      | Some (String "native") -> (
+          match List.assoc_opt "files" fields with
+          | Some files_json -> (
+              match parse_string_array files_json with
+              | Ok files ->
+                  Ok (Module_node.Native { files = List.map Path.v files })
+              | Error e -> Error e)
+          | None -> Error "invalid native kind payload")
+      | Some (String "library") -> (
+          match
+            ( List.assoc_opt "name" fields,
+              List.assoc_opt "includes" fields )
+          with
+          | Some (String name), Some includes_json -> (
+              match parse_string_array includes_json with
+              | Ok includes ->
+                  Ok
+                    (Module_node.Library
+                       { name; includes = List.map Path.v includes })
+              | Error e -> Error e)
+          | _ -> Error "invalid library kind payload")
+      | Some (String "binary") -> (
+          match
+            ( List.assoc_opt "name" fields,
+              List.assoc_opt "source" fields,
+              List.assoc_opt "libraries" fields,
+              List.assoc_opt "includes" fields )
+          with
+          | ( Some (String name),
+              Some (String source),
+              Some libraries_json,
+              Some includes_json ) -> (
+              match
+                (parse_string_array libraries_json, parse_string_array includes_json)
+              with
+              | Ok libraries, Ok includes ->
+                  Ok
+                    (Module_node.Binary
+                       {
+                         name;
+                         source = Path.v source;
+                         libraries = List.map Path.v libraries;
+                         includes = List.map Path.v includes;
+                       })
+              | Error e, _ | _, Error e -> Error e)
+          | _ -> Error "invalid binary kind payload")
+      | _ -> Error "unknown module kind")
+  | _ -> Error "module kind must be an object"
+
+let module_graph_to_json (module_graph : Module_node.t G.t) =
+  let open Std.Data.Json in
+  let nodes =
+    match G.topo_sort module_graph with
+    | Ok nodes -> nodes
+    | Error _ -> []
+  in
+  let node_to_json (node : Module_node.t G.node) =
+    Object
+      [
+        ("id", Int (G.Node_id.to_int node.id));
+        ("file", file_to_json node.value.file);
+        ("kind", module_kind_to_json node.value.kind);
+        ( "deps",
+          Array (List.map (fun dep -> Int (G.Node_id.to_int dep)) node.deps) );
+        ( "opens",
+          Array
+            (List.map
+               (fun open_node -> Int (G.Node_id.to_int open_node.id))
+               node.value.open_modules) );
+      ]
+  in
+  Object [ ("nodes", Array (List.map node_to_json nodes)) ]
+
+let module_graph_of_json json =
+  let open Std.Data.Json in
+  match json with
+  | Object fields -> (
+      match List.assoc_opt "nodes" fields with
+      | Some (Array node_jsons) ->
+          let graph = G.make () in
+          let id_to_node : (int, Module_node.t G.node) HashMap.t = HashMap.create () in
+          let pending_deps : (Module_node.t G.node * int list) vec = vec [] in
+          let pending_opens : (Module_node.t G.node * int list) vec = vec [] in
+          let parse_int_array = function
+            | Array xs ->
+                List.fold_left
+                  (fun acc item ->
+                    match (acc, item) with
+                    | Error e, _ -> Error e
+                    | Ok items, Int i -> Ok (i :: items)
+                    | Ok _, _ -> Error "expected int array")
+                  (Ok []) xs
+                |> Result.map List.rev
+            | _ -> Error "expected int array"
+          in
+          let result =
+            List.fold_left
+              (fun acc node_json ->
+                match acc with
+                | Error _ -> acc
+                | Ok () -> (
+                    match node_json with
+                    | Object node_fields -> (
+                        match
+                          ( List.assoc_opt "id" node_fields,
+                            List.assoc_opt "file" node_fields,
+                            List.assoc_opt "kind" node_fields,
+                            List.assoc_opt "deps" node_fields,
+                            List.assoc_opt "opens" node_fields )
+                        with
+                        | ( Some (Int legacy_id),
+                            Some file_json,
+                            Some kind_json,
+                            Some deps_json,
+                            Some opens_json ) -> (
+                            match
+                              ( file_of_json file_json,
+                                module_kind_of_json kind_json,
+                                parse_int_array deps_json,
+                                parse_int_array opens_json )
+                            with
+                            | Ok file, Ok kind, Ok deps, Ok opens ->
+                                let node_value : Module_node.t =
+                                  { file; open_modules = []; kind }
+                                in
+                                let node = G.add_node graph node_value in
+                                let _ = HashMap.insert id_to_node legacy_id node in
+                                Vector.push pending_deps (node, deps);
+                                Vector.push pending_opens (node, opens);
+                                Ok ()
+                            | Error e, _, _, _
+                            | _, Error e, _, _
+                            | _, _, Error e, _
+                            | _, _, _, Error e ->
+                                Error e)
+                        | _ -> Error "invalid module node payload")
+                    | _ -> Error "module node must be an object"))
+              (Ok ()) node_jsons
+          in
+          (match result with
+          | Error e -> Error e
+          | Ok () ->
+              Vector.into_iter pending_deps
+              |> Iterator.iter (fun (node, dep_ids) ->
+                     List.iter
+                       (fun dep_id ->
+                         match HashMap.get id_to_node dep_id with
+                         | Some dep_node -> G.add_edge node ~depends_on:dep_node
+                         | None -> ())
+                       dep_ids);
+              Vector.into_iter pending_opens
+              |> Iterator.iter (fun (node, open_ids) ->
+                     let opens =
+                       List.filter_map
+                         (fun open_id -> HashMap.get id_to_node open_id)
+                         open_ids
+                     in
+                     node.value.open_modules <- opens);
+              Ok graph)
+      | _ -> Error "missing module graph nodes")
+  | _ -> Error "module graph payload must be an object"
+
+let plan_bundle_to_json ~(package : Package.t) ~(module_graph : Module_node.t G.t)
+    ~(action_graph : Action_graph.t) =
   Std.Data.Json.Object
     [
       ("version", Std.Data.Json.Int 1);
       ("package", Std.Data.Json.String package.name);
+      ("module_graph", module_graph_to_json module_graph);
       ("action_graph", Action_graph.to_json action_graph);
     ]
 
@@ -33,11 +337,18 @@ let plan_bundle_of_json ~(package : Package.t) json =
   match json with
   | Object fields -> (
       match
-        (List.assoc_opt "version" fields, List.assoc_opt "package" fields, List.assoc_opt "action_graph" fields)
+        ( List.assoc_opt "version" fields,
+          List.assoc_opt "package" fields,
+          List.assoc_opt "module_graph" fields,
+          List.assoc_opt "action_graph" fields )
       with
-      | Some (Int 1), Some (String pkg_name), Some action_graph_json
+      | Some (Int 1), Some (String pkg_name), Some module_graph_json, Some action_graph_json
         when String.equal pkg_name package.name ->
-          Action_graph.from_json action_graph_json
+          (match
+             (module_graph_of_json module_graph_json, Action_graph.from_json action_graph_json)
+           with
+          | Ok module_graph, Ok action_graph -> Ok (module_graph, action_graph)
+          | Error e, _ | _, Error e -> Error e)
       | _ -> Error "invalid plan bundle shape")
   | _ -> Error "plan bundle must be a JSON object"
 
@@ -217,14 +528,14 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
       (match Tusk_store.Store.load_plan_bundle store ~hash:input_hash with
       | Some json -> (
           match plan_bundle_of_json ~package json with
-          | Ok action_graph ->
+          | Ok (module_graph, action_graph) ->
               Log.info ("Package " ^ package.name ^ ": plan bundle cache hit");
               Ok
                 (Planned
                    {
                      package_key;
                      package;
-                     module_graph = G.make ();
+                     module_graph;
                      action_graph;
                      hash = input_hash;
                      depset;
@@ -296,7 +607,7 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
 
                   let _ =
                     Tusk_store.Store.save_plan_bundle store ~hash:input_hash
-                      ~plan:(plan_bundle_to_json ~package ~action_graph)
+                      ~plan:(plan_bundle_to_json ~package ~module_graph ~action_graph)
                   in
                   Ok
                     (Planned
@@ -378,7 +689,7 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
             (* Use input_hash as the package hash - it's deterministic and sufficient *)
             let _ =
               Tusk_store.Store.save_plan_bundle store ~hash:input_hash
-                ~plan:(plan_bundle_to_json ~package ~action_graph)
+                ~plan:(plan_bundle_to_json ~package ~module_graph ~action_graph)
             in
             Ok
               (Planned

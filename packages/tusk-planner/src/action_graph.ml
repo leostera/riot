@@ -452,6 +452,8 @@ let from_json json =
   | None -> Error "Missing 'nodes' field"
   | Some (Array node_jsons) -> (
       let graph = create () in
+      let id_to_node : (int, Action_node.t) HashMap.t = HashMap.create () in
+      let dependencies_to_wire : (Action_node.t * int list) vec = vec [] in
 
       let parse_actions actions_json =
         match actions_json with
@@ -479,6 +481,20 @@ let from_json json =
         | _ -> Error "paths must be array"
       in
 
+      let parse_dependencies deps_json =
+        match deps_json with
+        | Array dep_jsons ->
+            List.fold_left
+              (fun acc dep_json ->
+                match (acc, dep_json) with
+                | Error e, _ -> Error e
+                | Ok deps, Int dep_id -> Ok (dep_id :: deps)
+                | Ok _, _ -> Error "dependencies must be int array")
+              (Ok []) dep_jsons
+            |> Result.map List.rev
+        | _ -> Error "dependencies must be array"
+      in
+
       match
         List.fold_left
           (fun acc node_json ->
@@ -489,19 +505,25 @@ let from_json json =
                   ( get_field "package" node_json,
                     get_field "actions" node_json,
                     get_field "outputs" node_json,
-                    get_field "sources" node_json )
+                    get_field "sources" node_json,
+                    get_field "id" node_json,
+                    get_field "dependencies" node_json )
                 with
                 | ( Some (String pkg_name),
                     Some actions_json,
                     Some outputs_json,
-                    Some sources_json ) -> (
+                    Some sources_json,
+                    Some (Int legacy_id),
+                    Some deps_json ) -> (
                     match parse_actions actions_json with
                     | Error err -> Error err
                     | Ok actions -> (
                         match
-                          (parse_paths outputs_json, parse_paths sources_json)
+                          ( parse_paths outputs_json,
+                            parse_paths sources_json,
+                            parse_dependencies deps_json )
                         with
-                        | Ok outputs, Ok sources ->
+                        | Ok outputs, Ok sources, Ok dependency_ids ->
                             let package =
                               Package.
                 {
@@ -534,14 +556,30 @@ let from_json json =
                                   Crypto.hash_string "")
                                 ~deps:[]
                             in
-                            let _ = add_node graph action_spec in
+                            let node = add_node graph action_spec in
+                            let _ = HashMap.insert id_to_node legacy_id node in
+                            Vector.push dependencies_to_wire
+                              (node, dependency_ids);
                             Ok ()
-                        | Error err, _ | _, Error err -> Error err))
+                        | Error err, _, _
+                        | _, Error err, _
+                        | _, _, Error err ->
+                            Error err))
                 | _ -> Error "Missing required node fields"))
           (Ok ()) node_jsons
       with
       | Error err -> Error err
-      | Ok () -> Ok graph)
+      | Ok () ->
+          Vector.into_iter dependencies_to_wire
+          |> Iterator.iter (fun (node, dependency_ids) ->
+                 List.iter
+                   (fun dep_id ->
+                     match HashMap.get id_to_node dep_id with
+                     | Some dep_node ->
+                         add_dependency graph node ~depends_on:dep_node
+                     | None -> ())
+                   dependency_ids);
+          Ok graph)
   | Some _ -> Error "nodes must be array"
 
 let equal g1 g2 =
