@@ -125,6 +125,44 @@ let test_handler_exception_isolation =
   if !good_handler_called then Ok ()
   else Error "Good handler should still be called despite bad handler exception"
 
+let test_restart_after_stop =
+  Test.case "telemetry: restart after stop" @@ fun () ->
+  let _pid = Telemetry.start () in
+  Telemetry.detach_all ();
+
+  let first_called = ref 0 in
+  Telemetry.attach "first" (fun _ -> first_called := !first_called + 1);
+  Telemetry.emit (TestEvent { value = 1 });
+  Telemetry.stop ();
+
+  let _pid = Telemetry.start () in
+  Telemetry.detach_all ();
+  let second_called = ref 0 in
+  Telemetry.attach "second" (fun _ -> second_called := !second_called + 1);
+  Telemetry.emit (TestEvent { value = 2 });
+  Telemetry.stop ();
+
+  if !first_called = 1 && !second_called = 1 then Ok ()
+  else
+    Error
+      ("Expected restart to isolate handler calls; first=" ^
+         string_of_int !first_called ^ ", second=" ^ string_of_int !second_called)
+
+let test_stop_idempotent =
+  Test.case "telemetry: stop idempotent and clears handlers view" @@ fun () ->
+  let _pid = Telemetry.start () in
+  Telemetry.detach_all ();
+  Telemetry.attach "tmp" (fun _ -> ());
+  Telemetry.stop ();
+  Telemetry.stop ();
+  let handlers = Telemetry.list_handlers () in
+  match handlers with
+  | [] -> Ok ()
+  | _ ->
+      Error
+        ("Expected [] handlers after stop, got " ^
+           String.concat ", " handlers)
+
 let name = "Telemetry"
 
 let tests =
@@ -135,6 +173,8 @@ let tests =
     test_detach;
     test_pattern_matching;
     test_handler_exception_isolation;
+    test_restart_after_stop;
+    test_stop_idempotent;
   ]
 
 let () = Miniriot.run ~main:(Test.Cli.main ~name ~tests) ~args:Env.args ()

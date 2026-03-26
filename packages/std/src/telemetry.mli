@@ -28,7 +28,8 @@ type event = ..
 
 val start : unit -> Miniriot.Pid.t
 (** Start the telemetry server process. Returns the server's PID. Must be called
-    before emitting events. *)
+    before emitting events. Idempotent: returns the existing server PID when the
+    server is already running. *)
 
 val emit : event -> unit
 (** Emit a telemetry event. All attached handlers will receive it. *)
@@ -45,9 +46,10 @@ val detach_all : unit -> unit
 (** Detach all handlers. Useful for testing. *)
 
 val list_handlers : unit -> string list
-(** List all attached handler names. *)
+(** List all attached handler names. Returns [[]] when telemetry is not running
+    or when the current server reference is stale. *)
 
 val stop : unit -> unit
 (** Stop the telemetry server. Blocks until all pending events are processed.
     This is useful in tests to ensure all events have been handled before making
-    assertions. *)
+    assertions. Safe to call multiple times. *)
