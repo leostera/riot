@@ -365,7 +365,7 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
         total_actions = List.length action_nodes;
         active = false;
         compilation_started = false;
-      }
+            }
     in
     let _ = HashMap.insert runtimes package_key runtime in
     match Package_graph.get_node_by_key package_graph package_key with
@@ -380,6 +380,17 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
               hash;
             }
     | None -> ()
+  in
+
+  let enqueue_all_ready_actions ~package_key runtime enqueue_ready =
+    let rec loop () =
+      match Action_queue.next runtime.action_queue with
+      | Some node ->
+          enqueue_ready (package_key, node);
+          loop ()
+      | None -> ()
+    in
+    loop ()
   in
 
   let rec plan_pass pending_nodes =
@@ -598,9 +609,7 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
                      package = runtime.package;
                      target = Workspace_planner.Package runtime.package.name;
                    });
-              match Action_queue.next runtime.action_queue with
-              | Some node -> enqueue_ready (package_key, node)
-              | None -> ()))
+              enqueue_all_ready_actions ~package_key runtime enqueue_ready))
       runtimes
   in
 
@@ -776,10 +785,7 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
                          target = Workspace_planner.Package runtime.package.name;
                        }));
                 Action_queue.mark_completed runtime.action_queue result;
-                (match Action_queue.next runtime.action_queue with
-                | Some next_node ->
-                    enqueue_ready (package_key, next_node)
-                | None -> ());
+                enqueue_all_ready_actions ~package_key runtime enqueue_ready;
                 finalize_if_complete package_key runtime;
                 loop ())
         | _ -> loop ())
