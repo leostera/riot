@@ -9,7 +9,7 @@ type t = {
   targets : string list;  (* Target architectures for cross-compilation *)
 }
 
-let default_ocaml_version = "5.3.0"
+let default_ocaml_version = "5.5.0"
 
 let default =
   { 
