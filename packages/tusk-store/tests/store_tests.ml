@@ -304,6 +304,43 @@ let test_load_package_exports_returns_none_for_malformed_payload () =
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_materialize_package_exports_from_action_artifact () =
+  match
+    Fs.with_tempdir ~prefix:"store_materialize_exports_test" (fun tmpdir ->
+        let workspace = make_test_workspace tmpdir in
+        let store = Tusk_store.Store.create ~workspace in
+        let sandbox = Path.(tmpdir / Path.v "sandbox") in
+        let _ = Fs.create_dir_all Path.(sandbox / Path.v "bin") in
+        let output = Path.(sandbox / Path.v "bin" / Path.v "tool") in
+        let _ = Fs.write "tool-binary" output in
+        let action_hash = Crypto.hash_string "materialize-action" in
+        let _ =
+          Tusk_store.Store.save store ~package:"pkg" ~hash:action_hash
+            ~sandbox_dir:sandbox ~outs:[ output ]
+          |> Result.expect ~msg:"save action artifact should succeed"
+        in
+        let exports =
+          [
+            Tusk_store.Store.
+              {
+                name = "tool";
+                path = Path.v "bin/tool";
+                action_hash = Crypto.Digest.hex action_hash;
+              };
+          ]
+        in
+        let target_dir = Path.(tmpdir / Path.v "out" / Path.v "pkg") in
+        let _ =
+          Tusk_store.Store.materialize_package_exports store ~exports ~target_dir
+          |> Result.expect ~msg:"materialize_package_exports should succeed"
+        in
+        let materialized = Path.(target_dir / Path.v "tool") in
+        if String.equal (read_file materialized) "tool-binary" then Ok ()
+        else Error "materialized export content did not match source artifact")
+  with
+  | Ok x -> x
+  | Error _ -> Error "tempdir creation failed"
+
 let tests =
   Test.
     [
@@ -321,6 +358,8 @@ let tests =
         test_find_package_export_path_returns_none_when_name_missing;
       case "load package exports returns none for malformed payload"
         test_load_package_exports_returns_none_for_malformed_payload;
+      case "materialize package exports from action artifacts"
+        test_materialize_package_exports_from_action_artifact;
     ]
 
 let name = "Tusk Store Tests"

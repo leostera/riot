@@ -182,6 +182,11 @@ let compute_export_entries (action_graph : Action_graph.t) :
         Some entry))
     entries
 
+let artifact_from_exports ~package_hash
+    (exports : Tusk_store.Store.export_entry list) =
+  let files = List.map (fun entry -> Path.v entry.name) exports in
+  Tusk_store.Artifact.{ hash = package_hash; files }
+
 let build ~workspace ~toolchain ~store ~package_graph ~package_key
     ~(package : Package.t)
     ~build_ctx =
@@ -346,21 +351,10 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
             | first_error :: _ -> Error (convert_action_error first_error)
             | [] ->
                 let export_entries = compute_export_entries action_graph in
-                (* Keep package-level artifact witness for compatibility, but
-                   authoritative cache reuse now happens at action level. *)
-                match
-                  Tusk_store.Store.save store ~package:package.name
-                    ~hash:package_hash ~sandbox_dir ~outs:outputs
-                with
-                | Ok artifact -> Ok (artifact, export_entries)
-                | Error msg ->
-                    Error
-                      (ExecutionFailed
-                         {
-                           message =
-                             "Failed to save artifacts for " ^ package.name ^ ": " ^
-                               msg;
-                         })
+                let artifact =
+                  artifact_from_exports ~package_hash export_entries
+                in
+                Ok (artifact, export_entries)
           in
 
           match
@@ -407,10 +401,11 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
                        ("Failed to save package export manifest for "
                       ^ package.name)
               in
-              Tusk_store.Store.promote store package_hash ~target_dir
+              Tusk_store.Store.materialize_package_exports store
+                ~exports:export_entries ~target_dir
               |> Result.expect
                    ~msg:
-                     ("Failed to promote artifacts for " ^ package.name);
+                     ("Failed to materialize package exports for " ^ package.name);
 
               (* Mark as Built with Fresh status *)
               (match

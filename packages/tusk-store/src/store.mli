@@ -115,3 +115,14 @@ val find_package_export_path :
 
     Returns [None] when no matching export exists, when metadata is malformed,
     or when the export path is not relative. *)
+
+val materialize_package_exports :
+  t ->
+  exports:export_entry list ->
+  target_dir:Std.Path.t ->
+  (unit, error) result
+(** Materialize package exports from immutable action artifact locations into a
+    package out directory.
+
+    Each export entry copies from [cache/<action_hash>/<path>] to
+    [target_dir/<name>]. *)

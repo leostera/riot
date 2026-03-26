@@ -297,3 +297,31 @@ let find_package_export_path store ~package ~profile ~target ~name =
       | Some entry ->
           if Path.is_absolute entry.path then None
           else Some Path.(store.root_dir / Path.v entry.action_hash / entry.path))
+
+let materialize_package_exports store ~exports ~target_dir =
+  Fs.create_dir_all target_dir
+  |> Result.expect
+       ~msg:
+         ("Failed to create package output directory: "
+        ^ Path.to_string target_dir);
+  let copy_one (entry : export_entry) =
+    if Path.is_absolute entry.path then
+      Error ("Export path must be relative: " ^ Path.to_string entry.path)
+    else
+      let src = Path.(store.root_dir / Path.v entry.action_hash / entry.path) in
+      let dst = Path.(target_dir / Path.v entry.name) in
+      match Fs.exists src with
+      | Ok true ->
+          Fs.copy ~src ~dst
+          |> Result.map_error (fun _ ->
+                 "Failed to copy export: " ^ Path.to_string src ^ " -> "
+                 ^ Path.to_string dst)
+      | Ok false | Error _ ->
+          Error ("Export source not found in store: " ^ Path.to_string src)
+  in
+  List.fold_left
+    (fun acc entry ->
+      match acc with
+      | Error _ -> acc
+      | Ok () -> copy_one entry)
+    (Ok ()) exports
