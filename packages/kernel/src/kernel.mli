@@ -5,6 +5,7 @@ module Char = Char
 module Collections = Collections
 module Crypto = Crypto
 module Dynlink = Dynlink
+module Domain = Domain
 module Effect = Effect
 module Env = Env
 module Exception = Printexc

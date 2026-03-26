@@ -32,6 +32,7 @@ module Uchar = Uchar
 module Random = Random
 module Dynlink = Dynlink
 module Ops = Ops
+module Domain = Domain
 
 (* Re-export global types and functions at top level for convenience *)
 include Global
