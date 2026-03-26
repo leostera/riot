@@ -73,3 +73,7 @@ path = "tests/lifecycle_stress_tests.ml"
 [[bin]]
 name = "timeout_race_tests"
 path = "tests/timeout_race_tests.ml"
+
+[[bin]]
+name = "shutdown_multicore_tests"
+path = "tests/shutdown_multicore_tests.ml"
