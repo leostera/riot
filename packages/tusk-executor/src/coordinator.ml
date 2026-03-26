@@ -40,6 +40,17 @@ let action_error_to_package_error = function
   | Action_executor.DependenciesFailed { failed } ->
       Package_builder.ActionDependenciesFailed { failed }
 
+let package_error_to_telemetry_error = function
+  | Package_builder.PlanningFailed err -> Telemetry_events.PlanningFailed err
+  | Package_builder.ExecutionFailed { message } ->
+      Telemetry_events.ExecutionFailed { message }
+  | Package_builder.ActionExecutionFailed { message } ->
+      Telemetry_events.ActionExecutionFailed { message }
+  | Package_builder.ActionOutputsNotCreated { missing } ->
+      Telemetry_events.ActionOutputsNotCreated { missing }
+  | Package_builder.ActionDependenciesFailed { failed } ->
+      Telemetry_events.ActionDependenciesFailed { failed }
+
 let compute_export_entries (action_graph : Action_graph.t) :
     Tusk_store.Store.export_entry list =
   let entries =
@@ -409,7 +420,7 @@ let build_workspace_actions ~workspace ~toolchain ~store ~package_graph
                  session_id;
                  package = runtime.package;
                  target = Workspace_planner.Package runtime.package.name;
-                 error = pkg_err;
+                 error = package_error_to_telemetry_error pkg_err;
                });
           Sandbox.cleanup runtime.sandbox
       | [] ->
