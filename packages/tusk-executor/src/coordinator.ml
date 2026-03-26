@@ -34,6 +34,18 @@ type package_runtime = {
   mutable compilation_started : bool;
 }
 
+type Message.t +=
+  | WorkspaceAssignAction of {
+      package_key : Package.key;
+      runtime : package_runtime;
+      node : Action_node.t;
+    }
+  | WorkspaceActionCompleted of {
+      worker_pid : Pid.t;
+      package_key : Package.key;
+      result : Action_executor.execution_result;
+    }
+
 let action_error_to_package_error = function
   | Action_executor.ExecutionFailed { message } ->
       Package_builder.ActionExecutionFailed { message }
@@ -222,6 +234,19 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
     HashMap.create ()
   in
   let action_ready_queue : (Package.key * Action_node.t) Queue.t = Queue.create () in
+  let ready_count = ref 0 in
+  let coordinator_pid = self () in
+  let enqueue_ready item =
+    Queue.push action_ready_queue item;
+    ready_count := !ready_count + 1
+  in
+  let pop_ready () =
+    match Queue.pop action_ready_queue with
+    | None -> None
+    | Some item ->
+        ready_count := !ready_count - 1;
+        Some item
+  in
 
   let materialize_initial_failure package_key package status =
     let result =
@@ -500,7 +525,7 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
                      target = Workspace_planner.Package runtime.package.name;
                    });
               match Action_queue.next runtime.action_queue with
-              | Some node -> Queue.push action_ready_queue (package_key, node)
+              | Some node -> enqueue_ready (package_key, node)
               | None -> ()))
       runtimes
   in
@@ -573,74 +598,117 @@ let build_workspace_actions ~(workspace : Workspace.t) ~toolchain ~store ~packag
   in
 
   let total_packages = List.length nodes in
+  let worker_count = max 1 build_ctx.Build_ctx.available_parallelism in
+  let rec workspace_worker_loop () =
+    match receive_any () with
+    | WorkspaceAssignAction { package_key; runtime; node } ->
+        let sandbox_dir = Sandbox.get_dir runtime.sandbox in
+        let result =
+          Action_executor.execute_node ~completed:runtime.completed_actions
+            ~store ~session_id toolchain sandbox_dir node
+        in
+        send coordinator_pid
+          (WorkspaceActionCompleted
+             { worker_pid = self (); package_key; result });
+        workspace_worker_loop ()
+    | _ -> workspace_worker_loop ()
+  in
+  let workers =
+    List.make ~len:worker_count ~fn:(fun _ -> spawn workspace_worker_loop)
+  in
+  let idle_workers : Pid.t Queue.t = Queue.create () in
+  List.iter (fun pid -> Queue.push idle_workers pid) workers;
+  let busy_workers : (Pid.t, Package.key) HashMap.t = HashMap.create () in
+
+  let rec drain_work_queue () =
+    match Queue.pop idle_workers with
+    | None -> ()
+    | Some worker_pid -> (
+        match pop_ready () with
+        | None ->
+            Queue.push idle_workers worker_pid
+        | Some (package_key, action_node) -> (
+            match HashMap.get runtimes package_key with
+            | None ->
+                Queue.push idle_workers worker_pid;
+                drain_work_queue ()
+            | Some runtime ->
+                let _ = HashMap.insert busy_workers worker_pid package_key in
+                send worker_pid
+                  (WorkspaceAssignAction
+                     { package_key; runtime; node = action_node });
+                drain_work_queue ()))
+  in
+
   let rec loop () =
     if HashMap.len package_results = total_packages then ()
     else (
       activate_ready_packages ();
-      match Queue.pop action_ready_queue with
-      | None ->
-          (* No actions available yet; either dependency-gated packages remain or
-             all remaining packages were completed by activation. *)
-          if HashMap.len package_results = total_packages then ()
-          else (
-            let before = HashMap.len package_results in
-            HashMap.into_iter runtimes
-            |> Iter.Iterator.to_list
-            |> List.iter
-                 (fun ((package_key, pkg_runtime) :
-                        Package.key * package_runtime) ->
-                   finalize_if_complete package_key pkg_runtime);
-            let after = HashMap.len package_results in
-            if after = before then
-              (HashMap.into_iter runtimes
-              |> Iter.Iterator.to_list
-              |> List.iter (fun ((package_key, pkg_runtime) :
-                                   Package.key * package_runtime) ->
-                     if Option.is_none (HashMap.get package_results package_key) then (
-                       let error = "No ready actions remaining for package" in
-                       let result =
-                         Package_builder.
-                           {
-                             package_key;
-                             package = pkg_runtime.package;
-                             status = Failed (ExecutionFailed { message = error });
-                             duration = Time.Duration.zero;
-                           }
-                       in
-                       let _ = HashMap.insert package_results package_key result in
-                       mark_package_failed_in_graph package_graph
-                         ~package:pkg_runtime.package ~package_key
-                         ~hash:pkg_runtime.hash
-                         ~error;
-                       Sandbox.cleanup pkg_runtime.sandbox)));
-            loop ())
-      | Some (package_key, action_node) -> (
-          match HashMap.get runtimes package_key with
-          | None -> loop ()
-          | Some runtime ->
-              if
-                (not runtime.compilation_started)
-                && (match action_node.value.actions with [] -> false | _ -> true)
-              then (
-                runtime.compilation_started <- true;
-                Telemetry.emit
-                  (CompilationStarted
-                     {
-                       session_id;
-                       package = runtime.package;
-                       target = Workspace_planner.Package runtime.package.name;
-                     }));
-              let sandbox_dir = Sandbox.get_dir runtime.sandbox in
-              let action_result =
-                Action_executor.execute_node ~completed:runtime.completed_actions
-                  ~store ~session_id toolchain sandbox_dir action_node
-              in
-              Action_queue.mark_completed runtime.action_queue action_result;
-              (match Action_queue.next runtime.action_queue with
-              | Some next_node -> Queue.push action_ready_queue (package_key, next_node)
-              | None -> ());
-              finalize_if_complete package_key runtime;
-              loop ()))
+      drain_work_queue ();
+      if HashMap.len package_results = total_packages then ()
+      else if HashMap.len busy_workers = 0 && !ready_count = 0 then (
+        let before = HashMap.len package_results in
+        HashMap.into_iter runtimes
+        |> Iter.Iterator.to_list
+        |> List.iter
+             (fun ((package_key, pkg_runtime) :
+                    Package.key * package_runtime) ->
+               finalize_if_complete package_key pkg_runtime);
+        let after = HashMap.len package_results in
+        if after = before then
+          (HashMap.into_iter runtimes
+          |> Iter.Iterator.to_list
+          |> List.iter (fun ((package_key, pkg_runtime) :
+                               Package.key * package_runtime) ->
+                 if Option.is_none (HashMap.get package_results package_key) then (
+                   let error = "No ready actions remaining for package" in
+                   let result =
+                     Package_builder.
+                       {
+                         package_key;
+                         package = pkg_runtime.package;
+                         status = Failed (ExecutionFailed { message = error });
+                         duration = Time.Duration.zero;
+                       }
+                   in
+                   let _ = HashMap.insert package_results package_key result in
+                   mark_package_failed_in_graph package_graph
+                     ~package:pkg_runtime.package ~package_key
+                     ~hash:pkg_runtime.hash
+                     ~error;
+                   Sandbox.cleanup pkg_runtime.sandbox)));
+        loop ())
+      else
+        match receive_any () with
+        | WorkspaceActionCompleted { worker_pid; package_key; result } -> (
+            let _ = HashMap.remove busy_workers worker_pid in
+            Queue.push idle_workers worker_pid;
+            match HashMap.get runtimes package_key with
+            | None -> loop ()
+            | Some runtime ->
+                if
+                  (not runtime.compilation_started)
+                  &&
+                  match result.status with
+                  | Action_executor.Cached _ -> false
+                  | Executed | Failed _ | Skipped -> true
+                then (
+                  runtime.compilation_started <- true;
+                  Telemetry.emit
+                    (CompilationStarted
+                       {
+                         session_id;
+                         package = runtime.package;
+                         target = Workspace_planner.Package runtime.package.name;
+                       }));
+                Action_queue.mark_completed runtime.action_queue result;
+                (match Action_queue.next runtime.action_queue with
+                | Some next_node ->
+                    enqueue_ready (package_key, next_node)
+                | None -> ());
+                finalize_if_complete package_key runtime;
+                loop ())
+        | _ -> loop ())
   in
   loop ();
   package_results
