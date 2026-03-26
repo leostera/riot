@@ -124,7 +124,7 @@ val next_mailbox_message : t -> Message.envelope option
 (** Get next message from the main mailbox queue only. *)
 
 val add_to_save_queue : t -> Message.envelope -> unit
-(** Add message to save queue *)
+(** Add message to the owner-local selective-receive save queue. *)
 
 val send_message : t -> Message.t -> unit
 (** Send a message to the process mailbox from any scheduler domain. *)
