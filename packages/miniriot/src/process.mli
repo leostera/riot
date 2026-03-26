@@ -127,7 +127,7 @@ val add_to_save_queue : t -> Message.envelope -> unit
 (** Add message to save queue *)
 
 val send_message : t -> Message.t -> unit
-(** Send a message to the process *)
+(** Send a message to the process mailbox from any scheduler domain. *)
 
 val mark_as_awaiting_io :
   t -> name:string -> Kernel.Async.Token.t -> Kernel.Async.Source.t -> unit

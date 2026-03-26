@@ -159,10 +159,9 @@ let add_to_save_queue t msg =
   with_lock t (fun () -> Mailbox.queue t.save_queue msg)
 
 let send_message t msg =
-  if is_alive t then (
-    with_lock t (fun () ->
-        let envelope = Message.envelope msg in
-        Mailbox.queue t.mailbox envelope))
+  if is_alive t then
+    let envelope = Message.envelope msg in
+    Mailbox.queue t.mailbox envelope
 
 (* I/O operations *)
 let mark_as_awaiting_io t ~name token source =
