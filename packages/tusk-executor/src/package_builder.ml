@@ -344,7 +344,7 @@ let build ~workspace ~toolchain ~store ~package_graph ~package_key
             let sandbox_dir = Sandbox.get_dir sandbox in
             let exec_result =
               Action_executor.execute ~action_graph ~sandbox ~store
-                toolchain ~concurrency:System.available_parallelism
+                ~session_id toolchain ~concurrency:System.available_parallelism
             in
 
             (* Check if any actions failed *)

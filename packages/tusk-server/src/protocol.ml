@@ -14,6 +14,8 @@ module BuildStats = struct
     mutable total_modules : int;
     mutable cache_hits : int;
     mutable cache_misses : int;
+    mutable action_cache_hits : int;
+    mutable action_cache_misses : int;
   }
 
   let make () =
@@ -25,6 +27,8 @@ module BuildStats = struct
       total_modules = 0;
       cache_hits = 0;
       cache_misses = 0;
+      action_cache_hits = 0;
+      action_cache_misses = 0;
     }
 
   let mark_started t = t.start_time <- Some (Time.Instant.now ())
@@ -33,6 +37,8 @@ module BuildStats = struct
   let inc_packages_failed t = t.packages_failed <- t.packages_failed + 1
   let inc_cache_hits t = t.cache_hits <- t.cache_hits + 1
   let inc_cache_misses t = t.cache_misses <- t.cache_misses + 1
+  let inc_action_cache_hits t = t.action_cache_hits <- t.action_cache_hits + 1
+  let inc_action_cache_misses t = t.action_cache_misses <- t.action_cache_misses + 1
   let set_total_modules t n = t.total_modules <- n
 
   let get_build_duration t =
@@ -47,6 +53,8 @@ module BuildStats = struct
   let get_total_modules t = t.total_modules
   let get_cache_hits t = t.cache_hits
   let get_cache_misses t = t.cache_misses
+  let get_action_cache_hits t = t.action_cache_hits
+  let get_action_cache_misses t = t.action_cache_misses
 end
 
 (** Request types that can be sent to the server *)

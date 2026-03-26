@@ -20,10 +20,19 @@ let init ~(workspace : Workspace.t) ~load_errors ~toolchain ~store ~concurrency 
     (Protocol.ServerResponse
        (Protocol.BuildStarted { session_id; started_at = Datetime.now () }));
 
+  let stats = Protocol.BuildStats.make () in
+  Protocol.BuildStats.mark_started stats;
+
   let handler_name =
     "build-worker-" ^ Session_id.to_string session_id
   in
   Telemetry.attach handler_name (fun event ->
+      (match event with
+      | Tusk_executor.Telemetry_events.CacheHit _ ->
+          Protocol.BuildStats.inc_action_cache_hits stats
+      | Tusk_executor.Telemetry_events.CacheMiss _ ->
+          Protocol.BuildStats.inc_action_cache_misses stats
+      | _ -> ());
       (* Filter events by session_id to prevent cross-contamination *)
       let event_session_id = match event with
         | Tusk_executor.Telemetry_events.BuildStarted { session_id; _ } -> Some session_id
@@ -53,9 +62,6 @@ let init ~(workspace : Workspace.t) ~load_errors ~toolchain ~store ~concurrency 
     | Protocol.All -> Tusk_planner.Workspace_planner.All
     | Protocol.Package name -> Tusk_planner.Workspace_planner.Package name
   in
-
-  let stats = Protocol.BuildStats.make () in
-  Protocol.BuildStats.mark_started stats;
 
   (* Check for package load errors first *)
   if List.length load_errors > 0 then (

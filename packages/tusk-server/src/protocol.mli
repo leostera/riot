@@ -15,6 +15,8 @@ module BuildStats : sig
   val inc_packages_failed : t -> unit
   val inc_cache_hits : t -> unit
   val inc_cache_misses : t -> unit
+  val inc_action_cache_hits : t -> unit
+  val inc_action_cache_misses : t -> unit
   val set_total_modules : t -> int -> unit
   val get_build_duration : t -> float (* seconds *)
   val get_packages_built : t -> int
@@ -22,6 +24,8 @@ module BuildStats : sig
   val get_total_modules : t -> int
   val get_cache_hits : t -> int
   val get_cache_misses : t -> int
+  val get_action_cache_hits : t -> int
+  val get_action_cache_misses : t -> int
 end
 
 (** Request types that can be sent to the server *)

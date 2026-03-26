@@ -31,11 +31,15 @@ type t = { completed : (G.Node_id.t, execution_result) HashMap.t }
 (** Execute an action graph with dependency-aware parallelism.
 
     Passing `concurrency = 1` uses the same code path with serialized
-    execution. *)
+    execution.
+
+    The executor performs cache lookup/save per action node hash and emits
+    action telemetry events scoped to the provided `session_id`. *)
 val execute :
   action_graph:Action_graph.t ->
   sandbox:Sandbox.t ->
   store:Tusk_store.Store.t ->
+  session_id:Tusk_model.Session_id.t ->
   Tusk_toolchain.t ->
   concurrency:int ->
   t

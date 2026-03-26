@@ -295,7 +295,8 @@ let has_failed_dependencies completed (node : Action_node.t) =
       | _ -> false)
     node.deps
 
-let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
+let execute_node ~completed ~store ~session_id toolchain sandbox_dir
+    (node : Action_node.t) =
   let start = Instant.now () in
   if has_failed_dependencies completed node then (
     let now = Instant.now () in
@@ -306,7 +307,56 @@ let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
       started_at = start;
       completed_at = now;
     })
-  else
+  else (
+    let action_hash = Action_node.get_hash node in
+    match Tusk_store.Store.get store action_hash with
+    | Some artifact ->
+        Telemetry.emit
+          Telemetry_events.(
+            CacheHit
+              {
+                session_id;
+                package = node.value.package;
+                action = node;
+                hash = action_hash;
+              });
+        let _ =
+          Tusk_store.Store.promote_artifact store artifact ~target_dir:sandbox_dir
+          |> Result.expect
+               ~msg:
+                 ("Failed to materialize cached action artifact: "
+                ^ G.Node_id.to_string node.id)
+        in
+        let completed_at = Instant.now () in
+        let duration = Instant.duration_since ~earlier:start completed_at in
+        Telemetry.emit
+          Telemetry_events.(
+            ActionCompleted
+              {
+                session_id;
+                package = node.value.package;
+                action = node;
+                artifact;
+                status = `Cached;
+                duration;
+              });
+        {
+          node_id = node.id;
+          status = Cached action_hash;
+          duration;
+          started_at = start;
+          completed_at;
+        }
+    | None ->
+        Telemetry.emit
+          Telemetry_events.(
+            CacheMiss
+              {
+                session_id;
+                package = node.value.package;
+                action = node;
+                hash = action_hash;
+              });
     let actions = node.value.actions in
     let outputs = node.value.outs in
     let sources = node.value.srcs in
@@ -314,7 +364,7 @@ let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
       Telemetry_events.(
         ActionStarted
           {
-            session_id = Tusk_model.Session_id.of_string "action";
+            session_id;
             package = node.value.package;
             action = node;
           });
@@ -357,7 +407,7 @@ let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
               Telemetry_events.(
                 ActionFailed
                   {
-                    session_id = Tusk_model.Session_id.of_string "action";
+                    session_id;
                     package = node.value.package;
                     action = node;
                     error = msg;
@@ -378,6 +428,26 @@ let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
                 actions
             in
             if not needs_output_verification then
+              let artifact =
+                Tusk_store.Store.save store ~package:node.value.package.name
+                  ~hash:action_hash ~sandbox_dir
+                  ~outs:(List.map (Path.join sandbox_dir) outputs)
+                |> Result.expect
+                     ~msg:
+                       ("Failed to store action artifact for node "
+                      ^ G.Node_id.to_string node.id)
+              in
+              Telemetry.emit
+                Telemetry_events.(
+                  ActionCompleted
+                    {
+                      session_id;
+                      package = node.value.package;
+                      action = node;
+                      artifact;
+                      status = `Fresh;
+                      duration;
+                    });
               {
                 node_id = node.id;
                 status = Executed;
@@ -392,28 +462,53 @@ let execute_node ~completed toolchain sandbox_dir (node : Action_node.t) =
                   {
                     node_id = node.id;
                     status = Failed (OutputsNotCreated { missing });
-                    duration;
-                    started_at = start;
-                    completed_at;
+                  duration;
+                  started_at = start;
+                  completed_at;
                   }
               | Ok () ->
+                  let artifact =
+                    Tusk_store.Store.save store ~package:node.value.package.name
+                      ~hash:action_hash ~sandbox_dir ~outs:abs_outputs
+                    |> Result.expect
+                         ~msg:
+                           ("Failed to store action artifact for node "
+                          ^ G.Node_id.to_string node.id)
+                  in
+                  Telemetry.emit
+                    Telemetry_events.(
+                      ActionCompleted
+                        {
+                          session_id;
+                          package = node.value.package;
+                          action = node;
+                          artifact;
+                          status = `Fresh;
+                          duration;
+                        });
                   {
                     node_id = node.id;
                     status = Executed;
                     duration;
                     started_at = start;
                     completed_at;
-                  })
+                  }))
 
-let rec worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed =
+let rec worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed ~store
+    ~session_id =
   match receive_any () with
   | AssignAction node ->
-      let result = execute_node ~completed toolchain sandbox_dir node in
+      let result =
+        execute_node ~completed ~store ~session_id toolchain sandbox_dir node
+      in
       send coordinator (ActionCompleted { worker_pid = self (); result });
-      worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed
-  | _ -> worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed
+      worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed ~store
+        ~session_id
+  | _ ->
+      worker_loop ~coordinator ~toolchain ~sandbox_dir ~completed ~store
+        ~session_id
 
-let execute ~action_graph ~sandbox ~store:_ toolchain ~concurrency =
+let execute ~action_graph ~sandbox ~store ~session_id toolchain ~concurrency =
   let sandbox_dir = Sandbox.get_dir sandbox in
   let sorted_nodes = Action_graph.nodes action_graph in
   let total_nodes = List.length sorted_nodes in
@@ -427,7 +522,7 @@ let execute ~action_graph ~sandbox ~store:_ toolchain ~concurrency =
     List.make ~len:concurrency ~fn:(fun _ ->
         spawn (fun () ->
             worker_loop ~coordinator:coordinator_pid ~toolchain ~sandbox_dir
-              ~completed:queue.completed))
+              ~completed:queue.completed ~store ~session_id))
   in
   let idle_workers = Queue.create () in
   List.iter (fun pid -> Queue.push idle_workers pid) workers;

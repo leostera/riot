@@ -104,17 +104,17 @@ let check_dependencies_built ~store ~package_graph ~package_key =
   let unplanned = ref [] in
   let failed = ref [] in
 
-  let rec summarize_dependency (node : Package_graph.package_node G.node) :
+  let rec summarize_dependency (node_value : Package_graph.package_node) :
       Dependency.t option =
-    let pkg = Package_graph.get_package node.value in
+    let pkg = Package_graph.get_package node_value in
     let is_ordering_only_self_dependency =
       String.equal pkg.Package.name current_package_name
       &&
-      match (current_scope, Package_graph.get_scope node.value) with
+      match (current_scope, Package_graph.get_scope node_value) with
       | Package_graph.Runtime, Package_graph.Build -> true
       | _ -> false
     in
-    match node.value with
+    match node_value with
     | Package_graph.Unplanned _ ->
         (* Not yet planned - unplanned dependency *)
         unplanned := pkg :: !unplanned
@@ -124,7 +124,15 @@ let check_dependencies_built ~store ~package_graph ~package_key =
     | Package_graph.Built { package; hash; _ } ->
         if is_ordering_only_self_dependency then None
         else
-          let dep_nodes = Package_graph.get_dependencies_for_node package_graph node in
+          let dep_nodes =
+            match
+              Package_graph.get_node_by_key package_graph
+                (Package_graph.get_key node_value)
+            with
+            | Some node ->
+                Package_graph.get_dependencies_for_node package_graph node
+            | None -> []
+          in
           let dep_depset = List.filter_map summarize_dependency dep_nodes in
           Some
             Dependency.
@@ -146,7 +154,7 @@ let check_dependencies_built ~store ~package_graph ~package_key =
         None
   in
 
-  let depset = List.filter_map summarize_dependency deps in
+  let depset = List.filter_map (fun node -> summarize_dependency node.value) deps in
 
   (* Check the sets in order: failed takes precedence *)
   if !failed != [] then Error (Failed !failed)
