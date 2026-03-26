@@ -271,7 +271,64 @@ and handle_find_artifact state client_pid package kind name =
         Protocol.ServerResponse
           (Protocol.ArtifactNotFound
              { error = "Package '" ^ package ^ "' not found" })
-    | Some pkg -> (
+    | Some pkg ->
+        let resolve_from_package_hash () =
+          let package_node_opt =
+            Tusk_planner.Package_graph.get_package_node state.package_graph pkg
+          in
+          match package_node_opt with
+          | None ->
+              Log.info
+                ("Server: Package '" ^ package ^ "' not found in package graph");
+              Protocol.ServerResponse
+                (Protocol.ArtifactNotFound
+                   { error = "Package '" ^ package ^ "' not in build graph" })
+          | Some package_node -> (
+              let hash_opt = Tusk_planner.Package_graph.get_hash package_node in
+              match hash_opt with
+              | None ->
+                  Log.info
+                    ("Server: Package '" ^ package ^ "' has no hash (not built)");
+                  Protocol.ServerResponse
+                    (Protocol.ArtifactNotFound
+                       { error = "Package '" ^ package ^ "' has not been built" })
+              | Some hash -> (
+                  match Tusk_store.Store.get state.store hash with
+                  | None ->
+                      Log.info
+                        ("Server: No artifact found for package '" ^ package
+                        ^ "' hash " ^ Std.Crypto.Digest.hex hash);
+                      Protocol.ServerResponse
+                        (Protocol.ArtifactNotFound
+                           { error = "Package '" ^ package ^ "' has not been built" })
+                  | Some artifact ->
+                      let binary_path =
+                        List.find_opt
+                          (fun file_path -> Path.basename file_path = name)
+                          artifact.Tusk_store.Artifact.files
+                      in
+                      match binary_path with
+                      | Some file_path ->
+                          let artifact_dir =
+                            Tusk_store.Store.get_artifact_dir state.store artifact
+                          in
+                          let full_path = Path.(artifact_dir / file_path) in
+                          Log.info
+                            ("Server: Artifact found at "
+                            ^ Path.to_string full_path);
+                          Protocol.ServerResponse
+                            (Protocol.ArtifactFound { path = full_path })
+                      | None ->
+                          Log.info
+                            ("Server: Artifact '" ^ name
+                            ^ "' not found in package '" ^ package ^ "' files");
+                          Protocol.ServerResponse
+                            (Protocol.ArtifactNotFound
+                               {
+                                 error =
+                                   "Artifact '" ^ name ^ "' not found in package '" ^ package ^ "'";
+                               })))
+        in
         let promoted_artifact_dir =
           Path.(
             Tusk_model.Tusk_dirs.out_dir ~workspace_root:state.workspace.root
@@ -289,61 +346,26 @@ and handle_find_artifact state client_pid package kind name =
             Protocol.ServerResponse
               (Protocol.ArtifactFound { path = promoted_artifact_path })
         | _ ->
-            let package_node_opt =
-              Tusk_planner.Package_graph.get_package_node state.package_graph pkg
-            in
-            match package_node_opt with
-            | None ->
-                Log.info
-                  ("Server: Package '" ^ package ^ "' not found in package graph");
-                Protocol.ServerResponse
-                  (Protocol.ArtifactNotFound
-                     { error = "Package '" ^ package ^ "' not in build graph" })
-            | Some package_node -> (
-                let hash_opt = Tusk_planner.Package_graph.get_hash package_node in
-                match hash_opt with
-                | None ->
+            let profile = "debug" in
+            let target = Tusk_model.Tusk_dirs.host_target () in
+            (match
+               Tusk_store.Store.find_package_export_path state.store
+                 ~package:pkg.name ~profile ~target ~name
+             with
+            | Some export_path -> (
+                match Fs.exists export_path with
+                | Ok true ->
                     Log.info
-                      ("Server: Package '" ^ package ^ "' has no hash (not built)");
+                      ("Server: Found export manifest artifact at "
+                      ^ Path.to_string export_path);
                     Protocol.ServerResponse
-                      (Protocol.ArtifactNotFound
-                         { error = "Package '" ^ package ^ "' has not been built" })
-                | Some hash -> (
-                    match Tusk_store.Store.get state.store hash with
-                    | None ->
-                        Log.info
-                          ("Server: No artifact found for package '" ^ package
-                          ^ "' hash " ^ Std.Crypto.Digest.hex hash);
-                        Protocol.ServerResponse
-                          (Protocol.ArtifactNotFound
-                             { error = "Package '" ^ package ^ "' has not been built" })
-                    | Some artifact ->
-                        let binary_path =
-                          List.find_opt
-                            (fun file_path -> Path.basename file_path = name)
-                            artifact.Tusk_store.Artifact.files
-                        in
-                        match binary_path with
-                        | Some file_path ->
-                            let artifact_dir =
-                              Tusk_store.Store.get_artifact_dir state.store artifact
-                            in
-                            let full_path = Path.(artifact_dir / file_path) in
-                            Log.info
-                              ("Server: Artifact found at "
-                              ^ Path.to_string full_path);
-                            Protocol.ServerResponse
-                              (Protocol.ArtifactFound { path = full_path })
-                        | None ->
-                            Log.info
-                              ("Server: Artifact '" ^ name
-                              ^ "' not found in package '" ^ package ^ "' files");
-                            Protocol.ServerResponse
-                              (Protocol.ArtifactNotFound
-                                 {
-                                   error =
-                                     "Artifact '" ^ name ^ "' not found in package '" ^ package ^ "'";
-                                 }))))
+                      (Protocol.ArtifactFound { path = export_path })
+                | _ ->
+                    Log.warn
+                      ("Server: Export manifest pointed to missing path "
+                      ^ Path.to_string export_path ^ ", falling back to package hash lookup");
+                    resolve_from_package_hash ())
+            | None -> resolve_from_package_hash ())
   in
   Log.debug "Server: Sending response";
   send client_pid response;
