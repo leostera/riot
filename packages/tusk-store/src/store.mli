@@ -53,3 +53,9 @@ val get_artifact_paths : t -> Artifact.t -> Std.Path.t list
 val get_artifact_dir : t -> Artifact.t -> Std.Path.t
 (** Get the cache directory containing an artifact's files. Returns the absolute
     path to the directory in immutable storage where the artifact is stored. *)
+
+val hash_dir_of : t -> Std.Crypto.hash -> Std.Path.t
+(** Get the immutable cache directory for a hash, whether or not it exists yet.
+
+    This is useful for planning and dependency summaries that need a stable
+    output location before execution materializes artifacts. *)

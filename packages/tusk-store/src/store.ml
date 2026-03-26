@@ -23,63 +23,59 @@ let create ~(workspace : Workspace.t) =
 let get_hash_dir store hash =
   Path.(store.root_dir / Path.v (Std.Crypto.Digest.hex hash))
 
+let manifest_path hash_dir = Path.(hash_dir / Path.v "manifest.json")
+
 (** Check if artifacts for a given hash exist in the store *)
 let exists store hash =
   let hash_dir = get_hash_dir store hash in
-  match Fs.exists hash_dir with Ok b -> b | Error _ -> false
+  match Fs.exists hash_dir with
+  | Ok true -> (
+      match Fs.exists (manifest_path hash_dir) with
+      | Ok true -> true
+      | Ok false | Error _ -> false)
+  | Ok false | Error _ -> false
 
 (** Promote artifacts from store to target directory *)
 let promote store hash ~target_dir =
   let hash_dir = get_hash_dir store hash in
-  match Fs.exists hash_dir with
-  | Ok true ->
+  match Manifest.load ~path:(manifest_path hash_dir) with
+  | Ok manifest ->
       Fs.create_dir_all target_dir
       |> Result.expect
            ~msg:
              ("Failed to create target directory: " ^ Path.to_string target_dir);
-
-      let reader =
-        Fs.read_dir hash_dir
-        |> Result.expect
-             ~msg:
-               ("Failed to read hash directory: " ^ Path.to_string hash_dir)
-      in
-      let rec copy_files () =
-        match MutIterator.next reader with
-        | None -> ()
-        | Some file_path -> (
-            let file = Path.basename file_path in
-            if String.equal file "manifest.json" then copy_files ()
-            else
-              let src = Path.(hash_dir / Path.v file) in
-              let dst = Path.(target_dir / Path.v file) in
-              match Fs.is_file src with
-              | Ok true ->
-                  Fs.copy ~src ~dst
-                  |> Result.expect
-                       ~msg:
-                         ("Failed to copy file: " ^ Path.to_string src ^ " -> " ^ Path.to_string dst);
-                  copy_files ()
-              | Ok false -> copy_files ()
-              | Error _ ->
-                  panic
-                    ("Failed to check if " ^ Path.to_string src ^ " is a file"))
-      in
-      copy_files ();
+      List.iter
+        (fun (entry : Manifest.file_entry) ->
+          let src = Path.(hash_dir / entry.path) in
+          let dst = Path.(target_dir / entry.path) in
+          let dst_parent = Path.dirname dst in
+          Fs.create_dir_all dst_parent
+          |> Result.expect
+               ~msg:
+                 ("Failed to create parent directory: " ^ Path.to_string dst_parent);
+          Fs.copy ~src ~dst
+          |> Result.expect
+               ~msg:
+                 ("Failed to copy file: " ^ Path.to_string src ^ " -> "
+                ^ Path.to_string dst))
+        manifest.files;
       Ok ()
-  | Ok false -> Error "Hash not found in store"
-  | Error _ ->
-      panic
-        ("Failed to check if hash directory exists: " ^ Path.to_string hash_dir)
+  | Error _ -> Error "Hash not found in store"
 
 (** Store artifacts from sandbox to content-addressable store *)
 let store_artifacts store ~package hash sandbox_dir declared_outputs =
   let hash_dir = get_hash_dir store hash in
-
-  Fs.create_dir_all hash_dir
+  let temp_dir =
+    let nanos = Time.SystemTime.duration_since_epoch () |> Time.Duration.to_nanos in
+    let temp_name =
+      Std.Crypto.Digest.hex hash ^ ".tmp." ^ Int64.to_string nanos
+    in
+    Path.(store.root_dir / Path.v temp_name)
+  in
+  Fs.create_dir_all temp_dir
   |> Result.expect
        ~msg:
-         ("Failed to create hash directory: " ^ Path.to_string hash_dir);
+         ("Failed to create temp directory: " ^ Path.to_string temp_dir);
 
   (* Copy declared outputs to store and track what was actually stored *)
   let stored_files_with_sizes =
@@ -88,7 +84,12 @@ let store_artifacts store ~package hash sandbox_dir declared_outputs =
         let src = Path.(sandbox_dir / Path.v output_file) in
         match Fs.exists src with
         | Ok true ->
-            let dst = Path.(hash_dir / Path.v output_file) in
+            let dst = Path.(temp_dir / Path.v output_file) in
+            let dst_parent = Path.dirname dst in
+            Fs.create_dir_all dst_parent
+            |> Result.expect
+                 ~msg:
+                   ("Failed to create parent directory: " ^ Path.to_string dst_parent);
             Fs.copy ~src ~dst
             |> Result.expect
                  ~msg:
@@ -100,7 +101,7 @@ let store_artifacts store ~package hash sandbox_dir declared_outputs =
                      ("Failed to get metadata for " ^ Path.to_string dst)
               |> Fs.Metadata.len
             in
-            (dst, size) :: acc
+            (Path.v output_file, size) :: acc
         | _ -> acc)
       [] declared_outputs
   in
@@ -111,25 +112,38 @@ let store_artifacts store ~package hash sandbox_dir declared_outputs =
       ~build_hash:(Std.Crypto.Digest.hex hash)
       ~files:(List.rev stored_files_with_sizes)
   in
-  let manifest_path = Path.(hash_dir / Path.v "manifest.json") in
-  Manifest.save manifest ~path:manifest_path
+  Manifest.save manifest ~path:(manifest_path temp_dir)
   |> Result.expect ~msg:"Failed to save manifest";
 
-  (* Return artifact witness with just the filenames *)
-  let stored_files =
-    List.map
-      (fun (path, _) -> Path.v (Path.basename path))
-      stored_files_with_sizes
+  let commit_result =
+    if exists store hash then
+      Ok ()
+    else Fs.rename ~src:temp_dir ~dst:hash_dir
   in
+
+  (match commit_result with
+  | Ok () -> ()
+  | Error _ ->
+      if exists store hash then ()
+      else
+        panic
+          ("Failed to move temp artifact dir into place: " ^ Path.to_string temp_dir
+         ^ " -> " ^ Path.to_string hash_dir));
+
+  (match Fs.exists temp_dir with
+  | Ok true ->
+      let _ = Fs.remove_dir_all temp_dir in
+      ()
+  | Ok false | Error _ -> ());
+
+  (* Return artifact witness with just the filenames *)
+  let stored_files = List.map (fun (path, _) -> path) stored_files_with_sizes in
   Artifact.{ hash; files = List.rev stored_files }
 
 (** Simple interface - check if we have cached artifacts for a hash *)
 let get store hash =
   if exists store hash then
-    let manifest_path =
-      Path.(get_hash_dir store hash / Path.v "manifest.json")
-    in
-    match Manifest.load ~path:manifest_path with
+    match Manifest.load ~path:(manifest_path (get_hash_dir store hash)) with
     | Ok manifest ->
         let files =
           List.map (fun entry -> entry.Manifest.path) manifest.files
@@ -150,7 +164,7 @@ let save store ~package ~hash ~sandbox_dir ~outs =
           let relative_start = sandbox_len + 1 in
           String.sub out_str relative_start
             (String.length out_str - relative_start)
-        else Path.basename out_path)
+        else Path.to_string out_path)
       outs
   in
   let artifact = store_artifacts store ~package hash sandbox_dir outs_str in
@@ -170,3 +184,5 @@ let get_artifact_paths store artifact =
 (** Get the cache directory containing an artifact's files *)
 let get_artifact_dir store artifact =
   get_hash_dir store Artifact.(artifact.hash)
+
+let hash_dir_of store hash = get_hash_dir store hash

@@ -152,7 +152,7 @@ let create ~package ~build_hash ~files =
         match Std.Fs.read_to_string path with
         | Ok file ->
             let hash = Std.Crypto.(Sha512.hash_string file |> Digest.hex) in
-            Some { path = Path.v (Std.Path.basename path); hash; size }
+            Some { path; hash; size }
         | Error _ -> None)
       files
   in
