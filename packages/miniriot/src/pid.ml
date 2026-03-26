@@ -1,16 +1,19 @@
 open Kernel
 open Kernel.Sync
-open Kernel.Sync.Cell
 
 type t = int
 
-let counter = Cell.create (-1)
+let counter = Atomic.make (-1)
 
 let main = 0
 
 let next () =
-  incr counter;
-  !counter
+  let rec next_id () =
+    let current = Atomic.get counter in
+    let next = current + 1 in
+    if Atomic.compare_and_set counter current next then next else next_id ()
+  in
+  next_id ()
 
 let equal = Int.equal
 let compare = Int.compare

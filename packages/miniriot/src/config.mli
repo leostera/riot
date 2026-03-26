@@ -6,13 +6,21 @@ type timer_resolution =
   | Microsecond  (** Timer resolution in microseconds - high precision *)
   | Nanosecond  (** Timer resolution in nanoseconds - highest precision *)
 
-type t = { timer_resolution : timer_resolution }
+type t = { timer_resolution : timer_resolution; scheduler_count : int }
 (** Runtime configuration *)
 
 val default : t
-(** Default configuration with millisecond timer resolution *)
+val default_scheduler_count : int
+(** Default number of worker schedulers.
 
-val make : ?timer_resolution:timer_resolution -> unit -> t
+    The default is `max 1 (System.available_parallelism - 1)`, reserving one
+    core for non-worker runtime work in a future reactor split. *)
+
+val worker_count : t -> int
+(** Get the number of runnable workers configured for this runtime. *)
+
+val make :
+  ?timer_resolution:timer_resolution -> ?scheduler_count:int -> unit -> t
 (** Create a configuration with custom settings *)
 
 val resolution_to_nanos : timer_resolution -> int64

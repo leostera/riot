@@ -1,4 +1,9 @@
-(** Process scheduler for Miniriot *)
+(** Process scheduler for Miniriot.
+
+    A scheduler owns a process registry plus one local runnable queue per worker.
+    `Config.scheduler_count` determines how many runnable worker queues are
+    created for one runtime invocation.
+*)
 open Kernel
 
 type t
@@ -8,7 +13,11 @@ val get_scheduler : unit -> t
 (** Get the current scheduler (must be called within a running scheduler) *)
 
 val spawn : t -> (unit -> (unit, Process.exit_reason) result) -> Pid.t
-(** Spawn a new process with the given function *)
+(** Spawn a new process with the given function.
+
+    The parent process no longer directly implies same-worker placement.
+    Newly spawned processes are assigned to a worker chosen by the scheduler and
+    enqueued directly onto that worker's runnable queue. *)
 
 val self : unit -> Pid.t
 (** Get the PID of the currently running process *)

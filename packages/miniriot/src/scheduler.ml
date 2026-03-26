@@ -12,10 +12,23 @@ type Message.t +=
       reason : (unit, Process.exit_reason) result;
     }
 
+type worker = {
+  id : int;
+  queue : Process.t Queue.t;
+}
+
+let create_worker id = { id; queue = Queue.create () }
+
+let default_worker_count config =
+  let requested = Config.worker_count config in
+  if requested < 1 then 1 else requested
+
 type t = {
   mutable stop : bool;
   mutable status : int;
-  run_queue : Process.t Queue.t;
+  workers : worker array;
+  mutable next_worker : int;
+  process_workers : (Pid.t, int) HashMap.t;
   processes : (Pid.t, Process.t) HashMap.t;
   mutable current_process : Process.t option;
   io_poll : Async.Poll.t;
@@ -28,10 +41,14 @@ let create ~config =
   match Async.Poll.make () with
   | Ok io_poll ->
       let timer_wheel = Timer_wheel.create ~config in
+      let worker_count = default_worker_count config in
+      let workers = Array.init worker_count create_worker in
       {
         stop = false;
         status = 0;
-        run_queue = Queue.create ();
+        workers;
+        next_worker = 0;
+        process_workers = HashMap.with_capacity 128;
         processes = HashMap.with_capacity 128;
         current_process = None;
         io_poll;
@@ -52,13 +69,39 @@ let get_scheduler () =
   | None -> panic "No scheduler running"
   | Some s -> s
 
-let add_to_run_queue t proc = Queue.push t.run_queue proc
+let worker_count t = Array.length t.workers
+
+let is_valid_worker t idx = idx >= 0 && idx < worker_count t
+
+let pick_spawn_worker t =
+  if worker_count t = 1 then 0 else Random.int (worker_count t)
+
+let worker_for_pid t pid =
+  match HashMap.get t.process_workers pid with
+  | Some worker_id -> worker_id
+  | None -> 0
+
+let add_to_run_queue ?worker_id t proc =
+  let owner =
+    let pid = Process.pid proc in
+    match worker_id with
+    | Some candidate when is_valid_worker t candidate -> candidate
+    | _ -> worker_for_pid t pid
+  in
+  let queue = t.workers.(owner).queue in
+  Queue.push queue proc
+
+let assign_worker t proc =
+  let worker_id = pick_spawn_worker t in
+  HashMap.insert t.process_workers (Process.pid proc) worker_id;
+  worker_id
 
 let spawn t fn =
   let proc = Process.make fn in
   let pid = Process.pid proc in
   HashMap.insert t.processes pid proc;
-  add_to_run_queue t proc;
+  let worker_id = assign_worker t proc in
+  add_to_run_queue ~worker_id t proc;
   pid
 
 let self () =
@@ -237,6 +280,7 @@ let perform t proc =
 
 let handle_exit_proc t proc reason =
   let exit_reason = reason in
+  let pid = Process.pid proc in
 
   (* 1. Send DOWN messages to all monitors *)
   List.iter
@@ -290,11 +334,13 @@ let handle_exit_proc t proc reason =
             eprintln ("[Scheduler] WARN: Failed to deregister I/O: "^
               (IO.error_message err)));
 
-    HashMap.remove t.processes (Process.pid proc);
+    HashMap.remove t.processes pid;
+    HashMap.remove t.process_workers pid;
     Process.mark_as_finalized proc)
   else (
     (* Non-main process: just finalize *)
-    HashMap.remove t.processes (Process.pid proc);
+    HashMap.remove t.processes pid;
+    HashMap.remove t.process_workers pid;
     Process.mark_as_finalized proc)
 
 let handle_wait_proc t proc =
@@ -425,11 +471,29 @@ let process_timers t =
                 ()))
       expired
 
+let has_runnable_processes t =
+  Array.exists (fun worker -> not (Queue.is_empty worker.queue)) t.workers
+
+let run_next_runnable t =
+  let total_workers = worker_count t in
+  let rec scan offset =
+    if offset = total_workers then
+      None
+    else
+      let worker_idx = (t.next_worker + offset) mod total_workers in
+      match Queue.pop t.workers.(worker_idx).queue with
+      | None -> scan (offset + 1)
+      | Some proc ->
+          t.next_worker <- (worker_idx + 1) mod total_workers;
+          Some proc
+  in
+  scan 0
+
 let run_loop t =
-  while (not (Queue.is_empty t.run_queue)) && not t.stop do
-    match Queue.pop t.run_queue with
-  | Some proc -> step_process t proc
-  | None -> ()
+  while (not t.stop) && has_runnable_processes t do
+    match run_next_runnable t with
+    | None -> ()
+    | Some proc -> step_process t proc
   done;
 
   (* Process expired timers only if there are any *)
@@ -444,10 +508,11 @@ let shutdown t ~status =
   (* Mark scheduler to stop *)
   t.stop <- true;
   t.status <- status;
-  (* Clear the run queue *)
-  Queue.clear t.run_queue;
+  (* Clear all run queues *)
+  Array.iter (fun worker -> Queue.clear worker.queue) t.workers;
   (* Clear all processes *)
-  HashMap.clear t.processes
+  HashMap.clear t.processes;
+  HashMap.clear t.process_workers
 
 let add_timer t ~now ~duration_nanos ~mode ~action =
   Timer_wheel.add_timer t.timer_wheel ~now ~duration_nanos ~mode ~action
@@ -471,9 +536,9 @@ let run ~config ~main =
   while not t.stop do
     run_loop t;
     (* If no processes are running and none are waiting for I/O, we're done *)
-    if Queue.is_empty t.run_queue && HashMap.len t.processes = 0 then
+    if (not (has_runnable_processes t)) && HashMap.len t.processes = 0 then
       t.stop <- true
-    else if Queue.is_empty t.run_queue then
+    else if (not (has_runnable_processes t)) then
       (* Still have processes, they might be waiting for I/O or timers *)
       let has_waiting_io =
         HashMap.fold

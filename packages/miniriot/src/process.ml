@@ -1,6 +1,5 @@
 open Kernel
 open Kernel.Sync
-open Kernel.Sync.Cell
 open Kernel.Collections
 
 type exit_reason = exn
@@ -8,6 +7,8 @@ type exit_reason = exn
 type monitor_ref = Monitor_ref of int
 
 type flag = TrapExit of bool
+
+type 'a atomic_ref = 'a Sync.Atomic.t
 
 module Messages = struct
   type Message.t +=
@@ -34,8 +35,7 @@ type state =
 
 type t = {
   pid : Pid.t;
-  (* TODO: `state` should be made Sync.Atomic.t before we can go multicore *)
-  mutable state : state;
+  state : state atomic_ref;
   mutable cont : (unit, exit_reason) result Proc_state.t option;
   mutable fn : (unit -> (unit, exit_reason) result) option;
   mailbox : Mailbox.t;
@@ -48,15 +48,20 @@ type t = {
   mutable links : Pid.t list;
   mutable monitors : (monitor_ref * Pid.t) list;
   mutable monitored_by : (Pid.t * monitor_ref) list;
-  mutable trap_exit : bool;
+  trap_exit : bool atomic_ref;
 }
 
-let monitor_ref_counter = Cell.create 0
+let monitor_ref_counter = Sync.Atomic.make 0
 
 let make_monitor_ref () =
-  let id = !monitor_ref_counter in
-  monitor_ref_counter := id + 1;
-  Monitor_ref id
+  let rec next_id () =
+    let current = Sync.Atomic.get monitor_ref_counter in
+    let next = current + 1 in
+    if Sync.Atomic.compare_and_set monitor_ref_counter current next then
+      Monitor_ref current
+    else next_id ()
+  in
+  next_id ()
 
 let make fn =
   let pid = Pid.next () in
@@ -64,7 +69,7 @@ let make fn =
     pid;
     cont = None;
     fn = Some fn;
-    state = Uninitialized;
+    state = Sync.Atomic.make Uninitialized;
     mailbox = Mailbox.create ();
     save_queue = Mailbox.create ();
     read_save_queue = false;
@@ -74,23 +79,24 @@ let make fn =
     links = [];
     monitors = [];
     monitored_by = [];
-    trap_exit = false;
+    trap_exit = Sync.Atomic.make false;
   }
 
 let init t =
   let fn = Option.unwrap t.fn in
   t.cont <- Some (Proc_state.make fn Proc_effect.Yield);
   t.fn <- None;
-  t.state <- Runnable
+  Sync.Atomic.set t.state Runnable
 
 let pid t = t.pid
-let state t = t.state
-let is_alive t = match t.state with Finalized | Exited _ -> false | _ -> true
-let is_exited t = match t.state with Finalized | Exited _ -> true | _ -> false
-let is_waiting t = match t.state with Waiting_message -> true | _ -> false
-let is_waiting_io t = match t.state with Waiting_io _ -> true | _ -> false
-let is_runnable t = t.state = Runnable
-let is_running t = t.state = Running
+
+let state t = Sync.Atomic.get t.state
+let is_alive t = match state t with Finalized | Exited _ -> false | _ -> true
+let is_exited t = match state t with Finalized | Exited _ -> true | _ -> false
+let is_waiting t = match state t with Waiting_message -> true | _ -> false
+let is_waiting_io t = match state t with Waiting_io _ -> true | _ -> false
+let is_runnable t = state t = Runnable
+let is_running t = state t = Running
 let is_main t = Pid.equal t.pid Pid.main
 
 let has_empty_mailbox t =
@@ -98,11 +104,11 @@ let has_empty_mailbox t =
 
 let has_messages t = not (has_empty_mailbox t)
 let message_count t = Mailbox.size t.mailbox + Mailbox.size t.save_queue
-let mark_as_running t = t.state <- Running
-let mark_as_runnable t = if is_alive t then t.state <- Runnable
-let mark_as_awaiting_message t = if is_alive t then t.state <- Waiting_message
-let mark_as_exited t reason = if not (is_exited t) then t.state <- Exited reason
-let mark_as_finalized t = t.state <- Finalized
+let mark_as_running t = if is_alive t then Sync.Atomic.set t.state Running
+let mark_as_runnable t = if is_alive t then Sync.Atomic.set t.state Runnable
+let mark_as_awaiting_message t = if is_alive t then Sync.Atomic.set t.state Waiting_message
+let mark_as_exited t reason = if not (is_exited t) then Sync.Atomic.set t.state (Exited reason)
+let mark_as_finalized t = Sync.Atomic.set t.state Finalized
 let cont t = Option.unwrap t.cont
 let set_cont t c = t.cont <- Some c
 
@@ -126,7 +132,7 @@ let send_message t msg =
 
 (* I/O operations *)
 let mark_as_awaiting_io t ~name token source =
-  if is_alive t then t.state <- Waiting_io { name; token; source }
+  if is_alive t then Sync.Atomic.set t.state (Waiting_io { name; token; source })
 
 let add_ready_token t token source =
   t.ready_tokens <- (token, source) :: t.ready_tokens
@@ -175,10 +181,12 @@ let demonitor proc ref =
 
 let set_flags proc flags =
   List.iter
-    (fun flag -> match flag with TrapExit value -> proc.trap_exit <- value)
+    (fun flag ->
+      match flag with
+      | TrapExit value -> Sync.Atomic.set proc.trap_exit value)
     flags
 
-let get_trap_exit proc = proc.trap_exit
+let get_trap_exit proc = Sync.Atomic.get proc.trap_exit
 let get_links proc = proc.links
 let get_monitors proc = proc.monitors
 let get_monitored_by proc = proc.monitored_by
