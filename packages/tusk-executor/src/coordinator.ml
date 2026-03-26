@@ -89,4 +89,14 @@ let build_workspace ~workspace ~toolchain ~store ~target ~scope ~concurrency
           let total_duration =
             Time.Instant.duration_since ~earlier:start (Time.Instant.now ())
           in
+          Telemetry.emit
+            (WorkspaceCompleted
+               {
+                 session_id;
+                 target;
+                 total_duration;
+                 cached_count = result.cached_count;
+                 built_count = result.built_count;
+                 failed_count = result.failed_count;
+               });
           Ok { result with total_duration })
