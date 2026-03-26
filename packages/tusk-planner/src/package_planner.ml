@@ -508,7 +508,16 @@ let plan_package ~workspace ~toolchain ~store ~package_graph ~package_key
 
       (match Tusk_store.Store.load_plan_bundle store ~hash:input_hash with
       | Some json -> (
-          match plan_bundle_of_json ~package json with
+          let parsed_bundle =
+            try plan_bundle_of_json ~package json
+            with exn ->
+              Log.warn
+                ("Package " ^ package.name
+               ^ ": plan bundle decode raised exception, rebuilding plan graph ("
+               ^ Exception.to_string exn ^ ")");
+              Error "plan bundle decode exception"
+          in
+          match parsed_bundle with
           | Ok (module_graph, action_graph) ->
               Log.info ("Package " ^ package.name ^ ": plan bundle cache hit");
               Ok

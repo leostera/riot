@@ -168,6 +168,20 @@ let finalize_package_success ~session_id ~store ~runtime =
   |> Result.expect
        ~msg:
          ("Failed to materialize package exports for " ^ runtime.package.name);
+  let compatibility_outs =
+    List.map
+      (fun (entry : Tusk_store.Store.export_entry) ->
+        Path.(runtime.target_dir / Path.v entry.name))
+      runtime.export_entries
+  in
+  let _ =
+    Tusk_store.Store.save store ~package:runtime.package.name ~hash:runtime.hash
+      ~sandbox_dir:runtime.target_dir ~outs:compatibility_outs
+    |> Result.expect
+         ~msg:
+           ("Failed to save compatibility package artifact for "
+          ^ runtime.package.name)
+  in
   let artifact = artifact_from_exports ~package_hash:runtime.hash runtime.export_entries in
   let all_cached =
     HashMap.into_iter runtime.completed_actions
