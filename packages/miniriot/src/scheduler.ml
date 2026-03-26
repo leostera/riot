@@ -2,86 +2,19 @@ open Kernel
 open Kernel.Collections
 open Kernel.Sync
 open Kernel.Sync.Cell
+open Scheduler_types
 
-type process_slot = {
-  process : Process.t;
-  (* Runtime-owned scheduling metadata.
-     Process continuations/mailboxes live on [Process.t], while ownership and
-     queue membership live here so workers can transfer slots without mutating
-     process internals. *)
-  owner_worker : Scheduler_id.t Atomic.t;
-  queued : bool Atomic.t;
-}
+type process_slot = Scheduler_types.process_slot
+type worker = Scheduler_types.worker
+type 'a response = 'a Scheduler_types.response
+type reactor_command = Scheduler_types.reactor_command
+type process_shard = Scheduler_types.process_shard
+type process_registry = Scheduler_types.process_registry
+type runtime_counters = Scheduler_types.runtime_counters
+type t = Scheduler_types.t
+type domain_context = Scheduler_types.domain_context
 
-type worker = {
-  id : Scheduler_id.t;
-  queue : process_slot Queue.t;
-  lock : Mutex.t;
-  cond : Condition.t;
-}
-
-type 'a response = {
-  lock : Mutex.t;
-  cond : Condition.t;
-  mutable value : 'a option;
-}
-
-type reactor_command =
-  | Add_timer of {
-      now : int64;
-      duration_nanos : int64;
-      mode : Timer.mode;
-      action : Timer.action;
-      reply : Timer.id response;
-    }
-  | Cancel_timer of Timer.id
-  | Register_io of {
-      token : Async.Token.t;
-      interest : Async.Interest.t;
-      source : Async.Source.t;
-      reply : (unit, IO.error) result response;
-    }
-  | Deregister_io of Async.Source.t
-
-type process_shard = {
-  lock : Mutex.t;
-  processes : (Pid.t, process_slot) HashMap.t;
-}
-
-type process_registry = {
-  shards : process_shard array;
-  size : int Atomic.t;
-}
-
-type runtime_counters = {
-  steals : int Atomic.t;
-  failed_steals : int Atomic.t;
-  remote_wakeups : int Atomic.t;
-  duplicate_enqueue_races : int Atomic.t;
-}
-
-type t = {
-  stop : bool Atomic.t;
-  status : int Atomic.t;
-  workers : worker array;
-  processes : process_registry;
-  counters : runtime_counters;
-  relations_lock : Mutex.t;
-  reactor_commands : reactor_command Queue.t;
-  reactor_lock : Mutex.t;
-  io_poll : Async.Poll.t;
-  timer_wheel : Timer_wheel.t;
-  config : Config.t;
-}
-
-type domain_context = {
-  scheduler : t;
-  worker_id : Scheduler_id.t option;
-  mutable current_process : Process.t option;
-}
-
-let current_context : domain_context option Domain.DLS.key =
-  Domain.DLS.new_key (fun () -> None)
+let current_context = Scheduler_types.current_context
 
 let has_run = Cell.create false
 let trace_enabled = Atomic.make false
@@ -102,6 +35,13 @@ let trace msg =
 
 let enable_trace () = Atomic.set trace_enabled true
 let disable_trace () = Atomic.set trace_enabled false
+
+let ensure_can_run_once () =
+  if !has_run then
+    panic
+      "Miniriot.run can only be called once per process. Each test should be \
+       in a separate executable.";
+  has_run := true
 
 let make_response () =
   {
@@ -877,107 +817,30 @@ let poll_io t =
           | _ -> ()))
     events
 
-(* Internal runtime split used by RFD0010:
-   - [Runtime] owns runtime-wide state and cross-worker operations
-   - [Reactor] owns timer/I/O command processing and polling loop
-   - [Worker] owns process execution and steal/park loop
-*)
-module Runtime = struct
-  include
-    Scheduler_runtime.Make (struct
-      type runtime = t
-      type slot = process_slot
-
-      let create = create
-      let request_shutdown = request_shutdown
-      let shutdown = shutdown
-      let worker_count = worker_count
-      let with_relations_lock = with_relations_lock
-      let get_process = get_process
-      let get_process_slot = get_process_slot
-      let get_current_process = get_current_process
-      let spawn_on_worker = spawn_on_worker
-      let spawn = spawn
-      let send_internal = send_internal
-      let enqueue_on_worker = enqueue_on_worker
-      let enqueue_owned_process = enqueue_owned_process
-      let wake_process = wake_process
-      let wake_process_from_message = wake_process_from_message
-    end)
-end
-
 module Reactor = struct
-  include
-    Scheduler_reactor.Make (struct
-      type runtime = t
-      type command = reactor_command
-      type context = domain_context
-
-      let add_timer = add_timer
-      let cancel_timer = cancel_timer
-      let register_io = register_io
-      let deregister_io = deregister_io
-      let make_context scheduler =
-        {
-          scheduler;
-          worker_id = None;
-          current_process = None;
-        }
-
-      let set_context ctx = Domain.DLS.set current_context ctx
-      let should_stop scheduler = Atomic.get scheduler.stop
-      let has_pending_commands = has_pending_reactor_commands
-      let drain_commands = drain_reactor_commands
-      let handle_command = handle_reactor_command
-      let process_timers = process_timers
-      let poll_io = poll_io
-    end)
+  let loop scheduler =
+    Scheduler_reactor.loop
+      ~has_pending_commands:has_pending_reactor_commands
+      ~drain_commands:drain_reactor_commands
+      ~handle_command:handle_reactor_command
+      ~process_timers ~poll_io scheduler
 end
 
 module Worker = struct
-  include
-    Scheduler_worker.Make (struct
-      type runtime = t
-      type state = worker
-      type slot = process_slot
-      type context = domain_context
-
-      let make_context scheduler worker =
-        {
-          scheduler;
-          worker_id = Some worker.id;
-          current_process = None;
-        }
-
-      let set_context ctx = Domain.DLS.set current_context ctx
-      let clear_current_process ctx = ctx.current_process <- None
-      let should_stop scheduler = Atomic.get scheduler.stop
-      let pop_local = pop_local
-      let step_process = step_process
-      let attempt_steal = attempt_steal
-      let wait_for_local_work = wait_for_local_work
-    end)
+  let loop scheduler worker =
+    Scheduler_worker.loop
+      ~pop_local ~step_process ~attempt_steal ~wait_for_local_work
+      scheduler worker
 end
 
+let runtime_deps : Scheduler_runtime.deps =
+  {
+    ensure_can_run_once;
+    create;
+    spawn_on_worker;
+    worker_loop = Worker.loop;
+    reactor_loop = Reactor.loop;
+  }
+
 let run ~config ~main =
-  if !has_run then
-    panic
-      "Miniriot.run can only be called once per process. Each test should be \
-       in a separate executable.";
-  has_run := true;
-
-  let t = Runtime.create ~config in
-  ignore (Runtime.spawn_on_worker t ~worker_id:Scheduler_id.zero main);
-
-  let reactor_domain = Domain.spawn (fun () -> Reactor.loop t) in
-  let worker_domains =
-    Array.init (Runtime.worker_count t - 1) (fun idx ->
-        let worker = t.workers.(idx + 1) in
-        Domain.spawn (fun () -> Worker.loop t worker))
-  in
-
-  Worker.loop t t.workers.(0);
-
-  Array.iter Domain.join worker_domains;
-  Domain.join reactor_domain;
-  Atomic.get t.status
+  Scheduler_runtime.run runtime_deps ~config ~main

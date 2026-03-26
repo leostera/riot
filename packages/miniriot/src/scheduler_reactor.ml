@@ -1,51 +1,20 @@
 open Kernel
 open Kernel.Collections
+open Kernel.Sync
+open Scheduler_types
 
-(** Reactor boundary module for scheduler internals. *)
-module Make (Deps : sig
-  type runtime
-  type command
-  type context
-
-  val add_timer :
-    runtime ->
-    now:int64 ->
-    duration_nanos:int64 ->
-    mode:Timer.mode ->
-    action:Timer.action ->
-    Timer.id
-  val cancel_timer : runtime -> Timer.id -> unit
-  val register_io :
-    runtime ->
-    token:Async.Token.t ->
-    interest:Async.Interest.t ->
-    source:Async.Source.t ->
-    (unit, IO.error) result
-  val deregister_io : runtime -> Async.Source.t -> unit
-  val make_context : runtime -> context
-  val set_context : context option -> unit
-  val should_stop : runtime -> bool
-  val has_pending_commands : runtime -> bool
-  val drain_commands : runtime -> command list
-  val handle_command : runtime -> command -> unit
-  val process_timers : runtime -> unit
-  val poll_io : runtime -> unit
-end) =
-struct
-  type runtime = Deps.runtime
-  type command = Deps.command
-
-  let add_timer = Deps.add_timer
-  let cancel_timer = Deps.cancel_timer
-  let register_io = Deps.register_io
-  let deregister_io = Deps.deregister_io
-
-  let loop t =
-    let ctx = Deps.make_context t in
-    Deps.set_context (Some ctx);
-    while (not (Deps.should_stop t)) || Deps.has_pending_commands t do
-      List.iter (Deps.handle_command t) (Deps.drain_commands t);
-      Deps.process_timers t;
-      if not (Deps.should_stop t) then Deps.poll_io t
-    done
-end
+let loop
+    ~(has_pending_commands : t -> bool)
+    ~(drain_commands : t -> reactor_command list)
+    ~(handle_command : t -> reactor_command -> unit)
+    ~(process_timers : t -> unit)
+    ~(poll_io : t -> unit)
+    (runtime : t)
+    =
+  Domain.DLS.set current_context
+    (Some { scheduler = runtime; worker_id = None; current_process = None });
+  while (not (Atomic.get runtime.stop)) || has_pending_commands runtime do
+    List.iter (handle_command runtime) (drain_commands runtime);
+    process_timers runtime;
+    if not (Atomic.get runtime.stop) then poll_io runtime
+  done

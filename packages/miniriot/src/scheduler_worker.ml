@@ -1,39 +1,31 @@
 open Kernel
+open Kernel.Sync
+open Scheduler_types
 
-(** Worker boundary module for scheduler internals. *)
-module Make (Deps : sig
-  type runtime
-  type state
-  type slot
-  type context
-
-  val make_context : runtime -> state -> context
-  val set_context : context option -> unit
-  val clear_current_process : context -> unit
-  val should_stop : runtime -> bool
-  val pop_local : state -> slot option
-  val step_process : runtime -> context -> slot -> unit
-  val attempt_steal : runtime -> state -> bool
-  val wait_for_local_work : runtime -> state -> slot option
-end) =
-struct
-  type runtime = Deps.runtime
-  type state = Deps.state
-
-  let loop t worker =
-    let ctx = Deps.make_context t worker in
-    Deps.set_context (Some ctx);
-    while not (Deps.should_stop t) do
-      match Deps.pop_local worker with
-      | Some slot ->
-          Deps.step_process t ctx slot
-      | None ->
-          if not (Deps.attempt_steal t worker) then
-            match Deps.wait_for_local_work t worker with
-            | None -> ()
-            | Some slot -> Deps.step_process t ctx slot
-    done;
-    Deps.clear_current_process ctx
-
-  let attempt_steal = Deps.attempt_steal
-end
+let loop
+    ~(pop_local : worker -> process_slot option)
+    ~(step_process : t -> domain_context -> process_slot -> unit)
+    ~(attempt_steal : t -> worker -> bool)
+    ~(wait_for_local_work : t -> worker -> process_slot option)
+    (runtime : t)
+    (worker : worker)
+    =
+  let ctx =
+    {
+      scheduler = runtime;
+      worker_id = Some worker.id;
+      current_process = None;
+    }
+  in
+  Domain.DLS.set current_context (Some ctx);
+  while not (Atomic.get runtime.stop) do
+    match pop_local worker with
+    | Some slot ->
+        step_process runtime ctx slot
+    | None ->
+        if not (attempt_steal runtime worker) then
+          match wait_for_local_work runtime worker with
+          | None -> ()
+          | Some slot -> step_process runtime ctx slot
+  done;
+  ctx.current_process <- None
