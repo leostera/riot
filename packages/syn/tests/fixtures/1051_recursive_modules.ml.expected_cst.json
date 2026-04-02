@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 118
+        "end": 115
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_MUTUAL_DECL",
             "span": {
               "start": 0,
-              "end": 118
+              "end": 115
             }
           },
           "keyword_token": {
@@ -50,15 +50,15 @@
             "syntax_node": {
               "kind": "SIG_EXPR",
               "span": {
-                "start": 14,
-                "end": 36
+                "start": 13,
+                "end": 34
               }
             },
             "signature_syntax_node": {
               "kind": "SIG_EXPR",
               "span": {
-                "start": 14,
-                "end": 36
+                "start": 13,
+                "end": 34
               }
             }
           },
@@ -68,7 +68,7 @@
               "kind": "MODULE_DECL",
               "span": {
                 "start": 0,
-                "end": 63
+                "end": 61
               }
             },
             "module_expression": {
@@ -76,16 +76,16 @@
               "syntax_node": {
                 "kind": "STRUCT_EXPR",
                 "span": {
-                  "start": 38,
-                  "end": 63
+                  "start": 36,
+                  "end": 61
                 }
               },
               "item_syntax_nodes": [
                 {
                   "kind": "LET_BINDING",
                   "span": {
-                    "start": 45,
-                    "end": 59
+                    "start": 43,
+                    "end": 57
                   }
                 }
               ]
@@ -95,15 +95,15 @@
               "syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 14,
-                  "end": 36
+                  "start": 13,
+                  "end": 34
                 }
               },
               "signature_syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 14,
-                  "end": 36
+                  "start": 13,
+                  "end": 34
                 }
               }
             }
@@ -112,16 +112,16 @@
             "syntax_node": {
               "kind": "MODULE_DECL",
               "span": {
-                "start": 67,
-                "end": 118
+                "start": 66,
+                "end": 115
               }
             },
             "keyword_token": {
               "kind": "IDENT_EXPR",
               "text": "and",
               "span": {
-                "start": 64,
-                "end": 67
+                "start": 63,
+                "end": 66
               }
             },
             "rec_token": null,
@@ -129,8 +129,8 @@
               "kind": "IDENT_EXPR",
               "text": "B",
               "span": {
-                "start": 68,
-                "end": 69
+                "start": 67,
+                "end": 68
               }
             },
             "functor_parameters": [],
@@ -139,15 +139,15 @@
               "syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 71,
-                  "end": 93
+                  "start": 69,
+                  "end": 90
                 }
               },
               "signature_syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 71,
-                  "end": 93
+                  "start": 69,
+                  "end": 90
                 }
               }
             },
@@ -156,8 +156,8 @@
               "syntax_node": {
                 "kind": "MODULE_DECL",
                 "span": {
-                  "start": 67,
-                  "end": 118
+                  "start": 66,
+                  "end": 115
                 }
               },
               "module_expression": {
@@ -165,16 +165,16 @@
                 "syntax_node": {
                   "kind": "STRUCT_EXPR",
                   "span": {
-                    "start": 95,
-                    "end": 118
+                    "start": 92,
+                    "end": 115
                   }
                 },
                 "item_syntax_nodes": [
                   {
                     "kind": "LET_BINDING",
                     "span": {
-                      "start": 102,
-                      "end": 114
+                      "start": 99,
+                      "end": 111
                     }
                   }
                 ]
@@ -184,15 +184,15 @@
                 "syntax_node": {
                   "kind": "SIG_EXPR",
                   "span": {
-                    "start": 71,
-                    "end": 93
+                    "start": 69,
+                    "end": 90
                   }
                 },
                 "signature_syntax_node": {
                   "kind": "SIG_EXPR",
                   "span": {
-                    "start": 71,
-                    "end": 93
+                    "start": 69,
+                    "end": 90
                   }
                 }
               }

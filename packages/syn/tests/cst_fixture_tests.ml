@@ -450,6 +450,16 @@ let approved_fixtures = [
   "1014_module_sig_type_val.ml";
   "1016_module_sig_module.ml";
   "1018_module_sig_multiple.ml";
+  "1022_module_with_inline_sig.ml";
+  "1023_module_transparent_ascription.ml";
+  "1024_module_opaque_ascription.ml";
+  "1025_module_constraint.ml";
+  "1028_module_functor_result_sig.ml";
+  "1033_module_functor_type.ml";
+  "1035_module_functor_complex.ml";
+  "1040_include_sig.ml";
+  "1044_local_open_array.ml";
+  "1051_recursive_modules.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"

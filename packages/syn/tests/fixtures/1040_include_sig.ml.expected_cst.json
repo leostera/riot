@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 92
+        "end": 90
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "MODULE_DECL",
             "span": {
               "start": 0,
-              "end": 92
+              "end": 90
             }
           },
           "keyword_token": {
@@ -43,15 +43,15 @@
             "syntax_node": {
               "kind": "SIG_EXPR",
               "span": {
-                "start": 10,
-                "end": 49
+                "start": 9,
+                "end": 47
               }
             },
             "signature_syntax_node": {
               "kind": "SIG_EXPR",
               "span": {
-                "start": 10,
-                "end": 49
+                "start": 9,
+                "end": 47
               }
             }
           },
@@ -61,7 +61,7 @@
               "kind": "MODULE_DECL",
               "span": {
                 "start": 0,
-                "end": 92
+                "end": 90
               }
             },
             "module_expression": {
@@ -69,23 +69,23 @@
               "syntax_node": {
                 "kind": "STRUCT_EXPR",
                 "span": {
-                  "start": 51,
-                  "end": 92
+                  "start": 49,
+                  "end": 90
                 }
               },
               "item_syntax_nodes": [
                 {
                   "kind": "INCLUDE_STMT",
                   "span": {
-                    "start": 58,
-                    "end": 70
+                    "start": 56,
+                    "end": 68
                   }
                 },
                 {
                   "kind": "LET_BINDING",
                   "span": {
-                    "start": 70,
-                    "end": 88
+                    "start": 68,
+                    "end": 86
                   }
                 }
               ]
@@ -95,15 +95,15 @@
               "syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 10,
-                  "end": 49
+                  "start": 9,
+                  "end": 47
                 }
               },
               "signature_syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
-                  "start": 10,
-                  "end": 49
+                  "start": 9,
+                  "end": 47
                 }
               }
             }
