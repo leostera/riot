@@ -6,9 +6,9 @@ open Riot_store
 module G = Graph.SimpleGraph
 
 type action_error = Action_queue.action_error =
-  | ExecutionFailed of { message: string }
-  | OutputsNotCreated of { missing: Path.t list }
-  | DependenciesFailed of { failed: G.Node_id.t list }
+  | ExecutionFailed of { message : string }
+  | OutputsNotCreated of { missing : Path.t list }
+  | DependenciesFailed of { failed : G.Node_id.t list }
 
 type action_status = Action_queue.action_status =
   | Cached of Crypto.hash
@@ -17,20 +17,20 @@ type action_status = Action_queue.action_status =
   | Skipped
 
 type execution_result = Action_queue.execution_result = {
-  node_id: G.Node_id.t;
-  status: action_status;
-  ocamlc_warnings: string list;
-  duration: Duration.t;
-  started_at: Instant.t;
-  completed_at: Instant.t;
+  node_id : G.Node_id.t;
+  status : action_status;
+  ocamlc_warnings : string list;
+  duration : Duration.t;
+  started_at : Instant.t;
+  completed_at : Instant.t;
 }
 
 type t = {
-  completed: (G.Node_id.t, execution_result) HashMap.t;
+  completed : (G.Node_id.t, execution_result) HashMap.t;
 }
 
 type Message.t +=
-  | ActionCompleted of { worker_pid: Pid.t; result: execution_result }
+  | ActionCompleted of { worker_pid : Pid.t; result : execution_result }
   | AssignAction of Action_node.t
 
 let make_flags_absolute = fun sandbox_dir flags ->
@@ -268,6 +268,37 @@ let run_action = fun ~session_id ~package ~node ocamlc sandbox_dir action ->
           let msg = IO.error_message err in
           Log.error ("WriteFile: failed - " ^ msg);
           ocamlc_failed ("Write failed: " ^ Path.to_string destination ^ " - " ^ msg)
+    )
+  | Action.RunMacroExpansion {
+    source;
+    destination;
+    workspace_root;
+    target_dir_root;
+    providers;
+    _
+  } -> (
+      let input_path =
+        if Path.is_absolute source then
+          source
+        else
+          Path.join sandbox_dir source
+      in
+      let output_path =
+        if Path.is_absolute destination then
+          destination
+        else
+          Path.join sandbox_dir destination
+      in
+      match
+        Macro.Runner.run_file
+          ~workspace_root
+          ~target_dir_root
+          providers
+          ~input_path
+          ~output_path
+      with
+      | Ok () -> ocamlc_success "Expanded macros"
+      | Error message -> ocamlc_failed message
     )
   | Action.BuildForeignDependency {
     name;

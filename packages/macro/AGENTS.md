@@ -14,6 +14,7 @@
 8. Reparse expanded source before returning it; invalid rewritten OCaml is a macro error, not a later planner/compiler surprise.
 9. Keep the public provider contract token-stream based. Macros may parse OCaml via `syn`, but the core ABI is provider-driven expansion plus diagnostics, not hardcoded AST-only rewrites.
 10. Keep built-in macro providers as bootstrap compatibility only. Package-scoped provider discovery and resolution belong outside ad hoc name matching.
+11. Generated macro runners must build from a self-contained workspace closure. Do not assume external path dependencies or ambient `cwd` are enough for nested `riot build` invocations.
 
 ## Validate
 
