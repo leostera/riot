@@ -94,6 +94,20 @@ module Format: sig
   val provider: unit -> Provider.t
 end
 
+module Format_parser: sig
+  type hole =
+    | Next_arg_to_string
+    | Var_to_string of string
+
+  type item =
+    | String of string
+    | Hole of hole
+
+  type t = item list
+
+  val parse_literal: literal_text:string -> span:Syn.Ceibo.Span.t -> (t, Error.t) result
+end
+
 module Validator: sig
   val validate_source: filename:Path.t -> string -> (unit, Error.t) result
 end

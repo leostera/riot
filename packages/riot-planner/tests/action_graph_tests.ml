@@ -403,8 +403,12 @@ let test_macro_modules_write_expanded_source_before_compile = fun () ->
                   Error "expected macro-expanded compile action to preserve the original module path"
                 else if node.value.srcs != [ Path.v "src/demo.ml" ] then
                   Error "expected action hashing to keep the original source path"
-                else if not (String.contains content "Stdlib.Printf.sprintf \"hello %s\" (name)") then
-                  Error "expected expanded module source to lower format! into Stdlib.Printf.sprintf"
+                else if not (String.contains content "Stdlib.Buffer.add_string") then
+                  Error "expected expanded module source to append through Stdlib.Buffer.add_string"
+                else if not (String.contains content "\"hello \"") then
+                  Error "expected expanded module source to preserve literal builder segments"
+                else if not (String.contains content "(name)") then
+                  Error "expected expanded module source to append the supplied argument"
                 else
                   Ok ()
             | _ ->
@@ -470,8 +474,12 @@ let test_macro_binaries_write_expanded_source_before_compile = fun () ->
                   Error "expected the binary node to keep its executable output"
                 else if node.value.srcs != [ Path.v "bin/main.ml" ] then
                   Error "expected binary action hashing to keep the original source path"
-                else if not (String.contains content "Stdlib.Printf.sprintf \"hello %s\" (name)") then
-                  Error "expected expanded binary source to lower format! into Stdlib.Printf.sprintf"
+                else if not (String.contains content "Stdlib.Buffer.add_string") then
+                  Error "expected expanded binary source to append through Stdlib.Buffer.add_string"
+                else if not (String.contains content "\"hello \"") then
+                  Error "expected expanded binary source to preserve literal builder segments"
+                else if not (String.contains content "(name)") then
+                  Error "expected expanded binary source to append the supplied argument"
                 else
                   Ok ()
             | _ ->

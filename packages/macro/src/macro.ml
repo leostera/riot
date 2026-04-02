@@ -8,6 +8,7 @@ module Parser = Macro_parser
 module Parse = Macro_parse
 module Provider = Macro_provider
 module Format = Macro_format
+module Format_parser = Macro_format_parser
 module Validator = Macro_validator
 module Expander = Macro_expander
 
