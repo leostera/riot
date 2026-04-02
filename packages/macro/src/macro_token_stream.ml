@@ -9,19 +9,14 @@ type t = {
   parsed_expr: node option;
 }
 
-let make = fun ?span source -> {
-  source;
-  backing_source = source;
-  span;
-  parsed_expr = None;
-}
+let make = fun ?span source -> { source; backing_source = source; span; parsed_expr = None }
 
 let of_expr_node = fun ~env node ->
   {
     source = Macro_environment.source_of_node env node;
     backing_source = Macro_environment.source env;
     span = Macro_environment.span_of_node node;
-    parsed_expr = Some node;
+    parsed_expr = Some node
   }
 
 let source = fun stream -> stream.source

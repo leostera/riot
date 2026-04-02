@@ -67,25 +67,20 @@ let parse_placeholder = fun placeholder_text ~span ->
   if String.equal placeholder_text "" then
     Ok Next_arg_to_string
   else if contains_char placeholder_text ':' then
-    Error
-      (Macro_error.make
-         ~span
-         "format! currently supports only {} and {name} placeholders")
+    Error (Macro_error.make ~span "format! currently supports only {} and {name} placeholders")
   else if is_capture_name placeholder_text then
     Ok (Var_to_string placeholder_text)
   else
-    Error
-      (Macro_error.make
-         ~span
-         "format! currently supports only {} and {name} placeholders")
+    Error (Macro_error.make ~span "format! currently supports only {} and {name} placeholders")
 
 let parse_literal = fun ~literal_text ~span ->
   let literal_len = String.length literal_text in
-  if literal_len < 2 || char_at literal_text 0 != Some '"' || char_at literal_text (literal_len - 1) != Some '"' then
-    Error
-      (Macro_error.make
-         ~span
-         "format! currently requires an ordinary string literal format string")
+  if
+    literal_len < 2
+    || char_at literal_text 0 != Some '"'
+    || char_at literal_text (literal_len - 1) != Some '"'
+  then
+    Error (Macro_error.make ~span "format! currently requires an ordinary string literal format string")
   else
     let current = IO.Buffer.create literal_len in
     let flush acc =
@@ -112,47 +107,49 @@ let parse_literal = fun ~literal_text ~span ->
         | None ->
             Ok (List.rev (flush items_rev))
         | Some '\\' ->
-            if index + 1 < literal_len - 1 then (
-              IO.Buffer.add_char current '\\';
+            if index + 1 < literal_len - 1 then
               (
-                match char_at literal_text (index + 1) with
-                | Some next -> IO.Buffer.add_char current next
-                | None -> ()
-              );
-              loop (index + 2) items_rev
-            ) else (
+                IO.Buffer.add_char current '\\';
+                (
+                  match char_at literal_text (index + 1) with
+                  | Some next -> IO.Buffer.add_char current next
+                  | None -> ()
+                );
+                loop (index + 2) items_rev
+              )
+            else (
               IO.Buffer.add_char current '\\';
               loop (index + 1) items_rev
             )
         | Some '{' ->
-            if index + 1 < literal_len - 1 && char_at literal_text (index + 1) = Some '{' then (
-              IO.Buffer.add_char current '{';
-              loop (index + 2) items_rev
-            ) else (
-              match find_closing_brace (index + 1) with
-              | None ->
-                  Error
-                    (Macro_error.make
-                       ~span
-                       "format! found an unmatched '{' in the format string")
-              | Some closing_index ->
-                  let placeholder_text =
-                    String.sub literal_text (index + 1) (closing_index - index - 1) in
-                  match parse_placeholder placeholder_text ~span with
-                  | Error _ as err -> err
-                  | Ok hole ->
-                      let items_rev = flush items_rev in
-                      loop (closing_index + 1) (Hole hole :: items_rev)
-            )
+            if index + 1 < literal_len - 1 && char_at literal_text (index + 1) = Some '{' then
+              (
+                IO.Buffer.add_char current '{';
+                loop (index + 2) items_rev
+              )
+            else
+              (
+                match find_closing_brace (index + 1) with
+                | None -> Error (Macro_error.make ~span "format! found an unmatched '{' in the format string")
+                | Some closing_index ->
+                    let placeholder_text = String.sub
+                      literal_text
+                      (index + 1)
+                      (closing_index - index - 1) in
+                    match parse_placeholder placeholder_text ~span with
+                    | Error _ as err -> err
+                    | Ok hole ->
+                        let items_rev = flush items_rev in
+                        loop (closing_index + 1) (Hole hole :: items_rev)
+              )
         | Some '}' ->
-            if index + 1 < literal_len - 1 && char_at literal_text (index + 1) = Some '}' then (
-              IO.Buffer.add_char current '}';
-              loop (index + 2) items_rev
-            ) else
-              Error
-                (Macro_error.make
-                   ~span
-                   "format! found an unmatched '}' in the format string")
+            if index + 1 < literal_len - 1 && char_at literal_text (index + 1) = Some '}' then
+              (
+                IO.Buffer.add_char current '}';
+                loop (index + 2) items_rev
+              )
+            else
+              Error (Macro_error.make ~span "format! found an unmatched '}' in the format string")
         | Some ch ->
             IO.Buffer.add_char current ch;
             loop (index + 1) items_rev

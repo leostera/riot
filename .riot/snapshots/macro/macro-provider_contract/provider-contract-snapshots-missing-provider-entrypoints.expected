@@ -1,0 +1,1 @@
+macro package 'demo-macro' must expose a top-level `let provider` entrypoint in src/macro.ml

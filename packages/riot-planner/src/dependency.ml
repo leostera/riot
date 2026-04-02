@@ -31,9 +31,7 @@ let transitive_closure = fun deps ->
   Vector.into_iter ordered |> Iterator.to_list
 
 let runtime_closure = fun deps ->
-  transitive_closure deps |> List.filter
-    (fun dep -> not (Package.is_macro_package dep.package))
+  transitive_closure deps |> List.filter (fun dep -> not (Package.is_macro_package dep.package))
 
 let macro_closure = fun deps ->
-  transitive_closure deps |> List.filter
-    (fun dep -> Package.is_macro_package dep.package)
+  transitive_closure deps |> List.filter (fun dep -> Package.is_macro_package dep.package)

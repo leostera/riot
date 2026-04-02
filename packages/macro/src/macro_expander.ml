@@ -27,9 +27,12 @@ let replacement_of_invocation = fun ?providers invocation ->
       | [] -> Ok { span = invocation.span; source = Macro_token_stream.source result.output }
 
 let apply_replacements = fun source replacements ->
-  let sorted = List.sort
-    (fun left right -> Int.compare right.span.start left.span.start)
-    replacements in
+  let sorted =
+    List.sort
+      (fun left right ->
+        Int.compare right.span.start left.span.start)
+      replacements
+  in
   List.fold_left
     (fun current_source replacement ->
       let before = String.sub current_source 0 replacement.span.start in
@@ -54,8 +57,7 @@ let expand_environment = fun ?providers env ->
       if not (has_invocations invocations) then
         Ok { source; changed = false }
       else if (Macro_environment.parsed env).diagnostics != [] then
-        Error
-          (Macro_error.make "macro expansion requires a parse-clean source file")
+        Error (Macro_error.make "macro expansion requires a parse-clean source file")
       else
         let rec build_replacements acc = function
           | [] -> Ok (List.rev acc)
@@ -84,12 +86,11 @@ let expand_once = fun ?providers ~filename source ->
 let expand_source = fun ?providers ~filename source ->
   let rec loop current_source changed_any remaining_passes =
     if remaining_passes = 0 then
-      Error
-        (Macro_error.make "macro expansion reached the recursive expansion limit")
+      Error (Macro_error.make "macro expansion reached the recursive expansion limit")
     else
       match expand_once ?providers ~filename current_source with
       | Error err -> Error err
-      | Ok { source = next_source; changed = changed_this_pass } ->
+      | Ok { source=next_source; changed=changed_this_pass } ->
           if changed_this_pass then
             loop next_source true (remaining_passes - 1)
           else

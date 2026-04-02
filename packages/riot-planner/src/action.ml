@@ -43,6 +43,14 @@ type t =
     }
   | CopyFile of { source: Path.t; destination: Path.t }
   | WriteFile of { destination: Path.t; content: string }
+  | RunMacroExpansion of {
+      source: Path.t;
+      destination: Path.t;
+      workspace_root: Path.t;
+      target_dir_root: Path.t;
+      providers: Riot_model.Macro_provider.t list;
+      provider_hash: string
+    }
   | BuildForeignDependency of {
       name: string;
       path: Path.t;
@@ -182,6 +190,25 @@ let hash = fun action ->
         Sha256.write hasher (Path.to_string destination);
         Sha256.write hasher content;
         Sha256.finish hasher
+    | RunMacroExpansion {
+      source;
+      destination;
+      workspace_root;
+      target_dir_root;
+      providers;
+      provider_hash
+    } ->
+        Sha256.write_string hasher "RunMacroExpansion";
+        Sha256.write_string hasher (Path.to_string source);
+        Sha256.write_string hasher (Path.to_string destination);
+        Sha256.write_string hasher (Path.to_string workspace_root);
+        Sha256.write_string hasher (Path.to_string target_dir_root);
+        Sha256.write_string hasher provider_hash;
+        let provider_fingerprints = providers
+        |> List.map Riot_model.Macro_provider.fingerprint
+        |> List.sort String.compare in
+        List.iter (Sha256.write_string hasher) provider_fingerprints;
+        Sha256.finish hasher
     | BuildForeignDependency {
       name;
       path;
@@ -305,6 +332,23 @@ let to_string = function
   ^ ","
   ^ Int.to_string (String.length content)
   ^ " bytes)"
+  | RunMacroExpansion {
+    source;
+    destination;
+    providers;
+    provider_hash;
+    _
+  } -> "RunMacroExpansion("
+  ^ Path.to_string source
+  ^ "->"
+  ^ Path.to_string destination
+  ^ ",providers="
+  ^ String.concat
+    ","
+    (List.map (fun provider -> provider.Riot_model.Macro_provider.package_name) providers)
+  ^ ",hash="
+  ^ provider_hash
+  ^ ")"
   | BuildForeignDependency {
     name;
     path;
@@ -412,6 +456,23 @@ let to_json = fun action ->
         ("destination", string (Path.to_string destination));
         ("content", string content);
       ]
+    | RunMacroExpansion {
+      source;
+      destination;
+      workspace_root;
+      target_dir_root;
+      providers;
+      provider_hash
+    } -> obj
+      [
+        ("type", string "RunMacroExpansion");
+        ("source", string (Path.to_string source));
+        ("destination", string (Path.to_string destination));
+        ("workspace_root", string (Path.to_string workspace_root));
+        ("target_dir_root", string (Path.to_string target_dir_root));
+        ("provider_hash", string provider_hash);
+        ("providers", array (List.map Riot_model.Macro_provider.to_json providers));
+      ]
     | BuildForeignDependency {
       name;
       path;
@@ -462,6 +523,20 @@ let from_json = fun json ->
       match parse_string_list "flags" json with
       | Some raw -> Some (Riot_toolchain.Ocamlc.flags_of_string raw)
       | None -> Some []
+    in
+    let parse_providers field json =
+      match get_field field json with
+      | Some (Array arr) ->
+          let rec loop acc = function
+            | [] -> Some (List.rev acc)
+            | provider_json :: rest -> (
+                match Riot_model.Macro_provider.of_json provider_json with
+                | Ok provider -> loop (provider :: acc) rest
+                | Error _ -> None
+              )
+          in
+          loop [] arr
+      | _ -> None
     in
     match get_field "type" json with
     | None ->
@@ -599,6 +674,28 @@ let from_json = fun json ->
         })
         | _ -> Error "Invalid WriteFile"
       )
+    | Some (String "RunMacroExpansion") -> (
+        match (
+          get_field "source" json,
+          get_field "destination" json,
+          get_field "workspace_root" json,
+          get_field "target_dir_root" json,
+          get_field "provider_hash" json,
+          parse_providers "providers" json
+        ) with
+        | Some (String source), Some (String destination), Some (String workspace_root), Some (String target_dir_root), Some (String provider_hash), Some providers ->
+            Ok (
+              RunMacroExpansion {
+                source = Path.v source;
+                destination = Path.v destination;
+                workspace_root = Path.v workspace_root;
+                target_dir_root = Path.v target_dir_root;
+                providers;
+                provider_hash;
+              }
+            )
+        | _ -> Error "Invalid RunMacroExpansion"
+      )
     | Some (String "BuildForeignDependency") -> (
         let parse_build_cmd json =
           match get_field "build_cmd" json with
@@ -685,6 +782,16 @@ let equal = fun a1 a2 ->
   | CopyFile r1, CopyFile r2 -> Path.equal r1.source r2.source && Path.equal r1.destination r2.destination
   | WriteFile r1, WriteFile r2 -> Path.equal r1.destination r2.destination
   && String.equal r1.content r2.content
+  | RunMacroExpansion r1, RunMacroExpansion r2 -> Path.equal r1.source r2.source
+  && Path.equal r1.destination r2.destination
+  && Path.equal r1.workspace_root r2.workspace_root
+  && Path.equal r1.target_dir_root r2.target_dir_root
+  && String.equal r1.provider_hash r2.provider_hash
+  && List.length r1.providers = List.length r2.providers
+  && List.for_all2
+    (fun left right -> Riot_model.Macro_provider.compare left right = 0)
+    r1.providers
+    r2.providers
   | BuildForeignDependency r1, BuildForeignDependency r2 -> r1.name = r2.name
   && Path.equal r1.path r2.path
   && r1.build_cmd = r2.build_cmd
@@ -702,6 +809,7 @@ let outputs = function
   | CreateSharedLibrary { outputs; _ } -> outputs
   | CopyFile { destination; _ } -> [ destination ]
   | WriteFile { destination; _ } -> [ destination ]
+  | RunMacroExpansion { destination; _ } -> [ destination ]
   | BuildForeignDependency { outputs; _ } -> outputs
 
 let kind = function
@@ -714,4 +822,5 @@ let kind = function
   | CreateSharedLibrary _ -> "CreateSharedLibrary"
   | CopyFile _ -> "CopyFile"
   | WriteFile _ -> "WriteFile"
+  | RunMacroExpansion _ -> "RunMacroExpansion"
   | BuildForeignDependency _ -> "BuildForeignDependency"

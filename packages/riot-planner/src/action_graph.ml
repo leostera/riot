@@ -111,36 +111,51 @@ type planned_source = {
   copied_sources: Path.t list;
 }
 
-let available_macro_providers = fun ~depset ->
-  let reachable_macro_packages =
-    Dependency.macro_closure depset |> List.filter_map
-      (fun (dep: Dependency.t) -> Package.macro_provider dep.package)
+let available_builtin_macro_providers = fun ~depset ->
+  let reachable_macro_packages = Dependency.macro_closure depset
+  |> List.filter_map (fun (dep: Dependency.t) -> Package.macro_provider dep.package) in
+  let linked_module_names =
+    List.map (fun (provider: Riot_model.Macro_provider.t) -> provider.module_name) reachable_macro_packages
   in
-  let linked_module_names = List.map
-    (fun (provider: Riot_model.Macro_provider.t) -> provider.module_name)
-    reachable_macro_packages in
   Macro.builtin_providers () |> List.filter
     (fun provider ->
       match List.rev (Macro.Provider.module_path provider) with
       | module_name :: _ -> List.mem module_name linked_module_names
       | [] -> false)
 
-let plan_compilation_pipeline = fun ~(package: Package.t) ~depset path ->
+let available_macro_provider_packages = fun ~(workspace:Workspace.t) ~(package:Package.t) ->
+  let provider_names = package.build_dependencies
+  |> List.map (fun (dep: Package.dependency) -> dep.name) in
+  workspace.packages |> List.filter
+    (fun (pkg: Package.t) ->
+      List.mem pkg.name provider_names) |> List.filter_map Package.macro_provider
+
+let plan_compilation_pipeline = fun ~(package:Package.t) ~(workspace:Workspace.t) ~depset path ->
+  let macro_providers = available_macro_provider_packages ~workspace ~package in
+  let builtin_providers =
+    if macro_providers = [] then
+      available_builtin_macro_providers ~depset
+    else
+      []
+  in
   match Compilation_pipeline.plan_concrete_source
-    ~providers:(available_macro_providers ~depset)
+    ~providers:builtin_providers
+    ~macro_providers
+    ~workspace_root:workspace.root
+    ~target_dir_root:workspace.target_dir_root
     ~package
     path with
   | Ok planned_source -> planned_source
   | Error message -> panic message
 
-let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get_dep_kind ~depset ~needs_unix ~needs_dynlink (
+let module_to_actions ~package ~workspace ~profile ~ctx ~dep_includes ~get_dep_outputs ~get_dep_kind ~depset ~needs_unix ~needs_dynlink (
   module_node: Module_node.t
 ) (deps: G.Node_id.t list):
   Action.t list * Path.t list * Path.t list =
   let base_compile_flags = stdlib_flags package @ profile_compile_flags profile in
   match module_node with
   | { kind=MLI mod_; file=Concrete path; open_modules; _ } ->
-      let planned_source = plan_compilation_pipeline ~package ~depset path in
+      let planned_source = plan_compilation_pipeline ~package ~workspace ~depset path in
       let cmi_output = Module.cmi mod_ in
       let cmti_output = Module.cmti mod_ in
       let outputs = [ cmti_output; cmi_output ] in
@@ -153,7 +168,7 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
       } in
       (planned_source.actions @ [ compile ], outputs, sources)
   | { kind=ML mod_; file=Concrete path; open_modules; _ } ->
-      let planned_source = plan_compilation_pipeline ~package ~depset path in
+      let planned_source = plan_compilation_pipeline ~package ~workspace ~depset path in
       let native_object_output = Module.o mod_ in
       let cmx_output = Module.cmx mod_ in
       let cmi_output = Module.cmi mod_ in
@@ -268,7 +283,7 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
       let all_outputs = [ library_name; archive_name ] in
       ([ create_lib ], all_outputs, sources)
   | { kind=Binary { name; source; libraries; includes }; _ } ->
-      let planned_source = plan_compilation_pipeline ~package ~depset source in
+      let planned_source = plan_compilation_pipeline ~package ~workspace ~depset source in
       let binary_mod = Module.make ~namespace:Namespace.empty ~filename:source in
       let binary_cmx = Module.cmx binary_mod in
       let sources = planned_source.copied_sources in
@@ -367,7 +382,7 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
       in
       (planned_source.actions @ [ compile_action; link_action ], [ binary_output ], sources)
 
-let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_unix ~needs_dynlink (
+let from_module_graph ~package ~workspace ~profile ~ctx ~toolchain ~store ~depset ~needs_unix ~needs_dynlink (
   module_graph: Module_node.t G.t
 ):
   t * Path.t list =
@@ -425,6 +440,7 @@ let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_un
     (fun (module_node: Module_node.t G.node) ->
       let actions, outputs, sources = module_to_actions
         ~package
+        ~workspace
         ~profile
         ~ctx
         ~dep_includes

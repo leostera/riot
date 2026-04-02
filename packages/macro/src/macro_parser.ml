@@ -19,29 +19,16 @@ let callee_path_of_node = fun node ->
 
 let invocation_of_node = fun env node ->
   match Syn.Ceibo.Red.SyntaxNode.children_list node with
-  | [
-   Syn.Ceibo.Red.Node callee;
-   Syn.Ceibo.Red.Token _bang;
-   Syn.Ceibo.Red.Node body;
-  ] ->
-      (
-        match Macro_environment.span_of_node node with
-        | Some span -> Ok {
-          callee_path = callee_path_of_node callee;
-          span;
-          body = Macro_token_stream.of_expr_node ~env body;
-        }
-        | None ->
-            Error
-              (Macro_error.make
-                 ~span:(Syn.Ceibo.Red.SyntaxNode.span node)
-                 "macro expansion could not recover the macro token span")
-      )
-  | _ ->
-      Error
-        (Macro_error.make
-           ~span:(Syn.Ceibo.Red.SyntaxNode.span node)
-           "macro expansion expected a macro invocation shape")
+  | [Syn.Ceibo.Red.Node callee;Syn.Ceibo.Red.Token _bang;Syn.Ceibo.Red.Node body;] -> (
+      match Macro_environment.span_of_node node with
+      | Some span -> Ok {
+        callee_path = callee_path_of_node callee;
+        span;
+        body = Macro_token_stream.of_expr_node ~env body
+      }
+      | None -> Error (Macro_error.make ~span:(Syn.Ceibo.Red.SyntaxNode.span node) "macro expansion could not recover the macro token span")
+    )
+  | _ -> Error (Macro_error.make ~span:(Syn.Ceibo.Red.SyntaxNode.span node) "macro expansion expected a macro invocation shape")
 
 let collect_invocations = fun env ->
   let root = Syn.Ceibo.Red.new_root (Macro_environment.parsed env).tree in

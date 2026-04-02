@@ -558,9 +558,7 @@ let tokens_to_green = fun parser tokens ->
     tokens
 
 let has_dot_ident_continuation = fun parser ->
-  peek_kind parser = Token.Dot
-  &&
-  match (peek_n parser 1).Token.kind with
+  peek_kind parser = Token.Dot && match (peek_n parser 1).Token.kind with
   | Token.Ident _ -> true
   | _ -> false
 
@@ -575,12 +573,12 @@ let rec macro_callee_ends_with_bang_after = fun parser offset ->
           | Token.Ident _ -> macro_callee_ends_with_bang_after parser (offset + 2)
           | _ -> false
         )
-      | _ -> false
+      | _ ->
+          false
     )
   | _ -> false
 
-let looks_like_macro_callee = fun parser ->
-  macro_callee_ends_with_bang_after parser 0
+let looks_like_macro_callee = fun parser -> macro_callee_ends_with_bang_after parser 0
 
 let parse_macro_callee = fun parser ->
   let first_ident = consume parser in
@@ -599,10 +597,12 @@ let parse_macro_callee = fun parser ->
         true
     else
       make_node
-        (if saw_path then
-           Syntax_kind.PATH_EXPR
-         else
-           Syntax_kind.IDENT_EXPR)
+        (
+          if saw_path then
+            Syntax_kind.PATH_EXPR
+          else
+            Syntax_kind.IDENT_EXPR
+        )
         acc
   in
   parse_tail [ make_token parser first_ident ] false

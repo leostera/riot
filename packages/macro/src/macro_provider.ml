@@ -22,5 +22,6 @@ let macros = fun provider -> provider.macros
 
 let find_macro = fun provider name ->
   List.find_opt
-    (fun macro_ -> String.equal macro_.name name)
+    (fun macro_ ->
+      String.equal macro_.name name)
     provider.macros

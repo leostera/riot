@@ -347,9 +347,7 @@ let tests = [
       let result = parse_ml "let x = Macro.format! \"hello {}\" name\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_true
-        (List.exists
-           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
-           (green_node_kinds result.tree));
+        (List.exists (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR) (green_node_kinds result.tree));
       Test.assert_true (Option.is_none result.cst);
       Ok ());
   Test.case "parser still accepts bare macro invocations when they are unambiguous"
@@ -357,9 +355,7 @@ let tests = [
       let result = parse_ml "let x = format! \"hello {}\" name\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_true
-        (List.exists
-           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
-           (green_node_kinds result.tree));
+        (List.exists (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR) (green_node_kinds result.tree));
       Test.assert_true (Option.is_none result.cst);
       Ok ());
   Test.case "parser still accepts parenthesized macro bodies"
@@ -367,27 +363,21 @@ let tests = [
       let result = parse_ml "let x = format!(\"hello {}\", name)\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_true
-        (List.exists
-           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
-           (green_node_kinds result.tree));
+        (List.exists (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR) (green_node_kinds result.tree));
       Ok ());
   Test.case "macro bodies stop at enclosing let-in boundaries"
     (fun _ctx ->
       let result = parse_ml "let y = let x = format! \"hello\" in x\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_true
-        (List.exists
-           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
-           (green_node_kinds result.tree));
+        (List.exists (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR) (green_node_kinds result.tree));
       Ok ());
   Test.case "parser keeps spaced bang applications out of macro syntax"
     (fun _ctx ->
       let result = parse_ml "let x = format ! name\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_false
-        (List.exists
-           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
-           (green_node_kinds result.tree));
+        (List.exists (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR) (green_node_kinds result.tree));
       Ok ());
   Test.case "cst root distinguishes interfaces from implementations"
     (fun _ctx ->

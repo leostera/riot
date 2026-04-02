@@ -7,11 +7,6 @@ type t = {
 
 let ok = fun output -> { output; diagnostics = [] }
 
-let ok_source = fun ?span source ->
-  ok (Macro_token_stream.make ?span source)
+let ok_source = fun ?span source -> ok (Macro_token_stream.make ?span source)
 
-let error = fun diagnostic ->
-  {
-    output = Macro_token_stream.make "";
-    diagnostics = [ diagnostic ];
-  }
+let error = fun diagnostic -> { output = Macro_token_stream.make ""; diagnostics = [ diagnostic ] }

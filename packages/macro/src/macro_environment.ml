@@ -6,11 +6,7 @@ type t = {
   parsed: Syn.Parser.parse_result;
 }
 
-let create = fun ~filename source -> {
-  filename;
-  source;
-  parsed = Syn.parse ~filename source;
-}
+let create = fun ~filename source -> { filename; source; parsed = Syn.parse ~filename source }
 
 let filename = fun env -> env.filename
 
@@ -35,7 +31,9 @@ let span_of_node = fun (node: (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_no
   | Some first_token, Some last_token -> Some (token_body_span first_token last_token)
   | _ -> None
 
-let span_of_node_with_leading_trivia = fun (node: (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node) ->
+let span_of_node_with_leading_trivia = fun (
+  node: (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node
+) ->
   match Syn.Ceibo.Red.SyntaxNode.first_token node, Syn.Ceibo.Red.SyntaxNode.last_token node with
   | Some first_token, Some last_token ->
       let start =

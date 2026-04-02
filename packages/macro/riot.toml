@@ -11,3 +11,4 @@ path = "src/macro.ml"
 [dependencies]
 std = { path = "../std", version = "*" }
 syn = { path = "../syn", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
