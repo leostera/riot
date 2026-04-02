@@ -11,7 +11,7 @@ let with_tempdir = fun prefix fn ->
   | Ok result -> result
   | Error _ -> Error "Tempdir creation failed"
 
-let test_reentrant_acquire_in_same_process = fun () ->
+let test_reentrant_acquire_in_same_process = fun _ctx ->
   with_tempdir "tusk_build_lock"
     (fun tmpdir ->
       BuildLock.acquire ~workspace_root:tmpdir ~profile:"debug" ~target:"aarch64-apple-darwin"
@@ -52,7 +52,7 @@ let test_reentrant_acquire_in_same_process = fun () ->
           | Some (Error reason) -> Error reason
           | None -> Error "Reentrant acquire in the same process should complete promptly"))
 
-let test_releases_lock_on_exception = fun () ->
+let test_releases_lock_on_exception = fun _ctx ->
   with_tempdir "tusk_build_lock"
     (fun tmpdir ->
       let exception Synthetic_failure in
@@ -76,7 +76,7 @@ let test_releases_lock_on_exception = fun () ->
           | Error _ -> Error "Build lock was not released after exception"
         ))
 
-let test_different_targets_do_not_block_each_other = fun () ->
+let test_different_targets_do_not_block_each_other = fun _ctx ->
   with_tempdir "tusk_build_lock"
     (fun tmpdir ->
       BuildLock.acquire ~workspace_root:tmpdir ~profile:"debug" ~target:"aarch64-apple-darwin"

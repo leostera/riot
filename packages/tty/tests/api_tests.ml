@@ -2,7 +2,7 @@ open Std
 module Test = Std.Test
 
 (** Tests for TTY API - focusing on state management and input, not output *)
-let test_make_tty = fun () ->
+let test_make_tty = fun _ctx ->
   (* Test that we can create a TTY (may fail in non-interactive mode) *)
   match Tty.make () with
   | Ok _tty -> Ok ()
@@ -11,7 +11,7 @@ let test_make_tty = fun () ->
 
 (* Also acceptable *)
 
-let test_make_raw = fun () ->
+let test_make_raw = fun _ctx ->
   (* Test creating a raw mode TTY *)
   match Tty.make_raw () with
   | Ok tty ->
@@ -25,7 +25,7 @@ let test_make_raw = fun () ->
   | Error (Tty.SystemError _err) ->
       Ok ()
 
-let test_size_accessors = fun () ->
+let test_size_accessors = fun _ctx ->
   (* Test size accessor when TTY is available *)
   match Tty.make () with
   | Error _ -> Ok ()
@@ -36,7 +36,7 @@ let test_size_accessors = fun () ->
       else
         Error ("Invalid size: " ^ Int.to_string size.cols ^ "x" ^ Int.to_string size.rows)
 
-let test_refresh_size = fun () ->
+let test_refresh_size = fun _ctx ->
   (* Test that refresh_size doesn't crash *)
   match Tty.make () with
   | Error _ -> Ok ()
@@ -48,7 +48,7 @@ let test_refresh_size = fun () ->
       else
         Error "Size invalid after refresh"
 
-let test_mode_switching = fun () ->
+let test_mode_switching = fun _ctx ->
   (* Test switching between raw and line-buffered modes *)
   match Tty.make () with
   | Error _ -> Ok ()
@@ -71,7 +71,7 @@ let test_mode_switching = fun () ->
         )
       )
 
-let test_escape_sequences_are_strings = fun () ->
+let test_escape_sequences_are_strings = fun _ctx ->
   (* Test that escape sequences are pure strings, not functions *)
   try
     let sequences = [
@@ -95,14 +95,14 @@ let test_escape_sequences_are_strings = fun () ->
   with
   | e -> Error ("Escape sequence error: " ^ (Exception.to_string e))
 
-let test_csi_constant = fun () ->
+let test_csi_constant = fun _ctx ->
   (* Test the CSI constant *)
   if Tty.Escape_seq.csi = "\x1b[" then
     Ok ()
   else
     Error ("Invalid CSI: " ^ Tty.Escape_seq.csi)
 
-let test_strip_ansi = fun () ->
+let test_strip_ansi = fun _ctx ->
   (* Test stripping ANSI codes *)
   let text_with_ansi = "\x1b[31mRed Text\x1b[0m" in
   let stripped = Tty.Escape_seq.strip text_with_ansi in
@@ -111,7 +111,7 @@ let test_strip_ansi = fun () ->
   else
     Error ("Strip failed: got '" ^ stripped)
 
-let test_width_calculation = fun () ->
+let test_width_calculation = fun _ctx ->
   (* Test width calculation ignoring ANSI codes *)
   let text_with_ansi = "\x1b[1;32mBold Green\x1b[0m" in
   let width = Tty.Escape_seq.width text_with_ansi in
@@ -120,14 +120,14 @@ let test_width_calculation = fun () ->
   else
     Error ("Width calculation failed: got " ^ Int.to_string width ^ ", expected 10")
 
-let test_is_tty = fun () ->
+let test_is_tty = fun _ctx ->
   (* Test is_tty function *)
   let stdin_is_tty = Tty.is_tty (Tty.stdin_fd ()) in
   (* We don't know if stdin is a TTY or not, just test it doesn't crash *)
   let _ = stdin_is_tty in
   Ok ()
 
-let test_stdin_stdout_stderr_fds = fun () ->
+let test_stdin_stdout_stderr_fds = fun _ctx ->
   (* Test that we can get standard file descriptors *)
   let _stdin = Tty.stdin_fd () in
   let _stdout = Tty.stdout_fd () in

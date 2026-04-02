@@ -41,7 +41,7 @@ let test = fun () ->
   else
     Result.Error "timers fired out of order"
 
-let test_case = fun () ->
+let test_case = fun _ctx ->
   try test () with
   | exn -> Result.Error (Kernel.Exception.to_string exn)
 

@@ -1,5 +1,7 @@
 open Global
 
+type ctx = Test_context.t
+
 type test_result =
   Pass
   | Fail of string
@@ -12,7 +14,7 @@ type test_type =
 type t = {
   name: string;
   test_type: test_type;
-  fn: unit -> (unit, string) result;
+  fn: ctx -> (unit, string) result;
   skip: bool;
 }
 
@@ -23,4 +25,4 @@ let property = fun name ~examples fn -> { name; test_type = Property { examples 
 let skip = fun name fn -> { name; test_type = UnitTest; fn; skip = true }
 
 let todo = fun name ->
-  { name; test_type = UnitTest; fn = (fun () -> Result.Error "todo"); skip = false }
+  { name; test_type = UnitTest; fn = (fun _ctx -> Result.Error "todo"); skip = false }

@@ -105,7 +105,7 @@ let test_mailbox_preserves_per_sender_order = fun () ->
   | Result.Ok () -> Result.Ok ()
   | Result.Error msg -> Result.Error msg
 
-let test_case = fun () ->
+let test_case = fun _ctx ->
   try test_mailbox_preserves_per_sender_order () with
   | Receive_timeout -> Result.Error "timed out waiting for mailbox ordering result"
   | exn -> Result.Error (Kernel.Exception.to_string exn)

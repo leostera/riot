@@ -75,30 +75,30 @@ let assert_roundtrip_hash = fun path ->
 
 let tests = [
   Test.case "format returns the original source for a simple implementation"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = 1 + 2\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"simple implementations should format" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format adds a final newline to non-empty output"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = 1 + 2" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"formatted output should end with a final newline" in
       Test.assert_equal ~expected:"let x = 1 + 2\n" ~actual;
       Ok ());
   Test.case "format keeps empty files empty"
-    (fun () ->
+    (fun _ctx ->
       let actual = parse_ml "" |> Krasny.format |> Result.expect ~msg:"empty files should still format" in
       Test.assert_equal ~expected:"" ~actual;
       Ok ());
   Test.case "format keeps explicit fun rhs bindings explicit"
-    (fun () ->
+    (fun _ctx ->
       let source = "let id = fun x -> x\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"explicit fun rhs bindings should format" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format renders fun body trivia from token-leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let with_comment = fun x -> (* keep *) x
 let with_doc = fun x -> (** keep *) x
 |}
@@ -116,7 +116,7 @@ let with_doc = fun x ->
         ~actual;
       Ok ());
   Test.case "format renders if-branch trivia from token-leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let classify = fun flag -> if flag then value (* keep before else *) else other
 let nested = fun flag other -> if flag then value else (* keep before branch *) if other then (* nested *) next else last
 |}
@@ -144,7 +144,7 @@ let nested = fun flag other ->
         ~actual;
       Ok ());
   Test.case "format renders let rhs and body trivia from token-leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let run =
   let value = (* keep before rhs *) compute in
   (* keep before body *)
@@ -164,7 +164,7 @@ let nested = fun flag other ->
         ~actual;
       Ok ());
   Test.case "format renders sequence and let-operator trivia from tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let run = fun () -> first (* keep after first *); (* keep before second *) second; (** keep before third *) third
 let bind =
   let* value = (* keep before bound value *) compute in
@@ -193,7 +193,7 @@ let bind =
         ~actual;
       Ok ());
   Test.case "format match cases from structure, not arrow source newlines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let render = function
   | A ->
       value
@@ -208,7 +208,7 @@ let bind =
         ~actual;
       Ok ());
   Test.case "format polymorphic variant heads from explicit tag tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let classify = function
   | `Ok value -> value
   | `Error -> fallback
@@ -220,7 +220,7 @@ let value = `Ok 1
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format quoted core type variables from explicit sigil tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type 'a t = 'a list
 
 val id : 'a -> 'a
@@ -230,7 +230,7 @@ val id : 'a -> 'a
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format core type alias binders from explicit sigil tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|val cast : ('a list as 'whole) -> 'whole
 |}
       in
@@ -238,7 +238,7 @@ val id : 'a -> 'a
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format record fields without name-length multiline forcing"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type t = {
   this_is_a_pretty_long_record_field_name : int list;
 }
@@ -252,7 +252,7 @@ type u = {
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "desugar typed named parameters without duplicating inner annotations"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type 'a t = 'a list
 
 let map (type a b) (iter : a t) ~(fn : a -> b) : b t = failwith "todo"
@@ -267,7 +267,7 @@ let map : type a b. a t -> fn:(a -> b) -> b t = fun iter ~fn -> failwith "todo"
       Test.assert_equal ~expected ~actual;
       Ok ());
   Test.case "keep typed parameters in the binding header when annotation synthesis declines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let pick x : int = x
 |}
       in
@@ -275,7 +275,7 @@ let map : type a b. a t -> fn:(a -> b) -> b t = fun iter ~fn -> failwith "todo"
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format index expressions from explicit delimiter tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let x = s.[0]
 let y = a.(0)
 let z = x.%(0)
@@ -285,7 +285,7 @@ let z = x.%(0)
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format signed literal patterns from structural sign tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let classify = function | -1 -> `Neg | +2 -> `Pos | _ -> `Other
 |}
       in
@@ -300,7 +300,7 @@ let z = x.%(0)
         ~actual;
       Ok ());
   Test.case "format leaves a blank line before docstring-led top-level items"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let first = 1
 (** doc for second *)
 let second = 2
@@ -316,7 +316,7 @@ let second = 2
         ~actual;
       Ok ());
   Test.case "format leaves a blank line before docstring-led signature items"
-    (fun () ->
+    (fun _ctx ->
       let source = {|val first : int
 (** doc for second *)
 val second : int
@@ -332,7 +332,7 @@ val second: int
         ~actual;
       Ok ());
   Test.case "format operator expressions and patterns from explicit operator tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let op = ( + )
 let is_plus = function | ( + ) -> true | _ -> false
 |}
@@ -349,7 +349,7 @@ let is_plus =
         ~actual;
       Ok ());
   Test.case "format infix and prefix expression operators from explicit operator tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let negate value = ~-value
 let ready = flag01 && flag02 && flag03 && flag04 && flag05 && flag06 && flag07 && flag08 && flag09
 |}
@@ -372,7 +372,7 @@ let ready =
         ~actual;
       Ok ());
   Test.case "format singleton list patterns with explicit formatter spacing"
-    (fun () ->
+    (fun _ctx ->
       let compact_source = {|let classify = function
   | [value] -> hit
 |}
@@ -392,7 +392,7 @@ let ready =
       Test.assert_equal ~expected ~actual:actual_spaced;
       Ok ());
   Test.case "format if conditions from infix structure, not token scans"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let decide =
   if a&&b
      || c
@@ -410,7 +410,7 @@ let ready =
         ~actual;
       Ok ());
   Test.case "format binding values from structure, not source newlines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let wrapped =
   (
     value
@@ -424,7 +424,7 @@ let ready =
         ~actual;
       Ok ());
   Test.case "format simple string bindings inline from ordinary simplicity checks"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let message =
   (
     "ok"
@@ -445,13 +445,13 @@ let bind =
         ~actual;
       Ok ());
   Test.case "format keeps simple applies inline even when identifiers contain keywords"
-    (fun () ->
+    (fun _ctx ->
       let source = "let handler = use function_handler\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"simple applies should not sniff keyword substrings" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format normalizes simple applies from structure, not source newlines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let call =
   run
     first
@@ -465,7 +465,7 @@ let bind =
         ~actual;
       Ok ());
   Test.case "format rewrites parameterized let bindings between formatted lets"
-    (fun () ->
+    (fun _ctx ->
       let source = "(* intro *)\nlet x = 1 + 2\nlet f x = x + 1\nlet y = 3 + 4\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"parameterized let bindings should lower through explicit fun syntax" in
       Test.assert_equal
@@ -473,7 +473,7 @@ let bind =
         ~actual;
       Ok ());
   Test.case "format keeps mixed trivia and unsupported items parseable"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 type t =
   | A
@@ -486,7 +486,7 @@ let y = 3 + 4
       assert_idempotent ~source ~msg:"mixed implementation files should format";
       Ok ());
   Test.case "format keeps tuple/list/array docs idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let tuple_value = (left_side_identifier, right_side_identifier, final_identifier)
 let list_value = [first_item_identifier; second_item_identifier; third_item_identifier]
 let array_value = [|first_item_identifier; second_item_identifier; third_item_identifier|]
@@ -495,7 +495,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
       assert_idempotent ~source ~msg:"collection expressions should stay stable";
       Ok ());
   Test.case "format canonicalizes multiline list apply arguments"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let cmd =
   f [
     first_item;
@@ -510,7 +510,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual:formatted;
       Ok ());
   Test.case "format normalizes let-open bodies from structure, not source newlines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let answer =
   let open Option in
   value
@@ -524,7 +524,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual:formatted;
       Ok ());
   Test.case "format open bang from explicit bang tokens in ml and mli"
-    (fun () ->
+    (fun _ctx ->
       let source = "open! Inline\n" in
       let actual_ml = parse_ml source |> Krasny.format |> Result.expect ~msg:"implementation open! should render from bang_token" in
       let actual_mli = parse_mli source |> Krasny.format |> Result.expect ~msg:"signature open! should render from bang_token" in
@@ -532,7 +532,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
       Test.assert_equal ~expected:source ~actual:actual_mli;
       Ok ());
   Test.case "format local binding equals policy for boolean chains and pipelines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let run flag01 flag02 flag03 flag04 flag05 flag06 flag07 flag08 flag09 value =
   let ready = flag01 && flag02 && flag03 && flag04 && flag05 && flag06 && flag07 && flag08 && flag09 in
   let staged = value |> stage01 |> stage02 |> stage03 |> stage04 |> stage05 |> stage06 in
@@ -567,7 +567,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual;
       Ok ());
   Test.case "format local binding infix threshold around inline-after-equals cutoff"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let totals a b c d e f g h i =
   let total8 = a + b + c + d + e + f + g + h in
   let total9 = a + b + c + d + e + f + g + h + i in
@@ -594,7 +594,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual;
       Ok ());
   Test.case "format simple apply rhs by shape, not comment scans"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let run x =
   let value = f (* keep *) x in
   value
@@ -605,7 +605,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
       assert_idempotent ~source ~msg:"comment-bearing simple apply rhs should stay stable";
       Ok ());
   Test.case "format binding-operator equals policy with explicit fun and multiline values"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let bind flag01 flag02 flag03 flag04 flag05 flag06 flag07 flag08 flag09 value =
   let* callback = fun x -> x in
   let* ready = flag01 && flag02 && flag03 && flag04 && flag05 && flag06 && flag07 && flag08 && flag09 in
@@ -642,7 +642,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual;
       Ok ());
   Test.case "format recursive local bindings with multiline bodies"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let outer value =
   let rec loop n = if n = 0 then value else loop (n - 1) in
   loop 3
@@ -662,7 +662,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual;
       Ok ());
   Test.case "format breaks long tuples without source-length sniffing"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let tuple_value = (left_side_identifier, right_side_identifier, final_identifier, fourth_identifier)
 |}
       in
@@ -678,7 +678,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
         ~actual:formatted;
       Ok ());
   Test.case "verify treats normalized punctuation and parens as safe"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_verify_semantic_hash"
         (fun tmpdir ->
           let parens = Path.(tmpdir / Path.v "parens.ml") in
@@ -714,7 +714,7 @@ let array_value = [|first_item_identifier; second_item_identifier; third_item_id
           Test.assert_equal ~expected:0 ~actual:result.summary.unsafe_to_format;
           Ok ()));
   Test.case "format keeps function and match lowering idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let f = function x, y -> x + y
 let g = function 0 -> "zero" | _ -> "other"
 let h = fun x -> match x with 0 -> "zero" | _ -> "other"
@@ -723,7 +723,7 @@ let h = fun x -> match x with 0 -> "zero" | _ -> "other"
       assert_idempotent ~source ~msg:"function and match forms should stay stable";
       Ok ());
   Test.case "format keeps let/if/sequence layouts idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let x =
   if a then (
     b;
@@ -738,7 +738,7 @@ let y =
       assert_idempotent ~source ~msg:"control-flow layouts should stay stable";
       Ok ());
   Test.case "format keeps typed and labeled bindings idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let delimiter_of_keyword : keyword -> delimiter option = function | Begin -> Some BeginEnd | _ -> None
 let label_arg = f ~y
 let optional_arg = f ?y
@@ -748,7 +748,7 @@ let optional_fun = fun ?(y = 0) -> y + 1
       assert_idempotent ~source ~msg:"typed/labeled forms should stay stable";
       Ok ());
   Test.case "format keeps structural named parameters with defaults idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let configure ?(timeout : int = 30) ?retry:retries ~point:{ x; y } ~limit:seconds () =
   (timeout, retries, x, y, seconds)
 |}
@@ -756,7 +756,7 @@ let optional_fun = fun ?(y = 0) -> y + 1
       assert_idempotent ~source ~msg:"named parameter defaults, renames, and destructuring should format structurally";
       Ok ());
   Test.case "format keeps signature operator values structural"
-    (fun () ->
+    (fun _ctx ->
       let source = {|val ( = ) : 'a -> 'a -> bool
 val (mod) : int -> int -> int
 val ( := ) : 'a ref -> 'a -> unit
@@ -773,7 +773,7 @@ val ( := ) : 'a ref -> 'a -> unit
         ~actual:formatted;
       Ok ());
   Test.case "format keeps alias patterns idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 
 let request = fun (Conn conn as c) () -> ()
@@ -782,7 +782,7 @@ let request = fun (Conn conn as c) () -> ()
       assert_idempotent ~source ~msg:"alias patterns should stay stable";
       Ok ());
   Test.case "format keeps constructor parameter patterns idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 
 let request = fun (Conn conn) () -> ()
@@ -791,14 +791,14 @@ let request = fun (Conn conn) () -> ()
       assert_idempotent ~source ~msg:"constructor parameter patterns should not gain extra parentheses";
       Ok ());
   Test.case "format keeps typed first-class module patterns idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let run_comparison index (module R : Reporter.Intf.Intf) comp = (index, comp)
 |}
       in
       assert_idempotent ~source ~msg:"typed first-class module patterns should lower structurally";
       Ok ());
   Test.case "format keeps first-class module expressions idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 
 module Protocol = struct
@@ -811,7 +811,7 @@ let packed = (module Protocol.Http1)
       assert_idempotent ~source ~msg:"first-class module expressions should stay stable";
       Ok ());
   Test.case "format keeps class declaration items idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|class ['a] service : object
   val mutable state : int
   method private run : int
@@ -827,7 +827,7 @@ end =
       assert_idempotent ~source ~msg:"class declaration items should lower structurally";
       Ok ());
   Test.case "format keeps class type declaration items idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|class type ['a] service = object
   inherit base
   val mutable state : int
@@ -844,7 +844,7 @@ class worker : int -> service
       Test.assert_equal ~expected:first ~actual:second;
       Ok ());
   Test.case "format keeps shortcut class declaration modifiers idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|class%foo [@foo] x = x
 class type%foo [@foo] y = y
 |}
@@ -852,7 +852,7 @@ class type%foo [@foo] y = y
       assert_idempotent ~source ~msg:"class declaration shell modifiers should stay structural";
       Ok ());
   Test.case "format keeps structural signature items idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|[@@@warning "-32"]
 
 type t +=
@@ -867,13 +867,13 @@ exception Nested = Std.Result.Error
       Test.assert_equal ~expected:formatted ~actual:reparsed;
       Ok ());
   Test.case "format floating attributes from structural payload items"
-    (fun () ->
+    (fun _ctx ->
       let source = "[@@@warning    \"-32\"]\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"floating attributes should render from structural payload items" in
       Test.assert_equal ~expected:"[@@@warning \"-32\"]\n" ~actual;
       Ok ());
   Test.case "format floating extension items structurally"
-    (fun () ->
+    (fun _ctx ->
       let structure_source = {|[%%foo]
 [%%bar let x = 1]
 |}
@@ -891,7 +891,7 @@ exception Nested = Std.Result.Error
       Test.assert_equal ~expected:actual_signature ~actual:reformatted_signature;
       Ok ());
   Test.case "format module-expression and module-type extensions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|module type S = [%foo]
 module M = [%foo]
 |}
@@ -901,7 +901,7 @@ module M = [%foo]
       assert_idempotent ~source ~msg:"module-expression and module-type extensions should stay stable";
       Ok ());
   Test.case "format keeps structural core types idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|val use : #service -> M.(t list) -> < close : unit -> unit; next : int >
 |}
       in
@@ -910,7 +910,7 @@ module M = [%foo]
       Test.assert_equal ~expected:formatted ~actual:reparsed;
       Ok ());
   Test.case "format first-class module types from structural module-type docs"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type packed = (module   Transport   with   type t = int)
 type extended = (module [%foo])
 type payload = (module [%foo: S])
@@ -925,25 +925,25 @@ type payload = (module [%foo: S])
         ~actual;
       Ok ());
   Test.case "format shared core-type attributes keeps opaque payload tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "type t = int [@deprecated   \"use other\"]\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"shared core-type attributes should render from opaque payload tokens" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format shared attribute payload infix expressions opaquely"
-    (fun () ->
+    (fun _ctx ->
       let source = "type t = int [@foo 1 + 2]\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"shared attribute payload infix expressions should render opaquely" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format expression attributes keeps opaque payload tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "let _ = value [@foo   1  +  2]\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"expression attributes should render from opaque payload tokens" in
       Test.assert_equal ~expected:source ~actual;
       Ok ());
   Test.case "format ordinary pattern-payload attributes structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let simple = 1 [@foo? Some y]
 let guarded = 1 [@foo? Some y when y > 0]
 |}
@@ -953,7 +953,7 @@ let guarded = 1 [@foo? Some y when y > 0]
       assert_idempotent ~source ~msg:"ordinary pattern-payload attributes should stay stable";
       Ok ());
   Test.case "format parenthesizes attributed non-atomic expressions"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let constructor = Some 0 [@inline always]
 let apply = I64.logor b (I64.shift_left b 32) [@inline always]
 let infix = mask land (mask - 1) [@inline always]
@@ -971,7 +971,7 @@ let infix = (mask land (mask - 1)) [@inline always]
       assert_idempotent ~source ~msg:"postfix attributed apply and infix expressions should stay stable";
       Ok ());
   Test.case "format plain object expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let empty = object end
 let methods =
   object
@@ -1038,7 +1038,7 @@ let typed =
       assert_idempotent ~source ~msg:"plain object expressions should stay stable across repeated formatting";
       Ok ());
   Test.case "format object bodies preserve terminal trivia"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let empty = object
   (* trailing comment *)
   (** trailing docstring *)
@@ -1063,7 +1063,7 @@ let typed =
       assert_idempotent ~source ~msg:"object-body terminal trivia should stay stable across repeated formatting";
       Ok ());
   Test.case "format object extension members structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let extended =
   object
     [%%foo]
@@ -1083,19 +1083,19 @@ let typed =
       assert_idempotent ~source ~msg:"object extension members should stay stable across repeated formatting";
       Ok ());
   Test.case "format trailing variant comments with explicit separator policy"
-    (fun () ->
+    (fun _ctx ->
       let source = "type t =\n  | A (* comment *)\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"trailing variant comments should format from explicit trivia separators" in
       Test.assert_equal ~expected:"type t =\n  | A (* comment *)\n" ~actual;
       Ok ());
   Test.case "format trailing variant docstrings with explicit separator policy"
-    (fun () ->
+    (fun _ctx ->
       let source = "type t =\n  | A (** doc *)\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"trailing variant docstrings should format from explicit trivia separators" in
       Test.assert_equal ~expected:"type t =\n  | A\n  (** doc *)\n" ~actual;
       Ok ());
   Test.case "format fails for signature-bodied first-class module types"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type packed = (module sig
   type t
 end)
@@ -1105,7 +1105,7 @@ end)
       | Ok _ -> panic "signature-bodied first-class module types should fail until they have a structural formatter"
       | Error _ -> Ok ());
   Test.case "format core-type extensions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "val use : [%foo: int]\n" in
       let actual = parse_mli source |> Krasny.format |> Result.expect ~msg:"core-type extensions should render structurally from the extension shell and payload" in
       Test.assert_equal ~expected:source ~actual;
@@ -1113,7 +1113,7 @@ end)
       Test.assert_equal ~expected:actual ~actual:reparsed;
       Ok ());
   Test.case "format keeps structural patterns idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let unpack = function
   | (module M) -> ()
   | (M.(Some x) as whole) -> whole
@@ -1123,7 +1123,7 @@ end)
       assert_idempotent ~source ~msg:"first-class module, local-open, alias, and typed patterns should format structurally";
       Ok ());
   Test.case "format keeps polymorphic-variant inherit patterns idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = match y with #color -> 1\n" in
       let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"polymorphic-variant inherit patterns should render from the structural path" in
       Test.assert_equal
@@ -1135,7 +1135,7 @@ end)
       assert_idempotent ~source ~msg:"polymorphic-variant inherit patterns should stay stable";
       Ok ());
   Test.case "format fails for typed first-class-module patterns"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let unpack = function
   | (module M : S) -> ()
 |}
@@ -1144,7 +1144,7 @@ end)
       | Ok _ -> panic "typed first-class-module patterns should fail formatting instead of preserving source"
       | Error _ -> Ok ());
   Test.case "format pattern extensions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let unpack = function
   | [%foo? Some x] -> x
   | [%foo? Some y when y > 0] -> y
@@ -1161,7 +1161,7 @@ end)
       assert_idempotent ~source ~msg:"pattern extensions should stay stable across repeated formatting";
       Ok ());
   Test.case "format keeps structural imperative and module expressions idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let packed = (module M : S)
 let guarded ready = assert ready
 let delayed compute = lazy (compute ())
@@ -1177,7 +1177,7 @@ let update next count = {< current = next; count >}
       assert_idempotent ~source ~msg:"module-pack, imperative, coercion, and object-override expressions should format structurally";
       Ok ());
   Test.case "format expression extensions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let generated = [%foo]
 let computed = [%test 42]
 let typed = [%foo: int]
@@ -1189,7 +1189,7 @@ let nested = [%foo let x = 1]
       assert_idempotent ~source ~msg:"expression extensions should stay stable across repeated formatting";
       Ok ());
   Test.case "format unreachable expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let absurd maybe =
   match maybe with
   | Some value -> value
@@ -1201,7 +1201,7 @@ let nested = [%foo let x = 1]
       assert_idempotent ~source ~msg:"unreachable expressions should stay stable across repeated formatting";
       Ok ());
   Test.case "format keeps typed and polymorphic expressions structural"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let typed value = (value : source)
 let shaped handler = (handler : < run : int >)
 let poly = ((fun x -> x) : 'a. 'a -> 'a)
@@ -1210,7 +1210,7 @@ let poly = ((fun x -> x) : 'a. 'a -> 'a)
       assert_idempotent ~source ~msg:"typed and polymorphic expressions should lower through structural core-type rendering";
       Ok ());
   Test.case "format keeps nested module bodies structural"
-    (fun () ->
+    (fun _ctx ->
       let source = {|module type S = sig
   (** x *)
   val x : int
@@ -1224,7 +1224,7 @@ end
       assert_idempotent ~source ~msg:"nested signature and structure bodies should lower from structural item streams";
       Ok ());
   Test.case "format keeps grouped GADT type declarations structural"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type _ expr =
   | Int : int expr
 and packed =
@@ -1234,7 +1234,7 @@ and packed =
       assert_idempotent ~source ~msg:"grouped GADT type declarations should lower structurally instead of preserving source";
       Ok ());
   Test.case "format inline record constructors from structure, not source newlines"
-    (fun () ->
+    (fun _ctx ->
       let source = {|type t =
   | A of {
       x : int;
@@ -1252,7 +1252,7 @@ and packed =
         ~actual;
       Ok ());
   Test.case "format keeps boolean if conditions with matches idempotent"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 
 let status_char mode summary =
@@ -1270,7 +1270,7 @@ let status_char mode summary =
       assert_idempotent ~source ~msg:"boolean match conditions should stay stable";
       Ok ());
   Test.case "format keeps top-level lowered fun phrases separated"
-    (fun () ->
+    (fun _ctx ->
       let source = {|open Std
 
 let ( .??[] ) () () = ();;
@@ -1283,7 +1283,7 @@ let ( .??[] ) () () = ();;
       assert_idempotent ~source ~msg:"top-level expression phrases should stay outside lowered fun bindings";
       Ok ());
   Test.case "format keeps top-level phrase separators structural"
-    (fun () ->
+    (fun _ctx ->
       let source = {|let project x = x
 ;;
 1
@@ -1304,11 +1304,11 @@ end
         ~actual;
       Ok ());
   Test.case "format preserves syntax hash for selected codebase files"
-    (fun () ->
+    (fun _ctx ->
       List.iter assert_roundtrip_hash workspace_files;
       Ok ());
   Test.case "runner skips hidden and build directories"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_scan"
         (fun tmpdir ->
           let visible_ml = Path.(tmpdir / Path.v "visible.ml") in
@@ -1330,7 +1330,7 @@ end
           Test.assert_equal ~expected ~actual;
           Ok ()));
   Test.case "runner skips ignored subtrees during collection"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_ignore_tree"
         (fun tmpdir ->
           let keep = Path.(tmpdir / Path.v "keep.ml") in
@@ -1349,7 +1349,7 @@ end
           Test.assert_equal ~expected:[ Path.to_string keep ] ~actual:files;
           Ok ()));
   Test.case "runner reports formatting status and emits json events"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_check"
         (fun tmpdir ->
           let formatted = Path.(tmpdir / Path.v "formatted.ml") in
@@ -1383,7 +1383,7 @@ end
               ~actual:(get_field "status" json);
             Ok ()));
   Test.case "verify reports files that would reformat safely"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_verify"
         (fun tmpdir ->
           let formatted = Path.(tmpdir / Path.v "formatted.ml") in
@@ -1413,7 +1413,7 @@ end
               ~actual:(get_field "status" json);
             Ok ()));
   Test.case "format rewrites files in place and reports formatted status"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_format"
         (fun tmpdir ->
           let formatted = Path.(tmpdir / Path.v "formatted.ml") in
@@ -1441,7 +1441,7 @@ end
             Test.assert_equal ~expected:(Some (String "formatted")) ~actual:(get_field "status" json);
             Ok ()));
   Test.case "streaming runner skips ignored files"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_ignore"
         (fun tmpdir ->
           let keep = Path.(tmpdir / Path.v "keep.ml") in
@@ -1462,7 +1462,7 @@ end
           Test.assert_equal ~expected:1 ~actual:result.summary.total_files;
           Ok ()));
   Test.case "streaming runner scans roots and streams file results"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "krasny_runner_stream"
         (fun tmpdir ->
           let formatted = Path.(tmpdir / Path.v "formatted.ml") in

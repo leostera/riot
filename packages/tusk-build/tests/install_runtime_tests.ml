@@ -1,7 +1,7 @@
 open Std
 module Test = Std.Test
 
-let test_install_event_to_json_serializes_promoted_binary = fun () ->
+let test_install_event_to_json_serializes_promoted_binary = fun _ctx ->
   match Tusk_build.install_event_to_json
     (Tusk_build.PromotedBinary { binary = "demo"; destination = Path.v "/tmp/demo"; global = true }) with
   | Some (Data.Json.Object fields) ->
@@ -17,7 +17,7 @@ let test_install_event_to_json_serializes_promoted_binary = fun () ->
   | None ->
       Error "expected JSON output for promoted binary event"
 
-let test_install_error_message_names_missing_binary = fun () ->
+let test_install_error_message_names_missing_binary = fun _ctx ->
   Test.assert_equal
     ~expected:"binary 'demo' not found in workspace"
     ~actual:(Tusk_build.install_error_message (Tusk_build.BinaryNotFound { binary_name = "demo" }));

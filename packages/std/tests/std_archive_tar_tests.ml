@@ -78,7 +78,7 @@ let build_archive = fun entries ->
   IO.Buffer.add_string buffer (String.make (tar_block_size * 2) '\000');
   IO.Buffer.contents buffer
 
-let test_entries_lists_archive_members = fun () ->
+let test_entries_lists_archive_members = fun _ctx ->
   let archive = build_archive
     [ ("src/", '5', 0o755L, ""); ("src/hello.txt", '0', 0o644L, "hello tar\n"); ] in
   match Tar.entries (IO.Reader.from_string archive) with
@@ -102,7 +102,7 @@ let with_temp_dir = fun label fn ->
     ~finally:(fun () -> ignore (Fs.remove_dir_all temp_root))
     (fun () -> fn temp_root)
 
-let test_extract_writes_regular_files = fun () ->
+let test_extract_writes_regular_files = fun _ctx ->
   let archive = build_archive
     [ ("pkg/", '5', 0o755L, ""); ("pkg/README.md", '0', 0o644L, "Hello from tar\n"); ] in
   with_temp_dir "tar_extract"
@@ -117,7 +117,7 @@ let test_extract_writes_regular_files = fun () ->
           | Error err -> Error ("failed to read extracted file: " ^ Kernel.IO.error_message err)
         ))
 
-let test_extract_allows_dot_root_directory_entry = fun () ->
+let test_extract_allows_dot_root_directory_entry = fun _ctx ->
   let archive = build_archive
     [
       ("./", '5', 0o755L, "");
@@ -137,7 +137,7 @@ let test_extract_allows_dot_root_directory_entry = fun () ->
           ^ Kernel.IO.error_message err)
         ))
 
-let test_extract_rejects_path_traversal = fun () ->
+let test_extract_rejects_path_traversal = fun _ctx ->
   let archive = build_archive [ ("../escape.txt", '0', 0o644L, "bad"); ] in
   with_temp_dir "tar_traversal"
     (fun dir ->

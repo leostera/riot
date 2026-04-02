@@ -152,7 +152,7 @@ let test = fun () ->
   in
   collect ~sender_started:0 ~sender_done:0 ~receiver_count:None
 
-let test_case = fun () ->
+let test_case = fun _ctx ->
   try test () with
   | exn -> Result.Error (Kernel.Exception.to_string exn)
 

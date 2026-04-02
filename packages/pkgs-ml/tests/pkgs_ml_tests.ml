@@ -1,7 +1,7 @@
 open Std
 module Test = Std.Test
 
-let test_registry_split_layout = fun () ->
+let test_registry_split_layout = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"
@@ -21,7 +21,7 @@ let test_registry_split_layout = fun () ->
   else
     Error ("unexpected registry layout:\nindex=" ^ index ^ "\narchive=" ^ archive ^ "\nsrc=" ^ src)
 
-let test_sparse_index_layout = fun () ->
+let test_sparse_index_layout = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"
@@ -33,7 +33,7 @@ let test_sparse_index_layout = fun () ->
   else
     Error ("unexpected sparse index cache path: " ^ actual)
 
-let test_sparse_index_document_parsing = fun () ->
+let test_sparse_index_document_parsing = fun _ctx ->
   let source = {|{
   "schema_version": 1,
   "name": "kernel",
@@ -66,7 +66,7 @@ let test_sparse_index_document_parsing = fun () ->
         Error "unexpected sparse index document contents"
   | Error err -> Error err
 
-let test_sparse_index_cached_reads = fun () ->
+let test_sparse_index_cached_reads = fun _ctx ->
   let config =
     Pkgs_ml.Sparse_index.config_of_string
       {|{
@@ -165,7 +165,7 @@ let make_fetch_recorder = fun ?post_handler get_handler ->
   in
   (fetch, requests)
 
-let test_filesystem_registry_fetches_config_on_cache_miss = fun () ->
+let test_filesystem_registry_fetches_config_on_cache_miss = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_fetch_config"
       (fun tempdir ->
@@ -209,7 +209,7 @@ let test_filesystem_registry_fetches_config_on_cache_miss = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_filesystem_registry_fetches_package_document_on_cache_miss = fun () ->
+let test_filesystem_registry_fetches_package_document_on_cache_miss = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_fetch_package"
       (fun tempdir ->
@@ -267,7 +267,7 @@ let test_filesystem_registry_fetches_package_document_on_cache_miss = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_filesystem_registry_returns_none_for_missing_package_document = fun () ->
+let test_filesystem_registry_returns_none_for_missing_package_document = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_fetch_missing_package"
       (fun tempdir ->
@@ -319,7 +319,7 @@ let test_filesystem_registry_returns_none_for_missing_package_document = fun () 
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_registry_materializes_in_memory_release = fun () ->
+let test_registry_materializes_in_memory_release = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_materialize"
       (fun tempdir ->
@@ -378,7 +378,7 @@ let test_registry_materializes_in_memory_release = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_registry_materialize_skips_existing_release = fun () ->
+let test_registry_materialize_skips_existing_release = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_materialize_skip"
       (fun tempdir ->
@@ -533,7 +533,7 @@ let gzip_file = fun ~src ~dst ->
             )
         )
 
-let test_filesystem_registry_materializes_cached_release = fun () ->
+let test_filesystem_registry_materializes_cached_release = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_filesystem_materialize"
       (fun tempdir ->
@@ -581,7 +581,7 @@ let test_filesystem_registry_materializes_cached_release = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_filesystem_registry_materializes_gzip_cached_release = fun () ->
+let test_filesystem_registry_materializes_gzip_cached_release = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_filesystem_materialize_gzip"
       (fun tempdir ->
@@ -634,7 +634,7 @@ let test_filesystem_registry_materializes_gzip_cached_release = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_filesystem_registry_downloads_release_archive_on_cache_miss = fun () ->
+let test_filesystem_registry_downloads_release_archive_on_cache_miss = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkgs_ml_filesystem_registry_download"
       (fun tempdir ->
@@ -724,7 +724,7 @@ let test_filesystem_registry_downloads_release_archive_on_cache_miss = fun () ->
   | Error err -> Error (IO.error_message err)
   | Ok result -> result
 
-let test_registry_publish_from_locator_posts_tarball_to_publish_route = fun () ->
+let test_registry_publish_from_locator_posts_tarball_to_publish_route = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"
@@ -804,7 +804,7 @@ let test_registry_publish_from_locator_posts_tarball_to_publish_route = fun () -
             Error "unexpected publish-from-locator request or response"
       | _ -> Error "expected exactly one publish request"
 
-let test_registry_publish_from_locator_bubbles_registry_error_message = fun () ->
+let test_registry_publish_from_locator_bubbles_registry_error_message = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"
@@ -837,7 +837,7 @@ let test_registry_publish_from_locator_bubbles_registry_error_message = fun () -
       else
         Error ("unexpected publish artifact error: " ^ err)
 
-let test_registry_publish_artifact_posts_tarball_to_artifact_publish_route = fun () ->
+let test_registry_publish_artifact_posts_tarball_to_artifact_publish_route = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"
@@ -906,7 +906,7 @@ let test_registry_publish_artifact_posts_tarball_to_artifact_publish_route = fun
             Error "unexpected artifact publish request or response"
       | _ -> Error "expected exactly one publish request"
 
-let test_registry_publish_artifact_bubbles_transport_exceptions_as_errors = fun () ->
+let test_registry_publish_artifact_bubbles_transport_exceptions_as_errors = fun _ctx ->
   let cache = Pkgs_ml.Registry_cache.create
     ~tusk_home:(Path.v "/tmp/.tusk")
     ~registry_name:"pkgs.ml"

@@ -14,6 +14,14 @@ let make_test_workspace = fun tmpdir packages ->
     profile_overrides = [];
   }
 
+let package_error_message = fun err ->
+  match err with
+  | Tusk_executor.Package_builder.PlanningFailed _ -> "planning"
+  | Tusk_executor.Package_builder.ExecutionFailed { message } -> message
+  | Tusk_executor.Package_builder.ActionExecutionFailed { message } -> message
+  | Tusk_executor.Package_builder.ActionOutputsNotCreated _ -> "outputs not created"
+  | Tusk_executor.Package_builder.ActionDependenciesFailed _ -> "dependencies failed"
+
 let make_package = fun tmpdir name content ->
   let pkg_dir = Path.(tmpdir / Path.v name) in
   let src_dir = Path.(pkg_dir / Path.v "src") in
@@ -47,7 +55,7 @@ let make_package = fun tmpdir name content ->
     publish = { version = None; description = None; license = None; is_public = None };
   }
 
-let test_fresh_build_no_cache = fun () ->
+let test_fresh_build_no_cache = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
@@ -72,22 +80,14 @@ let test_fresh_build_no_cache = fun () ->
         match build.status with
         | Tusk_executor.Package_builder.Built _ -> Ok ()
         | Tusk_executor.Package_builder.Cached _ -> Error "Fresh build should not be cached"
+        | Tusk_executor.Package_builder.Skipped { reason } -> Error ("Build skipped: " ^ reason)
         | Tusk_executor.Package_builder.Failed err ->
-            Error (
-              "Build failed: " ^ (
-                match err with
-                | PlanningFailed _ -> "planning"
-                | ExecutionFailed { message } -> message
-                | ActionExecutionFailed { message } -> message
-                | ActionOutputsNotCreated _ -> "outputs not created"
-                | ActionDependenciesFailed _ -> "dependencies failed"
-              )
-            ))
+            Error ("Build failed: " ^ package_error_message err))
   with
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_second_build_reuses_action_cache_path = fun () ->
+let test_second_build_reuses_action_cache_path = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
@@ -124,25 +124,16 @@ let test_second_build_reuses_action_cache_path = fun () ->
             match second_build.status with
             | Built _
             | Cached _ -> Ok ()
+            | Skipped { reason } -> Error ("Second build skipped: " ^ reason)
             | Failed err ->
-                Error (
-                  "Second build failed: " ^ (
-                    match err with
-                    | PlanningFailed _ -> "planning"
-                    | ExecutionFailed { message } -> message
-                  )
-                )
+                Error ("Second build failed: " ^ package_error_message err)
           )
+        | Skipped { reason } ->
+            Error ("First build skipped: " ^ reason)
         | Cached _ ->
             Error "First build should not be cached"
         | Failed err ->
-            Error (
-              "First build failed: " ^ (
-                match err with
-                | PlanningFailed _ -> "planning"
-                | ExecutionFailed { message } -> message
-              )
-            ))
+            Error ("First build failed: " ^ package_error_message err))
   with
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"

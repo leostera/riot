@@ -4,7 +4,7 @@ open Std
 module Frame = Http.Http2.Frame
 module Serializer = Http.Http2.Serializer
 
-let test_serialize_settings_frame = fun () ->
+let test_serialize_settings_frame = fun _ctx ->
   let frame = {
     Frame.length = 0;
     frame_type = Frame.Settings;
@@ -26,7 +26,7 @@ let test_serialize_settings_frame = fun () ->
   else
     Result.Error ("Serialized frame too short: " ^ Int.to_string (String.length serialized))
 
-let test_serialize_data_frame = fun () ->
+let test_serialize_data_frame = fun _ctx ->
   let frame = {
     Frame.length = 5;
     frame_type = Frame.Data;
@@ -48,7 +48,7 @@ let test_serialize_data_frame = fun () ->
   else
     Result.Error "Serialized data frame has no payload"
 
-let test_frame_types = fun () ->
+let test_frame_types = fun _ctx ->
   let types = [ Frame.Data; Frame.Headers; Frame.Settings; Frame.Ping; Frame.Goaway; ] in
   if List.length types = 5 then
     Result.Ok ()

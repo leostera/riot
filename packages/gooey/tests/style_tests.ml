@@ -1,34 +1,34 @@
 open Std
 open Gooey
 
-let test_empty_style = fun () ->
+let test_empty_style = fun _ctx ->
   let s = Style.empty in
   if s.direction = Style.LeftToRight && s.child_gap = 0 && s.z_index = 0 then
     Ok ()
   else
     Error "Style.empty should have correct defaults"
 
-let test_padding_helpers = fun () ->
+let test_padding_helpers = fun _ctx ->
   (* Verify we can create padding structures *)
   let _p1 = Style.Padding.all 10 in
   let _p2 = Style.Padding.symmetric ~h:20 ~v:10 in
   let _p3 = Style.Padding.make ~left:1 ~right:2 ~top:3 ~bottom:4 () in
   Ok ()
 
-let test_margin_helpers = fun () ->
+let test_margin_helpers = fun _ctx ->
   (* Verify we can create margin structures *)
   let _m1 = Style.Margin.all 5 in
   let _m2 = Style.Margin.symmetric ~h:15 ~v:8 in
   Ok ()
 
-let test_style_builder = fun () ->
+let test_style_builder = fun _ctx ->
   let s = Style.(empty |> bg (`rgb (255, 0, 0)) |> grow) in
   if s.background = Some (`rgb (255, 0, 0)) && s.sizing.width = Style.Grow then
     Ok ()
   else
     Error "Style builder should chain operations correctly"
 
-let test_sizing_variants = fun () ->
+let test_sizing_variants = fun _ctx ->
   let s1 = Style.(empty |> width (Fixed 100.0)) in
   if s1.sizing.width != Style.Fixed 100.0 then
     Error "Fixed sizing failed"
@@ -47,7 +47,7 @@ let test_sizing_variants = fun () ->
         else
           Ok ()
 
-let test_direction_helpers = fun () ->
+let test_direction_helpers = fun _ctx ->
   let s1 = Style.(empty |> row) in
   if s1.direction != Style.LeftToRight then
     Error "row should set LeftToRight direction"
@@ -58,7 +58,7 @@ let test_direction_helpers = fun () ->
     else
       Ok ()
 
-let test_border = fun () ->
+let test_border = fun _ctx ->
   let s = Style.(empty |> border ~width:2 ~color:(`rgb (100, 100, 100)) ()) in
   if s.border_width = 2 && s.border_color = Some (`rgb (100, 100, 100)) then
     Ok ()

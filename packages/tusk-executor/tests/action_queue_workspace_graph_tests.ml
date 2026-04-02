@@ -66,7 +66,7 @@ let failed_result = fun node_id ->
     completed_at = now;
   }
 
-let queue_respects_dependency_order = fun () ->
+let queue_respects_dependency_order = fun _ctx ->
   let queue = Tusk_executor.Action_queue.create () in
   let dep_node = make_action_node
     "kernel"
@@ -92,7 +92,7 @@ let queue_respects_dependency_order = fun () ->
             Ok ()
       )
 
-let queue_marks_dependents_skipped_after_failure = fun () ->
+let queue_marks_dependents_skipped_after_failure = fun _ctx ->
   let queue = Tusk_executor.Action_queue.create () in
   let dep_node = make_action_node "std" in
   let dependent_node = make_action_node "tusk-model" ~deps:[ dep_node.id ] in
@@ -106,7 +106,7 @@ let queue_marks_dependents_skipped_after_failure = fun () ->
   | Some _ -> Error "expected dependent action to be skipped"
   | None -> Error "missing dependent result"
 
-let requeue_with_deps_moves_blocked_node_and_queues_missing_dependency = fun () ->
+let requeue_with_deps_moves_blocked_node_and_queues_missing_dependency = fun _ctx ->
   let queue = Tusk_executor.Action_queue.create () in
   let missing_dep = make_action_node "kernel" in
   let blocked = make_action_node "std" ~deps:[ missing_dep.id ] in
@@ -123,7 +123,7 @@ let requeue_with_deps_moves_blocked_node_and_queues_missing_dependency = fun () 
       Ok ()
   | None -> Error "expected missing dependency node to be queued"
 
-let is_complete_checks_all_nodes_accounted_for = fun () ->
+let is_complete_checks_all_nodes_accounted_for = fun _ctx ->
   let queue = Tusk_executor.Action_queue.create () in
   let node_a = make_action_node "a" in
   let node_b = make_action_node "b" in

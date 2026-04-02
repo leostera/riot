@@ -83,7 +83,7 @@ let green_token_kinds = fun node ->
 
 let tests = [
   Test.case "ceibo tokens preserve leading trivia separately from token body width"
-    (fun () ->
+    (fun _ctx ->
       let comment = Ceibo.Green.make_trivia ~kind:Syn.SyntaxKind.COMMENT ~text:"(* hi *)" ~width:8 in
       let space = Ceibo.Green.make_trivia ~kind:Syn.SyntaxKind.WHITESPACE ~text:" " ~width:1 in
       let token = Ceibo.Green.make_token
@@ -97,7 +97,7 @@ let tests = [
       Test.assert_equal ~expected:2 ~actual:(List.length (Ceibo.Green.leading_trivia token));
       Ok ());
   Test.case "ceibo red tokens derive leading trivia spans before the token body"
-    (fun () ->
+    (fun _ctx ->
       let comment = Ceibo.Green.make_trivia ~kind:Syn.SyntaxKind.COMMENT ~text:"(*hi*)" ~width:6 in
       let space = Ceibo.Green.make_trivia ~kind:Syn.SyntaxKind.WHITESPACE ~text:" " ~width:1 in
       let token = Ceibo.Green.make_token
@@ -121,7 +121,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected two trivia entries");
   Test.case "ceibo builder helpers can construct tokens with leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let comment = Ceibo.Green.make_trivia ~kind:Syn.SyntaxKind.COMMENT ~text:"(*hi*)" ~width:6 in
       match Ceibo.Builder.make_token_with_leading_trivia
         ~leading_trivia:[ comment ]
@@ -133,7 +133,7 @@ let tests = [
           Ok ()
       | Ceibo.Green.Node _ -> Error "expected token element");
   Test.case "lexer attaches trailing file trivia to EOF leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let tokens = Syn.Lexer.tokenize "let x = 1\n(* tail *)\n" in
       match List.rev tokens with
       | eof :: _ ->
@@ -150,7 +150,7 @@ let tests = [
           )
       | [] -> Error "expected token stream to end with EOF");
   Test.case "lexer attaches mixed leading trivia onto the next real token"
-    (fun () ->
+    (fun _ctx ->
       let tokens = Syn.Lexer.tokenize "(** doc *)\n(* comment *)\nlet x = 1" in
       match tokens with
       | let_kw :: ident :: eq :: int_literal :: eof :: [] ->
@@ -174,7 +174,7 @@ let tests = [
           )
       | _ -> Error "expected lexer to emit only real tokens plus EOF");
   Test.case "parser consumes real-token streams without reintroducing trivia tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "(** doc *)\n(* comment *)\nlet x = 1" in
       let result = parse_ml source in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
@@ -191,7 +191,7 @@ let tests = [
         | _ -> Error "expected parser to preserve the lexer real-token stream"
       ));
   Test.case "parser compatibility keeps trailing file comments visible"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let x = 1\n(* tail *)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -201,7 +201,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected trailing file comment after let binding");
   Test.case "build_cst keeps trailing file docstrings visible via EOF trivia"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let x = 1\n(** tail doc *)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -211,7 +211,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected trailing file docstring after let binding");
   Test.case "visit traverses recursive declaration chains once"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "let rec a = 1 and b = 2 and c = 3\n\
          type a = A and b = B and c = C\n"
@@ -242,7 +242,7 @@ let tests = [
       Test.assert_equal ~expected:3 ~actual:type_declaration_count;
       Ok ());
   Test.case "parse results retain original tokens with EOF-owned trailing trivia"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let x = 1\n(* tail *)\n" in
       match List.rev result.tokens with
       | eof :: _ ->
@@ -259,7 +259,7 @@ let tests = [
           )
       | [] -> Error "expected token stream to end with EOF");
   Test.case "green tree no longer materializes standalone trivia tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "(* lead *)\n\
            let x =\n\
              (* inner *)\n\
@@ -283,7 +283,7 @@ let tests = [
         ~actual:(Ceibo.Green.width (Ceibo.Green.Node result.tree));
       Ok ());
   Test.case "red tree traversal stays trivia-free while first token keeps leading trivia"
-    (fun () ->
+    (fun _ctx ->
       let source = "(* lead *)\n\
            let x =\n\
              (* inner *)\n\
@@ -311,7 +311,7 @@ let tests = [
         )
       | None -> Error "expected root to have a first token");
   Test.case "cst exists for diagnostics-free parse"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type userProfile = int\n" in
       Test.assert_equal ~expected:0 ~actual:(List.length result.diagnostics);
       Test.assert_true (Option.is_some result.cst);
@@ -324,14 +324,14 @@ let tests = [
       );
       Ok ());
   Test.case "cst root distinguishes interfaces from implementations"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val create : int -> int\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
       Test.assert_equal ~expected:`Interface ~actual:(Syn.Cst.SourceFile.kind cst);
       Ok ());
   Test.case "cst source files expose top-level phrase separator tokens"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "let first = 1;;\n\
              let second = 2;;\n"
@@ -343,7 +343,7 @@ let tests = [
         ~actual:((Syn.Cst.SourceFile.phrase_separator_tokens cst |> List.map Syn.Cst.Token.text));
       Ok ());
   Test.case "cst polymorphic-variant inherit patterns keep the path after #"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let x = match y with #color | #M.color -> 1\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -362,13 +362,13 @@ let tests = [
         )
       | _ -> Error "expected let binding with match expression");
   Test.case "cst is absent when parse diagnostics exist"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let x =\n" in
       Test.assert_true (List.length result.diagnostics > 0);
       Test.assert_true (Option.is_none result.cst);
       Ok ());
   Test.case "cst ident helpers compare paths structurally"
-    (fun () ->
+    (fun _ctx ->
       let left = Syn.Cst.Ident.from_string "List.rev" in
       let right = Syn.Cst.Ident.from_string "List.rev" in
       let wrong = Syn.Cst.Ident.from_string "List.map" in
@@ -379,7 +379,7 @@ let tests = [
         ~actual:((Syn.Cst.Ident.segments left |> List.map Syn.Cst.Token.text));
       Ok ());
   Test.case "cst type extensions keep last module-path segment as name"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type Message.t += Added\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -392,7 +392,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a type extension");
   Test.case "cst type extensions preserve module-path names across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type Message (* c *).t += Added\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -404,7 +404,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected commented type extension");
   Test.case "cst type extensions are preserved in interfaces"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "type Message.t += Added\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -416,7 +416,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a type extension");
   Test.case "cst interface type declarations preserve abstract and manifest forms"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type t\n\
              type alias = int\n"
@@ -438,7 +438,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected interface type declarations");
   Test.case "cst interface type declarations distinguish destructive substitutions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "type view := string\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -459,7 +459,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected destructive type substitution");
   Test.case "cst type declarations preserve private flags structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "type visible = int\n\
              type hidden_record = private { value : int }\n\
@@ -493,7 +493,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected private and public type declarations");
   Test.case "cst type declarations preserve nonrec and manifest aliases"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "type nonrec 'a option = 'a option = None | Some of 'a\n\
              type point = Base.point = private { x : int; y : int }\n\
@@ -555,7 +555,7 @@ let tests = [
         )
       | _ -> Error "expected manifest alias declarations");
   Test.case "cst mutual type declarations preserve grouped bindings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type node = File of string\nand forest = node list\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -574,7 +574,7 @@ let tests = [
         )
       | _ -> Error "expected grouped type declaration");
   Test.case "cst mutual type declarations keep uppercase and-declarations on the variant path"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "type head = A\n\
              and alias = Outer (* c *).Inner.t\n\
@@ -611,7 +611,7 @@ let tests = [
         )
       | _ -> Error "expected grouped type declaration");
   Test.case "cst interface grouped type declarations keep uppercase GADT and-declarations on the variant path"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type _ expr = Int : int expr\n\
              and packed = Packed (* c *) : int expr -> packed\n"
@@ -648,7 +648,7 @@ let tests = [
         )
       | _ -> Error "expected grouped interface type declaration");
   Test.case "cst grouped type declarations keep and-member docs and following section headings in order"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type node = unit\n\
              (** Node type doc *)\n\
@@ -691,7 +691,7 @@ let tests = [
         )
       | _ -> Error "expected grouped type declaration, heading, and trailing type");
   Test.case "cst grouped type declarations keep docstrings on trailing and-members at eof"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type a = unit\n\
              (** doc for b *)\n\
@@ -713,7 +713,7 @@ let tests = [
         )
       | _ -> Error "expected a single grouped type declaration item");
   Test.case "cst grouped type declarations keep comments on trailing and-members at eof"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type a = unit\n\
              (* comment for b *)\n\
@@ -737,7 +737,7 @@ let tests = [
         )
       | _ -> Error "expected a single grouped type declaration item");
   Test.case "cst type declarations expose direct type parameters"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type ('a, 'error) resultish = int\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -751,7 +751,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst type declarations expose parameter variance and injectivity"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type (+!'a, -'b, !'c, 'd) descriptor = int\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -782,7 +782,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst type declarations expose declaration constraints"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type ('a, 'b) pair = 'a * 'b constraint 'a = int constraint 'b = string\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -814,7 +814,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst type declarations expose record fields structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type user = { mutable userName : string; created_at : int }\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -833,7 +833,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst record fields separate field attributes from field types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type user = { name : int [@deprecated]; code : (string [@boxed]) }\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -876,7 +876,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst type declarations expose variant constructors structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type user = | Guest_user | RegisteredUser of int\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -894,7 +894,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst variant constructors preserve tuple argument lists"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type coord = Point2D of int * int | Wrapped of (int * int)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -926,7 +926,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst variant constructors preserve inline record arguments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type person = Person of { name : string; age : int } | Anonymous\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -952,7 +952,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst GADT constructors expose argument and result structure"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type _ expr = Int : int expr | Val : 'a -> 'a expr\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -994,7 +994,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst type extensions expose GADT constructor result types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type _ Effect.t += Yield : unit Effect.t\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1016,7 +1016,7 @@ let tests = [
         )
       | _ -> Error "expected type extension item");
   Test.case "cst type declarations expose polyvariant tags structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type user = [ `guest_user | `RegisteredUser of int ]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1032,7 +1032,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a type declaration");
   Test.case "cst polyvariant rows preserve inherited fields and bounds"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val cast : [> base | `Ready ] -> unit\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1066,7 +1066,7 @@ let tests = [
         )
       | _ -> Error "expected first item to be a value declaration");
   Test.case "cst let bindings expose function binding names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let userProfile x = x\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1078,7 +1078,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst let bindings distinguish value bindings from function bindings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let userProfile = 42\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1089,7 +1089,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst module declarations preserve structure module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module Foo_bar = struct let answer = 42 end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1111,7 +1111,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with structure module expression");
   Test.case "cst builder can reify nested structure items from module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module Foo_bar = struct let answer = 42 end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1132,7 +1132,7 @@ let tests = [
         )
       | _ -> Error "expected module declaration with structure module expression");
   Test.case "cst builder keeps terminal nested structure comments standalone before end"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "module Foo_bar = struct\n\
              \  let answer = 42\n\
@@ -1159,7 +1159,7 @@ let tests = [
         )
       | _ -> Error "expected module declaration with structure module expression");
   Test.case "cst builder normalizes nested structure grouped type docs and headings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "module Green = struct\n\
              \  (** ## Types *)\n\
@@ -1234,7 +1234,7 @@ let tests = [
         )
       | _ -> Error "expected module declaration with structure body");
   Test.case "cst module declarations preserve constrained module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M : S with type t = int = struct type t = int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1281,7 +1281,7 @@ let tests = [
           );
       | _ -> Error "expected constrained module declaration");
   Test.case "cst module declarations preserve identifier module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module Alias = Source\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1295,7 +1295,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with identifier module expression");
   Test.case "cst module declarations preserve functor module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module F = functor (X : S) -> X\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1316,7 +1316,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with functor module expression");
   Test.case "cst module declarations preserve functor applications structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = F(X)(Y)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1342,7 +1342,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with functor application");
   Test.case "cst module declarations preserve functor applications across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = F (* c *) (X)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1362,7 +1362,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected commented module application");
   Test.case "cst module declarations preserve unit functor applications"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = F()\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1380,7 +1380,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with unit functor application");
   Test.case "cst module declarations preserve extension module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = [%driver]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1395,7 +1395,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with extension module expression");
   Test.case "cst module declarations preserve unpacked first-class modules"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = (val packed : S)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1419,7 +1419,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with unpacked first-class module");
   Test.case "cst module declarations preserve parenthesized module-type-of lookahead with comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module M = ((module (* c *) type of N))\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1441,7 +1441,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module declaration with parenthesized module-type-of body");
   Test.case "cst recursive module items preserve grouped bindings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module rec A : sig val x : int end = struct let x = B.y end\nand B : sig val y : int end = struct let y = 1 end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1456,7 +1456,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a grouped module declaration");
   Test.case "cst interface module declarations preserve signature-only bindings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "module M : sig val x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1472,7 +1472,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be an interface module declaration");
   Test.case "cst interface recursive modules preserve grouped signatures"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "module rec A : sig val x : int end\nand B : sig val y : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1487,7 +1487,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a grouped module declaration");
   Test.case "cst module type declarations expose declared names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type Foo_bar = sig end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1498,7 +1498,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a module type declaration");
   Test.case "cst module type lookahead survives inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module (* c *) type S = sig end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1509,7 +1509,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be a commented module type declaration");
   Test.case "cst interface module type declarations expose declared names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "module type Foo_bar = sig end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1520,7 +1520,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected first item to be an interface module type declaration");
   Test.case "cst module type declarations preserve identifier module type bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type Alias = Source\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1533,7 +1533,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected module type declaration with identifier body");
   Test.case "cst interface module type declarations preserve identifier module type bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "module type Alias = Source\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1546,7 +1546,7 @@ let tests = [
           Ok ()
       | _ -> Error "expected interface module type declaration with identifier body");
   Test.case "cst module type declarations preserve signature module type bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = sig val x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1557,7 +1557,7 @@ let tests = [
       } :: _ -> Ok ()
       | _ -> Error "expected module type declaration with signature body");
   Test.case "cst builder can reify nested signature items from module types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = sig val x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1582,7 +1582,7 @@ let tests = [
           )
       | _ -> Error "expected module type declaration with signature body");
   Test.case "cst builder keeps terminal nested signature docstrings standalone before end"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "module type S = sig\n\
              \  val x : int\n\
@@ -1613,7 +1613,7 @@ let tests = [
         )
       | _ -> Error "expected module type declaration with signature body");
   Test.case "cst builder keeps terminal nested signature comments standalone before end"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "module type S = sig\n\
              \  val x : int\n\
@@ -1643,7 +1643,7 @@ let tests = [
         )
       | _ -> Error "expected module type declaration with signature body");
   Test.case "cst builder normalizes nested signature grouped type docs and headings"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "module Green : sig\n\
              \  (** ## Types *)\n\
@@ -1725,7 +1725,7 @@ let tests = [
         )
       | _ -> Error "expected module declaration with signature body");
   Test.case "cst builder keeps nested signature prefix docs before declarations"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         {|
 module Span : sig
@@ -1774,7 +1774,7 @@ end
         )
       | _ -> Error "expected module declaration with signature body");
   Test.case "cst builder normalizes repeated nested signature type docs"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "module Capabilities : sig\n\
              \  (** {2 Capabilities} *)\n\
@@ -1833,7 +1833,7 @@ end
         )
       | _ -> Error "expected capabilities module declaration with signature body");
   Test.case "cst builder keeps ceibo nested signature headings stable"
-    (fun () ->
+    (fun _ctx ->
       let source = read_file
         Path.(Path.v "packages" / Path.v "ceibo" / Path.v "src" / Path.v "ceibo.mli") in
       let result = parse_mli source in
@@ -1917,7 +1917,7 @@ end
         )
       | None -> Error "expected Green module signature in ceibo.mli");
   Test.case "cst builder preserves nested signature standalone docs and comments after open"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "module Nested : sig\n\
              \  open Std\n\
@@ -1956,7 +1956,7 @@ end
         )
       | _ -> Error "expected module declaration with nested signature body");
   Test.case "cst module type declarations preserve with-constraint bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = Driver with type config = int\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -1984,7 +1984,7 @@ end
           )
       | _ -> Error "expected module type declaration with constrained body");
   Test.case "cst module type declarations preserve module-type-of bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = module type of Stdlib.Array\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2001,7 +2001,7 @@ end
           Ok ()
       | _ -> Error "expected module type declaration with module-type-of body");
   Test.case "cst module type declarations keep module-type-of lookahead stable across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = module (* c1 *) type (* c2 *) of Stdlib.Array\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2018,7 +2018,7 @@ end
           Ok ()
       | _ -> Error "expected commented module type declaration with module-type-of body");
   Test.case "cst module type declarations preserve extension module type bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type S = [%sig_ext]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2033,7 +2033,7 @@ end
           Ok ()
       | _ -> Error "expected module type declaration with extension body");
   Test.case "cst interface class declarations preserve typed class-type annotations"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "class c : object method x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2065,7 +2065,7 @@ end
           Ok ()
       | _ -> Error "expected interface class declaration");
   Test.case "cst implementation class declarations preserve declaration-site class-type annotations"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "class service : object method run : response end = object method run = value end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2113,7 +2113,7 @@ end
           Ok ()
       | _ -> Error "expected implementation class declaration");
   Test.case "cst class declarations preserve typed class-expression forms"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class direct = builder\n\
              class applied = builder arg\n\
@@ -2229,7 +2229,7 @@ end
           Ok ()
       | _ -> Error "expected typed class-expression declarations");
   Test.case "cst class declarations preserve constrained class-expression bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "class constrained = (builder : service)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2251,7 +2251,7 @@ end
           Ok ()
       | _ -> Error "expected constrained class-expression declaration");
   Test.case "cst class structures preserve field attributes"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class c = object\n\
              \  inherit builder [@@inh]\n\
@@ -2358,7 +2358,7 @@ end
           Ok ()
       | _ -> Error "expected class fields wrapped with attributes");
   Test.case "cst class structures preserve class fields, constraints, and extensions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class c = object\n\
              \  val mutable state = seed\n\
@@ -2452,7 +2452,7 @@ end
           Ok ()
       | _ -> Error "expected structured class fields");
   Test.case "cst class structures distinguish concrete and virtual members"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class c = object\n\
              \  val mutable state = seed\n\
@@ -2526,7 +2526,7 @@ end
           Ok ()
       | _ -> Error "expected concrete and virtual class member definitions");
   Test.case "cst builder keeps class trailing trivia as explicit body entries"
-    (fun () ->
+    (fun _ctx ->
       let source = "class c = object\n\
            \  method run = 1\n\
            \  (** body doc *)\n\
@@ -2562,7 +2562,7 @@ end
           )
       | _ -> Error "expected class declaration with structure body");
   Test.case "cst interface class type declarations preserve structured signatures"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "class type ct = object method x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2594,7 +2594,7 @@ end
           Ok ()
       | _ -> Error "expected interface class type declaration");
   Test.case "cst interface class type lookahead survives inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "class (* c *) type ct = object method x : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2623,7 +2623,7 @@ end
           Ok ()
       | _ -> Error "expected commented interface class type declaration");
   Test.case "cst rejects locally opened class types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         {|
 class type direct = C
@@ -2635,7 +2635,7 @@ class type generated = ([%ct])
       Test.assert_equal ~expected:None ~actual:result.cst;
       Ok ());
   Test.case "cst interface class declarations preserve arrow-style class types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "class service : request -> object method run : int end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2670,7 +2670,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected interface class declaration with arrow class type");
   Test.case "cst class type declarations preserve arrow and parenthesized arrow bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class type factory = request -> response -> service\n\
              class type grouped = (request -> service)\n"
@@ -2718,7 +2718,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected arrow-style class type declarations");
   Test.case "cst class type signatures preserve field structure and field attributes"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class type ct = object\n\
              \  inherit base [@@foo]\n\
@@ -2802,7 +2802,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected structured class type signature");
   Test.case "cst class type signatures preserve extension fields"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "class type ct = object\n\
              \  [%%foo]\n\
@@ -2837,7 +2837,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected class type extension field");
   Test.case "cst builder keeps class-type trailing trivia as explicit body entries"
-    (fun () ->
+    (fun _ctx ->
       let source = "class type ct = object\n\
            \  method run : int\n\
            \  (** body doc *)\n\
@@ -2873,7 +2873,7 @@ class type generated = ([%ct])
           )
       | _ -> Error "expected class type declaration with signature body");
   Test.case "cst value declarations preserve names and type nodes"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val create : name:string -> person\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2897,7 +2897,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected first item to be a value declaration");
   Test.case "cst value declarations preserve optional arrow labels"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val create : ?state:string -> person\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2916,7 +2916,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected optional labeled value declaration");
   Test.case "cst value declarations lift explicit polymorphic core types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val id : 'a 'b. 'a -> 'b -> 'a\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2939,7 +2939,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected explicitly polymorphic value declaration");
   Test.case "cst value declarations preserve quoted core type variable sigils"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val id : 'a -> 'a\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -2971,7 +2971,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected quoted core type variables");
   Test.case "cst value declarations preserve core type alias binder sigils"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val cast : ('a list as 'whole) -> 'whole\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3007,7 +3007,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected aliased core type binder with explicit sigil");
   Test.case "cst tokens expose operator-like names and fixed operators"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val ( mod ) : int -> int -> int\nval ( mod ) : int -> int -> int\nval ( |> ) : 'a -> ('a -> 'b) -> 'b\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3035,7 +3035,7 @@ class type generated = ([%ct])
           )
       | _ -> Error "expected operator value declarations");
   Test.case "cst value declarations lift explicit polymorphic core types with inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val id : 'a (* c *) 'b (* d *) . 'a -> 'b -> 'a\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3057,7 +3057,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected commented explicitly polymorphic value declaration");
   Test.case "cst value declarations preserve package core types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "val driver : (module Driver with type config = int)\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3076,7 +3076,7 @@ class type generated = ([%ct])
           Ok ()
       | _ -> Error "expected package core type");
   Test.case "cst rejects locally opened core types"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         {|
 val decode : Outer.Inner.(request -> response)
@@ -3086,7 +3086,7 @@ val decode : Outer.Inner.(request -> response)
       Test.assert_equal ~expected:None ~actual:result.cst;
       Ok ());
   Test.case "cst rejects locally opened core types with inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         {|
 val decode : Outer.Inner. (* c *) (request -> response)
@@ -3096,7 +3096,7 @@ val decode : Outer.Inner. (* c *) (request -> response)
       Test.assert_equal ~expected:None ~actual:result.cst;
       Ok ());
   Test.case "cst rejects locally opened core types with comments before dots"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         {|
 val decode : Outer.Inner (* c *).(request -> response)
@@ -3106,7 +3106,7 @@ val decode : Outer.Inner (* c *).(request -> response)
       Test.assert_equal ~expected:None ~actual:result.cst;
       Ok ());
   Test.case "cst external declarations preserve primitive names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "external sqrt : float -> float = \"caml_sqrt_float\"\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3123,7 +3123,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an external declaration");
   Test.case "cst external declarations preserve item attributes"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "external caml_hash : int -> int = \"caml_hash\" [@@noalloc]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3144,7 +3144,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected first item to be an external declaration");
   Test.case "cst shortcut extension declarations preserve declared names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "module%foo [@foo] M = M\n\
              module type%foo [@foo] S = S\n\
@@ -3164,7 +3164,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected shortcut extension declaration items");
   Test.case "cst include statements preserve typed include targets"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "include module type of Stdlib.Array\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3177,7 +3177,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an include statement");
   Test.case "cst include module type of lookahead survives inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "include module (* c *) type of Stdlib.Array\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3190,7 +3190,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected commented include module type of statement");
   Test.case "cst implementation includes preserve module-expression targets"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "include Std.List\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3210,7 +3210,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an include statement");
   Test.case "cst source files distinguish standalone attribute items"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "[@@@attr]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3224,7 +3224,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an attribute item");
   Test.case "cst source files distinguish standalone extension items"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "[%%toplevel_eval 42]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3248,7 +3248,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected first item to be an extension item");
   Test.case "cst interfaces distinguish standalone attribute items"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "[@@@attr]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3258,7 +3258,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an interface attribute item");
   Test.case "cst interfaces distinguish standalone extension items"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "[%%signature_item]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3270,7 +3270,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an interface extension item");
   Test.case "cst interface extension payloads default to opaque tokens"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "[%%signature_item val x : int]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3291,7 +3291,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | [] -> Error "expected interface extension payload");
   Test.case "cst attributed types keep attribute names and payload nodes"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "type t = int [@foo]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3310,21 +3310,10 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected attributed type alias");
   Test.case "cst pattern attributes attach orthogonally to the lifted pattern"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let (x [@foo]) = value\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
-      let assert_nested item_syntax_nodes =
-        let nested_items = Syn.CstBuilder.structure_items_from_syntax_nodes item_syntax_nodes in
-        match nested_items with
-        | Ok (Syn.Cst.StructureItem.LetBinding binding :: _) ->
-            Test.assert_equal ~expected:3 ~actual:(List.length binding.parameters);
-            Ok ()
-        | Ok _ ->
-            Error "expected nested let binding"
-        | Error _ ->
-            Error "expected nested structure relift to succeed"
-      in
       match structure_items cst with
       | Syn.Cst.StructureItem.LetBinding {
         binding_pattern=Syn.Cst.Pattern.Parenthesized { inner; _ };
@@ -3345,7 +3334,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected let binding with parenthesized pattern");
   Test.case "cst expression attributes keep opaque payload tokens"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let _ = value [@foo 1 + 2]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3363,7 +3352,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected expression attribute with opaque payload");
   Test.case "cst expression attributes survive inline comments after bracket"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let _ = value [ (* c *) @foo 1 + 2]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3380,7 +3369,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected let binding with commented expression attribute");
   Test.case "cst extensions keep typed `:` payloads opaque by default"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let _ = [%foo: int -> string]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3396,7 +3385,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected opaque typed extension payload");
   Test.case "cst extensions survive inline comments after bracket"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "let _ = [ (* c *) %foo: int -> string]\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3418,7 +3407,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected commented opaque extension payload");
   Test.case "cst exception declarations preserve declared names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "exception Not_found\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3428,7 +3417,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an exception declaration");
   Test.case "cst interface exception declarations preserve declared names"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "exception Not_found\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3438,7 +3427,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be an interface exception declaration");
   Test.case "cst type declarations preserve first-class module type definitions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "type transport = (module Transport)\n\
              type driver = (module Driver with type config = int)\n"
@@ -3460,7 +3449,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first-class module type definition");
   Test.case "cst type declarations distinguish class types from constructors"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "type bare = #list\n\
              type applied = int #list\n"
@@ -3500,7 +3489,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected class-type aliases");
   Test.case "cst open statements preserve open! structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "open! Std.List\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3527,7 +3516,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected first item to be an open statement");
   Test.case "cst interface open statements preserve open! structurally"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "open! Std.List\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3554,7 +3543,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected first item to be an interface open statement");
   Test.case "cst attaches top-level docstrings after open statements to the next value"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "open Std\n\
              \n\
@@ -3573,7 +3562,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected open statement and value declaration with leading doc");
   Test.case "cst keeps module overviews standalone before opens and repeated docs on the first type after open"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "(** JSON-RPC 2.0 Protocol Implementation *)\n\
              \n\
@@ -3603,7 +3592,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected standalone module overview, two opens, and a type declaration with repeated leading docs");
   Test.case "cst preserves standalone implementation docstrings after open statements"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "open Std\n\
              \n\
@@ -3621,7 +3610,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected open statement, standalone docstring, and let binding");
   Test.case "cst preserves standalone top-level comments after open statements"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "open Std\n\
              \n\
@@ -3637,7 +3626,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected open statement, standalone comment, and value declaration");
   Test.case "cst preserves standalone implementation comments after open statements"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "open Std\n\
              \n\
@@ -3653,7 +3642,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected open statement, standalone comment, and let binding");
   Test.case "build_cst derives top-level standalone trivia from parser token order"
-    (fun () ->
+    (fun _ctx ->
       let parsed = Syn.parse ~filename:sample_mli
         "open Std\n\
              \n\
@@ -3677,7 +3666,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | Error _ -> Error "expected CST build to succeed from parser token stream");
   Test.case "cst open statements expose raw owned trivia for inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "open (* keep me *) Std\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3689,7 +3678,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected single open statement item");
   Test.case "cst module declarations expose raw owned trivia for inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module (* keep me *) M = N\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3701,7 +3690,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected single module declaration item");
   Test.case "cst module type declarations expose raw owned trivia for inline comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli "module type (* keep me *) S = sig end\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -3713,7 +3702,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected single module type declaration item");
   Test.case "cst keeps terminal trailing value declaration docstrings standalone"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "val create : unit -> t\n\
              (** Create a new builder *)\n"
@@ -3730,7 +3719,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected value declaration followed by standalone terminal docstring");
   Test.case "cst keeps trailing alias docstrings with the next type declaration"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "(** Protocol version string *)\n\
              type protocol_version = string\n\
@@ -3768,7 +3757,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected two type declarations");
   Test.case "cst splits trailing variant docs between the current and next type"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type request_id =\n\
              \  | String of string\n\
@@ -3801,7 +3790,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected request_id and error_code declarations");
   Test.case "cst sends trailing docs after already-documented variant types to the next type"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "(** Method parameters *)\n\
              type params =\n\
@@ -3844,7 +3833,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected params and prerequest declarations");
   Test.case "cst keeps docstrings between top-level type declarations on the next type"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type request_id =\n\
              \  | String of string\n\
@@ -3880,7 +3869,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected request_id and error_code declarations");
   Test.case "cst keeps terminal type docstrings standalone at end of file"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type a\n\
              (** doc string *)\n"
@@ -3897,7 +3886,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected type declaration followed by standalone docstring");
   Test.case "cst keeps exception docstrings on the next item without a member stream"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "exception Cancelled\n\
              (** Response payload *)\n\
@@ -3920,7 +3909,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected exception declaration followed by type declaration");
   Test.case "cst keeps constructor docstrings leading on the next constructor"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type error =\n\
              \  | ParseError of { raw_input : string; parse_error : string }\n\
@@ -3945,7 +3934,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected single type declaration");
   Test.case "cst keeps terminal constructor docstrings standalone at end of file"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type error =\n\
              \  | UnknownServerError of { code : int; message : string; data : Json.t option }\n\
@@ -3979,7 +3968,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected type declaration followed by standalone docstrings");
   Test.case "cst keeps record field docstrings leading on the next field"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type event = {\n\
              \  data : string;\n\
@@ -4005,7 +3994,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected single record type declaration");
   Test.case "cst keeps terminal record field docs off the next type's leading docs"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type event = {\n\
              \  data : string;\n\
@@ -4036,7 +4025,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected event and response type declarations");
   Test.case "cst builder record field items keep terminal docstrings before closing braces"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type event = {\n\
              \  data : string;\n\
@@ -4068,7 +4057,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected event and response declarations");
   Test.case "cst builder record field items keep standalone terminal comments before closing braces"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "type event = {\n\
              \  data : string;\n\
@@ -4099,7 +4088,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected single record declaration");
   Test.case "cst docstrings expose explicit section vs ordinary kinds"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "(** ## Types *)\n\
              type a = int\n\
@@ -4135,7 +4124,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected section docstring, comment, and type declarations in order");
   Test.case "cst keeps section docstrings after grouped type declarations standalone"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_mli
         "(** ## Types *)\n\
              \n\
@@ -4192,7 +4181,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected types heading, two type declaration items, construction heading, and value declaration");
   Test.case "cst implementation keeps section docstrings after grouped type declarations standalone"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "(** ## Types *)\n\
              \n\
@@ -4250,7 +4239,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           )
       | _ -> Error "expected types heading, two type declaration items, construction heading, and let binding");
   Test.case "cst keeps banner comments as standalone top-level comments"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "let to_list t = collect t []\n\
              \n\
@@ -4274,7 +4263,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected banner comments to remain first-class comment items");
   Test.case "cst implementation open statements lift non-path module expressions"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         "open struct\n\
              let value = 1\n\
@@ -4296,7 +4285,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected first item to be an implementation open statement");
   Test.case "cst source files preserve mixed structure item ordering"
-    (fun () ->
+    (fun _ctx ->
       let source = "let first = 1\nmodule Middle = struct end\nlet second = 2\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4308,7 +4297,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected let/module/let item ordering");
   Test.case "cst let bindings expose typed parameters"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render userId ~displayName ?pageSize current_user = current_user\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4322,7 +4311,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected render binding parameters");
   Test.case "cst let bindings preserve optional parameter defaults structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let apply ?(f : int -> int = fun x -> x * 2) ?timeout:chosen_timeout () = f 1\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4357,7 +4346,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | [] -> Error "expected let binding");
   Test.case "cst let bindings preserve locally abstract type parameters"
-    (fun () ->
+    (fun _ctx ->
       let source = "let id (type a b) value = value\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4375,7 +4364,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | [] -> Error "expected let binding");
   Test.case "cst let bindings preserve recursive markers"
-    (fun () ->
+    (fun _ctx ->
       let source = "let rec loop x = loop x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4386,7 +4375,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | [] -> Error "expected recursive let binding");
   Test.case "cst let binding annotations wrap bound values as typed expressions"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render : user_t -> user_t = fun value -> value\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4404,7 +4393,7 @@ val decode : Outer.Inner (* c *).(request -> response)
       } :: _ -> Ok ()
       | _ -> Error "expected typed let-binding value");
   Test.case "cst let binding annotations preserve explicit polymorphism"
-    (fun () ->
+    (fun _ctx ->
       let source = "let id : 'a. 'a -> 'a = fun x -> x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4432,7 +4421,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected polymorphic let-binding value");
   Test.case "cst let binding annotations preserve locally abstract core types with inline comments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let id : type (* c *) a. a -> a = fun x -> x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4482,7 +4471,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected commented locally abstract core type annotation");
   Test.case "cst let bindings expose infix string concatenation values"
-    (fun () ->
+    (fun _ctx ->
       let source = "let banner = \"a\" ^ \"b\" ^ \"c\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4497,7 +4486,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst let bindings expose custom infix operators structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let composed = f %> g\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4512,7 +4501,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst let bindings preserve infix expressions across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let banner = \"a\" (* c *) ^ \"b\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4527,7 +4516,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst let bindings expose if expressions and unit else branches"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render ok = if ok then log () else ()\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4544,7 +4533,7 @@ val decode : Outer.Inner (* c *).(request -> response)
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst if expressions preserve boolean literal comparisons"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render ok = if ok = true then log () else ()\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4570,7 +4559,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst typed expressions preserve the wrapped expression and type node"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = (value : user_t)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4590,7 +4579,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected typed expression value");
   Test.case "cst coerce expressions preserve optional source types"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = (value : user_t :> display_t)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4614,7 +4603,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected coerce expression value");
   Test.case "cst source files keep top-level eval expressions as items"
-    (fun () ->
+    (fun _ctx ->
       let source = "print_endline \"hello\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4630,7 +4619,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected top-level eval expression item");
   Test.case "cst source files keep top-level let-in expressions as items"
-    (fun () ->
+    (fun _ctx ->
       let source = "let a, b = pair in a\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4655,7 +4644,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected top-level let expression item");
   Test.case "cst tuple patterns preserve labeled payloads and open tails"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f value = match value with | ~state:Some x, ~rest, .. -> x | _ -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4705,7 +4694,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected labeled tuple pattern with open tail");
   Test.case "cst tuple patterns preserve typed labeled punning"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f = function | ~(x : int), y -> x | _ -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4747,7 +4736,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected typed labeled tuple pattern");
   Test.case "cst match cases preserve unreachable expressions"
-    (fun () ->
+    (fun _ctx ->
       let source = "let absurd maybe = match maybe with | Some value -> value | None -> .\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4768,7 +4757,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected match expression with unreachable branch");
   Test.case "cst let-operator expressions preserve the leading operator clause"
-    (fun () ->
+    (fun _ctx ->
       let source = "let ( let* ) = Result.bind\nlet* value = Ok 1 in Ok value\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4788,7 +4777,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected top-level let-operator expression item");
   Test.case "cst let-operator expressions preserve parallel and-bindings"
-    (fun () ->
+    (fun _ctx ->
       let source = "let ( let* ) = Result.bind\n\
            let ( and* ) = Result.both\n\
            let* a = Ok 1 and* b = Ok 2 in Ok (a, b)\n"
@@ -4821,7 +4810,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected parallel let-operator expression item");
   Test.case "cst let-operator expressions expose equals and in tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "let ( let* ) = Result.bind\n\
            let ( and* ) = Result.both\n\
            let* a = Ok 1 and* b = Ok 2 in Ok (a, b)\n"
@@ -4847,7 +4836,7 @@ val decode : Outer.Inner (* c *).(request -> response)
           Ok ()
       | _ -> Error "expected let-operator tokens to expose equals and in");
   Test.case "cst let bindings keep comment trivia before grouped and-bindings"
-    (fun () ->
+    (fun _ctx ->
       let source = {|
 let rec first x = second x
 (* Parse signature item (top-level in .mli files) *)
@@ -4874,7 +4863,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected grouped let binding with nested and-binding comment");
   Test.case "cst type declarations keep declaration attributes attached"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml
         {|type perform = { perform : int } [@@unboxed]
 |}
@@ -4894,7 +4883,7 @@ and second x = x
         )
       | _ -> Error "expected a single type declaration item without a trailing floating attribute");
   Test.case "cst let expressions expose unit-pattern sequencing structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render () = let () = log () in flush ()\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4932,7 +4921,7 @@ and second x = x
       } :: _ -> Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst let bindings expose fun expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = fun value -> value\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4953,7 +4942,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected first item to be a let binding with a fun expression");
   Test.case "cst let bindings expose function expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = function | 0 -> \"zero\" | _ -> \"other\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4964,7 +4953,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected first item to be a let binding with a function expression");
   Test.case "cst function expressions preserve the leading bar token"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = function | 0 -> \"zero\" | _ -> \"other\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -4984,7 +4973,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected function cases to preserve their leading bars");
   Test.case "cst fun expressions preserve nested function case bodies"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render default = fun value -> function | Some current -> current | None -> default\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5028,7 +5017,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected fun expression with nested function body");
   Test.case "cst match expressions expose boolean cases structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render flag = match flag with true -> 1 | false -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5070,7 +5059,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst try expressions expose handlers structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render value = try render_inner value with exn -> raise exn\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5097,7 +5086,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected first item to be a let binding with a try expression");
   Test.case "cst try expressions expose effect handlers structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render thunk = try thunk () with | effect (Yield x), k -> continue k x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5140,7 +5129,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected first item to be a let binding with an effect handler");
   Test.case "cst let bindings preserve infix expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let changed = (left <> right)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5160,7 +5149,7 @@ and second x = x
         )
       | [] -> Error "expected let binding");
   Test.case "cst let bindings expose apply and field access expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let reversed = List.rev (List.rev xs)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5196,7 +5185,7 @@ and second x = x
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst begin-end expressions preserve grouping style"
-    (fun () ->
+    (fun _ctx ->
       let source = "let wrapped = begin log \"start\"; log \"done\" end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5214,7 +5203,7 @@ and second x = x
       } :: _ -> Ok ()
       | _ -> Error "expected begin-end parenthesized sequence");
   Test.case "cst preserves top-level trailing-semicolon phrases as sequences"
-    (fun () ->
+    (fun _ctx ->
       let source = "-1;;\n\n~+2;;\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5226,7 +5215,7 @@ and second x = x
       }) :: _ -> Ok ()
       | _ -> Error "expected top-level trailing-semicolon sequences");
   Test.case "cst keeps newline-before-semicolon sequences inside let-in bodies"
-    (fun () ->
+    (fun _ctx ->
       let source = "let with_lock t f = f ()\n\
            \n\
            let render t =\n\
@@ -5256,7 +5245,7 @@ and second x = x
       } :: _ -> Ok ()
       | _ -> Error "expected let-in body to remain a three-part sequence");
   Test.case "cst begin-end sequences survive inline comments before semicolons"
-    (fun () ->
+    (fun _ctx ->
       let source = "let wrapped = begin log \"start\" (* c *); log \"done\" end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5274,7 +5263,7 @@ and second x = x
       } :: _ -> Ok ()
       | _ -> Error "expected commented begin-end sequence");
   Test.case "cst sequences expose every separator token"
-    (fun () ->
+    (fun _ctx ->
       let source = "let wrapped = begin log \"start\"; log \"middle\"; log \"done\" end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5297,7 +5286,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected begin-end sequence with separator token list");
   Test.case "cst constructor expressions preserve bare and applied forms"
-    (fun () ->
+    (fun _ctx ->
       let source = "let some = Some 42\n\
            let none = None\n\
            let err = Result.Error message\n"
@@ -5341,7 +5330,7 @@ and second x = x
         )
       | _ -> Error "expected three let bindings");
   Test.case "cst tuple expressions survive inline comments before commas"
-    (fun () ->
+    (fun _ctx ->
       let source = "let pair = (left (* c *), right)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5369,7 +5358,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected commented tuple expression");
   Test.case "cst apply expressions preserve labeled arguments structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = f ~y:1\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5396,7 +5385,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected labeled apply argument");
   Test.case "cst tuples keep labeled applies separate from following comma expressions"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = (f ~y:value, fallback)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5436,7 +5425,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected tuple expression whose first element is a labeled apply");
   Test.case "cst apply expressions preserve optional shorthand arguments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = f ?y\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5456,7 +5445,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected optional shorthand apply argument");
   Test.case "cst apply expressions survive inline comments before positional args"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = f (* c *) y\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5477,7 +5466,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected commented positional apply expression");
   Test.case "cst local opens preserve module paths from token-only syntax"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x =\n  let open List in\n  map f xs\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5497,7 +5486,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected local open expression");
   Test.case "cst local opens via let survive inline comments after let"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = let (* c *) open List in map f xs\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5516,7 +5505,7 @@ and second x = x
           Ok ()
       | _ -> Error "expected commented let-open local open expression");
   Test.case "cst local opens preserve module paths through shortcut shells"
-    (fun () ->
+    (fun _ctx ->
       let source = {|
 let x =
   let open%foo[@foo] M in
@@ -5541,7 +5530,7 @@ let x =
           Ok ()
       | _ -> Error "expected shortcut let-open local open expression");
   Test.case "cst prefix local opens preserve module paths and body expressions"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = M.{ field = 42 }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5561,7 +5550,7 @@ let x =
           Ok ()
       | _ -> Error "expected prefix local open expression");
   Test.case "cst prefix local opens preserve paren bodies across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = M (* c *).(build value)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5581,7 +5570,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented paren local open expression");
   Test.case "cst prefix local opens preserve list bodies across inline comments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = List.(* c *)[1; 2; 3]\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5601,7 +5590,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented bracket local open expression");
   Test.case "cst local open patterns preserve module paths and wrapped patterns"
-    (fun () ->
+    (fun _ctx ->
       let source = "let unwrap = function\n| Outer.Inner.(Some x) -> x\n| Outer.Inner.(None) -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5642,7 +5631,7 @@ let x =
           Ok ()
       | _ -> Error "expected local open pattern");
   Test.case "cst local open patterns survive inline comments before the local-open dot"
-    (fun () ->
+    (fun _ctx ->
       let source = "let unwrap = function\n| Outer.Inner (* c *).(Some x) -> x\n| _ -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5683,7 +5672,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented local open pattern");
   Test.case "cst local open record patterns preserve module paths and record fields"
-    (fun () ->
+    (fun _ctx ->
       let source = "let serialize frame =\n\
           \  let Frame.{ fin; opcode; payload } = frame in\n\
           \  payload\n"
@@ -5711,7 +5700,7 @@ let x =
           Ok ()
       | _ -> Error "expected local open record pattern");
   Test.case "cst first-class module patterns preserve anonymous unpack binders"
-    (fun () ->
+    (fun _ctx ->
       let source = "let ignore_typed packed = let (module _ : S) = packed in ()\n\
            let ignore_plain packed = let (module _) = packed in ()\n"
       in
@@ -5752,7 +5741,7 @@ let x =
           Ok ()
       | _ -> Error "expected anonymous first-class module patterns");
   Test.case "cst first-class module expressions preserve module and type nodes"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = (module M : S)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5773,7 +5762,7 @@ let x =
           Ok ()
       | _ -> Error "expected first-class module expression");
   Test.case "cst qualified module paths preserve recursive structure"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = (module Std.Net.TcpClient : Std.Net.Transport)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5823,7 +5812,7 @@ let x =
           Ok ()
       | _ -> Error "expected qualified first-class module path");
   Test.case "cst qualified module paths survive inline comments before dots"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = (module Std (* c *).Net.TcpClient : Std.Net (* d *).Transport)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5873,7 +5862,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented qualified first-class module path");
   Test.case "cst first-class module expressions preserve structured packed payloads"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = (module struct let y = 1 end : S)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5896,7 +5885,7 @@ let x =
           Ok ()
       | _ -> Error "expected structured packed first-class module expression");
   Test.case "cst module type declarations preserve functor module type bodies"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type F = functor (X : S) -> T\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -5917,7 +5906,7 @@ let x =
           Ok ()
       | _ -> Error "expected module type declaration with functor body");
   Test.case "cst module type functor lookahead survives inline comments in parameters"
-    (fun () ->
+    (fun _ctx ->
       let result = parse_ml "module type F = functor (X (* c *) : S) -> T\n" in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
@@ -5938,7 +5927,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented module type functor body");
   Test.case "cst let-module expressions preserve module name and body"
-    (fun () ->
+    (fun _ctx ->
       let source = "let run driver = let module D = (val driver) in D.execute ()\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5965,7 +5954,7 @@ let x =
           Ok ()
       | _ -> Error "expected let-module expression");
   Test.case "cst let-module expressions preserve commented first-class module unpacking"
-    (fun () ->
+    (fun _ctx ->
       let source = "let run driver = let module D = ( (* c *) val driver ) in D.execute ()\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -5992,7 +5981,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented let-module expression");
   Test.case "cst field access preserves nested qualified field access structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render record = record.Module.field\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6019,7 +6008,7 @@ let x =
           Ok ()
       | _ -> Error "expected nested field access structure");
   Test.case "cst preserves parenthesized expressions structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let wrapped = (((((value)))))\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6034,7 +6023,7 @@ let x =
           Ok ()
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst preserves parenthesized expressions with inner comments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let wrapped = ( (* c *) value )\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for commented parenthesized expression"
@@ -6047,7 +6036,7 @@ let x =
         )
       | _ -> Error "expected first item to be a let binding");
   Test.case "cst function cases preserve constructor tuple patterns structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render = function | Some (head, _) -> head | None -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6097,7 +6086,7 @@ let x =
           Ok ()
       | _ -> Error "expected faithful constructor pattern structure");
   Test.case "cst constructor patterns preserve existential binders"
-    (fun () ->
+    (fun _ctx ->
       let source = "let unwrap = function | Pair (type a b) ((left, right) : a * b) -> left\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6136,7 +6125,7 @@ let x =
           Ok ()
       | _ -> Error "expected constructor existential binders");
   Test.case "cst match cases preserve alias and typed patterns structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render value = match value with | (user : user_t) as current_user -> current_user\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6170,7 +6159,7 @@ let x =
           Ok ()
       | _ -> Error "expected faithful alias typed pattern structure");
   Test.case "cst or patterns survive inline comments before pipe"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render value = match value with | None (* c *) | Some _ -> 0 | _ -> 1\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6207,7 +6196,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented or pattern structure");
   Test.case "cst alias patterns survive inline comments before as"
-    (fun () ->
+    (fun _ctx ->
       let source = "let render value = match value with | user (* c *) as current_user -> current_user\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6236,7 +6225,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented alias pattern structure");
   Test.case "cst cons patterns survive inline comments before coloncolon"
-    (fun () ->
+    (fun _ctx ->
       let source = "let first xs = match xs with | head (* c *) :: tail -> head | [] -> 0\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6265,7 +6254,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented cons pattern structure");
   Test.case "cst tuple patterns survive inline comments before commas"
-    (fun () ->
+    (fun _ctx ->
       let source = "let project pair = match pair with | (left (* c *), right) -> left\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6301,7 +6290,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented tuple pattern structure");
   Test.case "cst lazy patterns preserve the wrapped pattern"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f x = match x with | (lazy y) -> y\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6335,7 +6324,7 @@ let x =
           Ok ()
       | _ -> Error "expected lazy pattern structure");
   Test.case "cst exception patterns preserve the wrapped constructor"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f x = match x with exception Not_found -> None | y -> Some y\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6364,7 +6353,7 @@ let x =
           Ok ()
       | _ -> Error "expected exception pattern structure");
   Test.case "cst range patterns preserve the written bounds"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f x = match x with | 'a' .. 'z' -> \"lowercase\" | _ -> \"other\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6403,7 +6392,7 @@ let x =
           Ok ()
       | _ -> Error "expected range pattern structure");
   Test.case "cst range patterns survive inline comments before dotdot"
-    (fun () ->
+    (fun _ctx ->
       let source = "let f x = match x with | 'a' (* c *) .. 'z' -> \"lowercase\" | _ -> \"other\"\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6442,7 +6431,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented range pattern structure");
   Test.case "cst literals preserve structured constant details"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = 0xffL\nlet y = 1.2g\nlet z = {|hello|}\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6488,7 +6477,7 @@ let x =
           Ok ()
       | _ -> Error "expected structured literal constants");
   Test.case "cst pattern literals preserve explicit sign tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "let classify = function | -1 -> true | +2 -> false | _ -> false\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6536,7 +6525,7 @@ let x =
           Ok ()
       | _ -> Error "expected signed literal patterns in function cases");
   Test.case "lexer tagged quoted string literals tokenize as strings"
-    (fun () ->
+    (fun _ctx ->
       let kinds = Syn.tokenize "let explanation = {explain|hello|explain}\n"
       |> List.map (fun token -> Syn.Token.show_kind token.Syn.Token.kind) in
       Test.assert_equal
@@ -6554,7 +6543,7 @@ let x =
         ~actual:kinds;
       Ok ());
   Test.case "cst tagged quoted string literals preserve marker and contents"
-    (fun () ->
+    (fun _ctx ->
       let parsed = Syn.parse ~filename:sample_ml "let explanation = {explain|hello|explain}\n" in
       Test.assert_equal ~expected:0 ~actual:(List.length parsed.Syn.Parser.diagnostics);
       match Syn.build_cst parsed with
@@ -6588,7 +6577,7 @@ let x =
           | _ -> Error "expected tagged quoted string literal"
         ));
   Test.case "cst record expressions preserve literal fields structurally"
-    (fun () ->
+    (fun _ctx ->
       let source = "let point = { x = 1; y = 2 }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6620,7 +6609,7 @@ let x =
           Ok ()
       | _ -> Error "expected literal record expression");
   Test.case "cst record expressions preserve punning as explicit path values"
-    (fun () ->
+    (fun _ctx ->
       let source = "let make ~x ~y = { x; y }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6654,7 +6643,7 @@ let x =
           Ok ()
       | _ -> Error "expected punned record expression");
   Test.case "cst record update expressions preserve base and updated fields"
-    (fun () ->
+    (fun _ctx ->
       let source = "let point = { point with x = 3 }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6683,7 +6672,7 @@ let x =
           Ok ()
       | _ -> Error "expected update record expression");
   Test.case "cst object override expressions preserve instance variables"
-    (fun () ->
+    (fun _ctx ->
       let source = "let next = {< current = state; count = total >}\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6719,7 +6708,7 @@ let x =
           Ok ()
       | _ -> Error "expected object override expression");
   Test.case "cst index and assign expressions preserve the written target"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = arr.(0) <- 5\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6747,7 +6736,7 @@ let x =
           Ok ()
       | _ -> Error "expected assign(index(...)) expression");
   Test.case "cst index expressions survive inline comments before dot-paren"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = arr (* c *).(0)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6767,7 +6756,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented index expression");
   Test.case "cst string index expressions survive inline comments before brackets"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = text.(* c *)[0]\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6787,7 +6776,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented string index expression");
   Test.case "cst custom index expressions survive inline comments before operators"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = table.(* c *)?[\"key\"]\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6807,7 +6796,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented custom index expression");
   Test.case "cst assign expressions survive inline comments before arrows"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = arr.(0) (* c *) <- 5\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6828,7 +6817,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented assign expression");
   Test.case "cst field assignments preserve field-access targets"
-    (fun () ->
+    (fun _ctx ->
       let source = "let () = obj.field <- 10\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6851,7 +6840,7 @@ let x =
           Ok ()
       | _ -> Error "expected field assignment expression");
   Test.case "cst object methods preserve instance-variable assignments"
-    (fun () ->
+    (fun _ctx ->
       let source = "let counter =\n  object\n    val mutable count = 0\n    method set next = count <- next\n  end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6886,7 +6875,7 @@ let x =
           Ok ()
       | _ -> Error "expected object method instance-variable assignment");
   Test.case "cst object expressions preserve extension members"
-    (fun () ->
+    (fun _ctx ->
       let source = "let value =\n  object\n    [%%foo]\n    method run = 1\n  end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6917,7 +6906,7 @@ let x =
           Ok ()
       | _ -> Error "expected object extension member");
   Test.case "cst builder keeps object trailing trivia as explicit body entries"
-    (fun () ->
+    (fun _ctx ->
       let source = "let value =\n  object\n    method run = 1\n    (** body doc *)\n    (* body comment *)\n  end\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6948,7 +6937,7 @@ let x =
           )
       | _ -> Error "expected object expression in leading let binding");
   Test.case "cst record patterns preserve field punning and nested patterns"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = match r with { user = { id }; name } -> id\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -6995,7 +6984,7 @@ let x =
           Ok ()
       | _ -> Error "expected record pattern structure");
   Test.case "cst record patterns preserve inner comments around fields"
-    (fun () ->
+    (fun _ctx ->
       let source = "let { (* c *) foo } = record\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for commented record pattern"
@@ -7010,7 +6999,7 @@ let x =
           Ok ()
       | _ -> Error "expected commented record pattern structure");
   Test.case "cst record patterns preserve open wildcard tails"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = match r with { user; _ } -> user\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7042,7 +7031,7 @@ let x =
           Ok ()
       | _ -> Error "expected open record pattern");
   Test.case "cst array patterns preserve literal element patterns"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = match xs with [| 1; value |] -> value\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7076,7 +7065,7 @@ let x =
           Ok ()
       | _ -> Error "expected array pattern structure");
   Test.case "cst string indexing reuses the shared index expression shape"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = s.[0]\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7099,7 +7088,7 @@ let x =
           Ok ()
       | _ -> Error "expected string index expression");
   Test.case "cst extended index expressions preserve delimiter tokens"
-    (fun () ->
+    (fun _ctx ->
       let source = "let z = x.%(0)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7122,7 +7111,7 @@ let x =
           Ok ()
       | _ -> Error "expected extended index expression");
   Test.case "cst polyvariant expressions preserve tags and payloads"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = `Point { y = 1; z = 2 }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7143,7 +7132,7 @@ let x =
           Ok ()
       | _ -> Error "expected polyvariant expression");
   Test.case "cst polyvariant patterns mirror bare and payload parsetree forms"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = match y with `Done -> 0 | `Point (a, b) -> a\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7190,7 +7179,7 @@ let x =
           Ok ()
       | _ -> Error "expected polyvariant pattern");
   Test.case "cst nested record updates preserve expression bases"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = { { point with a = 1 } with b = 2 }\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7215,7 +7204,7 @@ let x =
           Ok ()
       | _ -> Error "expected nested record update");
   Test.case "cst assert expressions preserve the asserted value"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = assert true\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7234,7 +7223,7 @@ let x =
           Ok ()
       | _ -> Error "expected assert expression");
   Test.case "cst lazy expressions preserve the wrapped body"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = lazy (1 + 2)\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7251,7 +7240,7 @@ let x =
       } :: _ -> Ok ()
       | _ -> Error "expected lazy expression");
   Test.case "cst while expressions preserve the condition and body"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = while !y < 10 do y := !y + 1 done\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7271,7 +7260,7 @@ let x =
           Ok ()
       | _ -> Error "expected while expression");
   Test.case "cst for expressions preserve iterator and direction"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = for i = 0 downto 1 do f i done\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7293,7 +7282,7 @@ let x =
           Ok ()
       | _ -> Error "expected for expression");
   Test.case "cst for expressions distinguish ascending direction"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x = for i = 0 to 1 do f i done\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7313,7 +7302,7 @@ let x =
           Ok ()
       | _ -> Error "expected ascending for expression");
   Test.case "cst builder keeps let-binding parameters when relifting local module structure items"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x =\n\
           \  let module M = struct\n\
           \    let read data ?timeout:_ buf = Ok 0\n\
@@ -7367,7 +7356,7 @@ let x =
       } :: _ -> assert_nested item_syntax_nodes
       | _ -> Error "expected local module in let body");
   Test.case "cst builder keeps let-binding parameters for compact local-module bindings"
-    (fun () ->
+    (fun _ctx ->
       let source = "let x =\n\
           \  let module M = struct\n\
           \    let read  data ?timeout:_ buf= Ok 0\n\
@@ -7421,7 +7410,7 @@ let x =
       } :: _ -> assert_nested item_syntax_nodes
       | _ -> Error "expected local module in let body");
   Test.case "cst builder keeps nested floating attributes in relifted module bodies"
-    (fun () ->
+    (fun _ctx ->
       let source = "module M = struct\n\
           \  type t = int [@@foo]\n\
           \  [@@@foo]\n\
@@ -7479,7 +7468,7 @@ let x =
         )
       | _ -> Error "expected nested module declaration and module type declaration");
   Test.case "cst builder keeps class declaration shell modifiers explicit"
-    (fun () ->
+    (fun _ctx ->
       let source = "class%foo [@foo] x = x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7496,7 +7485,7 @@ let x =
           Ok ()
       | _ -> Error "expected class declaration shell extension and attribute");
   Test.case "cst builder keeps class-type declaration shell modifiers explicit"
-    (fun () ->
+    (fun _ctx ->
       let source = "class type%foo [@foo] x = x\n" in
       let result = parse_ml source in
       let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
@@ -7512,7 +7501,7 @@ let x =
           Ok ()
       | _ -> Error "expected class-type declaration shell extension and attribute");
   Test.case "cst keeps top-level let comments standalone instead of duplicating them"
-    (fun () ->
+    (fun _ctx ->
       let source = {|
 (* First non-trivia token *)
 let first_non_trivia_token node =
@@ -7535,7 +7524,7 @@ let first_non_trivia_token node =
         )
       | _ -> Error "expected leading comment followed by top-level let binding");
   Test.case "cst parenthesized expressions preserve trivia after the opening delimiter"
-    (fun () ->
+    (fun _ctx ->
       let source = {|
 let classify remaining available =
   if remaining <= 0 then (
@@ -7589,7 +7578,7 @@ let classify remaining available =
         )
       | _ -> Error "expected parenthesized if branches to preserve opening-delimiter trivia");
   Test.case "cst keeps polymorphic variant payload local opens distinct from raw local opens"
-    (fun () ->
+    (fun _ctx ->
       let source = {|
 let lifted =
   match suffix_class_body, declaration_class_type with

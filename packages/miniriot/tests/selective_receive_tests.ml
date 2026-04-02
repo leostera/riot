@@ -69,7 +69,7 @@ let test_selective_receive_preserves_skipped_messages = fun () ->
               second
       )
 
-let test_case = fun () ->
+let test_case = fun _ctx ->
   try test_selective_receive_preserves_skipped_messages () with
   | Receive_timeout -> Result.Error "timed out waiting for expected message"
   | exn -> Result.Error (Kernel.Exception.to_string exn)

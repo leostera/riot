@@ -1,13 +1,13 @@
 open Std
 open Gooey
 
-let test_text_element = fun () ->
+let test_text_element = fun _ctx ->
   let elem = Element.text "Hello" in
   match elem with
   | Element.Text { content; _ } when content = "Hello" -> Ok ()
   | _ -> Error "Element.text should create Text element with correct content"
 
-let test_text_element_with_style = fun () ->
+let test_text_element_with_style = fun _ctx ->
   let custom_style = Style.(empty |> bold |> fg (`rgb (255, 0, 0))) in
   let elem = Element.text ~style:custom_style "Styled" in
   match elem with
@@ -16,7 +16,7 @@ let test_text_element_with_style = fun () ->
   && style.foreground = Some (`rgb (255, 0, 0)) -> Ok ()
   | _ -> Error "Text element should preserve custom style"
 
-let test_container_element = fun () ->
+let test_container_element = fun _ctx ->
   let child1 = Element.text "A" in
   let child2 = Element.text "B" in
   let elem = Element.container [ child1; child2 ] in
@@ -24,19 +24,19 @@ let test_container_element = fun () ->
   | Element.Container { children; _ } when List.length children = 2 -> Ok ()
   | _ -> Error "Container should hold correct number of children"
 
-let test_row_element = fun () ->
+let test_row_element = fun _ctx ->
   let elem = Element.row [ Element.text "A" ] in
   match elem with
   | Element.Container { style; _ } when style.direction = Style.LeftToRight -> Ok ()
   | _ -> Error "Row should have LeftToRight direction"
 
-let test_column_element = fun () ->
+let test_column_element = fun _ctx ->
   let elem = Element.column [ Element.text "A" ] in
   match elem with
   | Element.Container { style; _ } when style.direction = Style.TopToBottom -> Ok ()
   | _ -> Error "Column should have TopToBottom direction"
 
-let test_spacer_element = fun () ->
+let test_spacer_element = fun _ctx ->
   let elem = Element.spacer ~flex:2.0 () in
   match elem with
   | Element.Container { children; style } when List.length children = 0
@@ -44,7 +44,7 @@ let test_spacer_element = fun () ->
   && style.sizing.height = Style.Grow -> Ok ()
   | _ -> Error "Spacer should be empty container with fixed width and grow height"
 
-let test_empty_element = fun () ->
+let test_empty_element = fun _ctx ->
   let elem = Element.Empty in
   match elem with
   | Element.Empty -> Ok ()

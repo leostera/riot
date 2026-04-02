@@ -3,7 +3,7 @@ open Std.Collections
 
 (* ===== Rune Width Tests ===== *)
 
-let test_rune_width_ascii = fun () ->
+let test_rune_width_ascii = fun _ctx ->
   match Unicode.Utf8.decode_rune "A" 0 with
   | Some (r, _) ->
       if Unicode.Rune.width r = 1 then
@@ -12,7 +12,7 @@ let test_rune_width_ascii = fun () ->
         Error ("Expected width 1 for 'A', got " ^ Int.to_string (Unicode.Rune.width r))
   | None -> Error "Failed to decode 'A'"
 
-let test_rune_width_cjk = fun () ->
+let test_rune_width_cjk = fun _ctx ->
   match Unicode.Utf8.decode_rune "一" 0 with
   | Some (r, _) ->
       if Unicode.Rune.width r = 2 then
@@ -21,7 +21,7 @@ let test_rune_width_cjk = fun () ->
         Error ("Expected width 2 for '一', got " ^ Int.to_string (Unicode.Rune.width r))
   | None -> Error "Failed to decode '一'"
 
-let test_rune_width_combining = fun () ->
+let test_rune_width_combining = fun _ctx ->
   (* Combining acute accent - extract just the combining mark from "é" *)
   match Unicode.Utf8.decode_rune "́" 0 with
   | Some (r, _) ->
@@ -31,7 +31,7 @@ let test_rune_width_combining = fun () ->
         Error ("Expected width 0 for combining acute, got " ^ Int.to_string (Unicode.Rune.width r))
   | None -> Error "Failed to decode combining accent"
 
-let test_rune_width_emoji = fun () ->
+let test_rune_width_emoji = fun _ctx ->
   match Unicode.Utf8.decode_rune "👍" 0 with
   | Some (r, _) ->
       if Unicode.Rune.width r = 2 then
@@ -40,7 +40,7 @@ let test_rune_width_emoji = fun () ->
         Error ("Expected width 2 for '👍', got " ^ Int.to_string (Unicode.Rune.width r))
   | None -> Error "Failed to decode '👍'"
 
-let test_rune_width_zwj = fun () ->
+let test_rune_width_zwj = fun _ctx ->
   (* Zero-width joiner - using the actual character *)
   match Unicode.Utf8.decode_rune "‍" 0 with
   | Some (r, _) ->
@@ -50,7 +50,7 @@ let test_rune_width_zwj = fun () ->
         Error ("Expected width 0 for ZWJ, got " ^ Int.to_string (Unicode.Rune.width r))
   | None -> Error "Failed to decode ZWJ"
 
-let test_rune_width_fullwidth = fun () ->
+let test_rune_width_fullwidth = fun _ctx ->
   match Unicode.Utf8.decode_rune "Ａ" 0 with
   | Some (r, _) ->
       if Unicode.Rune.width r = 2 then
@@ -61,19 +61,19 @@ let test_rune_width_fullwidth = fun () ->
 
 (* ===== String Width Tests ===== *)
 
-let test_string_width_ascii = fun () ->
+let test_string_width_ascii = fun _ctx ->
   if String.width "Hello" = 5 then
     Ok ()
   else
     Error ("Expected width 5, got " ^ Int.to_string (String.width "Hello"))
 
-let test_string_width_cjk = fun () ->
+let test_string_width_cjk = fun _ctx ->
   if String.width "你好" = 4 then
     Ok ()
   else
     Error ("Expected width 4, got " ^ Int.to_string (String.width "你好"))
 
-let test_string_width_mixed = fun () ->
+let test_string_width_mixed = fun _ctx ->
   let width = String.width "Hi世界" in
   if width = 6 then
     Ok ()
@@ -81,13 +81,13 @@ let test_string_width_mixed = fun () ->
   else
     Error ("Expected width 6, got " ^ Int.to_string width)
 
-let test_string_width_emoji = fun () ->
+let test_string_width_emoji = fun _ctx ->
   if String.width "👍" = 2 then
     Ok ()
   else
     Error ("Expected width 2, got " ^ Int.to_string (String.width "👍"))
 
-let test_string_width_combining = fun () ->
+let test_string_width_combining = fun _ctx ->
   (* "e" + combining acute = "é" *)
   if String.width "é" = 1 then
     Ok ()
@@ -96,19 +96,19 @@ let test_string_width_combining = fun () ->
 
 (* ===== Grapheme Count Tests ===== *)
 
-let test_grapheme_count_ascii = fun () ->
+let test_grapheme_count_ascii = fun _ctx ->
   if String.grapheme_count "Hello" = 5 then
     Ok ()
   else
     Error ("Expected 5 graphemes, got " ^ Int.to_string (String.grapheme_count "Hello"))
 
-let test_grapheme_count_cjk = fun () ->
+let test_grapheme_count_cjk = fun _ctx ->
   if String.grapheme_count "你好" = 2 then
     Ok ()
   else
     Error ("Expected 2 graphemes, got " ^ Int.to_string (String.grapheme_count "你好"))
 
-let test_grapheme_count_emoji_with_modifier = fun () ->
+let test_grapheme_count_emoji_with_modifier = fun _ctx ->
   (* Thumbs up with skin tone should be 1 grapheme *)
   if String.grapheme_count "👍🏻" = 1 then
     Ok ()
@@ -117,19 +117,19 @@ let test_grapheme_count_emoji_with_modifier = fun () ->
 
 (* ===== Rune Count Tests ===== *)
 
-let test_rune_count_ascii = fun () ->
+let test_rune_count_ascii = fun _ctx ->
   if String.rune_count "Hello" = 5 then
     Ok ()
   else
     Error ("Expected 5 runes, got " ^ Int.to_string (String.rune_count "Hello"))
 
-let test_rune_count_cjk = fun () ->
+let test_rune_count_cjk = fun _ctx ->
   if String.rune_count "你好" = 2 then
     Ok ()
   else
     Error ("Expected 2 runes, got " ^ Int.to_string (String.rune_count "你好"))
 
-let test_rune_count_emoji = fun () ->
+let test_rune_count_emoji = fun _ctx ->
   if String.rune_count "👍" = 1 then
     Ok ()
   else
@@ -137,13 +137,13 @@ let test_rune_count_emoji = fun () ->
 
 (* ===== UTF-8 Tests ===== *)
 
-let test_utf8_valid = fun () ->
+let test_utf8_valid = fun _ctx ->
   if Unicode.Utf8.is_valid "Hello 世界" then
     Ok ()
   else
     Error "Valid UTF-8 string should be valid"
 
-let test_utf8_decode = fun () ->
+let test_utf8_decode = fun _ctx ->
   match Unicode.Utf8.decode_rune "Hello" 0 with
   | Some (r, next_pos) ->
       let code = Unicode.Rune.to_int r in
@@ -163,7 +163,7 @@ let test_utf8_decode = fun () ->
         Error ("Expected U+0048 at pos 1, got " ^ code_hex ^ " at pos " ^ Int.to_string next_pos)
   | None -> Error "Failed to decode valid UTF-8"
 
-let test_utf8_encode = fun () ->
+let test_utf8_encode = fun _ctx ->
   match Unicode.Utf8.decode_rune "一" 0 with
   | Some (r, _) ->
       let encoded = Unicode.Utf8.encode_rune r in
@@ -175,7 +175,7 @@ let test_utf8_encode = fun () ->
 
 (* ===== Rune Conversion Tests ===== *)
 
-let test_rune_of_int_valid = fun () ->
+let test_rune_of_int_valid = fun _ctx ->
   match Unicode.Rune.of_int 0x41 with
   | Some r ->
       let s = Unicode.Rune.to_string r in
@@ -185,12 +185,12 @@ let test_rune_of_int_valid = fun () ->
         Error ("Expected 'A', got '" ^ s ^ "'")
   | None -> Error "Valid code point should succeed"
 
-let test_rune_of_int_invalid = fun () ->
+let test_rune_of_int_invalid = fun _ctx ->
   match Unicode.Rune.of_int 0x11_0000 with
   | Some _ -> Error "Invalid code point should return None"
   | None -> Ok ()
 
-let test_rune_to_int = fun () ->
+let test_rune_to_int = fun _ctx ->
   match Unicode.Utf8.decode_rune "👍" 0 with
   | Some (r, _) ->
       if Unicode.Rune.to_int r = 0x1_f44d then
@@ -215,21 +215,21 @@ let test_rune_to_int = fun () ->
 
 (* ===== Word Boundary Tests ===== *)
 
-let test_word_boundaries_simple = fun () ->
+let test_word_boundaries_simple = fun _ctx ->
   let boundaries = String.word_boundaries "Hello world" in
   if List.length boundaries > 0 then
     Ok ()
   else
     Error "Should find word boundaries in 'Hello world'"
 
-let test_word_split_simple = fun () ->
+let test_word_split_simple = fun _ctx ->
   let words = String.split_words "Hello world" in
   if List.length words >= 2 then
     Ok ()
   else
     Error ("Expected at least 2 words, got " ^ Int.to_string (List.length words))
 
-let test_word_split_contractions = fun () ->
+let test_word_split_contractions = fun _ctx ->
   let words = String.split_words "don't" in
   (* Should NOT split contractions *)
   if List.exists (fun w -> w = "don't") words then
@@ -237,7 +237,7 @@ let test_word_split_contractions = fun () ->
   else
     Error "Contractions should stay together"
 
-let test_word_split_identifiers = fun () ->
+let test_word_split_identifiers = fun _ctx ->
   let words = String.split_words "foo_bar" in
   (* Should NOT split snake_case identifiers *)
   if List.exists (fun w -> w = "foo_bar") words then
@@ -245,7 +245,7 @@ let test_word_split_identifiers = fun () ->
   else
     Error "Identifiers with underscores should stay together"
 
-let test_next_word_start = fun () ->
+let test_next_word_start = fun _ctx ->
   let text = "Hello world" in
   let next = Unicode.Segmentation.find_next_word_start text 0 in
   if next > 0 && next < String.length text then
@@ -256,7 +256,7 @@ let test_next_word_start = fun () ->
     ^ ", got "
     ^ Int.to_string next)
 
-let test_prev_word_start = fun () ->
+let test_prev_word_start = fun _ctx ->
   let text = "Hello world" in
   let len = String.length text in
   let prev = Unicode.Segmentation.find_prev_word_start text len in
@@ -267,21 +267,21 @@ let test_prev_word_start = fun () ->
 
 (* ===== Line Breaking Tests ===== *)
 
-let test_line_breaks_newline = fun () ->
+let test_line_breaks_newline = fun _ctx ->
   let breaks = Unicode.Segmentation.find_line_breaks "Hello\nWorld" in
   if List.length breaks > 0 then
     Ok ()
   else
     Error "Should find line break at newline"
 
-let test_line_breaks_space = fun () ->
+let test_line_breaks_space = fun _ctx ->
   let breaks = Unicode.Segmentation.find_line_breaks "Hello world" in
   if List.length breaks > 0 then
     Ok ()
   else
     Error "Should find line break at space"
 
-let test_wrap_lines_simple = fun () ->
+let test_wrap_lines_simple = fun _ctx ->
   let lines = Unicode.Segmentation.wrap_lines ~width:10 "Hello world" in
   if List.length lines >= 2 then
     Ok ()
@@ -289,14 +289,14 @@ let test_wrap_lines_simple = fun () ->
     Error ("Expected at least 2 lines when wrapping to width 10, got "
     ^ Int.to_string (List.length lines))
 
-let test_wrap_lines_short = fun () ->
+let test_wrap_lines_short = fun _ctx ->
   let lines = Unicode.Segmentation.wrap_lines ~width:100 "Hello" in
   if List.length lines = 1 then
     Ok ()
   else
     Error ("Expected 1 line for short text, got " ^ Int.to_string (List.length lines))
 
-let test_wrap_lines_cjk = fun () ->
+let test_wrap_lines_cjk = fun _ctx ->
   let text = "你好世界" in
   (* Width 8 *)
   let lines = Unicode.Segmentation.wrap_lines ~width:5 text in
@@ -305,14 +305,14 @@ let test_wrap_lines_cjk = fun () ->
   else
     Error "Should wrap CJK text when width exceeded"
 
-let test_wrap_lines_preserves_newlines = fun () ->
+let test_wrap_lines_preserves_newlines = fun _ctx ->
   let lines = Unicode.Segmentation.wrap_lines ~width:100 "Line1\nLine2" in
   if List.length lines >= 2 then
     Ok ()
   else
     Error "Should preserve newlines as separate lines"
 
-let test_wrap_lines_width_respected = fun () ->
+let test_wrap_lines_width_respected = fun _ctx ->
   let lines = Unicode.Segmentation.wrap_lines ~width:20 "The quick brown fox jumps" in
   let all_fit =
     List.for_all (fun line -> String.width line <= 20) lines
@@ -324,7 +324,7 @@ let test_wrap_lines_width_respected = fun () ->
 
 (* ===== String Unicode Functions Tests ===== *)
 
-let test_string_truncate_width = fun () ->
+let test_string_truncate_width = fun _ctx ->
   let s = "Hello world" in
   let truncated = String.truncate_width ~width:5 s in
   let w = String.width truncated in
@@ -333,7 +333,7 @@ let test_string_truncate_width = fun () ->
   else
     Error ("Truncated string should have width <= 5, got " ^ Int.to_string w)
 
-let test_string_truncate_width_cjk = fun () ->
+let test_string_truncate_width_cjk = fun _ctx ->
   let s = "你好世界" in
   (* Width 8 *)
   let truncated = String.truncate_width ~width:5 s in
@@ -345,7 +345,7 @@ let test_string_truncate_width_cjk = fun () ->
 
 (* ===== East Asian Width Configuration Tests ===== *)
 
-let test_east_asian_width_config = fun () ->
+let test_east_asian_width_config = fun _ctx ->
   let original = Unicode.Config.get_east_asian_width () in
   Unicode.Config.set_east_asian_width true;
   let is_set = Unicode.Config.get_east_asian_width () in
@@ -358,7 +358,7 @@ let test_east_asian_width_config = fun () ->
 
 (* ===== Character Classification Tests ===== *)
 
-let test_rune_is_letter = fun () ->
+let test_rune_is_letter = fun _ctx ->
   match Unicode.Utf8.decode_rune "A" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_letter r then
@@ -367,7 +367,7 @@ let test_rune_is_letter = fun () ->
         Error "'A' should be detected as letter"
   | None -> Error "Failed to decode 'A'"
 
-let test_rune_is_digit = fun () ->
+let test_rune_is_digit = fun _ctx ->
   match Unicode.Utf8.decode_rune "0" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_digit r then
@@ -376,7 +376,7 @@ let test_rune_is_digit = fun () ->
         Error "'0' should be detected as digit"
   | None -> Error "Failed to decode '0'"
 
-let test_rune_is_space = fun () ->
+let test_rune_is_space = fun _ctx ->
   match Unicode.Utf8.decode_rune " " 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_space r then
@@ -385,7 +385,7 @@ let test_rune_is_space = fun () ->
         Error "' ' should be detected as space"
   | None -> Error "Failed to decode ' '"
 
-let test_rune_is_control = fun () ->
+let test_rune_is_control = fun _ctx ->
   match Unicode.Utf8.decode_rune "\x00" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_control r then
@@ -394,7 +394,7 @@ let test_rune_is_control = fun () ->
         Error "NUL should be detected as control"
   | None -> Error "Failed to decode NUL"
 
-let test_rune_case_conversion = fun () ->
+let test_rune_case_conversion = fun _ctx ->
   match Unicode.Utf8.decode_rune "a" 0 with
   | Some (lower, _) ->
       let upper = Unicode.Rune.to_upper lower in
@@ -407,7 +407,7 @@ let test_rune_case_conversion = fun () ->
 
 (* ===== Extended Character Classification Tests ===== *)
 
-let test_greek_letter_classification = fun () ->
+let test_greek_letter_classification = fun _ctx ->
   match Unicode.Utf8.decode_rune "α" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_letter r then
@@ -416,7 +416,7 @@ let test_greek_letter_classification = fun () ->
         Error "Greek α should be detected as letter"
   | None -> Error "Failed to decode Greek α"
 
-let test_greek_lowercase = fun () ->
+let test_greek_lowercase = fun _ctx ->
   match Unicode.Utf8.decode_rune "α" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_lower r then
@@ -425,7 +425,7 @@ let test_greek_lowercase = fun () ->
         Error "Greek α should be detected as lowercase"
   | None -> Error "Failed to decode Greek α"
 
-let test_greek_uppercase = fun () ->
+let test_greek_uppercase = fun _ctx ->
   match Unicode.Utf8.decode_rune "Α" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_upper r then
@@ -434,7 +434,7 @@ let test_greek_uppercase = fun () ->
         Error "Greek Α should be detected as uppercase"
   | None -> Error "Failed to decode Greek Α"
 
-let test_cyrillic_letter = fun () ->
+let test_cyrillic_letter = fun _ctx ->
   match Unicode.Utf8.decode_rune "А" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_letter r then
@@ -443,7 +443,7 @@ let test_cyrillic_letter = fun () ->
         Error "Cyrillic А should be detected as letter"
   | None -> Error "Failed to decode Cyrillic А"
 
-let test_cyrillic_uppercase = fun () ->
+let test_cyrillic_uppercase = fun _ctx ->
   match Unicode.Utf8.decode_rune "А" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_upper r then
@@ -452,7 +452,7 @@ let test_cyrillic_uppercase = fun () ->
         Error "Cyrillic А should be detected as uppercase"
   | None -> Error "Failed to decode Cyrillic А"
 
-let test_cyrillic_lowercase = fun () ->
+let test_cyrillic_lowercase = fun _ctx ->
   match Unicode.Utf8.decode_rune "а" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_lower r then
@@ -461,7 +461,7 @@ let test_cyrillic_lowercase = fun () ->
         Error "Cyrillic а should be detected as lowercase"
   | None -> Error "Failed to decode Cyrillic а"
 
-let test_cjk_letter = fun () ->
+let test_cjk_letter = fun _ctx ->
   match Unicode.Utf8.decode_rune "中" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_letter r then
@@ -470,7 +470,7 @@ let test_cjk_letter = fun () ->
         Error "CJK 中 should be detected as letter"
   | None -> Error "Failed to decode CJK 中"
 
-let test_arabic_digit = fun () ->
+let test_arabic_digit = fun _ctx ->
   match Unicode.Utf8.decode_rune "٥" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_digit r then
@@ -479,7 +479,7 @@ let test_arabic_digit = fun () ->
         Error "Arabic ٥ should be detected as digit"
   | None -> Error "Failed to decode Arabic ٥"
 
-let test_hebrew_letter = fun () ->
+let test_hebrew_letter = fun _ctx ->
   match Unicode.Utf8.decode_rune "א" 0 with
   | Some (r, _) ->
       if Unicode.Rune.is_letter r then
@@ -490,7 +490,7 @@ let test_hebrew_letter = fun () ->
 
 (* ===== Category Coverage Tests ===== *)
 
-let test_combining_mark_detection = fun () ->
+let test_combining_mark_detection = fun _ctx ->
   (* U+0301 - Combining acute accent *)
   match Unicode.Utf8.decode_rune "́" 0 with
   | Some (r, _) ->
@@ -500,7 +500,7 @@ let test_combining_mark_detection = fun () ->
         Error "Combining acute accent should be detected as mark"
   | None -> Error "Failed to decode combining accent"
 
-let test_math_symbol_detection = fun () ->
+let test_math_symbol_detection = fun _ctx ->
   (* U+2211 - N-ary summation ∑ *)
   match Unicode.Utf8.decode_rune "∑" 0 with
   | Some (r, _) ->
@@ -510,7 +510,7 @@ let test_math_symbol_detection = fun () ->
         Error "∑ should be detected as symbol"
   | None -> Error "Failed to decode ∑"
 
-let test_currency_symbol_detection = fun () ->
+let test_currency_symbol_detection = fun _ctx ->
   (* U+20AC - Euro sign € *)
   match Unicode.Utf8.decode_rune "€" 0 with
   | Some (r, _) ->
@@ -520,7 +520,7 @@ let test_currency_symbol_detection = fun () ->
         Error "€ should be detected as symbol"
   | None -> Error "Failed to decode €"
 
-let test_roman_numeral_as_number = fun () ->
+let test_roman_numeral_as_number = fun _ctx ->
   (* U+216B - Roman numeral twelve Ⅻ *)
   match Unicode.Utf8.decode_rune "Ⅻ" 0 with
   | Some (r, _) ->
@@ -530,7 +530,7 @@ let test_roman_numeral_as_number = fun () ->
         Error "Ⅻ should be detected as number"
   | None -> Error "Failed to decode Ⅻ"
 
-let test_em_dash_punctuation = fun () ->
+let test_em_dash_punctuation = fun _ctx ->
   (* U+2014 - Em dash — *)
   match Unicode.Utf8.decode_rune "—" 0 with
   | Some (r, _) ->
@@ -540,7 +540,7 @@ let test_em_dash_punctuation = fun () ->
         Error "— should be detected as punctuation"
   | None -> Error "Failed to decode —"
 
-let test_fraction_as_number = fun () ->
+let test_fraction_as_number = fun _ctx ->
   (* U+00BD - Vulgar fraction one half ½ *)
   match Unicode.Utf8.decode_rune "½" 0 with
   | Some (r, _) ->
@@ -552,23 +552,23 @@ let test_fraction_as_number = fun () ->
 
 (* ===== Edge Cases Tests ===== *)
 
-let test_invalid_code_point_beyond_unicode = fun () ->
+let test_invalid_code_point_beyond_unicode = fun _ctx ->
   match Unicode.Rune.of_int 0x11_0000 with
   | Some _ -> Error "Code point beyond Unicode range should return None"
   | None -> Ok ()
 
-let test_invalid_negative_code_point = fun () ->
+let test_invalid_negative_code_point = fun _ctx ->
   match Unicode.Rune.of_int (-1) with
   | Some _ -> Error "Negative code point should return None"
   | None -> Ok ()
 
-let test_surrogate_pair_invalid = fun () ->
+let test_surrogate_pair_invalid = fun _ctx ->
   (* U+D800 - High surrogate (invalid in UTF-8) *)
   match Unicode.Rune.of_int 0xd800 with
   | Some _ -> Error "Surrogate pair code point should return None"
   | None -> Ok ()
 
-let test_cjk_has_no_case = fun () ->
+let test_cjk_has_no_case = fun _ctx ->
   (* CJK ideographs have no case mapping *)
   match Unicode.Utf8.decode_rune "中" 0 with
   | Some (r, _) ->
@@ -580,7 +580,7 @@ let test_cjk_has_no_case = fun () ->
         Error "CJK character should not change case"
   | None -> Error "Failed to decode 中"
 
-let test_titlecase_letter_detection = fun () ->
+let test_titlecase_letter_detection = fun _ctx ->
   (* U+01C5 - Latin capital letter D with small letter z with caron (ǅ) *)
   match Unicode.Utf8.decode_rune "ǅ" 0 with
   | Some (r, _) ->
@@ -590,7 +590,7 @@ let test_titlecase_letter_detection = fun () ->
         Error "ǅ should be detected as titlecase"
   | None -> Error "Failed to decode ǅ"
 
-let test_max_unicode_code_point = fun () ->
+let test_max_unicode_code_point = fun _ctx ->
   (* U+10FFFF - Maximum valid Unicode code point *)
   match Unicode.Rune.of_int 0x10_ffff with
   | Some r ->
@@ -616,7 +616,7 @@ let test_max_unicode_code_point = fun () ->
 
 (* ===== Round-Trip Tests ===== *)
 
-let test_uppercase_roundtrip = fun () ->
+let test_uppercase_roundtrip = fun _ctx ->
   match Unicode.Utf8.decode_rune "A" 0 with
   | Some (r, _) ->
       let lower = Unicode.Rune.to_lower r in
@@ -627,7 +627,7 @@ let test_uppercase_roundtrip = fun () ->
         Error "to_upper(to_lower('A')) should equal 'A'"
   | None -> Error "Failed to decode 'A'"
 
-let test_lowercase_roundtrip = fun () ->
+let test_lowercase_roundtrip = fun _ctx ->
   match Unicode.Utf8.decode_rune "a" 0 with
   | Some (r, _) ->
       let upper = Unicode.Rune.to_upper r in
@@ -638,7 +638,7 @@ let test_lowercase_roundtrip = fun () ->
         Error "to_lower(to_upper('a')) should equal 'a'"
   | None -> Error "Failed to decode 'a'"
 
-let test_greek_roundtrip = fun () ->
+let test_greek_roundtrip = fun _ctx ->
   match Unicode.Utf8.decode_rune "α" 0 with
   | Some (r, _) ->
       let upper = Unicode.Rune.to_upper r in
@@ -649,7 +649,7 @@ let test_greek_roundtrip = fun () ->
         Error "Greek roundtrip should preserve original"
   | None -> Error "Failed to decode α"
 
-let test_utf8_encode_decode_roundtrip = fun () ->
+let test_utf8_encode_decode_roundtrip = fun _ctx ->
   match Unicode.Utf8.decode_rune "世" 0 with
   | Some (r, _) ->
       let encoded = Unicode.Utf8.encode_rune r in
@@ -659,7 +659,7 @@ let test_utf8_encode_decode_roundtrip = fun () ->
         Error ("Expected '世', got '" ^ encoded ^ "'")
   | None -> Error "Failed to decode 世"
 
-let test_rune_to_int_of_int_roundtrip = fun () ->
+let test_rune_to_int_of_int_roundtrip = fun _ctx ->
   let code = 0x1_f44d in
   (* 👍 *)
   match Unicode.Rune.of_int code with
@@ -684,7 +684,7 @@ let test_rune_to_int_of_int_roundtrip = fun () ->
         Error ("Expected U+" ^ to_hex code ^ ", got U+" ^ to_hex code2)
   | None -> Error "Failed to create rune from valid code point"
 
-let test_ascii_roundtrip_regression = fun () ->
+let test_ascii_roundtrip_regression = fun _ctx ->
   (* Ensure ASCII still works after Unicode tables *)
   let test_char c =
     match Unicode.Utf8.decode_rune (String.make 1 c) 0 with
@@ -700,7 +700,7 @@ let test_ascii_roundtrip_regression = fun () ->
 
 (* ===== Case Conversion Tests ===== *)
 
-let test_greek_case_conversion = fun () ->
+let test_greek_case_conversion = fun _ctx ->
   match Unicode.Utf8.decode_rune "α" 0 with
   | Some (lower, _) ->
       let upper = Unicode.Rune.to_upper lower in
@@ -719,7 +719,7 @@ let test_greek_case_conversion = fun () ->
         Error ("Expected U+0391 (Α), got U+" ^ to_hex upper_code "" 4)
   | None -> Error "Failed to decode Greek α"
 
-let test_cyrillic_case_conversion = fun () ->
+let test_cyrillic_case_conversion = fun _ctx ->
   match Unicode.Utf8.decode_rune "а" 0 with
   | Some (lower, _) ->
       let upper = Unicode.Rune.to_upper lower in
@@ -738,7 +738,7 @@ let test_cyrillic_case_conversion = fun () ->
         Error ("Expected U+0410 (А), got U+" ^ to_hex upper_code "" 4)
   | None -> Error "Failed to decode Cyrillic а"
 
-let test_greek_uppercase_to_lowercase = fun () ->
+let test_greek_uppercase_to_lowercase = fun _ctx ->
   match Unicode.Utf8.decode_rune "Α" 0 with
   | Some (upper, _) ->
       let lower = Unicode.Rune.to_lower upper in
@@ -757,7 +757,7 @@ let test_greek_uppercase_to_lowercase = fun () ->
         Error ("Expected U+03B1 (α), got U+" ^ to_hex lower_code "" 4)
   | None -> Error "Failed to decode Greek Α"
 
-let test_latin_extended_uppercase = fun () ->
+let test_latin_extended_uppercase = fun _ctx ->
   (* Test Latin Extended-A character: Ā (U+0100) -> ā (U+0101) *)
   match Unicode.Utf8.decode_rune "Ā" 0 with
   | Some (upper, _) ->
@@ -779,7 +779,7 @@ let test_latin_extended_uppercase = fun () ->
 
 (* ===== Integration Tests ===== *)
 
-let test_integration_mixed_content = fun () ->
+let test_integration_mixed_content = fun _ctx ->
   let text = "Hello 世界! How are you?" in
   let width = String.width text in
   let graphemes = String.grapheme_count text in
@@ -789,7 +789,7 @@ let test_integration_mixed_content = fun () ->
   else
     Error "Mixed content should have positive width, grapheme count, and rune count"
 
-let test_integration_wrap_and_width = fun () ->
+let test_integration_wrap_and_width = fun _ctx ->
   let text = "Hello world, this is a test" in
   let lines = Unicode.Segmentation.wrap_lines ~width:15 text in
   let all_valid =

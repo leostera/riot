@@ -2,7 +2,7 @@
 open Std
 open Propane
 
-let test_towards_zero_shrinks = fun () ->
+let test_towards_zero_shrinks = fun _ctx ->
   let shrinker = Shrinker.towards 0 in
   let shrunk = Shrinker.shrink shrinker 100 in
   (* Check that all shrunk values are smaller in absolute value *)
@@ -22,7 +22,7 @@ let test_towards_zero_shrinks = fun () ->
   in
   check shrunk
 
-let test_towards_target_shrinks = fun () ->
+let test_towards_target_shrinks = fun _ctx ->
   let shrinker = Shrinker.towards 50 in
   let shrunk = Shrinker.shrink shrinker 100 in
   (* Check that all shrunk values are between 50 and 100 *)
@@ -36,7 +36,7 @@ let test_towards_target_shrinks = fun () ->
   in
   check shrunk
 
-let test_int_at_target_no_shrink = fun () ->
+let test_int_at_target_no_shrink = fun _ctx ->
   let shrinker = Shrinker.towards 0 in
   let shrunk = Shrinker.shrink shrinker 0 in
   if List.length shrunk = 0 then
@@ -44,7 +44,7 @@ let test_int_at_target_no_shrink = fun () ->
   else
     Error "shrinking value at target should produce empty list"
 
-let test_list_shrinker_removes_elements = fun () ->
+let test_list_shrinker_removes_elements = fun _ctx ->
   let shrinker = Shrinker.list Shrinker.nil in
   let original = [ 1; 2; 3; 4; 5 ] in
   let shrunk = Shrinker.shrink shrinker original in
@@ -59,7 +59,7 @@ let test_list_shrinker_removes_elements = fun () ->
   in
   check shrunk
 
-let test_nil_shrinker_produces_nothing = fun () ->
+let test_nil_shrinker_produces_nothing = fun _ctx ->
   let shrinker = Shrinker.nil in
   let shrunk = Shrinker.shrink shrinker 42 in
   if List.length shrunk = 0 then
@@ -67,7 +67,7 @@ let test_nil_shrinker_produces_nothing = fun () ->
   else
     Error "nil shrinker should produce empty list"
 
-let test_shrinking_is_finite = fun () ->
+let test_shrinking_is_finite = fun _ctx ->
   let shrinker = Shrinker.int in
   (* Repeatedly shrink and count iterations *)
   let rec shrink_until_done value count =
@@ -81,7 +81,7 @@ let test_shrinking_is_finite = fun () ->
   in
   shrink_until_done 100_000 0
 
-let test_string_shrinker_produces_shorter = fun () ->
+let test_string_shrinker_produces_shorter = fun _ctx ->
   let shrinker = Shrinker.string in
   let original = "hello world" in
   let shrunk = Shrinker.shrink shrinker original in

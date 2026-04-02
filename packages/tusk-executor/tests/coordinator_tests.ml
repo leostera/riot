@@ -33,7 +33,7 @@ let with_scanned_workspace = fun tmpdir f ->
   | Error _ -> Error "workspace scan failed"
   | Ok (workspace, _load_errors) -> f workspace
 
-let test_build_workspace_two_packages_success = fun () ->
+let test_build_workspace_two_packages_success = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"coordinator_two_pkg_test"
       (fun tmpdir ->
@@ -64,7 +64,7 @@ let test_build_workspace_two_packages_success = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_build_workspace_respects_serial_package_orchestration = fun () ->
+let test_build_workspace_respects_serial_package_orchestration = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"coordinator_serial_pkg_test"
       (fun tmpdir ->
@@ -95,7 +95,7 @@ let test_build_workspace_respects_serial_package_orchestration = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_failed_dependency_updates_package_graph = fun () ->
+let test_failed_dependency_updates_package_graph = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"coordinator_failed_dep_test"
       (fun tmpdir ->

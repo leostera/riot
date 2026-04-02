@@ -12,7 +12,7 @@ let make_test_workspace = fun tmpdir ->
 
 let read_file = fun path -> Fs.read_to_string path |> Result.expect ~msg:"failed to read file"
 
-let test_save_and_promote_nested_outputs = fun () ->
+let test_save_and_promote_nested_outputs = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_nested_test"
       (fun tmpdir ->
@@ -47,7 +47,7 @@ let test_save_and_promote_nested_outputs = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_get_preserves_relative_paths = fun () ->
+let test_get_preserves_relative_paths = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_manifest_path_test"
       (fun tmpdir ->
@@ -76,7 +76,7 @@ let test_get_preserves_relative_paths = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_exists_requires_manifest_file = fun () ->
+let test_exists_requires_manifest_file = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_exists_manifest_test"
       (fun tmpdir ->
@@ -93,7 +93,7 @@ let test_exists_requires_manifest_file = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_put_if_absent_keeps_first_writer = fun () ->
+let test_put_if_absent_keeps_first_writer = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_put_if_absent_test"
       (fun tmpdir ->
@@ -129,7 +129,7 @@ let test_put_if_absent_keeps_first_writer = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_plan_bundle_round_trip = fun () ->
+let test_plan_bundle_round_trip = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_plan_bundle_test"
       (fun tmpdir ->
@@ -153,7 +153,7 @@ let test_plan_bundle_round_trip = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_package_exports_round_trip = fun () ->
+let test_package_exports_round_trip = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_exports_round_trip_test"
       (fun tmpdir ->
@@ -190,7 +190,7 @@ let test_package_exports_round_trip = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_artifact_round_trip_preserves_ocamlc_warnings = fun () ->
+let test_artifact_round_trip_preserves_ocamlc_warnings = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_ocamlc_warnings_test"
       (fun tmpdir ->
@@ -221,7 +221,7 @@ let test_artifact_round_trip_preserves_ocamlc_warnings = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_find_package_export_path_round_trip = fun () ->
+let test_find_package_export_path_round_trip = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_find_export_test"
       (fun tmpdir ->
@@ -255,7 +255,7 @@ let test_find_package_export_path_round_trip = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_find_package_export_path_rejects_absolute_export_paths = fun () ->
+let test_find_package_export_path_rejects_absolute_export_paths = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_find_export_absolute_path_test"
       (fun tmpdir ->
@@ -287,7 +287,7 @@ let test_find_package_export_path_rejects_absolute_export_paths = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_find_package_export_path_returns_none_when_name_missing = fun () ->
+let test_find_package_export_path_returns_none_when_name_missing = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_find_export_missing_name_test"
       (fun tmpdir ->
@@ -315,7 +315,7 @@ let test_find_package_export_path_returns_none_when_name_missing = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_load_package_exports_returns_none_for_malformed_payload = fun () ->
+let test_load_package_exports_returns_none_for_malformed_payload = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_load_exports_malformed_test"
       (fun tmpdir ->
@@ -337,7 +337,7 @@ let test_load_package_exports_returns_none_for_malformed_payload = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_materialize_package_exports_from_action_artifact = fun () ->
+let test_materialize_package_exports_from_action_artifact = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_materialize_exports_test"
       (fun tmpdir ->

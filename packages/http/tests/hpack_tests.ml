@@ -1,7 +1,7 @@
 open Std
 module Hpack = Http.Http2.Hpack
 
-let test_encoder_decoder_roundtrip = fun () ->
+let test_encoder_decoder_roundtrip = fun _ctx ->
   let encoder = Hpack.create_encoder () in
   let decoder = Hpack.create_decoder () in
   let headers = [
@@ -21,7 +21,7 @@ let test_encoder_decoder_roundtrip = fun () ->
         ^ Int.to_string (List.length decoded_headers))
   | Error err -> Result.Error ("Decode failed: " ^ err)
 
-let test_static_table_lookup = fun () ->
+let test_static_table_lookup = fun _ctx ->
   match Hpack.static_table_lookup 2 with
   | Some header ->
       if header.name = ":method" && header.value = "GET" then
@@ -30,7 +30,7 @@ let test_static_table_lookup = fun () ->
         Result.Error ("Static table entry 2 has wrong values: " ^ header.name ^ "=" ^ header.value)
   | None -> Result.Error "Static table lookup failed"
 
-let test_encode_simple_header = fun () ->
+let test_encode_simple_header = fun _ctx ->
   let encoder = Hpack.create_encoder () in
   let headers = [ { Hpack.name = ":method"; value = "GET" } ] in
   let encoded = Hpack.encode encoder ~sensitive_headers:[] () ~headers in

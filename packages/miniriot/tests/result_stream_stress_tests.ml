@@ -164,7 +164,7 @@ let () =
   let tests = [
     Test.case
       "short-lived result stream remains stable under sustained multicore load"
-      (fun () ->
+      (fun _ctx ->
         test_case "short-lived result stream remains stable under sustained multicore load" test_short_lived_result_stream_stress);
   ] in
   let normalize_args = function

@@ -2,7 +2,7 @@
 open Std
 open Propane
 
-let test_int_range_basic = fun () ->
+let test_int_range_basic = fun _ctx ->
   let gen = Generator.int_range 5 10 in
   let rnd = Random.State.make [|42|] in
   (* Generate 100 values and check they're all in range *)
@@ -18,7 +18,7 @@ let test_int_range_basic = fun () ->
   in
   check 100
 
-let test_int_range_single_value = fun () ->
+let test_int_range_single_value = fun _ctx ->
   let gen = Generator.int_range 7 7 in
   let rnd = Random.State.make [|123|] in
   let value = Generator.generate rnd gen in
@@ -27,7 +27,7 @@ let test_int_range_single_value = fun () ->
   else
     Error ("int_range with low=high should return that value, got: " ^ Int.to_string value)
 
-let test_one_of_picks_from_list = fun () ->
+let test_one_of_picks_from_list = fun _ctx ->
   let gen1 = Generator.return 1 in
   let gen2 = Generator.return 2 in
   let gen3 = Generator.return 3 in
@@ -46,7 +46,7 @@ let test_one_of_picks_from_list = fun () ->
   in
   check 50
 
-let test_map_transforms_correctly = fun () ->
+let test_map_transforms_correctly = fun _ctx ->
   let gen = Generator.int_range 1 10 in
   let doubled =
     Generator.map (fun x -> x * 2) gen
@@ -61,7 +61,7 @@ let test_map_transforms_correctly = fun () ->
   else
     Ok ()
 
-let test_list_generates_lists = fun () ->
+let test_list_generates_lists = fun _ctx ->
   let gen = Generator.list (Generator.int_range 0 100) in
   let rnd = Random.State.make [|42|] in
   (* Generate several lists and check they're valid *)
@@ -82,7 +82,7 @@ let test_list_generates_lists = fun () ->
   in
   check 20
 
-let test_pair_generates_pairs = fun () ->
+let test_pair_generates_pairs = fun _ctx ->
   let gen = Generator.pair (Generator.int_range 1 5) (Generator.int_range 10 20) in
   let rnd = Random.State.make [|42|] in
   let (a, b) = Generator.generate rnd gen in
@@ -93,7 +93,7 @@ let test_pair_generates_pairs = fun () ->
   else
     Ok ()
 
-let test_deterministic_with_same_seed = fun () ->
+let test_deterministic_with_same_seed = fun _ctx ->
   let gen = Generator.int_range 1 1_000 in
   let rnd1 = Random.State.make [|12_345|] in
   let value1 = Generator.generate rnd1 gen in
@@ -104,7 +104,7 @@ let test_deterministic_with_same_seed = fun () ->
   else
     Error "same seed should produce same values"
 
-let test_string_generates_strings = fun () ->
+let test_string_generates_strings = fun _ctx ->
   let gen = Generator.string in
   let rnd = Random.State.make [|42|] in
   (* Just verify it produces strings without crashing *)

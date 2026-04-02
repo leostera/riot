@@ -16,39 +16,39 @@ let diff_hashmaps = fun left right ->
 
 let make_map = fun items -> HashMap.of_list items
 
-let test_diff_identical_hashmaps = fun () ->
+let test_diff_identical_hashmaps = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1) ]) (make_map [ ("a", 1) ]) in
   if not (Diff.has_changes diffs) then
     Ok ()
   else
     Error "Identical maps should produce no changes"
 
-let test_diff_empty_hashmaps = fun () ->
+let test_diff_empty_hashmaps = fun _ctx ->
   let diffs = diff_hashmaps (make_map []) (make_map []) in
   if diffs = [] then
     Ok ()
   else
     Error "Empty maps should produce no changes"
 
-let test_diff_added_keys = fun () ->
+let test_diff_added_keys = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1) ]) (make_map [ ("a", 1); ("b", 2) ]) in
   match Diff.additions diffs with
   | [ { path=[ Diff.Key "b" ]; kind=Diff.Added 2 } ] -> Ok ()
   | _ -> Error "Expected one added key"
 
-let test_diff_removed_keys = fun () ->
+let test_diff_removed_keys = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1); ("b", 2) ]) (make_map [ ("a", 1) ]) in
   match Diff.removals diffs with
   | [ { path=[ Diff.Key "b" ]; kind=Diff.Removed 2 } ] -> Ok ()
   | _ -> Error "Expected one removed key"
 
-let test_diff_changed_values = fun () ->
+let test_diff_changed_values = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1) ]) (make_map [ ("a", 2) ]) in
   match Diff.changes diffs with
   | [ { path=[ Diff.Key "a" ]; kind=Diff.Changed (1, 2) } ] -> Ok ()
   | _ -> Error "Expected one changed value"
 
-let test_diff_mixed_changes = fun () ->
+let test_diff_mixed_changes = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1); ("b", 2) ]) (make_map [ ("a", 3); ("c", 4) ]) in
   if
     List.length (Diff.additions diffs) = 1
@@ -59,7 +59,7 @@ let test_diff_mixed_changes = fun () ->
   else
     Error "Expected one addition, one removal, and one change"
 
-let test_diff_nested_hashmaps = fun () ->
+let test_diff_nested_hashmaps = fun _ctx ->
   let before = make_map [ ("x", 1); ("y", 2) ] in
   let after = make_map [ ("x", 1); ("y", 3) ] in
   let nested_change = { Diff.path = [ Diff.Key "outer" ]; kind = Diff.Changed (before, after) } in
@@ -68,21 +68,21 @@ let test_diff_nested_hashmaps = fun () ->
   && HashMap.get right "y" = Some 3 -> Ok ()
   | _ -> Error "Expected changed nested hashmap payload"
 
-let test_diff_one_empty = fun () ->
+let test_diff_one_empty = fun _ctx ->
   let diffs = diff_hashmaps (make_map []) (make_map [ ("a", 1); ("b", 2) ]) in
   if List.length (Diff.additions diffs) = 2 then
     Ok ()
   else
     Error "Expected additions for every key in the non-empty map"
 
-let test_diff_different_sizes = fun () ->
+let test_diff_different_sizes = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1) ]) (make_map [ ("a", 1); ("b", 2); ("c", 3) ]) in
   if List.length diffs = 2 then
     Ok ()
   else
     Error "Expected two additions from size mismatch"
 
-let test_diff_all_different = fun () ->
+let test_diff_all_different = fun _ctx ->
   let diffs = diff_hashmaps (make_map [ ("a", 1); ("b", 2) ]) (make_map [ ("c", 3); ("d", 4) ]) in
   if List.length (Diff.additions diffs) = 2 && List.length (Diff.removals diffs) = 2 then
     Ok ()

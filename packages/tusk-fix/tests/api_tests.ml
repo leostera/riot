@@ -34,7 +34,7 @@ let parse_matches = fun argv ->
   | Ok matches -> Ok matches
 
 let tests = [ Test.case "fix_request_of_matches parses explicit check requests"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "tusk_fix_api"
         (fun tmpdir ->
           with_cwd tmpdir
@@ -56,7 +56,7 @@ let tests = [ Test.case "fix_request_of_matches parses explicit check requests"
                       | _ -> Error "expected run request"
                     )
                 )))); Test.case "fix list-rules returns structured output"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "tusk_fix_api"
         (fun tmpdir ->
           with_cwd tmpdir
@@ -77,7 +77,7 @@ let tests = [ Test.case "fix_request_of_matches parses explicit check requests"
                           | None -> Error "expected list-rules output"
                     )
                 )))); Test.case "event to_json encodes progress events"
-    (fun () ->
+    (fun _ctx ->
       let event = Tusk_fix.Event.FileProgress {
         file = Path.v "sample.ml";
         progress = {
@@ -95,7 +95,7 @@ let tests = [ Test.case "fix_request_of_matches parses explicit check requests"
             ~actual:(List.assoc_opt "stage" fields);
           Ok ()
       | _ -> Error "expected JSON object"); Test.case "fix check emits events through the top-level api"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "tusk_fix_api"
         (fun tmpdir ->
           let sample = Path.(tmpdir / Path.v "sample.ml") in
@@ -122,7 +122,7 @@ let tests = [ Test.case "fix_request_of_matches parses explicit check requests"
                 (String.contains (Exception.to_string err) "Issues remain after tusk fix");
               Test.assert_true (List.length !seen > 0);
               Ok ())); Test.case "fix_request_of_matches disables generated runner when requested via env"
-    (fun () ->
+    (fun _ctx ->
       with_tempdir "tusk_fix_api"
         (fun tmpdir ->
           with_cwd tmpdir

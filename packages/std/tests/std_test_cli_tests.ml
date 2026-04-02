@@ -2,9 +2,9 @@ open Std
 module Test = Std.Test
 
 let sample_tests = [
-  Test.case "alpha_long" (fun () -> Ok ());
-  Test.case "beta" (fun () -> Ok ());
-  Test.case "middle_long_case" (fun () -> Ok ());
+  Test.case "alpha_long" (fun _ctx -> Ok ());
+  Test.case "beta" (fun _ctx -> Ok ());
+  Test.case "middle_long_case" (fun _ctx -> Ok ());
 ]
 
 let self_executable = fun () ->
@@ -32,7 +32,7 @@ let run_sample_capture = fun args ->
   let cmd = Command.make (self_executable ()) ~args:(("sample" :: args)) in
   Command.output cmd |> Result.expect ~msg:"failed to run sample test cli"
 
-let test_list_tests_lists_all_cases = fun () ->
+let test_list_tests_lists_all_cases = fun _ctx ->
   let output = run_sample_capture [ "list-tests" ] in
   if not (Int.equal output.status 0) then
     Error ("expected list-tests to succeed, got " ^ Int.to_string output.status)
@@ -44,7 +44,7 @@ let test_list_tests_lists_all_cases = fun () ->
     else
       Error ("unexpected listed test names: " ^ String.concat ", " names)
 
-let test_run_tests_pattern_matches_suffix_substring = fun () ->
+let test_run_tests_pattern_matches_suffix_substring = fun _ctx ->
   let output = run_sample_capture [ "run-tests"; "_long"; "--format"; "json" ] in
   if not (Int.equal output.status 0) then
     Error ("expected filtered run to succeed, got " ^ Int.to_string output.status)
@@ -56,7 +56,7 @@ let test_run_tests_pattern_matches_suffix_substring = fun () ->
     else
       Error ("unexpected filtered names for _long: " ^ String.concat ", " names)
 
-let test_run_tests_pattern_matches_middle_substring = fun () ->
+let test_run_tests_pattern_matches_middle_substring = fun _ctx ->
   let output = run_sample_capture [ "run-tests"; "long_case"; "--format"; "json" ] in
   if not (Int.equal output.status 0) then
     Error ("expected filtered run to succeed, got " ^ Int.to_string output.status)
@@ -67,7 +67,7 @@ let test_run_tests_pattern_matches_middle_substring = fun () ->
     else
       Error ("unexpected filtered names for long_case: " ^ String.concat ", " names)
 
-let test_run_tests_returns_success_with_zero_matches = fun () ->
+let test_run_tests_returns_success_with_zero_matches = fun _ctx ->
   let output = run_sample_capture [ "run-tests"; "missing_case"; "--format"; "json" ] in
   if not (Int.equal output.status 0) then
     Error ("expected filtered run with no matches to succeed, got " ^ Int.to_string output.status)

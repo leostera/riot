@@ -37,7 +37,7 @@ let make_package = fun ~root ~name ->
     publish = { version = None; description = None; license = None; is_public = None };
   }
 
-let test_rewrite_ocamlc_result_rewrites_workspace_paths = fun () ->
+let test_rewrite_ocamlc_result_rewrites_workspace_paths = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"diagnostic_rewrite_test"
       (fun tmpdir ->
@@ -68,7 +68,7 @@ let test_rewrite_ocamlc_result_rewrites_workspace_paths = fun () ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_rewrite_ocamlc_result_leaves_generated_paths_alone = fun () ->
+let test_rewrite_ocamlc_result_leaves_generated_paths_alone = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"diagnostic_rewrite_generated_test"
       (fun tmpdir ->

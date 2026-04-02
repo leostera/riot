@@ -23,7 +23,7 @@ let assert_conflict = fun result ->
 
 let test_debug_derivations =
   Test.case "DEBUG: Test derivations are created"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [];
@@ -31,14 +31,14 @@ let test_debug_derivations =
 
 let test_empty_root =
   Test.case "Empty root package"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [];
       assert_solution 1 (Pubgrub.solve (Pubgrub.to_provider provider) "root" (v 1 0 0)))
 
 let test_single_dependency =
   Test.case "Single direct dependency"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [];
@@ -46,7 +46,7 @@ let test_single_dependency =
 
 let test_two_dependencies =
   Test.case "Two independent dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full); ("bar", Pubgrub.full) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [];
@@ -55,7 +55,7 @@ let test_two_dependencies =
 
 let test_transitive_chain =
   Test.case "Transitive dependency chain (3 levels)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("b", Pubgrub.full) ];
@@ -65,7 +65,7 @@ let test_transitive_chain =
 
 let test_deep_chain =
   Test.case "Deep dependency chain (5 levels)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("b", Pubgrub.full) ];
@@ -77,7 +77,7 @@ let test_deep_chain =
 
 let test_diamond_dependency =
   Test.case "Diamond dependency"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full); ("b", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("c", Pubgrub.full) ];
@@ -87,7 +87,7 @@ let test_diamond_dependency =
 
 let test_multiple_versions_picks_latest =
   Test.case "Multiple versions available - picks latest"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [];
@@ -98,7 +98,7 @@ let test_multiple_versions_picks_latest =
 
 let test_version_constraint_lower =
   Test.case "Version constraint: >= 2.0.0"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.higher_than (v 2 0 0)) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [];
@@ -108,7 +108,7 @@ let test_version_constraint_lower =
 
 let test_version_constraint_upper =
   Test.case "Version constraint: < 2.0.0"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -122,7 +122,7 @@ let test_version_constraint_upper =
 
 let test_version_range =
   Test.case "Version range: >= 1.0.0 and < 2.0.0"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.between (v 1 0 0) (v 2 0 0)) ];
       Pubgrub.add_package provider "foo" (v 0 9 0) [];
@@ -133,7 +133,7 @@ let test_version_range =
 
 let test_wide_tree =
   Test.case "Wide dependency tree (5 deps)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -155,7 +155,7 @@ let test_wide_tree =
 
 let test_nested_diamonds =
   Test.case "Nested diamond dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full); ("b", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("c", Pubgrub.full); ("d", Pubgrub.full) ];
@@ -167,7 +167,7 @@ let test_nested_diamonds =
 
 let test_complex_graph =
   Test.case "Complex dependency graph"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full); ("b", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("c", Pubgrub.full); ("d", Pubgrub.full) ];
@@ -181,7 +181,7 @@ let test_complex_graph =
 
 let test_many_versions =
   Test.case "Package with many versions (10)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       for i = 0 to 9 do
@@ -191,7 +191,7 @@ let test_many_versions =
 
 let test_semantic_versions =
   Test.case "Semantic version ordering"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       Pubgrub.add_package provider "foo" (v 0 1 0) [];
@@ -204,7 +204,7 @@ let test_semantic_versions =
 
 let test_transitive_constraints =
   Test.case "Transitive version constraints"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("b", Pubgrub.higher_than (v 2 0 0)) ];
@@ -215,7 +215,7 @@ let test_transitive_constraints =
 
 let test_larger_graph =
   Test.case "Larger dependency graph (15 packages)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -240,7 +240,7 @@ let test_larger_graph =
 
 let test_version_selection_strategy =
   Test.case "Version selection with many options"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       for major = 0 to 2 do
@@ -254,7 +254,7 @@ let test_version_selection_strategy =
 
 let test_very_deep_chain =
   Test.case "Very deep dependency chain (10 levels)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("b", Pubgrub.full) ];
@@ -270,7 +270,7 @@ let test_very_deep_chain =
 
 let test_very_wide_tree =
   Test.case "Very wide dependency tree (10 deps)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0)
         [
@@ -299,7 +299,7 @@ let test_very_wide_tree =
 
 let test_triple_diamond =
   Test.case "Triple diamond pattern"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full); ("b", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("c", Pubgrub.full); ("d", Pubgrub.full) ];
@@ -313,7 +313,7 @@ let test_triple_diamond =
 
 let test_many_versions_20 =
   Test.case "Package with 20 versions"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       for i = 0 to 19 do
@@ -323,7 +323,7 @@ let test_many_versions_20 =
 
 let test_many_versions_50 =
   Test.case "Package with 50 versions"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       for i = 0 to 49 do
@@ -333,7 +333,7 @@ let test_many_versions_50 =
 
 let test_constraint_range_narrow =
   Test.case "Narrow version range constraint"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.between (v 1 5 0) (v 1 7 0)) ];
       for i = 0 to 10 do
@@ -343,7 +343,7 @@ let test_constraint_range_narrow =
 
 let test_patch_versions =
   Test.case "Patch version selection"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full) ];
       for i = 0 to 10 do
@@ -353,7 +353,7 @@ let test_patch_versions =
 
 let test_branching_graph =
   Test.case "Branching dependency graph"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package
@@ -371,7 +371,7 @@ let test_branching_graph =
 
 let test_deep_and_wide =
   Test.case "Deep and wide combined (20 packages)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -406,7 +406,7 @@ let generate_web_framework_tests = fun () ->
   for i = 1 to 25 do
     let test =
       Test.case ("Web framework scenario " ^ (Int.to_string i))
-        (fun () ->
+        (fun _ctx ->
           let provider = Pubgrub.create_offline () in
           Pubgrub.add_package
             provider
@@ -431,7 +431,7 @@ let generate_database_tests = fun () ->
   for i = 1 to 25 do
     let test =
       Test.case ("Database scenario " ^ (Int.to_string i))
-        (fun () ->
+        (fun _ctx ->
           let provider = Pubgrub.create_offline () in
           Pubgrub.add_package
             provider
@@ -464,7 +464,7 @@ let generate_compiler_tests = fun () ->
   for i = 1 to 22 do
     let test =
       Test.case ("Compiler toolchain scenario " ^ (Int.to_string i))
-        (fun () ->
+        (fun _ctx ->
           let provider = Pubgrub.create_offline () in
           Pubgrub.add_package
             provider
@@ -492,7 +492,7 @@ let generate_compiler_tests = fun () ->
 
 let test_large_graph_30_packages =
   Test.case "Large graph: 30 packages with mixed dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -553,14 +553,14 @@ let test_large_graph_30_packages =
 
 let test_conflict_missing_dependency =
   Test.case "Conflict: missing dependency"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("nonexistent", Pubgrub.full) ];
       assert_conflict (Pubgrub.solve (Pubgrub.to_provider provider) "root" (v 1 0 0)))
 
 let test_balanced_tree =
   Test.case "Balanced binary tree of dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -605,7 +605,7 @@ let test_balanced_tree =
 
 let test_monorepo_structure =
   Test.case "Monorepo: multiple packages with shared deps"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -636,7 +636,7 @@ let test_monorepo_structure =
 
 let test_massive_graph_100_packages =
   Test.case "Massive graph: 100+ packages with complex dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       let deps = ref [] in
       for i = 0 to 9 do
@@ -661,7 +661,7 @@ let test_massive_graph_100_packages =
 
 let test_massive_versions =
   Test.case "Massive versions: package with 100 versions"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("lib", Pubgrub.full) ];
       for i = 0 to 99 do
@@ -671,7 +671,7 @@ let test_massive_versions =
 
 let test_complex_constraint_web =
   Test.case "Complex constraints: realistic web stack"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -705,7 +705,7 @@ let test_complex_constraint_web =
 
 let test_deep_shared_dependency =
   Test.case "Deep graph with shared transitive dependencies"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -747,7 +747,7 @@ let test_deep_shared_dependency =
 
 let test_plugin_system =
   Test.case "Plugin system with core and extensions"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -788,7 +788,7 @@ let test_plugin_system =
 
 let test_multi_level_constraints =
   Test.case "Multi-level version constraints (4 levels)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("a", Pubgrub.full) ];
       Pubgrub.add_package provider "a" (v 1 0 0) [ ("b", Pubgrub.higher_than (v 2 0 0)) ];
@@ -803,7 +803,7 @@ let test_multi_level_constraints =
 
 let test_ref_same_result_on_repeated_runs =
   Test.case "REF: Same result on repeated runs"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "c" (v 0 0 0) [];
       Pubgrub.add_package provider "c" (v 2 0 0) [];
@@ -822,7 +822,7 @@ let test_ref_same_result_on_repeated_runs =
 
 let test_ref_no_solution_empty_dep =
   Test.case "REF: No solution with empty dependency"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "a" (v 0 0 0) [ ("b", Pubgrub.empty) ];
       match Pubgrub.solve (Pubgrub.to_provider provider) "a" (v 0 0 0) with
@@ -832,7 +832,7 @@ let test_ref_no_solution_empty_dep =
 
 let test_ref_no_solution_transitive =
   Test.case "REF: No solution transitively"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "a" (v 0 0 0) [ ("b", Pubgrub.empty) ];
       Pubgrub.add_package provider "c" (v 0 0 0) [ ("a", Pubgrub.full) ];
@@ -843,7 +843,7 @@ let test_ref_no_solution_transitive =
 
 let test_ref_depend_on_self_ok =
   Test.case "REF: Depend on self (should work)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "a" (v 0 0 0) [ ("a", Pubgrub.full) ];
       match Pubgrub.solve (Pubgrub.to_provider provider) "a" (v 0 0 0) with
@@ -853,7 +853,7 @@ let test_ref_depend_on_self_ok =
 
 let test_ref_depend_on_self_impossible =
   Test.case "REF: Depend on self impossible version"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "a" (v 66 0 0) [ ("a", Pubgrub.singleton (v 111 0 0)) ];
       match Pubgrub.solve (Pubgrub.to_provider provider) "a" (v 66 0 0) with
@@ -869,7 +869,7 @@ let test_ref_depend_on_self_impossible =
 
 let test_ref_no_conflict =
   Test.case "REF: No conflict (from Dart docs)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.between (v 1 0 0) (v 2 0 0)) ];
       Pubgrub.add_package provider "foo" (v 1 0 0) [ ("bar", Pubgrub.between (v 1 0 0) (v 2 0 0)) ];
@@ -886,7 +886,7 @@ let test_ref_no_conflict =
 
 let test_ref_avoiding_conflict =
   Test.case "REF: Avoiding conflict during decision"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -912,7 +912,7 @@ let test_ref_avoiding_conflict =
 
 let test_ref_conflict_resolution =
   Test.case "REF: Conflict resolution (from Dart docs)"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.higher_than (v 1 0 0)) ];
       Pubgrub.add_package provider "foo" (v 2 0 0) [ ("bar", Pubgrub.between (v 1 0 0) (v 2 0 0)) ];
@@ -928,7 +928,7 @@ let test_ref_conflict_resolution =
 
 let test_debug_conflict_partial_satisfier =
   Test.case "DEBUG: Conflict with partial satisfier"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -980,7 +980,7 @@ let test_debug_conflict_partial_satisfier =
 
 let test_ref_conflict_partial_satisfier =
   Test.case "REF: Conflict with partial satisfier"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package
         provider
@@ -1032,7 +1032,7 @@ let test_ref_conflict_partial_satisfier =
 
 let test_ref_double_choices =
   Test.case "REF: Double choices"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "a" (v 0 0 0) [ ("b", Pubgrub.full); ("c", Pubgrub.full) ];
       Pubgrub.add_package provider "b" (v 0 0 0) [ ("d", Pubgrub.singleton (v 0 0 0)) ];
@@ -1059,7 +1059,7 @@ let test_ref_double_choices =
 
 let test_ref_confusing_with_holes =
   Test.case "REF: Confusing with lots of holes"
-    (fun () ->
+    (fun _ctx ->
       let provider = Pubgrub.create_offline () in
       Pubgrub.add_package provider "root" (v 1 0 0) [ ("foo", Pubgrub.full); ("baz", Pubgrub.full) ];
       for i = 1 to 5 do

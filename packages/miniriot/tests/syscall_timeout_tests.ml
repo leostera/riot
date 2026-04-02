@@ -125,7 +125,7 @@ let () =
   let tests = [
     Test.case
       "syscall timeout deregisters wait registration"
-      (fun () -> test_case "syscall timeout deregisters wait registration" test_syscall_timeout_deregisters_wait_registration);
+      (fun _ctx -> test_case "syscall timeout deregisters wait registration" test_syscall_timeout_deregisters_wait_registration);
   ] in
   let normalize_args = function
     | [] -> [ "syscall_timeout_tests"; "run-tests" ]

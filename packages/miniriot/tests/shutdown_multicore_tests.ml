@@ -66,7 +66,7 @@ let () =
   let tests = [
     Test.case
       "shutdown wakes parked workers"
-      (fun () -> test_case "shutdown wakes parked workers" test_shutdown_unparks_idle_workers);
+      (fun _ctx -> test_case "shutdown wakes parked workers" test_shutdown_unparks_idle_workers);
   ] in
   let normalize_args = function
     | [] -> [ "shutdown_multicore_tests"; "run-tests" ]

@@ -8,7 +8,7 @@ let text_measurer = fun text _style ->
   let height = 1.0 in
   Viewport.make ~width ~height
 
-let test_three_column_with_grow = fun () ->
+let test_three_column_with_grow = fun _ctx ->
   (* Left: Fixed 20, Middle: Grow, Right: Fixed 15
      In an 80-wide viewport:
      - Left should be 20

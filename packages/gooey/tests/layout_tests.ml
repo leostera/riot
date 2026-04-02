@@ -7,7 +7,7 @@ let make_config = fun () ->
     ~text_measurer:Config.default_text_measurer
     ()
 
-let test_layout_single_text = fun () ->
+let test_layout_single_text = fun _ctx ->
   let elem = Element.text "Hello" in
   let commands = layout ~config:(make_config ()) elem in
   if List.length commands != 1 then
@@ -25,7 +25,7 @@ let test_layout_single_text = fun () ->
           Ok ()
     | _ -> Error "Expected Text command"
 
-let test_layout_row = fun () ->
+let test_layout_row = fun _ctx ->
   let elem = Element.row [ Element.text "A"; Element.text "B"; Element.text "C"; ] in
   let commands = layout ~config:(make_config ()) elem in
   if List.length commands != 3 then
@@ -44,7 +44,7 @@ let test_layout_row = fun () ->
     else
       Error ("Expected texts [A; B; C], got [" ^ String.concat "; " texts ^ "]")
 
-let test_layout_column = fun () ->
+let test_layout_column = fun _ctx ->
   let elem = Element.column [ Element.text "A"; Element.text "B" ] in
   let commands = layout ~config:(make_config ()) elem in
   let texts =
@@ -60,7 +60,7 @@ let test_layout_column = fun () ->
   else
     Error ("Expected texts [A; B], got [" ^ String.concat "; " texts ^ "]")
 
-let test_layout_with_padding = fun () ->
+let test_layout_with_padding = fun _ctx ->
   let elem = Element.container ~style:Style.(empty |> padding (Padding.all 10)) [ Element.text "Hi" ] in
   let commands = layout ~config:(make_config ()) elem in
   if List.length commands != 1 then
@@ -79,7 +79,7 @@ let test_layout_with_padding = fun () ->
           ^ ")")
     | _ -> Error "Expected Text command"
 
-let test_layout_with_child_gap = fun () ->
+let test_layout_with_child_gap = fun _ctx ->
   let elem = Element.row ~style:Style.(empty |> child_gap 5) [ Element.text "A"; Element.text "B" ] in
   let commands = layout ~config:(make_config ()) elem in
   let positions =
@@ -98,7 +98,7 @@ let test_layout_with_child_gap = fun () ->
     ^ String.concat "; " (List.map Float.to_string positions)
     ^ "]")
 
-let test_layout_grow_sizing = fun () ->
+let test_layout_grow_sizing = fun _ctx ->
   let elem = Element.container ~style:Style.(empty |> grow) [] in
   let commands = layout ~config:(make_config ()) elem in
   (* Empty container with no background produces no commands *)
@@ -107,7 +107,7 @@ let test_layout_grow_sizing = fun () ->
   else
     Error "Empty grow container should produce no commands"
 
-let test_layout_fixed_sizing = fun () ->
+let test_layout_fixed_sizing = fun _ctx ->
   let elem = Element.container
     ~style:Style.(empty |> width (Fixed 50.0) |> height (Fixed 30.0) |> bg (`rgb (0, 0, 0)))
     [] in
@@ -126,7 +126,7 @@ let test_layout_fixed_sizing = fun () ->
           ^ Float.to_string bounding_box.height)
     | _ -> Error "Expected Rectangle command"
 
-let test_nested_layout = fun () ->
+let test_nested_layout = fun _ctx ->
   let elem = Element.column
     [
       Element.text "Title";

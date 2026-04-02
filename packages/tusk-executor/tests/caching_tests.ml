@@ -10,12 +10,12 @@ let make_test_workspace = fun tmpdir ->
     profile_overrides = [];
   }
 
-let test_cache_store_creation = fun () ->
+let test_cache_store_creation = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
         let workspace = make_test_workspace tmpdir in
-        let store = Tusk_store.Store.create ~workspace in
+        ignore (Tusk_store.Store.create ~workspace);
         let cache_dir = Path.(tmpdir / Path.v "target" / Path.v "debug" / Path.v "cache") in
         match Fs.exists cache_dir with
         | Ok true -> Ok ()
@@ -25,7 +25,7 @@ let test_cache_store_creation = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_simple_file_caching = fun () ->
+let test_simple_file_caching = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
@@ -48,7 +48,7 @@ let test_simple_file_caching = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_cache_hit_retrieval = fun () ->
+let test_cache_hit_retrieval = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
@@ -73,7 +73,7 @@ let test_cache_hit_retrieval = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_cache_promotion_workflow = fun () ->
+let test_cache_promotion_workflow = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->
@@ -114,7 +114,7 @@ let test_cache_promotion_workflow = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_different_hashes_isolated = fun () ->
+let test_different_hashes_isolated = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"cache_test"
       (fun tmpdir ->

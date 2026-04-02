@@ -29,7 +29,7 @@ let make_workspace = fun binaries ->
   in
   Tusk_model.Workspace.make ~root:(Path.v "/workspace") ~packages:[ package ] ()
 
-let test_collect_test_suites_filters_workspace_binaries = fun () ->
+let test_collect_test_suites_filters_workspace_binaries = fun _ctx ->
   let workspace = make_workspace
     [
       Tusk_model.Package.{ name = "alpha_tests"; path = Path.v "tests/alpha_tests.ml" };
@@ -45,7 +45,7 @@ let test_collect_test_suites_filters_workspace_binaries = fun () ->
     ~actual;
   Ok ()
 
-let test_test_event_to_json_serializes_summary = fun () ->
+let test_test_event_to_json_serializes_summary = fun _ctx ->
   match Tusk_build.test_event_to_json (Tusk_build.Summary { total = 3; passed = 2; failed = 1 }) with
   | Some (Data.Json.Object fields) ->
       Test.assert_equal

@@ -11,14 +11,14 @@ let parse_logout = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
-let test_login_accepts_token_option = fun () ->
+let test_login_accepts_token_option = fun _ctx ->
   match parse_login [ "login"; "--token"; "root-secret" ] with
   | Error err -> Error ("expected login args to parse: " ^ err)
   | Ok matches ->
       Test.assert_equal ~expected:(Some "root-secret") ~actual:(ArgParser.get_one matches "token");
       Ok ()
 
-let test_logout_accepts_no_args = fun () ->
+let test_logout_accepts_no_args = fun _ctx ->
   match parse_logout [ "logout" ] with
   | Error err -> Error ("expected logout args to parse: " ^ err)
   | Ok _ -> Ok ()

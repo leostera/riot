@@ -163,10 +163,10 @@ let () =
   let tests = [
     Test.case
       "link trap_exit receives EXIT across workers"
-      (fun () -> test_case "link trap_exit receives EXIT" test_link_trap_exit_receives_exit_message);
+      (fun _ctx -> test_case "link trap_exit receives EXIT" test_link_trap_exit_receives_exit_message);
     Test.case
       "link without trap_exit exits across workers"
-      (fun () -> test_case "link without trap_exit exits" test_link_without_trap_exit_dies_on_abnormal_exit);
+      (fun _ctx -> test_case "link without trap_exit exits" test_link_without_trap_exit_dies_on_abnormal_exit);
   ] in
   let normalize_args = function
     | [] -> [ "link_multicore_tests"; "run-tests" ]

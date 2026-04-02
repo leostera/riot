@@ -2,43 +2,43 @@ open Std
 open Std.Data
 open Std.Collections
 
-let test_path_component_key = Test.case "create Key path component" @@ fun () ->
+let test_path_component_key = Test.case "create Key path component" @@ fun _ctx ->
   let component = Diff.Key "user" in
   match component with
   | Diff.Key "user" -> Ok ()
   | _ -> Error "Failed to create Key component"
 
-let test_path_component_index = Test.case "create Index path component" @@ fun () ->
+let test_path_component_index = Test.case "create Index path component" @@ fun _ctx ->
   let component = Diff.Index 5 in
   match component with
   | Diff.Index 5 -> Ok ()
   | _ -> Error "Failed to create Index component"
 
-let test_kind_added = Test.case "create Added kind" @@ fun () ->
+let test_kind_added = Test.case "create Added kind" @@ fun _ctx ->
   let kind = Diff.Added 42 in
   match kind with
   | Diff.Added 42 -> Ok ()
   | _ -> Error "Failed to create Added kind"
 
-let test_kind_removed = Test.case "create Removed kind" @@ fun () ->
+let test_kind_removed = Test.case "create Removed kind" @@ fun _ctx ->
   let kind = Diff.Removed "test" in
   match kind with
   | Diff.Removed "test" -> Ok ()
   | _ -> Error "Failed to create Removed kind"
 
-let test_kind_changed = Test.case "create Changed kind" @@ fun () ->
+let test_kind_changed = Test.case "create Changed kind" @@ fun _ctx ->
   let kind = Diff.Changed (1, 2) in
   match kind with
   | Diff.Changed (1, 2) -> Ok ()
   | _ -> Error "Failed to create Changed kind"
 
-let test_change_empty_path = Test.case "change with empty path" @@ fun () ->
+let test_change_empty_path = Test.case "change with empty path" @@ fun _ctx ->
   let result = { Diff.path = []; kind = Diff.Added 42 } in
   match result.path with
   | [] -> Ok ()
   | _ -> Error "Expected empty path"
 
-let test_change_nested_path = Test.case "change with nested path" @@ fun () ->
+let test_change_nested_path = Test.case "change with nested path" @@ fun _ctx ->
   let result = {
     Diff.path = [ Diff.Key "user"; Diff.Key "address"; Diff.Key "city" ];
     kind = Diff.Changed ("NYC", "SF")
@@ -47,7 +47,7 @@ let test_change_nested_path = Test.case "change with nested path" @@ fun () ->
   | [Diff.Key "user";Diff.Key "address";Diff.Key "city"] -> Ok ()
   | _ -> Error "Path doesn't match"
 
-let test_change_mixed_path = Test.case "change with mixed Key and Index path" @@ fun () ->
+let test_change_mixed_path = Test.case "change with mixed Key and Index path" @@ fun _ctx ->
   let result = {
     Diff.path = [ Diff.Key "users"; Diff.Index 0; Diff.Key "name" ];
     kind = Diff.Changed ("Alice", "Bob")
@@ -56,14 +56,14 @@ let test_change_mixed_path = Test.case "change with mixed Key and Index path" @@
   | [Diff.Key "users";Diff.Index 0;Diff.Key "name"] -> Ok ()
   | _ -> Error "Path doesn't match"
 
-let test_has_changes_empty = Test.case "has_changes on empty list" @@ fun () ->
+let test_has_changes_empty = Test.case "has_changes on empty list" @@ fun _ctx ->
   let result = Diff.has_changes [] in
   if not result then
     Ok ()
   else
     Error "Expected false for empty list"
 
-let test_has_changes_with_changes = Test.case "has_changes with actual changes" @@ fun () ->
+let test_has_changes_with_changes = Test.case "has_changes with actual changes" @@ fun _ctx ->
   let changes = [ { Diff.path = []; kind = Diff.Added 1 } ] in
   let result = Diff.has_changes changes in
   if result then
@@ -71,7 +71,7 @@ let test_has_changes_with_changes = Test.case "has_changes with actual changes" 
   else
     Error "Expected true for non-empty list"
 
-let test_additions_filter = Test.case "additions filters only Added changes" @@ fun () ->
+let test_additions_filter = Test.case "additions filters only Added changes" @@ fun _ctx ->
   let changes = [
     { Diff.path = [ Diff.Key "a" ]; kind = Diff.Added 1 };
     { Diff.path = [ Diff.Key "b" ]; kind = Diff.Removed 2 };
@@ -83,7 +83,7 @@ let test_additions_filter = Test.case "additions filters only Added changes" @@ 
   | [{ path=[ Diff.Key "a" ]; kind=Diff.Added 1 };{ path=[ Diff.Key "d" ]; kind=Diff.Added 5 };] -> Ok ()
   | _ -> Error ("Expected 2 specific additions, got " ^ Int.to_string (List.length added))
 
-let test_removals_filter = Test.case "removals filters only Removed changes" @@ fun () ->
+let test_removals_filter = Test.case "removals filters only Removed changes" @@ fun _ctx ->
   let changes = [
     { Diff.path = [ Diff.Key "a" ]; kind = Diff.Added 1 };
     { Diff.path = [ Diff.Key "b" ]; kind = Diff.Removed 2 };
@@ -94,7 +94,7 @@ let test_removals_filter = Test.case "removals filters only Removed changes" @@ 
   | [{ path=[ Diff.Key "b" ]; kind=Diff.Removed 2 };{ path=[ Diff.Key "c" ]; kind=Diff.Removed 3 };] -> Ok ()
   | _ -> Error ("Expected 2 specific removals, got " ^ Int.to_string (List.length removed))
 
-let test_changes_filter = Test.case "changes filters only Changed changes" @@ fun () ->
+let test_changes_filter = Test.case "changes filters only Changed changes" @@ fun _ctx ->
   let changes = [
     { Diff.path = [ Diff.Key "a" ]; kind = Diff.Added 1 };
     { Diff.path = [ Diff.Key "b" ]; kind = Diff.Changed (2, 3) };
@@ -110,7 +110,7 @@ let test_changes_filter = Test.case "changes filters only Changed changes" @@ fu
   ] -> Ok ()
   | _ -> Error ("Expected 2 specific changes, got " ^ Int.to_string (List.length changed))
 
-let test_at_path_exact_match = Test.case "at_path with exact match" @@ fun () ->
+let test_at_path_exact_match = Test.case "at_path with exact match" @@ fun _ctx ->
   let diffs = [
     { Diff.path = [ Diff.Key "user"; Diff.Key "name" ]; kind = Diff.Added "Alice" };
     { Diff.path = [ Diff.Key "user"; Diff.Key "age" ]; kind = Diff.Added "30" };
@@ -121,7 +121,7 @@ let test_at_path_exact_match = Test.case "at_path with exact match" @@ fun () ->
   | [ { path=[Diff.Key "user";Diff.Key "name"]; kind=Diff.Added "Alice" };  ] -> Ok ()
   | _ -> Error ("Expected 1 match at user.name, got " ^ Int.to_string (List.length at_user_name))
 
-let test_at_path_no_match = Test.case "at_path with no match" @@ fun () ->
+let test_at_path_no_match = Test.case "at_path with no match" @@ fun _ctx ->
   let diffs = [ { Diff.path = [ Diff.Key "user"; Diff.Key "name" ]; kind = Diff.Added "Alice" }; ] in
   let at_config = Diff.at_path [ Diff.Key "config" ] diffs in
   if List.length at_config = 0 then

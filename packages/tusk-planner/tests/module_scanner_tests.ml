@@ -14,7 +14,7 @@ let rec flatten_entries = fun entries ->
     )
     entries
 
-let test_scan_tags_c_and_h_files = fun () ->
+let test_scan_tags_c_and_h_files = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"module_scanner_test"
       (fun tmpdir ->

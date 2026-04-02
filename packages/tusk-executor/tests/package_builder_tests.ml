@@ -5,7 +5,7 @@ module Test = Std.Test
 let test_toolchain = Tusk_toolchain.init ~config:Tusk_model.Toolchain_config.default
 |> Result.expect ~msg:"Failed to initialize test toolchain"
 
-let test_collect_source_files = fun () ->
+let test_collect_source_files = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkg_test"
       (fun tmpdir ->
@@ -77,7 +77,7 @@ let test_collect_source_files = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_build_result_status_variants = fun () ->
+let test_build_result_status_variants = fun _ctx ->
   let package =
     Tusk_model.Package.{
       name = "test";
@@ -142,7 +142,7 @@ let test_build_result_status_variants = fun () ->
   | Cached _, Built _, Failed _ -> Ok ()
   | _ -> Error "Status variants don't match expected types"
 
-let test_package_error_variants = fun () ->
+let test_package_error_variants = fun _ctx ->
   let planning_error = Tusk_planner.Planning_error.Exception { exn = Failure "test" } in
   let error1 = Tusk_executor.Package_builder.PlanningFailed planning_error in
   let error2 = Tusk_executor.Package_builder.ExecutionFailed { message = "build failed" } in
@@ -150,7 +150,7 @@ let test_package_error_variants = fun () ->
   | PlanningFailed _, ExecutionFailed _ -> Ok ()
   | _ -> Error "Error variants don't match expected types"
 
-let test_build_writes_package_export_manifest = fun () ->
+let test_build_writes_package_export_manifest = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkg_builder_export_manifest_test"
       (fun tmpdir ->
@@ -213,7 +213,7 @@ let test_build_writes_package_export_manifest = fun () ->
         match result.status with
         | Tusk_executor.Package_builder.Failed err ->
             Error ("build failed: " ^ Tusk_executor.Package_builder.package_error_to_string err)
-        | Tusk_executor.Package_builder.Skipped reason ->
+        | Tusk_executor.Package_builder.Skipped { reason } ->
             Error ("build skipped: " ^ reason)
         | Tusk_executor.Package_builder.Built _
         | Tusk_executor.Package_builder.Cached _ ->

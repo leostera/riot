@@ -5,7 +5,7 @@ let make_keys = fun n ->
 
 let tests = [
   Test.case "hash collisions"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       (* Insert 20 elements - some may have hash collisions *)
       for i = 0 to 19 do
@@ -19,7 +19,7 @@ let tests = [
       done;
       Ok ());
   Test.case "remove/reinsert cycle"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       for round = 0 to 9 do
         let _ = Swisstable.insert map "key" round in
@@ -30,7 +30,7 @@ let tests = [
       Test.assert_equal ~expected:0 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "fill/empty/refill"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 50 in
       (* Fill *)
@@ -61,7 +61,7 @@ let tests = [
       done;
       Ok ());
   Test.case "overwrite existing"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 20 in
       (* Insert initial values *)
@@ -84,7 +84,7 @@ let tests = [
       done;
       Ok ());
   Test.case "sparse removal"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 100 in
       (* Insert 100 elements *)
@@ -111,7 +111,7 @@ let tests = [
       done;
       Ok ());
   Test.case "grow then shrink"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 200 in
       (* Grow to 200 elements *)
@@ -135,7 +135,7 @@ let tests = [
       done;
       Ok ());
   Test.case "interleaved operations"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 30 in
       (* Insert 10 *)
@@ -172,7 +172,7 @@ let tests = [
       Test.assert_equal ~expected:20 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "clear and reuse"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let keys = make_keys 50 in
       (* Fill, clear, fill again - 3 times *)
@@ -189,7 +189,7 @@ let tests = [
       done;
       Ok ());
   Test.case "entry API patterns"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       (* or_insert on vacant *)
       let v1 = Swisstable.or_insert map "counter" 0 in
@@ -207,7 +207,7 @@ let tests = [
       Test.assert_equal ~expected:(Some 11) ~actual:(Swisstable.get map "counter");
       Ok ());
   Test.case "mixed key types"
-    (fun () ->
+    (fun _ctx ->
       let map1 = Swisstable.create () in
       let map2 = Swisstable.create () in
       let map3 = Swisstable.create () in
@@ -233,7 +233,7 @@ let tests = [
       Test.assert_equal ~expected:50 ~actual:(Swisstable.len map3);
       Ok ());
   Test.case "value patterns"
-    (fun () ->
+    (fun _ctx ->
       (* Option values *)
       let map1 = Swisstable.create () in
       let _ = Swisstable.insert map1 "opt_none" ((None: int option)) in
@@ -252,7 +252,7 @@ let tests = [
       Test.assert_equal ~expected:(Some false) ~actual:(Swisstable.get map3 "false_val");
       Ok ());
   Test.case "fold patterns"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       for i = 1 to 10 do
         let _ = Swisstable.insert map i (i * i) in

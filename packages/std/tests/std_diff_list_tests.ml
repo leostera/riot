@@ -18,66 +18,66 @@ let diff_lists = fun left right ->
   in
   loop 0 []
 
-let test_diff_identical_lists = fun () ->
+let test_diff_identical_lists = fun _ctx ->
   let diffs = diff_lists [ 1; 2 ] [ 1; 2 ] in
   if diffs = [] then
     Ok ()
   else
     Error "Identical lists should produce no changes"
 
-let test_diff_empty_lists = fun () ->
+let test_diff_empty_lists = fun _ctx ->
   let diffs = diff_lists [] [] in
   if not (Diff.has_changes diffs) then
     Ok ()
   else
     Error "Empty lists should produce no changes"
 
-let test_diff_added_elements = fun () ->
+let test_diff_added_elements = fun _ctx ->
   let diffs = diff_lists [ 1 ] [ 1; 2 ] in
   match Diff.additions diffs with
   | [ { path=[ Diff.Index 1 ]; kind=Diff.Added 2 } ] -> Ok ()
   | _ -> Error "Expected one added element"
 
-let test_diff_removed_elements = fun () ->
+let test_diff_removed_elements = fun _ctx ->
   let diffs = diff_lists [ 1; 2 ] [ 1 ] in
   match Diff.removals diffs with
   | [ { path=[ Diff.Index 1 ]; kind=Diff.Removed 2 } ] -> Ok ()
   | _ -> Error "Expected one removed element"
 
-let test_diff_changed_elements = fun () ->
+let test_diff_changed_elements = fun _ctx ->
   let diffs = diff_lists [ 1; 2 ] [ 1; 3 ] in
   match Diff.changes diffs with
   | [ { path=[ Diff.Index 1 ]; kind=Diff.Changed (2, 3) } ] -> Ok ()
   | _ -> Error "Expected one changed element"
 
-let test_diff_reordered_elements = fun () ->
+let test_diff_reordered_elements = fun _ctx ->
   let diffs = diff_lists [ 1; 2 ] [ 2; 1 ] in
   if List.length (Diff.changes diffs) = 2 then
     Ok ()
   else
     Error "Expected both positions to change when reordered"
 
-let test_diff_nested_lists = fun () ->
+let test_diff_nested_lists = fun _ctx ->
   let diffs = [ { Diff.path = [ Diff.Index 0 ]; kind = Diff.Changed ([ 1 ], [ 2 ]) } ] in
   match Diff.changes diffs with
   | [ { kind=Diff.Changed ([ 1 ], [ 2 ]); _ } ] -> Ok ()
   | _ -> Error "Expected changed nested list payload"
 
-let test_diff_one_empty = fun () ->
+let test_diff_one_empty = fun _ctx ->
   let diffs = diff_lists [] [ 1; 2 ] in
   if List.length (Diff.additions diffs) = 2 then
     Ok ()
   else
     Error "Expected all elements to be additions"
 
-let test_diff_different_lengths = fun () ->
+let test_diff_different_lengths = fun _ctx ->
   let diffs = diff_lists [ 1 ] [ 1; 2; 3 ] in
   if List.length diffs = 2 then
     Ok ()
   else
     Error "Expected two additions"
 
-let test_diff_mixed_changes = fun () ->
+let test_diff_mixed_changes = fun _ctx ->
   let diffs = diff_lists [ 1; 2; 3 ] [ 1; 4; 5; 6 ] in
   if List.length (Diff.changes diffs) = 2 && List.length (Diff.additions diffs) = 1 then
     Ok ()

@@ -2,13 +2,13 @@ open Std
 
 let tests = [
   Test.case "create empty map"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       Test.assert_true (Swisstable.is_empty map);
       Test.assert_equal ~expected:0 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "insert and get"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let prev = Swisstable.insert map "alice" 100 in
       Test.assert_equal ~expected:None ~actual:prev;
@@ -16,7 +16,7 @@ let tests = [
       Test.assert_equal ~expected:(Some 100) ~actual:(Swisstable.get map "alice");
       Ok ());
   Test.case "overwrite existing key"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "key" 1 in
       let prev = Swisstable.insert map "key" 2 in
@@ -25,7 +25,7 @@ let tests = [
       Test.assert_equal ~expected:(Some 2) ~actual:(Swisstable.get map "key");
       Ok ());
   Test.case "multiple inserts"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "a" 1 in
       let _ = Swisstable.insert map "b" 2 in
@@ -36,7 +36,7 @@ let tests = [
       Test.assert_equal ~expected:(Some 3) ~actual:(Swisstable.get map "c");
       Ok ());
   Test.case "remove"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "key" 42 in
       let removed = Swisstable.remove map "key" in
@@ -45,14 +45,14 @@ let tests = [
       Test.assert_equal ~expected:None ~actual:(Swisstable.get map "key");
       Ok ());
   Test.case "remove non-existent key"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let removed = Swisstable.remove map "missing" in
       Test.assert_equal ~expected:None ~actual:removed;
       Test.assert_equal ~expected:0 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "contains_key"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       Test.assert_false (Swisstable.contains_key map "key");
       let _ = Swisstable.insert map "key" 1 in
@@ -61,7 +61,7 @@ let tests = [
       Test.assert_false (Swisstable.contains_key map "key");
       Ok ());
   Test.case "clear"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "a" 1 in
       let _ = Swisstable.insert map "b" 2 in
@@ -73,7 +73,7 @@ let tests = [
       Test.assert_equal ~expected:None ~actual:(Swisstable.get map "a");
       Ok ());
   Test.case "of_list"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("c", 3) ] in
       Test.assert_equal ~expected:3 ~actual:(Swisstable.len map);
       Test.assert_equal ~expected:(Some 1) ~actual:(Swisstable.get map "a");
@@ -81,13 +81,13 @@ let tests = [
       Test.assert_equal ~expected:(Some 3) ~actual:(Swisstable.get map "c");
       Ok ());
   Test.case "of_list with duplicates"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("a", 3) ] in
       Test.assert_equal ~expected:2 ~actual:(Swisstable.len map);
       Test.assert_equal ~expected:(Some 3) ~actual:(Swisstable.get map "a");
       Ok ());
   Test.case "keys"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("c", 3) ] in
       let keys = Swisstable.keys map in
       Test.assert_equal ~expected:3 ~actual:(List.length keys);
@@ -96,7 +96,7 @@ let tests = [
       Test.assert_true (List.mem "c" keys);
       Ok ());
   Test.case "values"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("c", 3) ] in
       let values = Swisstable.values map in
       Test.assert_equal ~expected:3 ~actual:(List.length values);
@@ -105,7 +105,7 @@ let tests = [
       Test.assert_true (List.mem 3 values);
       Ok ());
   Test.case "iter"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("c", 3) ] in
       let sum = Sync.Cell.create 0 in
       Swisstable.iter
@@ -115,7 +115,7 @@ let tests = [
       Test.assert_equal ~expected:6 ~actual:(Sync.Cell.get sum);
       Ok ());
   Test.case "fold"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2); ("c", 3) ] in
       let sum =
         Swisstable.fold (fun _ v acc -> acc + v) map 0
@@ -123,7 +123,7 @@ let tests = [
       Test.assert_equal ~expected:6 ~actual:sum;
       Ok ());
   Test.case "to_list"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.of_list [ ("a", 1); ("b", 2) ] in
       let list = Swisstable.to_list map in
       Test.assert_equal ~expected:2 ~actual:(List.length list);
@@ -131,20 +131,20 @@ let tests = [
       Test.assert_true (List.mem ("b", 2) list);
       Ok ());
   Test.case "entry - Occupied"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "key" 42 in
       match Swisstable.entry map "key" with
       | Swisstable.Occupied 42 -> Ok ()
       | _ -> Error "Expected Occupied entry with value 42");
   Test.case "entry - Vacant"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       match Swisstable.entry map "missing" with
       | Swisstable.Vacant -> Ok ()
       | _ -> Error "Expected Vacant entry");
   Test.case "or_insert"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let v1 = Swisstable.or_insert map "key" 10 in
       Test.assert_equal ~expected:10 ~actual:v1;
@@ -154,7 +154,7 @@ let tests = [
       Test.assert_equal ~expected:1 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "and_modify"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "count" 5 in
       Swisstable.and_modify map "count" (fun x -> x + 1);
@@ -163,14 +163,14 @@ let tests = [
       Test.assert_equal ~expected:None ~actual:(Swisstable.get map "missing");
       Ok ());
   Test.case "with_capacity"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.with_capacity 100 in
       Test.assert_true (Swisstable.is_empty map);
       let _ = Swisstable.insert map "key" 1 in
       Test.assert_equal ~expected:1 ~actual:(Swisstable.len map);
       Ok ());
   Test.case "resize with many elements"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       (* Pre-create keys to ensure consistent hashing *)
       let keys =
@@ -194,7 +194,7 @@ let tests = [
       in
       verify 0);
   Test.case "insert after remove"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "a" 1 in
       let _ = Swisstable.insert map "b" 2 in
@@ -206,7 +206,7 @@ let tests = [
       Test.assert_equal ~expected:(Some 3) ~actual:(Swisstable.get map "c");
       Ok ());
   Test.case "integer keys"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map 1 "one" in
       let _ = Swisstable.insert map 2 "two" in
@@ -217,7 +217,7 @@ let tests = [
       Test.assert_equal ~expected:(Some "three") ~actual:(Swisstable.get map 3);
       Ok ());
   Test.case "complex values"
-    (fun () ->
+    (fun _ctx ->
       let map = Swisstable.create () in
       let _ = Swisstable.insert map "point1" (10, 20) in
       let _ = Swisstable.insert map "point2" (30, 40) in

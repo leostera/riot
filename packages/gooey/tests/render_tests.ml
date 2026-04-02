@@ -7,21 +7,21 @@ let make_config = fun () ->
     ~text_measurer:Config.default_text_measurer
     ()
 
-let test_render_text_command = fun () ->
+let test_render_text_command = fun _ctx ->
   let elem = Element.text ~style:Style.(empty |> fg (`rgb (255, 0, 0))) "Test" in
   let commands = layout ~config:(make_config ()) elem in
   match List.hd commands with
   | { Render.command_type=Text { color=`rgb (255, 0, 0); _ }; _ } -> Ok ()
   | _ -> Error "Expected Text command with rgb(255, 0, 0) color"
 
-let test_render_background = fun () ->
+let test_render_background = fun _ctx ->
   let elem = Element.container ~style:Style.(empty |> bg (`rgb (100, 150, 200))) [] in
   let commands = layout ~config:(make_config ()) elem in
   match List.hd commands with
   | { Render.command_type=Rectangle { color=`rgb (100, 150, 200); _ }; _ } -> Ok ()
   | _ -> Error "Expected Rectangle command with rgb(100, 150, 200) color"
 
-let test_render_border = fun () ->
+let test_render_border = fun _ctx ->
   let elem = Element.container
     ~style:Style.(empty |> border ~width:2 ~color:(`rgb (50, 50, 50)) ())
     [] in
@@ -39,7 +39,7 @@ let test_render_border = fun () ->
   else
     Error "Expected Border command with rgb(50, 50, 50) color"
 
-let test_render_background_and_border = fun () ->
+let test_render_background_and_border = fun _ctx ->
   let elem = Element.container
     ~style:Style.(empty |> bg (`rgb (255, 255, 255)) |> border ~width:2 ~color:(`rgb (0, 0, 0)) ())
     [] in
@@ -67,7 +67,7 @@ let test_render_background_and_border = fun () ->
   else
     Error "Missing border"
 
-let test_render_z_index_sorting = fun () ->
+let test_render_z_index_sorting = fun _ctx ->
   let elem = Element.container
     [
       Element.text ~style:Style.(empty |> z_index 2) "Top";
@@ -85,7 +85,7 @@ let test_render_z_index_sorting = fun () ->
     ^ String.concat "; " (List.map Int.to_string z_indices)
     ^ "]")
 
-let test_render_corner_radius = fun () ->
+let test_render_corner_radius = fun _ctx ->
   let elem = Element.container
     ~style:Style.(empty |> bg (`rgb (255, 0, 0)) |> border ~radius:(CornerRadius.all 8.0) ())
     [] in
@@ -107,7 +107,7 @@ let test_render_corner_radius = fun () ->
   else
     Error "Expected Rectangle with corner radius"
 
-let test_render_command_bounding_boxes = fun () ->
+let test_render_command_bounding_boxes = fun _ctx ->
   let elem = Element.row [ Element.text "A"; Element.text "B"; ] in
   let commands = layout ~config:(make_config ()) elem in
   let all_valid =

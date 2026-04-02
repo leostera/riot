@@ -137,7 +137,7 @@ let () =
   let tests = [
     Test.case
       "receive timeout cancellation race"
-      (fun () -> test_case "receive timeout cancellation race" test_receive_timeout_cancel_race);
+      (fun _ctx -> test_case "receive timeout cancellation race" test_receive_timeout_cancel_race);
   ] in
   let normalize_args = function
     | [] -> [ "timeout_race_tests"; "run-tests" ]

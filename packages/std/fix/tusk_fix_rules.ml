@@ -9,6 +9,7 @@ let rules = fun () ->
     Prefer_list_is_empty.rule ();
     Prefer_option_map_over_manual_match.rule ();
     Prefer_result_map_over_manual_match.rule ();
+    Upgrade_test_ctx_callbacks.rule ();
   ]
 
 let explanations = fun () ->
@@ -19,3 +20,4 @@ let explanations = fun () ->
   @ Prefer_list_is_empty.explanations ()
   @ Prefer_option_map_over_manual_match.explanations ()
   @ Prefer_result_map_over_manual_match.explanations ()
+  @ Upgrade_test_ctx_callbacks.explanations ()

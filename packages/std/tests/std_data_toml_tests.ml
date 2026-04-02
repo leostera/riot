@@ -26,7 +26,7 @@ let get_bool = function
 
 (* === BASIC VALUE TESTS === *)
 
-let test_simple_string = Test.case "parse simple string value" @@ fun () ->
+let test_simple_string = Test.case "parse simple string value" @@ fun _ctx ->
   let input = {|name = "hello"|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -37,7 +37,7 @@ let test_simple_string = Test.case "parse simple string value" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_quoted_string_with_escapes = Test.case "parse string with escapes" @@ fun () ->
+let test_quoted_string_with_escapes = Test.case "parse string with escapes" @@ fun _ctx ->
   let input = {|text = "hello\nworld\t\"quoted\""|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -48,7 +48,7 @@ let test_quoted_string_with_escapes = Test.case "parse string with escapes" @@ f
     )
   | _ -> Error "Parse failed"
 
-let test_boolean_true = Test.case "parse boolean true" @@ fun () ->
+let test_boolean_true = Test.case "parse boolean true" @@ fun _ctx ->
   let input = {|enabled = true|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -59,7 +59,7 @@ let test_boolean_true = Test.case "parse boolean true" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_boolean_false = Test.case "parse boolean false" @@ fun () ->
+let test_boolean_false = Test.case "parse boolean false" @@ fun _ctx ->
   let input = {|enabled = false|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -70,7 +70,7 @@ let test_boolean_false = Test.case "parse boolean false" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_integer_positive = Test.case "parse positive integer" @@ fun () ->
+let test_integer_positive = Test.case "parse positive integer" @@ fun _ctx ->
   let input = {|port = 2112|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -81,7 +81,7 @@ let test_integer_positive = Test.case "parse positive integer" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_integer_negative = Test.case "parse negative integer" @@ fun () ->
+let test_integer_negative = Test.case "parse negative integer" @@ fun _ctx ->
   let input = {|offset = -42|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -92,7 +92,7 @@ let test_integer_negative = Test.case "parse negative integer" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_integer_zero = Test.case "parse zero" @@ fun () ->
+let test_integer_zero = Test.case "parse zero" @@ fun _ctx ->
   let input = {|count = 0|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -103,7 +103,7 @@ let test_integer_zero = Test.case "parse zero" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_integer_in_array = Test.case "parse array of integers" @@ fun () ->
+let test_integer_in_array = Test.case "parse array of integers" @@ fun _ctx ->
   let input = {|ports = [8080, 8081, 8082]|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -114,7 +114,7 @@ let test_integer_in_array = Test.case "parse array of integers" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_bare_string = Test.case "parse bare string value" @@ fun () ->
+let test_bare_string = Test.case "parse bare string value" @@ fun _ctx ->
   let input = {|version = release-1|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -127,7 +127,7 @@ let test_bare_string = Test.case "parse bare string value" @@ fun () ->
 
 (* === ARRAY TESTS === *)
 
-let test_simple_array = Test.case "parse simple array" @@ fun () ->
+let test_simple_array = Test.case "parse simple array" @@ fun _ctx ->
   let input = {|numbers = [1, 2, 3]|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -138,7 +138,7 @@ let test_simple_array = Test.case "parse simple array" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_string_array = Test.case "parse string array" @@ fun () ->
+let test_string_array = Test.case "parse string array" @@ fun _ctx ->
   let input = {|tags = ["foo", "bar", "baz"]|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -149,7 +149,7 @@ let test_string_array = Test.case "parse string array" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_empty_array = Test.case "parse empty array" @@ fun () ->
+let test_empty_array = Test.case "parse empty array" @@ fun _ctx ->
   let input = {|empty = []|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -160,7 +160,7 @@ let test_empty_array = Test.case "parse empty array" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_nested_array = Test.case "parse nested array" @@ fun () ->
+let test_nested_array = Test.case "parse nested array" @@ fun _ctx ->
   let input = {|matrix = [[1, 2], [3, 4]]|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -173,7 +173,7 @@ let test_nested_array = Test.case "parse nested array" @@ fun () ->
 
 (* === INLINE TABLE TESTS === *)
 
-let test_simple_inline_table = Test.case "parse simple inline table" @@ fun () ->
+let test_simple_inline_table = Test.case "parse simple inline table" @@ fun _ctx ->
   let input = {|
 [dependencies]
 std = { path = "../std" }
@@ -196,7 +196,7 @@ std = { path = "../std" }
     )
   | _ -> Error "Parse failed"
 
-let test_multiple_inline_tables = Test.case "parse multiple inline tables" @@ fun () ->
+let test_multiple_inline_tables = Test.case "parse multiple inline tables" @@ fun _ctx ->
   let input = {|
 [dependencies]
 std = { path = "../std" }
@@ -213,7 +213,7 @@ miniriot = { path = "../miniriot" }
     )
   | _ -> Error "Parse failed"
 
-let test_inline_table_multiple_keys = Test.case "parse inline table with multiple keys" @@ fun () ->
+let test_inline_table_multiple_keys = Test.case "parse inline table with multiple keys" @@ fun _ctx ->
   let input = {|person = { name = "John", age = "30", city = "NYC" }|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -234,7 +234,7 @@ let test_inline_table_multiple_keys = Test.case "parse inline table with multipl
     )
   | _ -> Error "Parse failed"
 
-let test_inline_table_with_bool = Test.case "parse inline table with boolean" @@ fun () ->
+let test_inline_table_with_bool = Test.case "parse inline table with boolean" @@ fun _ctx ->
   let input = {|config = { enabled = true, debug = false }|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -248,7 +248,7 @@ let test_inline_table_with_bool = Test.case "parse inline table with boolean" @@
     )
   | _ -> Error "Parse failed"
 
-let test_nested_inline_tables = Test.case "parse nested inline tables" @@ fun () ->
+let test_nested_inline_tables = Test.case "parse nested inline tables" @@ fun _ctx ->
   let input = {|server = { host = { ip = "127.0.0.1", port = "8080" } }|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -268,7 +268,7 @@ let test_nested_inline_tables = Test.case "parse nested inline tables" @@ fun ()
 
 (* === SECTION TESTS === *)
 
-let test_simple_section = Test.case "parse simple section" @@ fun () ->
+let test_simple_section = Test.case "parse simple section" @@ fun _ctx ->
   let input = {|
 [package]
 name = "test"
@@ -284,7 +284,7 @@ version = "1.0.0"
     )
   | _ -> Error "Parse failed"
 
-let test_multiple_sections = Test.case "parse multiple sections" @@ fun () ->
+let test_multiple_sections = Test.case "parse multiple sections" @@ fun _ctx ->
   let input = {|
 [package]
 name = "test"
@@ -299,7 +299,7 @@ std = { path = "../std" }
   ^ Int.to_string (List.length sections))
   | _ -> Error "Parse failed"
 
-let test_nested_section_names = Test.case "parse nested section names" @@ fun () ->
+let test_nested_section_names = Test.case "parse nested section names" @@ fun _ctx ->
   let input = {|
 [server.config]
 port = "8080"
@@ -331,7 +331,7 @@ port = "8080"
 
 (* === ARRAY OF TABLES TESTS === *)
 
-let test_array_of_tables_simple = Test.case "parse simple array of tables" @@ fun () ->
+let test_array_of_tables_simple = Test.case "parse simple array of tables" @@ fun _ctx ->
   let input = {|
 [[bin]]
 name = "tusk"
@@ -369,14 +369,14 @@ path = "src/server.ml"
   | Error err ->
       Error ("Parse failed: " ^ (Toml.error_to_string err))
 
-let test_array_of_tables_empty = Test.case "parse empty array of tables" @@ fun () ->
+let test_array_of_tables_empty = Test.case "parse empty array of tables" @@ fun _ctx ->
   let input = {|[[empty]]|} in
   match Toml.parse input with
   | Ok _ -> Ok ()
   | Error _ -> Error "Should parse empty array of tables"
 
 let test_array_of_tables_multiple_keys = Test.case "parse array of tables with multiple keys"
-@@ fun () ->
+@@ fun _ctx ->
   let input = {|
 [[fruits]]
 name = "apple"
@@ -399,7 +399,7 @@ tasty = true
   | _ -> Error "Parse failed"
 
 let test_array_of_tables_dotted_path = Test.case "parse array of tables with dotted path"
-@@ fun () ->
+@@ fun _ctx ->
   let input = {|
 [[log.handler]]
 type = "stdout"
@@ -434,7 +434,7 @@ path = "./app.log"
 
 (* === COMMENT TESTS === *)
 
-let test_line_comment = Test.case "parse with line comment" @@ fun () ->
+let test_line_comment = Test.case "parse with line comment" @@ fun _ctx ->
   let input = {|
 # This is a comment
 name = "test"
@@ -448,7 +448,7 @@ name = "test"
     )
   | _ -> Error "Parse failed"
 
-let test_inline_comment = Test.case "parse with inline comment" @@ fun () ->
+let test_inline_comment = Test.case "parse with inline comment" @@ fun _ctx ->
   let input = {|name = "test" # inline comment|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -458,7 +458,7 @@ let test_inline_comment = Test.case "parse with inline comment" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_comment_in_section = Test.case "parse section with comment" @@ fun () ->
+let test_comment_in_section = Test.case "parse section with comment" @@ fun _ctx ->
   let input = {|
 [package] # package section
 name = "test" # package name
@@ -478,7 +478,7 @@ name = "test" # package name
 
 (* === WHITESPACE TESTS === *)
 
-let test_leading_whitespace = Test.case "parse with leading whitespace" @@ fun () ->
+let test_leading_whitespace = Test.case "parse with leading whitespace" @@ fun _ctx ->
   let input = {|  name = "test"|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -488,7 +488,7 @@ let test_leading_whitespace = Test.case "parse with leading whitespace" @@ fun (
     )
   | _ -> Error "Parse failed"
 
-let test_trailing_whitespace = Test.case "parse with trailing whitespace" @@ fun () ->
+let test_trailing_whitespace = Test.case "parse with trailing whitespace" @@ fun _ctx ->
   let input = {|name = "test"   |} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -498,7 +498,7 @@ let test_trailing_whitespace = Test.case "parse with trailing whitespace" @@ fun
     )
   | _ -> Error "Parse failed"
 
-let test_whitespace_around_equals = Test.case "parse with whitespace around =" @@ fun () ->
+let test_whitespace_around_equals = Test.case "parse with whitespace around =" @@ fun _ctx ->
   let input = {|name   =   "test"|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -508,7 +508,7 @@ let test_whitespace_around_equals = Test.case "parse with whitespace around =" @
     )
   | _ -> Error "Parse failed"
 
-let test_empty_lines = Test.case "parse with empty lines" @@ fun () ->
+let test_empty_lines = Test.case "parse with empty lines" @@ fun _ctx ->
   let input = {|
 
 name = "test"
@@ -525,7 +525,7 @@ version = "1.0"
 
 (* === EDGE CASE TESTS === *)
 
-let test_empty_string = Test.case "parse empty string value" @@ fun () ->
+let test_empty_string = Test.case "parse empty string value" @@ fun _ctx ->
   let input = {|text = ""|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -536,7 +536,7 @@ let test_empty_string = Test.case "parse empty string value" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_empty_inline_table = Test.case "parse empty inline table" @@ fun () ->
+let test_empty_inline_table = Test.case "parse empty inline table" @@ fun _ctx ->
   let input = {|empty = {}|} in
   match Toml.parse input with
   | Ok (Toml.Table items) -> (
@@ -547,14 +547,14 @@ let test_empty_inline_table = Test.case "parse empty inline table" @@ fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_empty_document = Test.case "parse empty document" @@ fun () ->
+let test_empty_document = Test.case "parse empty document" @@ fun _ctx ->
   let input = "" in
   match Toml.parse input with
   | Ok (Toml.Table []) -> Ok ()
   | Ok (Toml.Table items) -> Error ("Expected empty, got " ^ Int.to_string (List.length items) ^ " items")
   | _ -> Error "Parse failed"
 
-let test_only_comments = Test.case "parse document with only comments" @@ fun () ->
+let test_only_comments = Test.case "parse document with only comments" @@ fun _ctx ->
   let input = {|
 # Comment 1
 # Comment 2
@@ -568,7 +568,7 @@ let test_only_comments = Test.case "parse document with only comments" @@ fun ()
 
 (* === COMPLEX REAL-WORLD TESTS === *)
 
-let test_real_tusk_toml = Test.case "parse actual tusk.toml structure" @@ fun () ->
+let test_real_tusk_toml = Test.case "parse actual tusk.toml structure" @@ fun _ctx ->
   let content = {|[package]
 name = "tusk"
 version = "0.0.1"
@@ -597,7 +597,7 @@ std = { path = "../std" }
   | Error err ->
       Error ("Parse error: " ^ (Toml.error_to_string err))
 
-let test_typical_package_toml = Test.case "parse typical package.toml" @@ fun () ->
+let test_typical_package_toml = Test.case "parse typical package.toml" @@ fun _ctx ->
   let input = {|
 [package]
 name = "myapp"
@@ -618,7 +618,7 @@ kernel = { path = "../kernel" }
   ^ Int.to_string (List.length sections))
   | _ -> Error "Parse failed"
 
-let test_workspace_toml = Test.case "parse workspace.toml" @@ fun () ->
+let test_workspace_toml = Test.case "parse workspace.toml" @@ fun _ctx ->
   let input = {|
 [workspace]
 members = ["packages/a", "packages/b", "packages/c"]
@@ -642,7 +642,7 @@ kernel = { path = "../riot/packages/kernel" }
   | _ -> Error "Parse failed"
 
 let test_mixed_inline_and_section_tables = Test.case "parse mixed inline and section tables"
-@@ fun () ->
+@@ fun _ctx ->
   let input = {|
 inline = { a = "1", b = "2" }
 
@@ -658,25 +658,25 @@ d = "4"
 
 (* === ERROR HANDLING TESTS === *)
 
-let test_unterminated_string = Test.case "detect unterminated string" @@ fun () ->
+let test_unterminated_string = Test.case "detect unterminated string" @@ fun _ctx ->
   let input = {|name = "unterminated|} in
   match Toml.parse input with
   | Error _ -> Ok ()
   | Ok _ -> Error "Should have failed on unterminated string"
 
-let test_unterminated_array = Test.case "detect unterminated array" @@ fun () ->
+let test_unterminated_array = Test.case "detect unterminated array" @@ fun _ctx ->
   let input = {|arr = [1, 2, 3|} in
   match Toml.parse input with
   | Error _ -> Ok ()
   | Ok _ -> Error "Should have failed on unterminated array"
 
-let test_unterminated_inline_table = Test.case "detect unterminated inline table" @@ fun () ->
+let test_unterminated_inline_table = Test.case "detect unterminated inline table" @@ fun _ctx ->
   let input = {|tbl = { a = "1", b = "2"|} in
   match Toml.parse input with
   | Error _ -> Ok ()
   | Ok _ -> Error "Should have failed on unterminated inline table"
 
-let test_missing_equals = Test.case "detect missing equals" @@ fun () ->
+let test_missing_equals = Test.case "detect missing equals" @@ fun _ctx ->
   let input = {|name "value"|} in
   match Toml.parse input with
   | Ok (Toml.Table []) -> Ok ()
@@ -684,7 +684,7 @@ let test_missing_equals = Test.case "detect missing equals" @@ fun () ->
   | Error _ -> Error "Parser should currently ignore malformed lines"
 
 let test_duplicate_keys_in_section = Test.case "parse duplicate keys in section (last wins)"
-@@ fun () ->
+@@ fun _ctx ->
   let input = {|
 [config]
 port = "8080"

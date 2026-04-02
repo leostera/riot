@@ -11,7 +11,7 @@ let parse_fmt = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
-let test_fmt_accepts_multiple_paths = fun () ->
+let test_fmt_accepts_multiple_paths = fun _ctx ->
   match parse_fmt [ "fmt"; "packages/blink/src/connection.ml"; "packages/syn/src/parser.ml" ] with
   | Error err -> Error ("expected fmt args to parse: " ^ err)
   | Ok matches ->
@@ -21,14 +21,14 @@ let test_fmt_accepts_multiple_paths = fun () ->
         ~actual;
       Ok ()
 
-let test_fmt_usage_shows_variadic_paths = fun () ->
+let test_fmt_usage_shows_variadic_paths = fun _ctx ->
   let usage = ArgParser.usage_string Tusk_fmt.command in
   if String.contains usage "path..." then
     Ok ()
   else
     Error ("expected variadic path usage, got: " ^ usage)
 
-let test_fmt_formats_only_explicit_file = fun () ->
+let test_fmt_formats_only_explicit_file = fun _ctx ->
   with_tempdir "tusk_fmt_explicit_file"
     (fun tmpdir ->
       let needs = Path.(tmpdir / Path.v "needs.ml") in

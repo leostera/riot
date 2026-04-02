@@ -11,7 +11,7 @@ let assert_roundtrip = fun action ->
         Error "action changed after json roundtrip"
   | Error err -> Error ("failed to decode action json: " ^ err)
 
-let compile_interface_roundtrip_preserves_fields = fun () ->
+let compile_interface_roundtrip_preserves_fields = fun _ctx ->
   assert_roundtrip
     (Tusk_planner.Action.CompileInterface {
       source = Path.v "src/a.mli";
@@ -20,7 +20,7 @@ let compile_interface_roundtrip_preserves_fields = fun () ->
       flags = [ Tusk_toolchain.Ocamlc.Open "Std"; Tusk_toolchain.Ocamlc.NoAliasDeps ]
     })
 
-let compile_implementation_roundtrip_preserves_flags = fun () ->
+let compile_implementation_roundtrip_preserves_flags = fun _ctx ->
   assert_roundtrip
     (Tusk_planner.Action.CompileImplementation {
       source = Path.v "src/a.ml";
@@ -33,7 +33,7 @@ let compile_implementation_roundtrip_preserves_flags = fun () ->
       ]
     })
 
-let compile_c_roundtrip_preserves_ccflags = fun () ->
+let compile_c_roundtrip_preserves_ccflags = fun _ctx ->
   assert_roundtrip
     (Tusk_planner.Action.CompileC {
       source = Path.v "native/stub.c";
@@ -41,7 +41,7 @@ let compile_c_roundtrip_preserves_ccflags = fun () ->
       ccflags = [ "-O3"; "-fPIC"; "-DTEST=1" ]
     })
 
-let create_executable_roundtrip_preserves_linker_fields = fun () ->
+let create_executable_roundtrip_preserves_linker_fields = fun _ctx ->
   assert_roundtrip
     (
       Tusk_planner.Action.CreateExecutable {
@@ -55,7 +55,7 @@ let create_executable_roundtrip_preserves_linker_fields = fun () ->
       }
     )
 
-let create_shared_library_roundtrip_preserves_linker_fields = fun () ->
+let create_shared_library_roundtrip_preserves_linker_fields = fun _ctx ->
   assert_roundtrip
     (
       Tusk_planner.Action.CreateSharedLibrary {
@@ -69,7 +69,7 @@ let create_shared_library_roundtrip_preserves_linker_fields = fun () ->
       }
     )
 
-let build_foreign_dependency_roundtrip_preserves_env_and_outputs = fun () ->
+let build_foreign_dependency_roundtrip_preserves_env_and_outputs = fun _ctx ->
   assert_roundtrip
     (
       Tusk_planner.Action.BuildForeignDependency {
@@ -81,7 +81,7 @@ let build_foreign_dependency_roundtrip_preserves_env_and_outputs = fun () ->
       }
     )
 
-let compile_implementation_roundtrip_preserves_combined_warning_flags = fun () ->
+let compile_implementation_roundtrip_preserves_combined_warning_flags = fun _ctx ->
   assert_roundtrip
     (Tusk_planner.Action.CompileImplementation {
       source = Path.v "src/warn.ml";
@@ -92,7 +92,7 @@ let compile_implementation_roundtrip_preserves_combined_warning_flags = fun () -
       ]
     })
 
-let compile_implementation_roundtrip_preserves_profile_style_flags = fun () ->
+let compile_implementation_roundtrip_preserves_profile_style_flags = fun _ctx ->
   assert_roundtrip
     (Tusk_planner.Action.CompileImplementation {
       source = Path.v "src/release.ml";

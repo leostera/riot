@@ -7,7 +7,7 @@ type Telemetry.event +=
 type Telemetry.event +=
   AnotherEvent of { name: string }
 
-let test_emit_and_receive = Test.case "telemetry: emit and receive" @@ fun () ->
+let test_emit_and_receive = Test.case "telemetry: emit and receive" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let received = ref [] in
@@ -23,7 +23,7 @@ let test_emit_and_receive = Test.case "telemetry: emit and receive" @@ fun () ->
   | [99;42] -> Ok ()
   | _ -> Error ("Expected [99; 42], got " ^ String.concat ", " (List.map string_of_int !received))
 
-let test_multiple_handlers = Test.case "telemetry: multiple handlers" @@ fun () ->
+let test_multiple_handlers = Test.case "telemetry: multiple handlers" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let handler1_called = ref false in
@@ -45,7 +45,7 @@ let test_multiple_handlers = Test.case "telemetry: multiple handlers" @@ fun () 
   else
     Error "Both handlers should be called"
 
-let test_handler_replacement = Test.case "telemetry: handler replacement" @@ fun () ->
+let test_handler_replacement = Test.case "telemetry: handler replacement" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let first_called = ref false in
@@ -59,7 +59,7 @@ let test_handler_replacement = Test.case "telemetry: handler replacement" @@ fun
   else
     Error "Only second handler should be called"
 
-let test_detach = Test.case "telemetry: detach handler" @@ fun () ->
+let test_detach = Test.case "telemetry: detach handler" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let called = ref false in
@@ -71,7 +71,7 @@ let test_detach = Test.case "telemetry: detach handler" @@ fun () ->
   else
     Error "Handler should not be called after detach"
 
-let test_pattern_matching = Test.case "telemetry: pattern matching" @@ fun () ->
+let test_pattern_matching = Test.case "telemetry: pattern matching" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let test_count = ref 0 in
@@ -94,7 +94,7 @@ let test_pattern_matching = Test.case "telemetry: pattern matching" @@ fun () ->
     ^ ", another="
     ^ string_of_int !another_count)
 
-let test_handler_exception_isolation = Test.case "telemetry: exception isolation" @@ fun () ->
+let test_handler_exception_isolation = Test.case "telemetry: exception isolation" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let good_handler_called = ref false in
@@ -107,7 +107,7 @@ let test_handler_exception_isolation = Test.case "telemetry: exception isolation
   else
     Error "Good handler should still be called despite bad handler exception"
 
-let test_restart_after_stop = Test.case "telemetry: restart after stop" @@ fun () ->
+let test_restart_after_stop = Test.case "telemetry: restart after stop" @@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   let first_called = ref 0 in
@@ -129,7 +129,7 @@ let test_restart_after_stop = Test.case "telemetry: restart after stop" @@ fun (
     ^ string_of_int !second_called)
 
 let test_stop_idempotent = Test.case "telemetry: stop idempotent and clears handlers view"
-@@ fun () ->
+@@ fun _ctx ->
   let _pid = Telemetry.start () in
   Telemetry.detach_all ();
   Telemetry.attach "tmp" (fun _ -> ());

@@ -17,6 +17,7 @@ rules = [
   "prefer-list-is-empty",
   "prefer-option-map-over-manual-match",
   "prefer-result-map-over-manual-match",
+  "upgrade-test-ctx-callbacks",
 ]
 
 [dependencies]

@@ -60,7 +60,7 @@ let assert_same_keys = fun ~expected ~actual ->
     ~expected:(List.sort Package.key_compare expected)
     ~actual:(List.sort Package.key_compare actual)
 
-let runtime_scope_wires_workspace_like_graph = fun () ->
+let runtime_scope_wires_workspace_like_graph = fun _ctx ->
   let packages = [
     make_package "std";
     make_package ~dependencies:[ "std" ] "kernel";
@@ -84,7 +84,7 @@ let runtime_scope_wires_workspace_like_graph = fun () ->
     ~actual:(dependency_keys_for_node graph server_runtime);
   Ok ()
 
-let dev_scope_does_not_inherit_build_only_dependencies = fun () ->
+let dev_scope_does_not_inherit_build_only_dependencies = fun _ctx ->
   let packages = [
     make_package "std";
     make_package "codegen";
@@ -104,7 +104,7 @@ let dev_scope_does_not_inherit_build_only_dependencies = fun () ->
     ~actual:(dependency_keys_for_node graph app_dev);
   Ok ()
 
-let missing_workspace_dependencies_are_reported = fun () ->
+let missing_workspace_dependencies_are_reported = fun _ctx ->
   let packages = [
     make_package ~dependencies:[ "missing_a" ] "left";
     make_package ~dependencies:[ "missing_b" ] "right";
@@ -120,7 +120,7 @@ let missing_workspace_dependencies_are_reported = fun () ->
       Test.assert_equal ~expected:[ "left->missing_a"; "right->missing_b" ] ~actual:missing_pairs;
       Ok ()
 
-let filter_for_package_keeps_only_transitive_dependencies = fun () ->
+let filter_for_package_keeps_only_transitive_dependencies = fun _ctx ->
   let packages = [
     make_package "std";
     make_package ~dependencies:[ "std" ] "kernel";
@@ -137,7 +137,7 @@ let filter_for_package_keeps_only_transitive_dependencies = fun () ->
   Test.assert_equal ~expected:[ "a"; "app"; "kernel"; "std" ] ~actual:package_names;
   Ok ()
 
-let topological_sort_places_dependencies_before_dependents = fun () ->
+let topological_sort_places_dependencies_before_dependents = fun _ctx ->
   let packages = [
     make_package "std";
     make_package ~dependencies:[ "std" ] "kernel";
@@ -158,7 +158,7 @@ let topological_sort_places_dependencies_before_dependents = fun () ->
   Test.assert_true (position_of miniriot_runtime < position_of app_runtime);
   Ok ()
 
-let runtime_nodes_with_build_dependencies_depend_on_their_build_nodes = fun () ->
+let runtime_nodes_with_build_dependencies_depend_on_their_build_nodes = fun _ctx ->
   let packages = [
     make_package "std";
     make_package "codegen";
@@ -172,7 +172,7 @@ let runtime_nodes_with_build_dependencies_depend_on_their_build_nodes = fun () -
   Test.assert_true (List.exists (Package.key_equal app_build_key) dependency_keys);
   Ok ()
 
-let scope_node_counts_match_expected_projection = fun () ->
+let scope_node_counts_match_expected_projection = fun _ctx ->
   let packages = [
     make_package "std";
     make_package ~dependencies:[ "std" ] "kernel";
@@ -187,7 +187,7 @@ let scope_node_counts_match_expected_projection = fun () ->
   Test.assert_equal ~expected:6 ~actual:(Package_graph.size dev_graph);
   Ok ()
 
-let filter_for_unknown_package_returns_empty_graph = fun () ->
+let filter_for_unknown_package_returns_empty_graph = fun _ctx ->
   let packages = [ make_package "std"; make_package ~dependencies:[ "std" ] "app" ] in
   let workspace = make_workspace packages in
   let graph = Package_graph.create ~scope:Runtime workspace |> Result.expect ~msg:"expected runtime graph" in
@@ -195,7 +195,7 @@ let filter_for_unknown_package_returns_empty_graph = fun () ->
   Test.assert_equal ~expected:0 ~actual:(Package_graph.size filtered);
   Ok ()
 
-let get_unplanned_dependencies_only_reports_unplanned_runtime_dependencies = fun () ->
+let get_unplanned_dependencies_only_reports_unplanned_runtime_dependencies = fun _ctx ->
   let std = make_package "std" in
   let kernel = make_package ~dependencies:[ "std" ] "kernel" in
   let app = make_package ~dependencies:[ "kernel" ] "app" in
@@ -214,7 +214,7 @@ let get_unplanned_dependencies_only_reports_unplanned_runtime_dependencies = fun
     ~actual:(List.map (fun (pkg: Package.t) -> pkg.name) unplanned);
   Ok ()
 
-let build_scope_wires_declared_build_dependencies = fun () ->
+let build_scope_wires_declared_build_dependencies = fun _ctx ->
   let packages = [ make_package "codegen"; make_package ~build_dependencies:[ "codegen" ] "app" ] in
   let workspace = make_workspace packages in
   let graph = Package_graph.create ~scope:Build workspace |> Result.expect ~msg:"expected build graph" in

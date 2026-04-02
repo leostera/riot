@@ -66,7 +66,7 @@ let () =
         List.map
           (fun ((test_path, diagnostic_path)) ->
             let name = Path.basename (Path.v test_path) in
-            Test.case name (fun () -> test_diagnostic test_path diagnostic_path))
+            Test.case name (fun _ctx -> test_diagnostic test_path diagnostic_path))
           diagnostics
       in
       Test.Cli.main ~name:"syn-diagnostics" ~tests ~args)

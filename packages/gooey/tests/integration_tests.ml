@@ -7,7 +7,7 @@ let make_config = fun () ->
     ~text_measurer:Config.default_text_measurer
     ()
 
-let test_complex_nested_layout = fun () ->
+let test_complex_nested_layout = fun _ctx ->
   let elem = Element.column
     [
       Element.container
@@ -31,7 +31,7 @@ let test_complex_nested_layout = fun () ->
   else
     Error ("Expected 4 text commands, got " ^ Int.to_string text_count)
 
-let test_flexbox_style_layout = fun () ->
+let test_flexbox_style_layout = fun _ctx ->
   let elem = Element.row [ Element.text "Left"; Element.spacer ~flex:1.0 (); Element.text "Right"; ] in
   let commands = layout ~config:(make_config ()) elem in
   let text_positions =
@@ -46,7 +46,7 @@ let test_flexbox_style_layout = fun () ->
   | [("Left", x1);("Right", x2)] when x1 = 0.0 && x2 > 10.0 -> Ok ()
   | _ -> Error "Spacer should push 'Right' text far to the right"
 
-let test_responsive_percent_sizing = fun () ->
+let test_responsive_percent_sizing = fun _ctx ->
   let elem = Element.row
     [
       Element.container ~style:Style.(empty |> width (Percent 0.3) |> bg (`rgb (255, 0, 0))) [];
@@ -68,7 +68,7 @@ let test_responsive_percent_sizing = fun () ->
     ^ String.concat "; " (List.map Float.to_string widths)
     ^ "]")
 
-let test_card_ui_pattern = fun () ->
+let test_card_ui_pattern = fun _ctx ->
   let card = Element.column
     ~style:Style.(empty
     |> width (Fixed 60.0)
@@ -108,7 +108,7 @@ let test_card_ui_pattern = fun () ->
     ^ Int.to_string text_count
     ^ " texts")
 
-let test_grid_like_layout = fun () ->
+let test_grid_like_layout = fun _ctx ->
   let grid = Element.column
     [
       Element.row
@@ -136,7 +136,7 @@ let test_grid_like_layout = fun () ->
   else
     Error "Grid layout should produce 4 rectangles with correct colors"
 
-let test_alignment_with_fixed_sizes = fun () ->
+let test_alignment_with_fixed_sizes = fun _ctx ->
   let elem = Element.column
     [
       Element.container

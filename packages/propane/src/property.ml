@@ -197,7 +197,7 @@ let property = fun name arbitrary predicate ->
   let config = { default_config with test_count; seed } in
   let prop = Prop { name; arbitrary; predicate } in
   Test.property name ~examples:test_count
-    (fun () ->
+    (fun _ctx ->
       let result = check ~config prop in
       match result with
       | Success ->

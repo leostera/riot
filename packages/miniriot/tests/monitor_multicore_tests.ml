@@ -115,10 +115,10 @@ let () =
   let tests = [
     Test.case
       "monitor receives DOWN across workers"
-      (fun () -> test_case "monitor receives DOWN" test_monitor_receives_down);
+      (fun _ctx -> test_case "monitor receives DOWN" test_monitor_receives_down);
     Test.case
       "demonitor suppresses DOWN across workers"
-      (fun () -> test_case "demonitor suppresses DOWN" test_demonitor_suppresses_down);
+      (fun _ctx -> test_case "demonitor suppresses DOWN" test_demonitor_suppresses_down);
   ] in
   let normalize_args = function
     | [] -> [ "monitor_multicore_tests"; "run-tests" ]

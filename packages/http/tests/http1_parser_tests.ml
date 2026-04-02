@@ -17,7 +17,7 @@ module Uri = Std.Net.Uri
 
 (* HTTP/1 Request Tests *)
 
-let test_request_simple_get = fun () ->
+let test_request_simple_get = fun _ctx ->
   let req = "GET /path HTTP/1.1\r\nHost: example.com\r\n\r\n" in
   match Http1.Request.parse req with
   | Done { value=parsed; _ } -> (
@@ -42,7 +42,7 @@ let test_request_simple_get = fun () ->
   | Error e ->
       Result.Error ("Parse error: " ^ e)
 
-let test_request_post_with_body = fun () ->
+let test_request_post_with_body = fun _ctx ->
   let req = "POST /api/data HTTP/1.1\r\n\
      Host: api.example.com\r\n\
      Content-Type: application/json\r\n\
@@ -67,7 +67,7 @@ let test_request_post_with_body = fun () ->
   | Error e ->
       Result.Error ("Parse error: " ^ e)
 
-let test_request_incomplete = fun () ->
+let test_request_incomplete = fun _ctx ->
   let req = "GET /path HTTP/1.1\r\nHost: exa" in
   match Http1.Request.parse req with
   | Need_more -> Result.Ok ()
@@ -76,7 +76,7 @@ let test_request_incomplete = fun () ->
 
 (* HTTP/1 Response Tests *)
 
-let test_response_200_ok = fun () ->
+let test_response_200_ok = fun _ctx ->
   let resp = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello" in
   match Http1.Response.parse resp with
   | Done { value=parsed; remaining } ->
@@ -95,7 +95,7 @@ let test_response_200_ok = fun () ->
   | Error e ->
       Result.Error ("Parse error: " ^ e)
 
-let test_response_404 = fun () ->
+let test_response_404 = fun _ctx ->
   let resp = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n" in
   match Http1.Response.parse resp with
   | Done { value=parsed; _ } ->
@@ -111,7 +111,7 @@ let test_response_404 = fun () ->
 
 (* Chunked Encoding Tests *)
 
-let test_chunk_single = fun () ->
+let test_chunk_single = fun _ctx ->
   let chunk = "5\r\nHello\r\n" in
   match Http1.Chunk.parse chunk with
   | Done { value=chunk_result; _ } ->
@@ -124,7 +124,7 @@ let test_chunk_single = fun () ->
   | Need_more -> Result.Error "Unexpected Need_more"
   | Error e -> Result.Error ("Parse error: " ^ e)
 
-let test_chunk_last = fun () ->
+let test_chunk_last = fun _ctx ->
   let chunk = "0\r\n\r\n" in
   match Http1.Chunk.parse chunk with
   | Done { value=chunk_result; _ } ->
@@ -135,7 +135,7 @@ let test_chunk_last = fun () ->
   | Need_more -> Result.Error "Unexpected Need_more"
   | Error e -> Result.Error ("Parse error: " ^ e)
 
-let test_chunk_hex_size = fun () ->
+let test_chunk_hex_size = fun _ctx ->
   let chunk = "1a\r\nabcdefghijklmnopqrstuvwxyz\r\n" in
   match Http1.Chunk.parse chunk with
   | Done { value=chunk_result; _ } ->
@@ -148,7 +148,7 @@ let test_chunk_hex_size = fun () ->
 
 (* SSE Tests *)
 
-let test_sse_data_line = fun () ->
+let test_sse_data_line = fun _ctx ->
   match Http1.Sse.parse_line "data: Hello World" with
   | Some event ->
       if event.data != "Hello World" then
@@ -159,7 +159,7 @@ let test_sse_data_line = fun () ->
         Result.Ok ()
   | None -> Result.Error "Failed to parse data line"
 
-let test_sse_event_type = fun () ->
+let test_sse_event_type = fun _ctx ->
   match Http1.Sse.parse_line "event: message" with
   | Some event ->
       if event.event_type != Some "message" then
@@ -168,12 +168,12 @@ let test_sse_event_type = fun () ->
         Result.Ok ()
   | None -> Result.Error "Failed to parse event type"
 
-let test_sse_empty_line = fun () ->
+let test_sse_empty_line = fun _ctx ->
   match Http1.Sse.parse_line "" with
   | None -> Result.Ok ()
   | Some _ -> Result.Error "Should have ignored empty line"
 
-let test_sse_comment = fun () ->
+let test_sse_comment = fun _ctx ->
   match Http1.Sse.parse_line ": this is a comment" with
   | None -> Result.Ok ()
   | Some _ -> Result.Error "Should have ignored comment"

@@ -85,7 +85,7 @@ let with_workspace_dirs = fun tmpdir f ->
         )
     )
 
-let test_execute_node_copies_package_relative_sources = fun () ->
+let test_execute_node_copies_package_relative_sources = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"action_exec_src_copy_rel"
       (fun tmpdir ->
@@ -115,7 +115,7 @@ let test_execute_node_copies_package_relative_sources = fun () ->
   | Ok r -> r
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_execute_node_copies_workspace_relative_sources = fun () ->
+let test_execute_node_copies_workspace_relative_sources = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"action_exec_src_copy_ws"
       (fun tmpdir ->
@@ -145,7 +145,7 @@ let test_execute_node_copies_workspace_relative_sources = fun () ->
   | Ok r -> r
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_execute_node_cache_hit_materializes_outputs = fun () ->
+let test_execute_node_cache_hit_materializes_outputs = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"action_exec_cache_hit"
       (fun tmpdir ->

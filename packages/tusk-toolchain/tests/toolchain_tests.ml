@@ -23,7 +23,7 @@ let sample_colored_ocaml_warning = String.concat
     "\027[1;35mWarning\027[0m 26 [unused-var]: unused variable \027[1mdisplayed_packages\027[0m.";
   ]
 
-let test_compile_impl_disables_no_cmi_file_by_default = fun () ->
+let test_compile_impl_disables_no_cmi_file_by_default = fun _ctx ->
   let ocamlc = Tusk_toolchain.Ocamlc.make (Path.v "/tmp/ocamlopt.opt") in
   let invocation = Tusk_toolchain.Ocamlc.compile_impl
     ocamlc
@@ -38,7 +38,7 @@ let test_compile_impl_disables_no_cmi_file_by_default = fun () ->
   else
     Error ("expected default warning baseline to disable warning 49, got: " ^ command)
 
-let test_compile_impl_does_not_force_debug_symbols = fun () ->
+let test_compile_impl_does_not_force_debug_symbols = fun _ctx ->
   let ocamlc = Tusk_toolchain.Ocamlc.make (Path.v "/tmp/ocamlopt.opt") in
   let invocation = Tusk_toolchain.Ocamlc.compile_impl
     ocamlc
@@ -53,7 +53,7 @@ let test_compile_impl_does_not_force_debug_symbols = fun () ->
   else
     Ok ()
 
-let test_compile_impl_renders_warn_error_and_raw_flags = fun () ->
+let test_compile_impl_renders_warn_error_and_raw_flags = fun _ctx ->
   let ocamlc = Tusk_toolchain.Ocamlc.make (Path.v "/tmp/ocamlopt.opt") in
   let invocation = Tusk_toolchain.Ocamlc.compile_impl
     ocamlc
@@ -76,7 +76,7 @@ let test_compile_impl_renders_warn_error_and_raw_flags = fun () ->
   else
     Ok ()
 
-let test_parse_ocaml_warning_diagnostic = fun () ->
+let test_parse_ocaml_warning_diagnostic = fun _ctx ->
   match Tusk_toolchain.Ocamlc.Diagnostic.parse sample_ocaml_warning with
   | [ diagnostic ] -> (
       match Tusk_toolchain.Ocamlc.Diagnostic.location diagnostic with
@@ -95,7 +95,7 @@ let test_parse_ocaml_warning_diagnostic = fun () ->
   | diagnostics -> Error ("expected exactly one parsed warning block, got "
   ^ Int.to_string (List.length diagnostics))
 
-let test_map_path_rewrites_rendered_diagnostic = fun () ->
+let test_map_path_rewrites_rendered_diagnostic = fun _ctx ->
   match Tusk_toolchain.Ocamlc.Diagnostic.parse sample_ocaml_warning with
   | [ diagnostic ] ->
       let rewritten =
@@ -114,7 +114,7 @@ let test_map_path_rewrites_rendered_diagnostic = fun () ->
         Error ("expected rewritten diagnostic path, got: " ^ rendered)
   | _ -> Error "expected exactly one parsed warning block"
 
-let test_parse_c_error_diagnostic = fun () ->
+let test_parse_c_error_diagnostic = fun _ctx ->
   match Tusk_toolchain.Ocamlc.Diagnostic.parse sample_c_error with
   | [ diagnostic ] -> (
       match Tusk_toolchain.Ocamlc.Diagnostic.location diagnostic with
@@ -124,7 +124,7 @@ let test_parse_c_error_diagnostic = fun () ->
     )
   | _ -> Error "expected exactly one parsed c diagnostic"
 
-let test_unparseable_c_like_line_falls_back_to_raw = fun () ->
+let test_unparseable_c_like_line_falls_back_to_raw = fun _ctx ->
   match Tusk_toolchain.Ocamlc.Diagnostic.parse sample_unparseable_c_like_line with
   | [ diagnostic ] ->
       let rendered = Tusk_toolchain.Ocamlc.Diagnostic.render diagnostic in
@@ -135,7 +135,7 @@ let test_unparseable_c_like_line_falls_back_to_raw = fun () ->
   | diagnostics -> Error ("expected exactly one raw diagnostic block, got "
   ^ Int.to_string (List.length diagnostics))
 
-let test_parse_colored_ocaml_warning_diagnostic = fun () ->
+let test_parse_colored_ocaml_warning_diagnostic = fun _ctx ->
   match Tusk_toolchain.Ocamlc.Diagnostic.parse sample_colored_ocaml_warning with
   | [ diagnostic ] -> (
       match Tusk_toolchain.Ocamlc.Diagnostic.location diagnostic with

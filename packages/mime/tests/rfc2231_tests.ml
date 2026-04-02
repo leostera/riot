@@ -1,7 +1,7 @@
 open Std
 open Mime
 
-let test_simple_filename = fun () ->
+let test_simple_filename = fun _ctx ->
   let headers = [ ("Content-Disposition", "attachment; filename=\"test.txt\"") ] in
   let body = "test content" in
   match parse ~headers ~body with
@@ -13,7 +13,7 @@ let test_simple_filename = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_rfc2231_encoded = fun () ->
+let test_rfc2231_encoded = fun _ctx ->
   let headers = [ ("Content-Disposition", "attachment; filename*=utf-8'en'Hello%20World.txt"); ] in
   let body = "test content" in
   match parse ~headers ~body with
@@ -25,7 +25,7 @@ let test_rfc2231_encoded = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_rfc2231_continuation = fun () ->
+let test_rfc2231_continuation = fun _ctx ->
   let headers = [ (
       "Content-Disposition",
       "attachment; filename*0=\"Long\"; filename*1=\"Filename\"; \
@@ -42,7 +42,7 @@ let test_rfc2231_continuation = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_base64_encoding = fun () ->
+let test_base64_encoding = fun _ctx ->
   let headers = [ ("Content-Type", "text/plain"); ("Content-Transfer-Encoding", "base64") ] in
   let body = "SGVsbG8gV29ybGQ=" in
   match parse ~headers ~body with
@@ -54,7 +54,7 @@ let test_base64_encoding = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_quoted_printable = fun () ->
+let test_quoted_printable = fun _ctx ->
   let headers = [
     ("Content-Type", "text/plain");
     ("Content-Transfer-Encoding", "quoted-printable");
@@ -69,7 +69,7 @@ let test_quoted_printable = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_nested_multipart = fun () ->
+let test_nested_multipart = fun _ctx ->
   let headers = [ ("Content-Type", "multipart/mixed; boundary=outer") ] in
   let body = "--outer\r\n\
      Content-Type: multipart/alternative; boundary=inner\r\n\
@@ -107,7 +107,7 @@ let test_nested_multipart = fun () ->
   | Ok (SinglePart _) -> Error "Expected MultiPart, got SinglePart"
   | Error e -> Error ("Parse failed: " ^ e)
 
-let test_content_type_parsing = fun () ->
+let test_content_type_parsing = fun _ctx ->
   let headers = [ ("Content-Type", "text/html; charset=utf-8") ] in
   let body = "test" in
   match parse ~headers ~body with
@@ -125,7 +125,7 @@ let test_content_type_parsing = fun () ->
     )
   | _ -> Error "Parse failed"
 
-let test_encoding_detection = fun () ->
+let test_encoding_detection = fun _ctx ->
   let headers = [ ("Content-Transfer-Encoding", "base64") ] in
   let body = "test" in
   match parse ~headers ~body with

@@ -162,10 +162,10 @@ let () =
   let tests = [
     Test.case
       "monitor exit storm across workers"
-      (fun () -> test_case "monitor exit storm" test_monitor_exit_storm);
+      (fun _ctx -> test_case "monitor exit storm" test_monitor_exit_storm);
     Test.case
       "trap_exit link storm across workers"
-      (fun () -> test_case "trap_exit link storm" test_trap_exit_storm);
+      (fun _ctx -> test_case "trap_exit link storm" test_trap_exit_storm);
   ] in
   let normalize_args = function
     | [] -> [ "lifecycle_stress_tests"; "run-tests" ]

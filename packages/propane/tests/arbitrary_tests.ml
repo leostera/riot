@@ -2,7 +2,7 @@
 open Std
 open Propane
 
-let test_arbitrary_int_generates = fun () ->
+let test_arbitrary_int_generates = fun _ctx ->
   let arb = Arbitrary.int in
   let rnd = Random.State.make [|42|] in
   let value = Generator.generate rnd arb.gen in
@@ -10,7 +10,7 @@ let test_arbitrary_int_generates = fun () ->
   let _ = value in
   Ok ()
 
-let test_arbitrary_int_has_shrinker = fun () ->
+let test_arbitrary_int_has_shrinker = fun _ctx ->
   let arb = Arbitrary.int in
   match arb.shrink with
   | None -> Error "int arbitrary should have shrinker"
@@ -22,7 +22,7 @@ let test_arbitrary_int_has_shrinker = fun () ->
       else
         Error "int shrinker should produce candidates"
 
-let test_arbitrary_int_has_printer = fun () ->
+let test_arbitrary_int_has_printer = fun _ctx ->
   let arb = Arbitrary.int in
   match arb.print with
   | None -> Error "int arbitrary should have printer"
@@ -33,7 +33,7 @@ let test_arbitrary_int_has_printer = fun () ->
       else
         Error ("printer produced wrong output: " ^ s)
 
-let test_arbitrary_list_generates = fun () ->
+let test_arbitrary_list_generates = fun _ctx ->
   let arb = Arbitrary.list Arbitrary.int in
   let rnd = Random.State.make [|42|] in
   let lst = Generator.generate rnd arb.gen in
@@ -41,7 +41,7 @@ let test_arbitrary_list_generates = fun () ->
   let _ = List.length lst in
   Ok ()
 
-let test_arbitrary_list_has_printer = fun () ->
+let test_arbitrary_list_has_printer = fun _ctx ->
   let arb = Arbitrary.list Arbitrary.int in
   match arb.print with
   | None -> Error "list arbitrary should have printer"
@@ -52,7 +52,7 @@ let test_arbitrary_list_has_printer = fun () ->
       else
         Error "printer produced empty string"
 
-let test_arbitrary_pair_generates = fun () ->
+let test_arbitrary_pair_generates = fun _ctx ->
   let arb = Arbitrary.pair Arbitrary.int Arbitrary.string in
   let rnd = Random.State.make [|42|] in
   let (n, s) = Generator.generate rnd arb.gen in
@@ -61,7 +61,7 @@ let test_arbitrary_pair_generates = fun () ->
   let _ = String.length s in
   Ok ()
 
-let test_arbitrary_option_generates_both = fun () ->
+let test_arbitrary_option_generates_both = fun _ctx ->
   let arb = Arbitrary.option Arbitrary.int in
   let rnd = Random.State.make [|42|] in
   (* Generate many values and check we get both None and Some *)
@@ -78,14 +78,14 @@ let test_arbitrary_option_generates_both = fun () ->
   in
   check 100 false false
 
-let test_arbitrary_string_generates = fun () ->
+let test_arbitrary_string_generates = fun _ctx ->
   let arb = Arbitrary.string in
   let rnd = Random.State.make [|42|] in
   let s = Generator.generate rnd arb.gen in
   let _ = String.length s in
   Ok ()
 
-let test_arbitrary_bool_generates_both = fun () ->
+let test_arbitrary_bool_generates_both = fun _ctx ->
   let arb = Arbitrary.bool in
   let rnd = Random.State.make [|42|] in
   (* Generate many values and check we get both true and false *)
@@ -101,7 +101,7 @@ let test_arbitrary_bool_generates_both = fun () ->
   in
   check 100 false false
 
-let test_arbitrary_int_has_small = fun () ->
+let test_arbitrary_int_has_small = fun _ctx ->
   let arb = Arbitrary.int in
   match arb.small with
   | None -> Error "int should have small function"

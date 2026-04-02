@@ -115,7 +115,7 @@ let () =
   let tests = [
     Test.case
       "trace counters observable and resettable"
-      (fun () -> test_case "trace counters observable/reset" test_trace_counters_observable_and_resettable);
+      (fun _ctx -> test_case "trace counters observable/reset" test_trace_counters_observable_and_resettable);
   ] in
   let normalize_args = function
     | [] -> [ "trace_counters_tests"; "run-tests" ]

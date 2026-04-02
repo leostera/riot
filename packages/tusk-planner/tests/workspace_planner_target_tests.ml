@@ -46,7 +46,7 @@ let plan_workspace = fun workspace target scope ->
 let package_names = fun plan ->
   Workspace_planner.packages_in_plan plan |> List.map (fun (pkg: Package.t) -> pkg.name)
 
-let plan_all_runtime_returns_workspace_like_order = fun () ->
+let plan_all_runtime_returns_workspace_like_order = fun _ctx ->
   let workspace = make_workspace
     [
       make_package "std";
@@ -71,7 +71,7 @@ let plan_all_runtime_returns_workspace_like_order = fun () ->
       Test.assert_true (position "tusk-store" < position "tusk-build");
       Ok ()
 
-let plan_single_package_includes_only_transitive_closure = fun () ->
+let plan_single_package_includes_only_transitive_closure = fun _ctx ->
   let workspace = make_workspace
     [
       make_package "std";
@@ -87,7 +87,7 @@ let plan_single_package_includes_only_transitive_closure = fun () ->
       Test.assert_equal ~expected:[ "a"; "app"; "kernel"; "std" ] ~actual:names;
       Ok ()
 
-let plan_multiple_packages_includes_union_of_dependencies = fun () ->
+let plan_multiple_packages_includes_union_of_dependencies = fun _ctx ->
   let workspace = make_workspace
     [
       make_package "std";
@@ -105,7 +105,7 @@ let plan_multiple_packages_includes_union_of_dependencies = fun () ->
       Test.assert_equal ~expected:[ "a"; "app"; "b"; "kernel"; "std"; "tool" ] ~actual:names;
       Ok ()
 
-let plan_unknown_package_reports_available_packages = fun () ->
+let plan_unknown_package_reports_available_packages = fun _ctx ->
   let workspace = make_workspace [ make_package "std"; make_package ~dependencies:[ "std" ] "app" ] in
   match plan_workspace workspace (Package "missing") Runtime with
   | Ok _ ->
@@ -117,7 +117,7 @@ let plan_unknown_package_reports_available_packages = fun () ->
   | Error _ ->
       Error "expected PackageNotFound"
 
-let plan_multiple_unknown_packages_reports_all_missing_names = fun () ->
+let plan_multiple_unknown_packages_reports_all_missing_names = fun _ctx ->
   let workspace = make_workspace [ make_package "std"; make_package ~dependencies:[ "std" ] "app" ] in
   match plan_workspace workspace (Packages [ "missing-a"; "app"; "missing-b" ]) Runtime with
   | Ok _ ->
@@ -129,7 +129,7 @@ let plan_multiple_unknown_packages_reports_all_missing_names = fun () ->
   | Error _ ->
       Error "expected PackagesNotFound"
 
-let plan_reports_missing_dependencies_before_sorting = fun () ->
+let plan_reports_missing_dependencies_before_sorting = fun _ctx ->
   let workspace = make_workspace [ make_package ~dependencies:[ "missing-lib" ] "app" ] in
   match plan_workspace workspace All Runtime with
   | Ok _ ->

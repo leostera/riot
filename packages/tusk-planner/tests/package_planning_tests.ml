@@ -80,7 +80,7 @@ let compute_input_hash = fun ?(planner_version = planner_artifacts_version) ~pac
     sorted_deps;
   H.finish state
 
-let test_plan_bundle_cache_hit_restores_module_and_action_graphs = fun () ->
+let test_plan_bundle_cache_hit_restores_module_and_action_graphs = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"planner_bundle_hit_test"
       (fun tmpdir ->
@@ -176,7 +176,7 @@ let test_plan_bundle_cache_hit_restores_module_and_action_graphs = fun () ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_stale_plan_bundle_version_rebuilds_plan_graphs = fun () ->
+let test_stale_plan_bundle_version_rebuilds_plan_graphs = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"planner_bundle_stale_version_test"
       (fun tmpdir ->

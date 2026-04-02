@@ -22,7 +22,7 @@ let run_fd_check = fun fd_nums ->
   let cmd = Command.make "/bin/sh" ~args in
   Command.output cmd |> Result.expect ~msg:"failed to run fd inheritance helper"
 
-let test_command_output_drains_stdout_and_stderr = fun () ->
+let test_command_output_drains_stdout_and_stderr = fun _ctx ->
   let output = run_capture () in
   if not (Int.equal output.status 0) then
     Error ("expected capture helper to exit 0, got " ^ Int.to_string output.status)
@@ -33,7 +33,7 @@ let test_command_output_drains_stdout_and_stderr = fun () ->
   else
     Ok ()
 
-let test_command_spawn_does_not_inherit_pipe_fds = fun () ->
+let test_command_spawn_does_not_inherit_pipe_fds = fun _ctx ->
   let pipe = Kernel.Fd.pipe () in
   let close_pipe () =
     Kernel.Fd.close pipe.read_fd;

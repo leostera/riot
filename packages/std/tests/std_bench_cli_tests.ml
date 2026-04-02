@@ -18,7 +18,7 @@ let run_sample_capture = fun args ->
   let cmd = Command.make (self_executable ()) ~args:(("sample" :: args)) in
   Command.output cmd |> Result.expect ~msg:"failed to run sample bench cli"
 
-let test_list_benchmarks_lists_all_cases = fun () ->
+let test_list_benchmarks_lists_all_cases = fun _ctx ->
   let output = run_sample_capture [ "list-benchmarks" ] in
   if not (Int.equal output.status 0) then
     Error ("expected list-benchmarks to succeed, got " ^ Int.to_string output.status)
@@ -33,7 +33,7 @@ let test_list_benchmarks_lists_all_cases = fun () ->
     else
       Error ("unexpected listed benchmark names: " ^ String.concat ", " lines)
 
-let test_run_benchmarks_pattern_matches_substring = fun () ->
+let test_run_benchmarks_pattern_matches_substring = fun _ctx ->
   let output = run_sample_capture [ "run-benchmarks"; "_long" ] in
   if not (Int.equal output.status 0) then
     Error ("expected filtered benchmark run to succeed, got " ^ Int.to_string output.status)
@@ -47,7 +47,7 @@ let test_run_benchmarks_pattern_matches_substring = fun () ->
   else
     Error "unexpected filtered benchmark output for _long"
 
-let test_run_benchmarks_succeeds_with_zero_matches = fun () ->
+let test_run_benchmarks_succeeds_with_zero_matches = fun _ctx ->
   let output = run_sample_capture [ "run-benchmarks"; "missing_case" ] in
   if not (Int.equal output.status 0) then
     Error ("expected filtered benchmark run with no matches to succeed, got "

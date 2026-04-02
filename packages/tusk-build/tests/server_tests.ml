@@ -49,7 +49,7 @@ let make_simple_package = fun tmpdir name ->
 
 let test_server_starts_and_shuts_down = fun () -> Ok ()
 
-let test_cache_hit_using_package_builder = fun () ->
+let test_cache_hit_using_package_builder = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"server_test"
       (fun tmpdir ->
@@ -94,6 +94,7 @@ let test_cache_hit_using_package_builder = fun () ->
             match second_build.status with
             | Built _
             | Cached _ -> Ok ()
+            | Skipped _ -> Error "Second build was unexpectedly skipped"
             | Failed err ->
                 Error (
                   "Second build failed: " ^ (
@@ -117,6 +118,8 @@ let test_cache_hit_using_package_builder = fun () ->
                 | ActionDependenciesFailed _ -> "dependencies failed"
               )
             )
+        | Skipped _ ->
+            Error "First build was unexpectedly skipped"
         | Cached _ ->
             Error "First build should not be cached")
   with
@@ -134,15 +137,17 @@ let check_cache_invalidation_results = fun first_build second_build ->
   in
   match first_build.Tusk_executor.Package_builder.status with
   | Failed err -> Error ("First build failed: " ^ error_msg err)
+  | Skipped _ -> Error "First build was unexpectedly skipped"
   | Built _
   | Cached _ -> (
       match second_build.Tusk_executor.Package_builder.status with
       | Built _ -> Ok ()
       | Cached _ -> Error "Expected cache miss after source change, got cache hit"
+      | Skipped _ -> Error "Second build was unexpectedly skipped"
       | Failed err -> Error ("Second build failed: " ^ error_msg err)
     )
 
-let test_cache_invalidation_on_source_change = fun () ->
+let test_cache_invalidation_on_source_change = fun _ctx ->
   try
     let result =
       Fs.with_tempdir ~prefix:"server_test"
@@ -208,7 +213,7 @@ let test_cache_invalidation_on_source_change = fun () ->
 
 let test_telemetry_events_during_build = fun () -> Ok ()
 
-let test_build_stats_action_cache_counters = fun () ->
+let test_build_stats_action_cache_counters = fun _ctx ->
   let stats = Tusk_build.Protocol.BuildStats.make () in
   Tusk_build.Protocol.BuildStats.inc_action_cache_hits stats;
   Tusk_build.Protocol.BuildStats.inc_action_cache_hits stats;
@@ -221,7 +226,7 @@ let test_build_stats_action_cache_counters = fun () ->
   else
     Error "unexpected action cache counter values"
 
-let test_start_local_prepares_workspace_with_registry_packages = fun () ->
+let test_start_local_prepares_workspace_with_registry_packages = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"server_pm_test"
       (fun tmpdir ->
@@ -284,7 +289,7 @@ std = "*"
                     canonical_locator = "github.com/example/std";
                     repo_url = "https://github.com/example/std";
                     subdir = ".";
-                    sha = "deadbeef";
+                    artifact_sha256 = "deadbeef";
                     description = None;
                     license = Some "Apache-2.0";
                     homepage = None;
@@ -348,7 +353,7 @@ version = "0.2.0"
   | Ok result -> result
   | Error err -> Error (IO.error_message err)
 
-let test_start_local_emits_dependency_resolution_events = fun () ->
+let test_start_local_emits_dependency_resolution_events = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"server_pm_events_test"
       (fun tmpdir ->
@@ -411,7 +416,7 @@ std = "*"
                     canonical_locator = "github.com/example/std";
                     repo_url = "https://github.com/example/std";
                     subdir = ".";
-                    sha = "deadbeef";
+                    artifact_sha256 = "deadbeef";
                     description = None;
                     license = Some "Apache-2.0";
                     homepage = None;

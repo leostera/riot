@@ -13,13 +13,13 @@ let with_temp_dir = fun label fn ->
     ~finally:(fun () -> ignore (Fs.remove_dir_all temp_root))
     (fun () -> fn temp_root)
 
-let test_decompress_string = fun () ->
+let test_decompress_string = fun _ctx ->
   match Gzip.decompress_string gzip_hello with
   | Ok "hello from gzip\n" -> Ok ()
   | Ok text -> Error ("unexpected decompressed string: " ^ text)
   | Error _ -> Error "failed to decompress known gzip payload"
 
-let test_decompress_file = fun () ->
+let test_decompress_file = fun _ctx ->
   with_temp_dir "gzip_file"
     (fun dir ->
       let src = Path.join dir (Path.v "payload.txt.gz") in
@@ -37,7 +37,7 @@ let test_decompress_file = fun () ->
             )
         ))
 
-let test_compress_string_roundtrip = fun () ->
+let test_compress_string_roundtrip = fun _ctx ->
   match Gzip.compress_string "hello from gzip\n" with
   | Error _ -> Error "failed to compress string into gzip payload"
   | Ok payload -> (
@@ -47,7 +47,7 @@ let test_compress_string_roundtrip = fun () ->
       | Error _ -> Error "failed to decompress compressed string payload"
     )
 
-let test_compress_file_roundtrip = fun () ->
+let test_compress_file_roundtrip = fun _ctx ->
   with_temp_dir "gzip_compress_file"
     (fun dir ->
       let src = Path.join dir (Path.v "payload.txt") in

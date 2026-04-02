@@ -55,7 +55,7 @@ let make_package_with_paths = fun ~name ~path ~relative_path ->
     publish = { version = None; description = None; license = None; is_public = None };
   }
 
-let test_action_graph_json_round_trip_preserves_dependencies = fun () ->
+let test_action_graph_json_round_trip_preserves_dependencies = fun _ctx ->
   let package = make_package "pkg" in
   let graph = Tusk_planner.Action_graph.create () in
   let write_a = Tusk_planner.Action.WriteFile { destination = Path.v "a.txt"; content = "a" } in
@@ -109,7 +109,7 @@ let test_action_graph_json_round_trip_preserves_dependencies = fun () ->
       | _ -> Error "decoded graph missing nodes array"
     )
 
-let test_action_graph_json_round_trip_preserves_package_paths_and_hashes = fun () ->
+let test_action_graph_json_round_trip_preserves_package_paths_and_hashes = fun _ctx ->
   let package = make_package_with_paths
     ~name:"kernel"
     ~path:(Path.v "packages/kernel")
@@ -151,7 +151,7 @@ let test_action_graph_json_round_trip_preserves_package_paths_and_hashes = fun (
       | _ -> Error "expected one decoded node"
     )
 
-let test_action_hash_tracks_package_relative_source_contents = fun () ->
+let test_action_hash_tracks_package_relative_source_contents = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"action_hash_pkg_src"
       (fun tmpdir ->
@@ -200,7 +200,7 @@ let test_action_hash_tracks_package_relative_source_contents = fun () ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_library_builds_do_not_emit_shared_library_actions = fun () ->
+let test_library_builds_do_not_emit_shared_library_actions = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"planner_no_shared"
       (fun tmpdir ->
@@ -248,7 +248,7 @@ let test_library_builds_do_not_emit_shared_library_actions = fun () ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_library_actions_exclude_ml_object_files = fun () ->
+let test_library_actions_exclude_ml_object_files = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"planner_library_objects"
       (fun tmpdir ->
@@ -330,7 +330,7 @@ let test_library_actions_exclude_ml_object_files = fun () ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let test_release_profile_flags_flow_into_compile_actions = fun () ->
+let test_release_profile_flags_flow_into_compile_actions = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"planner_release_flags"
       (fun tmpdir ->

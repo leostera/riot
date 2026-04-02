@@ -2,43 +2,43 @@ open Std
 open Std.Data
 open Std.Collections
 
-let test_create_element = fun () ->
+let test_create_element = fun _ctx ->
   let elem = Xml.element "div" [] in
   match elem with
   | Xml.Element { name="div"; attrs=[]; children=[] } -> Ok ()
   | _ -> Error "Failed to create element"
 
-let test_create_element_with_attrs = fun () ->
+let test_create_element_with_attrs = fun _ctx ->
   let elem = Xml.element "div" ~attrs:[ ("class", "test") ] [] in
   match elem with
   | Xml.Element { name="div"; attrs=[ ("class", "test") ]; _ } -> Ok ()
   | _ -> Error "Failed to create element with attributes"
 
-let test_create_text = fun () ->
+let test_create_text = fun _ctx ->
   match Xml.text "hello" with
   | Xml.Text "hello" -> Ok ()
   | _ -> Error "Failed to create text node"
 
-let test_create_cdata = fun () ->
+let test_create_cdata = fun _ctx ->
   match Xml.cdata "data" with
   | Xml.CData "data" -> Ok ()
   | _ -> Error "Failed to create CDATA"
 
-let test_element_with_children = fun () ->
+let test_element_with_children = fun _ctx ->
   let child = Xml.text "content" in
   let parent = Xml.element "p" [ child ] in
   match parent with
   | Xml.Element { name="p"; children=[ Xml.Text "content" ]; _ } -> Ok ()
   | _ -> Error "Failed to create element with children"
 
-let test_nested_elements = fun () ->
+let test_nested_elements = fun _ctx ->
   let inner = Xml.element "span" [ Xml.text "inner" ] in
   let outer = Xml.element "div" [ inner ] in
   match outer with
   | Xml.Element { name="div"; children=[ Xml.Element { name="span"; _ } ]; _ } -> Ok ()
   | _ -> Error "Failed to create nested elements"
 
-let test_serialize_simple_element = fun () ->
+let test_serialize_simple_element = fun _ctx ->
   let elem = Xml.element "div" [] in
   let str = Xml.to_string elem in
   if str = "<div></div>" then
@@ -46,7 +46,7 @@ let test_serialize_simple_element = fun () ->
   else
     Error ("Unexpected serialization: " ^ str)
 
-let test_serialize_element_with_attrs = fun () ->
+let test_serialize_element_with_attrs = fun _ctx ->
   let elem = Xml.element "div" ~attrs:[ ("id", "test") ] [] in
   let str = Xml.to_string elem in
   if String.contains str "=" then
@@ -54,14 +54,14 @@ let test_serialize_element_with_attrs = fun () ->
   else
     Error "Attributes not serialized"
 
-let test_serialize_text = fun () ->
+let test_serialize_text = fun _ctx ->
   let text = Xml.text "hello world" in
   if Xml.to_string text = "hello world" then
     Ok ()
   else
     Error "Failed to serialize text"
 
-let test_serialize_with_children = fun () ->
+let test_serialize_with_children = fun _ctx ->
   let elem = Xml.element "p" [ Xml.text "content" ] in
   let str = Xml.to_string elem in
   if str = "<p>\ncontent\n</p>" then
@@ -69,7 +69,7 @@ let test_serialize_with_children = fun () ->
   else
     Error ("Unexpected serialization: " ^ str)
 
-let test_serialize_nested = fun () ->
+let test_serialize_nested = fun _ctx ->
   let inner = Xml.element "span" [ Xml.text "text" ] in
   let outer = Xml.element "div" [ inner ] in
   let str = Xml.to_string outer in
@@ -78,7 +78,7 @@ let test_serialize_nested = fun () ->
   else
     Error "Failed to serialize nested elements"
 
-let test_multiple_attributes = fun () ->
+let test_multiple_attributes = fun _ctx ->
   let elem = Xml.element "div" ~attrs:[ ("id", "test"); ("class", "box") ] [] in
   let str = Xml.to_string elem in
   if String.contains str "=" then
@@ -86,7 +86,7 @@ let test_multiple_attributes = fun () ->
   else
     Error "Multiple attributes not serialized"
 
-let test_mixed_children = fun () ->
+let test_mixed_children = fun _ctx ->
   let children = [ Xml.text "before"; Xml.element "span" [ Xml.text "middle" ]; Xml.text "after"; ] in
   let elem = Xml.element "div" children in
   let str = Xml.to_string elem in
@@ -95,14 +95,14 @@ let test_mixed_children = fun () ->
   else
     Error "Failed to serialize mixed children"
 
-let test_empty_text = fun () ->
+let test_empty_text = fun _ctx ->
   let text = Xml.text "" in
   if Xml.to_string text = "" then
     Ok ()
   else
     Error "Failed to serialize empty text"
 
-let test_cdata_serialization = fun () ->
+let test_cdata_serialization = fun _ctx ->
   let cdata = Xml.cdata "some data" in
   let str = Xml.to_string cdata in
   if String.contains str "[" then
@@ -110,14 +110,14 @@ let test_cdata_serialization = fun () ->
   else
     Error "CDATA not properly serialized"
 
-let test_declaration = fun () ->
+let test_declaration = fun _ctx ->
   let decl = Xml.declaration in
   if String.contains decl "?" then
     Ok ()
   else
     Error "Declaration doesn't look correct"
 
-let test_indented_output = fun () ->
+let test_indented_output = fun _ctx ->
   let elem = Xml.element "div" [ Xml.element "p" [ Xml.text "test" ] ] in
   let str = Xml.to_string ~indent:2 elem in
   if String.length str > 0 then
@@ -125,7 +125,7 @@ let test_indented_output = fun () ->
   else
     Error "Failed to serialize with indentation"
 
-let test_special_chars_in_text = fun () ->
+let test_special_chars_in_text = fun _ctx ->
   let text = Xml.text "<>&\"" in
   let str = Xml.to_string text in
   if String.length str >= 4 then
@@ -133,7 +133,7 @@ let test_special_chars_in_text = fun () ->
   else
     Error "Special characters not handled"
 
-let test_special_chars_in_attrs = fun () ->
+let test_special_chars_in_attrs = fun _ctx ->
   let elem = Xml.element "div" ~attrs:[ ("data", "a\"b") ] [] in
   let str = Xml.to_string elem in
   if String.length str > 0 then
@@ -141,7 +141,7 @@ let test_special_chars_in_attrs = fun () ->
   else
     Error "Special chars in attributes not handled"
 
-let test_complex_document = fun () ->
+let test_complex_document = fun _ctx ->
   let doc = Xml.element
     "html"
     [

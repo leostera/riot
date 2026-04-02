@@ -2,7 +2,7 @@ open Std
 open Std.Collections
 module Test = Std.Test
 
-let test_workspace_completed_is_silent = fun () ->
+let test_workspace_completed_is_silent = fun _ctx ->
   let displayed_packages = HashSet.create () in
   let event = Tusk_executor.Telemetry_events.WorkspaceCompleted {
     session_id = Tusk_model.Session_id.make ();
@@ -19,7 +19,7 @@ let test_workspace_completed_is_silent = fun () ->
   else
     Error ("expected empty workspace summary, got: " ^ rendered)
 
-let test_build_failed_prefixes_package_name = fun () ->
+let test_build_failed_prefixes_package_name = fun _ctx ->
   let displayed_packages = HashSet.create () in
   let package =
     Tusk_model.Package.{
@@ -58,7 +58,7 @@ let test_build_failed_prefixes_package_name = fun () ->
   else
     Error ("expected package-prefixed error, got: " ^ rendered)
 
-let test_package_ocamlc_warnings_prefix_package_name = fun () ->
+let test_package_ocamlc_warnings_prefix_package_name = fun _ctx ->
   let displayed_packages = HashSet.create () in
   let package =
     Tusk_model.Package.{

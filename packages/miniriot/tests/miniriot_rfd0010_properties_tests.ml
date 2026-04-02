@@ -60,11 +60,11 @@ let config_worker_count_matches_scheduler_count =
       let cfg = Miniriot.Config.make ~scheduler_count:requested () in
       Kernel.Int.equal (Miniriot.Config.worker_count cfg) requested)
 
-let test_pid_monotonicity = fun () -> assert_ok "pid monotonicity" pid_uids_increase
+let test_pid_monotonicity = fun _ctx -> assert_ok "pid monotonicity" pid_uids_increase
 
-let test_scheduler_count_clamped = fun () -> assert_ok "scheduler_count clamping" scheduler_count_clamped
+let test_scheduler_count_clamped = fun _ctx -> assert_ok "scheduler_count clamping" scheduler_count_clamped
 
-let test_config_worker_count = fun () -> assert_ok "worker_count accessor mirrors scheduler_count" config_worker_count_matches_scheduler_count
+let test_config_worker_count = fun _ctx -> assert_ok "worker_count accessor mirrors scheduler_count" config_worker_count_matches_scheduler_count
 
 let default_scheduler_count_matches_config =
   Property.for_all Arbitrary.bool
@@ -76,7 +76,7 @@ let default_scheduler_count_matches_config =
         | _ -> true
       ))
 
-let test_default_scheduler_count = fun () -> assert_ok "default scheduler count is exported" default_scheduler_count_matches_config
+let test_default_scheduler_count = fun _ctx -> assert_ok "default scheduler count is exported" default_scheduler_count_matches_config
 
 let scheduler_id_roundtrip =
   Property.for_all Arbitrary.int
@@ -85,7 +85,7 @@ let scheduler_id_roundtrip =
       let id = Miniriot.Scheduler_id.of_int normalized in
       Kernel.Int.equal (Miniriot.Scheduler_id.to_int id) normalized)
 
-let test_scheduler_id_roundtrip = fun () -> assert_ok "scheduler id roundtrip" scheduler_id_roundtrip
+let test_scheduler_id_roundtrip = fun _ctx -> assert_ok "scheduler id roundtrip" scheduler_id_roundtrip
 
 let tests = [
   Test.property "pid monotonicity" ~examples:128 test_pid_monotonicity;

@@ -113,7 +113,7 @@ let () =
   let tests = [
     Test.case
       "work stealing counters observe successful steals"
-      (fun () -> test_case "work stealing counters observe successful steals" test_steals_observable_under_load);
+      (fun _ctx -> test_case "work stealing counters observe successful steals" test_steals_observable_under_load);
   ] in
   let normalize_args = function
     | [] -> [ "work_stealing_counters_tests"; "run-tests" ]

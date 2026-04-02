@@ -74,7 +74,7 @@ let test_fixture = fun fixture_path expected_path ->
     ^ actual_str
     ^ "\n")
 
-let test_tagged_quoted_string_cst = fun () ->
+let test_tagged_quoted_string_cst = fun _ctx ->
   let source = "let explanation = {explain|hello|explain}\n" in
   let parse_result = Syn.parse ~filename:(Path.v "tagged_quoted_string.ml") source in
   if List.length parse_result.Parser.diagnostics > 0 then
@@ -147,7 +147,7 @@ let () =
       let tests = Test.case "tagged_quoted_string_cst" test_tagged_quoted_string_cst :: List.map
         (fun ((fixture_path, expected_path)) ->
           let name = Path.basename (Path.v fixture_path) in
-          Test.case name (fun () -> test_fixture fixture_path expected_path))
+          Test.case name (fun _ctx -> test_fixture fixture_path expected_path))
         fixtures
       in
       Test.Cli.main ~name:"syn-fixtures" ~tests ~args)

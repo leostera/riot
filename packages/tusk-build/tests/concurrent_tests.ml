@@ -44,7 +44,7 @@ type Message.t +=
 type Message.t +=
   | BuildCompleteWithCache of (string * bool * (unit, string) result)
 
-let test_concurrent_builds_different_packages = fun () ->
+let test_concurrent_builds_different_packages = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"concurrent_test"
       (fun tmpdir ->
@@ -146,7 +146,7 @@ let test_concurrent_builds_different_packages = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_concurrent_builds_same_package = fun () ->
+let test_concurrent_builds_same_package = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"concurrent_test"
       (fun tmpdir ->
@@ -243,7 +243,7 @@ let test_concurrent_builds_same_package = fun () ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
-let test_concurrent_builds_with_shared_cache = fun () ->
+let test_concurrent_builds_with_shared_cache = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"concurrent_test"
       (fun tmpdir ->

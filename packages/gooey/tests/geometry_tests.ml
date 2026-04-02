@@ -1,7 +1,7 @@
 open Std
 open Gooey
 
-let test_point_creation = fun () ->
+let test_point_creation = fun _ctx ->
   let p = Geometry.Point.make ~x:10.0 ~y:20.0 in
   if p.x = 10.0 && p.y = 20.0 then
     let zero = Geometry.Point.zero in
@@ -12,7 +12,7 @@ let test_point_creation = fun () ->
   else
     Error "Point.make should create point with given coordinates"
 
-let test_rect_creation = fun () ->
+let test_rect_creation = fun _ctx ->
   let r = Geometry.Rect.make ~x:5.0 ~y:10.0 ~width:100.0 ~height:50.0 in
   if r.x = 5.0 && r.y = 10.0 && r.width = 100.0 && r.height = 50.0 then
     let zero = Geometry.Rect.zero in
@@ -23,7 +23,7 @@ let test_rect_creation = fun () ->
   else
     Error "Rect.make should create rect with given dimensions"
 
-let test_viewport_creation = fun () ->
+let test_viewport_creation = fun _ctx ->
   let v = Viewport.make ~width:80.0 ~height:24.0 in
   if v.width = 80.0 && v.height = 24.0 then
     Ok ()

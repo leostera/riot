@@ -147,8 +147,6 @@ let chunk_roundtrip_prop =
       (* Take a substring of the specified size *)
       let actual_size = min size (String.length full_data) in
       let data = String.sub full_data 0 actual_size in
-      (* Encode as chunked - use decimal for simplicity *)
-      let size_str = Int.to_string (String.length data) in
       (* Convert to hex manually for small numbers *)
       let hex_size =
         let n = String.length data in

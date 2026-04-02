@@ -7,7 +7,7 @@ let parse_build = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
-let test_build_accepts_multiple_packages = fun () ->
+let test_build_accepts_multiple_packages = fun _ctx ->
   match parse_build [ "build"; "syn"; "krasny"; "tusk-cli" ] with
   | Error err -> Error ("expected build args to parse: " ^ err)
   | Ok matches ->
@@ -15,14 +15,14 @@ let test_build_accepts_multiple_packages = fun () ->
       Test.assert_equal ~expected:[ "syn"; "krasny"; "tusk-cli" ] ~actual;
       Ok ()
 
-let test_build_usage_shows_variadic_packages = fun () ->
+let test_build_usage_shows_variadic_packages = fun _ctx ->
   let usage = ArgParser.usage_string Tusk_cli.Build.command in
   if String.contains usage "package..." then
     Ok ()
   else
     Error ("expected variadic package usage, got: " ^ usage)
 
-let test_build_accepts_json_flag = fun () ->
+let test_build_accepts_json_flag = fun _ctx ->
   match parse_build [ "build"; "--json"; "syn" ] with
   | Error err -> Error ("expected build args to parse: " ^ err)
   | Ok matches ->
@@ -31,7 +31,7 @@ let test_build_accepts_json_flag = fun () ->
       else
         Error "expected --json flag to be parsed"
 
-let test_build_accepts_release_flag = fun () ->
+let test_build_accepts_release_flag = fun _ctx ->
   match parse_build [ "build"; "--release"; "syn" ] with
   | Error err -> Error ("expected build args to parse: " ^ err)
   | Ok matches ->
@@ -68,7 +68,7 @@ let make_workspace = fun binaries ->
   in
   Tusk_model.Workspace.make ~root:(Path.v "/workspace") ~packages:[ package ] ()
 
-let test_run_build_scope_uses_runtime_for_runtime_binaries = fun () ->
+let test_run_build_scope_uses_runtime_for_runtime_binaries = fun _ctx ->
   let workspace = make_workspace
     [ Tusk_model.Package.{ name = "demo"; path = Path.v "src/demo.ml" } ] in
   Test.assert_equal
@@ -76,7 +76,7 @@ let test_run_build_scope_uses_runtime_for_runtime_binaries = fun () ->
     ~actual:(Tusk_cli.Run.build_scope_for_binary workspace ~package_name:"demo" ~binary_name:"demo");
   Ok ()
 
-let test_run_build_scope_uses_dev_for_test_binaries = fun () ->
+let test_run_build_scope_uses_dev_for_test_binaries = fun _ctx ->
   let workspace = make_workspace
     [ Tusk_model.Package.{ name = "pm_tests"; path = Path.v "tests/pm_tests.ml" } ] in
   Test.assert_equal
@@ -84,14 +84,14 @@ let test_run_build_scope_uses_dev_for_test_binaries = fun () ->
     ~actual:(Tusk_cli.Run.build_scope_for_binary workspace ~package_name:"demo" ~binary_name:"pm_tests");
   Ok ()
 
-let test_run_build_scope_defaults_to_runtime_when_binary_is_missing = fun () ->
+let test_run_build_scope_defaults_to_runtime_when_binary_is_missing = fun _ctx ->
   let workspace = make_workspace [] in
   Test.assert_equal
     ~expected:Tusk_cli.Build.Runtime
     ~actual:(Tusk_cli.Run.build_scope_for_binary workspace ~package_name:"demo" ~binary_name:"missing");
   Ok ()
 
-let test_pm_event_hides_workspace_resolved_packages = fun () ->
+let test_pm_event_hides_workspace_resolved_packages = fun _ctx ->
   let seen_registry_updates = HashSet.create () in
   let actual = Tusk_cli.Build.format_pm_event
     ~seen_registry_updates
@@ -104,7 +104,7 @@ let test_pm_event_hides_workspace_resolved_packages = fun () ->
   Test.assert_equal ~expected:None ~actual;
   Ok ()
 
-let test_pm_event_maps_materialization_to_fetching = fun () ->
+let test_pm_event_maps_materialization_to_fetching = fun _ctx ->
   let seen_registry_updates = HashSet.create () in
   let actual = Tusk_cli.Build.format_pm_event
     ~seen_registry_updates
@@ -120,7 +120,7 @@ let test_pm_event_maps_materialization_to_fetching = fun () ->
       Ok ()
   | None -> Error "expected materialization event to render as a fetching message"
 
-let test_pm_event_hides_manifest_fetch_chatter = fun () ->
+let test_pm_event_hides_manifest_fetch_chatter = fun _ctx ->
   let seen_registry_updates = HashSet.create () in
   let actual = Tusk_cli.Build.format_pm_event
     ~seen_registry_updates
@@ -128,7 +128,7 @@ let test_pm_event_hides_manifest_fetch_chatter = fun () ->
   Test.assert_equal ~expected:None ~actual;
   Ok ()
 
-let test_pm_event_hides_download_skipped = fun () ->
+let test_pm_event_hides_download_skipped = fun _ctx ->
   let seen_registry_updates = HashSet.create () in
   let actual = Tusk_cli.Build.format_pm_event
     ~seen_registry_updates

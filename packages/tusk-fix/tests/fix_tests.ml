@@ -53,7 +53,7 @@ let overlapping_replace_rule = fun ~rule_id ~needle ~replacement ~overlap_text -
     ()
 
 let tests = [ Test.case "apply single operation"
-    (fun () ->
+    (fun _ctx ->
       let source = "open Stdlib\n" in
       let span = Syn.Ceibo.Span.make ~start:5 ~end_:11 in
       let token = synthetic_token ~span ~text:"Stdlib" in
@@ -63,7 +63,7 @@ let tests = [ Test.case "apply single operation"
       |> Result.expect ~msg:"apply single operation failed" in
       Test.assert_equal ~expected:"open Std\n" ~actual;
       Ok ()); Test.case "apply multiple operations in descending span order"
-    (fun () ->
+    (fun _ctx ->
       let source = "open Stdlib\nlet q : int Queue.t = Queue.create ()\n" in
       let stdlib_token = synthetic_token ~span:(Syn.Ceibo.Span.make ~start:5 ~end_:11) ~text:"Stdlib" in
       let queue_type_token = synthetic_token ~span:(Syn.Ceibo.Span.make ~start:24 ~end_:29) ~text:"Queue" in
@@ -85,7 +85,7 @@ let tests = [ Test.case "apply single operation"
       in
       Test.assert_equal ~expected ~actual;
       Ok ()); Test.case "reject overlapping operations"
-    (fun () ->
+    (fun _ctx ->
       let source = "open Stdlib\n" in
       let left = synthetic_token ~span:(Syn.Ceibo.Span.make ~start:5 ~end_:8) ~text:"Std" in
       let right = synthetic_token ~span:(Syn.Ceibo.Span.make ~start:7 ~end_:11) ~text:"lib" in
@@ -97,7 +97,7 @@ let tests = [ Test.case "apply single operation"
         ] in
       Test.assert_error (Tusk_fix.Fix.apply_fix ~source fix);
       Ok ()); Test.case "source runner skips linting when parsing fails"
-    (fun () ->
+    (fun _ctx ->
       let source = "let =" in
       let result = Tusk_fix.Source_runner.run_rule
         ~rule:(replace_token_rule ~rule_id:"test:broken-source" ~needle:"let" ~replacement:"and")
@@ -105,7 +105,7 @@ let tests = [ Test.case "apply single operation"
       Test.assert_true (List.length result.parse_diagnostics > 0);
       Test.assert_equal ~expected:0 ~actual:(List.length result.diagnostics);
       Ok ()); Test.case "rule-test applies snake-case type fixes and reruns cleanly"
-    (fun () ->
+    (fun _ctx ->
       let source = "type userProfile = { name : string }\n" in
       let result = Tusk_fix.Rule_test.run_rule ~rule:(Tusk_fix.Rules.Snake_case_type_names.make ()) source
       |> Result.expect ~msg:"expected snake-case type rule to apply" in
@@ -118,7 +118,7 @@ let tests = [ Test.case "apply single operation"
       in
       Test.assert_equal ~expected:[] ~actual:remaining;
       Ok ()); Test.case "rule-test applies multiple non-overlapping fixes"
-    (fun () ->
+    (fun _ctx ->
       let source = "type userProfile = int\nlet old_value = userProfile\n" in
       let result = Tusk_fix.Rule_test.run
         ~rules:[
@@ -139,7 +139,7 @@ let tests = [ Test.case "apply single operation"
       in
       Test.assert_equal ~expected:[] ~actual:remaining;
       Ok ()); Test.case "rule-test rejects overlapping fixes from multiple rules"
-    (fun () ->
+    (fun _ctx ->
       let source = "let old_value = 1\n" in
       let actual = Tusk_fix.Rule_test.run
         ~rules:[

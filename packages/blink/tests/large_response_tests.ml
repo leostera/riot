@@ -9,7 +9,7 @@ let case =
   else
     Test.skip
 
-let test_large_json_response = fun () ->
+let test_large_json_response = fun _ctx ->
   (* Test that we can read JSON responses without truncation.
      This test makes a real HTTP request to an LM Studio instance expected
      to be running on port 1234. We use the chat completions endpoint with
@@ -37,7 +37,6 @@ let test_large_json_response = fun () ->
               let status = Net.Http.Response.status response |> Net.Http.Status.to_int in
               let headers = Net.Http.Response.headers response in
               let content_length_hdr = Net.Http.Header.get headers "content-length" in
-              let transfer_encoding_hdr = Net.Http.Header.get headers "transfer-encoding" in
               (* Verify we got a successful response *)
               if status < 200 || status >= 300 then
                 (Error ("Unexpected status: " ^ string_of_int status ^ ", body: " ^ body))
@@ -69,7 +68,7 @@ let test_large_json_response = fun () ->
                       )
                     | _ -> Error "Response is not a JSON object"
 
-let test_streamed_response = fun () ->
+let test_streamed_response = fun _ctx ->
   (* Test that we can read chunked/streamed responses without truncation.
      When "stream": true is set, the server sends Transfer-Encoding: chunked
      with Server-Sent Events (SSE) format data chunks. *)
@@ -134,7 +133,7 @@ let test_streamed_response = fun () ->
                   | None -> Error "No Transfer-Encoding header (expected chunked)"
                 )
 
-let test_sse_parsing = fun () ->
+let test_sse_parsing = fun _ctx ->
   (* Test the SSE module to parse streaming events *)
   let request_body = {|{"stream":true,"max_tokens":50,"temperature":0.7,"model":"qwen/qwen3-coder-30b","messages":[{"role":"user","content":"Count from 1 to 3"}]}|} in
   let uri = Net.Uri.of_string "http://127.0.0.1:1234/v1/chat/completions" |> Result.expect ~msg:"Invalid URI" in
@@ -216,7 +215,7 @@ let () =
     ~main:(fun ~args ->
       (* Enable logging to see chunk messages in streamed response test *)
       Std.Config.load_string test_config;
-      Std.Log.start_link ();
+      ignore (Std.Log.start_link ());
       Test.Cli.main ~name:"blink_large_response" ~tests ~args)
     ~args:Env.args
     ()

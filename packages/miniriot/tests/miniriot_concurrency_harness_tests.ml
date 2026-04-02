@@ -226,7 +226,7 @@ let run_scenario = fun scenario ->
       scenario_to_string scenario
     ])
 
-let test_loom_style_concurrency_harness = fun () ->
+let test_loom_style_concurrency_harness = fun _ctx ->
   (* Loom's model checker iterates many bounded schedules and validates
      invariants each time. This test mirrors that style using deterministic
      seeds to generate many interleaving-heavy actor scenarios. *)

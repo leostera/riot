@@ -2,7 +2,7 @@ open Std
 
 (* Test 1: Spec DSL construction *)
 
-let test_spec_dsl = fun () ->
+let test_spec_dsl = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -18,7 +18,7 @@ let test_spec_dsl = fun () ->
 
 (* Test 2: Loader - environment detection *)
 
-let test_env_detection = fun () ->
+let test_env_detection = fun _ctx ->
   let env = Config.Loader.detect_env () in
   (* Just check that it returns something valid *)
   match env with
@@ -28,14 +28,14 @@ let test_env_detection = fun () ->
 
 (* Test 3: Loader - file loading *)
 
-let test_file_loading = fun () ->
+let test_file_loading = fun _ctx ->
   match Config.Loader.load_file "./packages/std/tests/fixtures/config/dev.toml" with
   | Error err -> Error ("Failed to load file: " ^ err)
   | Ok _toml -> Ok ()
 
 (* Test 4: Loader - extract app section *)
 
-let test_extract_app_section = fun () ->
+let test_extract_app_section = fun _ctx ->
   match Config.Loader.load_file "./packages/std/tests/fixtures/config/dev.toml" with
   | Error err -> Error ("Failed to load file: " ^ err)
   | Ok toml -> (
@@ -50,7 +50,7 @@ let test_extract_app_section = fun () ->
 
 (* Test 5: Validator - simple validation *)
 
-let test_validation = fun () ->
+let test_validation = fun _ctx ->
   let spec = Config.Spec.for_app ~app:"testapp" [ Config.Spec.string "log_level" ~default:"info"; ] in
   let toml = Data.Toml.Table [ ("log_level", Data.Toml.String "debug"); ] in
   match Config.Validator.validate spec toml with
@@ -59,7 +59,7 @@ let test_validation = fun () ->
 
 (* Test 6: Validator - default values *)
 
-let test_defaults = fun () ->
+let test_defaults = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [ Config.Spec.string "log_level" ~default:"info"; Config.Spec.int "port" ~default:8_080; ] in
@@ -77,7 +77,7 @@ let test_defaults = fun () ->
 
 (* Test 7: Validator - nested maps *)
 
-let test_nested_validation = fun () ->
+let test_nested_validation = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -98,7 +98,7 @@ let test_nested_validation = fun () ->
 
 (* Test 8: Error handling - missing required field *)
 
-let test_required_field = fun () ->
+let test_required_field = fun _ctx ->
   let spec = Config.Spec.for_app ~app:"testapp" [ Config.Spec.string "api_key" ~required:true; ] in
   let toml = Data.Toml.Table [] in
   match Config.Validator.validate spec toml with
@@ -107,7 +107,7 @@ let test_required_field = fun () ->
 
 (* Test 9: Enum string - valid value *)
 
-let test_enum_string_valid = fun () ->
+let test_enum_string_valid = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -134,7 +134,7 @@ let test_enum_string_valid = fun () ->
 
 (* Test 10: Enum string - invalid value *)
 
-let test_enum_string_invalid = fun () ->
+let test_enum_string_invalid = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -154,7 +154,7 @@ let test_enum_string_invalid = fun () ->
 
 (* Test 11: Enum string - default value *)
 
-let test_enum_string_default = fun () ->
+let test_enum_string_default = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -181,7 +181,7 @@ let test_enum_string_default = fun () ->
 
 (* Test 12: Enum int - valid value *)
 
-let test_enum_int_valid = fun () ->
+let test_enum_int_valid = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -209,7 +209,7 @@ let test_enum_int_valid = fun () ->
 
 (* Test 13: Enum int - invalid value *)
 
-let test_enum_int_invalid = fun () ->
+let test_enum_int_invalid = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -230,7 +230,7 @@ let test_enum_int_invalid = fun () ->
 
 (* Test 14: List of strings *)
 
-let test_list_of_strings = fun () ->
+let test_list_of_strings = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [ Config.Spec.list (Config.Spec.string "" ~default:"") "tags" ~default:[]; ] in
@@ -258,7 +258,7 @@ let test_list_of_strings = fun () ->
 
 (* Test 15: List with default *)
 
-let test_list_default = fun () ->
+let test_list_default = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [ Config.Spec.list (Config.Spec.int "" ~default:0) "ports" ~default:[]; ] in
@@ -276,7 +276,7 @@ let test_list_default = fun () ->
 
 (* Test 16: List of maps *)
 
-let test_list_of_maps = fun () ->
+let test_list_of_maps = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -312,7 +312,7 @@ let test_list_of_maps = fun () ->
 
 (* Test 17: Discriminated union - console variant *)
 
-let test_discriminated_union_console = fun () ->
+let test_discriminated_union_console = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -355,12 +355,10 @@ let test_discriminated_union_console = fun () ->
         | _ -> Error "ID not found or incorrect"
       else
         Error ("Wrong variant: expected console, got " ^ variant)
-  | _ ->
-      Error "Unexpected validation result"
 
 (* Test 18: Discriminated union - unknown variant *)
 
-let test_discriminated_union_unknown = fun () ->
+let test_discriminated_union_unknown = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -385,7 +383,7 @@ let test_discriminated_union_unknown = fun () ->
 
 (* Test 19: List of discriminated unions *)
 
-let test_list_of_discriminated_unions = fun () ->
+let test_list_of_discriminated_unions = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [
@@ -451,7 +449,7 @@ let test_list_of_discriminated_unions = fun () ->
 
 (* Test 20: Dotted path - two levels *)
 
-let test_dotted_path_two_levels = fun () ->
+let test_dotted_path_two_levels = fun _ctx ->
   match Config.Loader.load_file "./packages/std/tests/fixtures/config/dotted.toml" with
   | Error err -> Error ("Failed to load file: " ^ err)
   | Ok toml -> (
@@ -466,7 +464,7 @@ let test_dotted_path_two_levels = fun () ->
 
 (* Test 21: Dotted path - three levels *)
 
-let test_dotted_path_three_levels = fun () ->
+let test_dotted_path_three_levels = fun _ctx ->
   match Config.Loader.load_file "./packages/std/tests/fixtures/config/dotted.toml" with
   | Error err -> Error ("Failed to load file: " ^ err)
   | Ok toml -> (
@@ -485,7 +483,7 @@ let test_dotted_path_three_levels = fun () ->
 
 (* Test 22: Dotted path - missing section *)
 
-let test_dotted_path_missing = fun () ->
+let test_dotted_path_missing = fun _ctx ->
   match Config.Loader.load_file "./packages/std/tests/fixtures/config/dotted.toml" with
   | Error err -> Error ("Failed to load file: " ^ err)
   | Ok toml -> (
@@ -496,7 +494,7 @@ let test_dotted_path_missing = fun () ->
 
 (* Test 23: Integer values - both TOML Int and String forms *)
 
-let test_int_values_both_forms = fun () ->
+let test_int_values_both_forms = fun _ctx ->
   let spec = Config.Spec.for_app
     ~app:"testapp"
     [ Config.Spec.int "port" ~default:8_080; Config.Spec.int "timeout" ~default:30; ] in

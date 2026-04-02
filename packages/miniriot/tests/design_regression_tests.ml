@@ -208,13 +208,13 @@ let () =
   let tests = [
     Test.case
       "selective receive timeout ignores unmatched saved messages"
-      (fun () -> test_case "selective receive timeout ignores unmatched saved messages" test_selective_receive_timeout_ignores_unmatched_saved_messages);
+      (fun _ctx -> test_case "selective receive timeout ignores unmatched saved messages" test_selective_receive_timeout_ignores_unmatched_saved_messages);
     Test.case
       "selective receive timeout does not rearm after unmatched wakeup"
-      (fun () -> test_case "selective receive timeout does not rearm after unmatched wakeup" test_selective_receive_timeout_does_not_rearm_after_unmatched_wakeup);
+      (fun _ctx -> test_case "selective receive timeout does not rearm after unmatched wakeup" test_selective_receive_timeout_does_not_rearm_after_unmatched_wakeup);
     Test.case
       "interval cancel stops future ticks"
-      (fun () -> test_case "interval cancel stops future ticks" test_interval_cancel_stops_future_ticks);
+      (fun _ctx -> test_case "interval cancel stops future ticks" test_interval_cancel_stops_future_ticks);
   ] in
   let normalize_args = function
     | [] -> [ "design_regression_tests"; "run-tests" ]

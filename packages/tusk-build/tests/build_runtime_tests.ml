@@ -73,7 +73,7 @@ let make_valid_workspace = fun tmpdir ->
   in
   Tusk_model.Workspace.make ~root:tmpdir ~packages:[ package ] ()
 
-let test_build_surfaces_failed_builds = fun () ->
+let test_build_surfaces_failed_builds = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"tusk_build_runtime"
       (fun tmpdir ->
@@ -99,7 +99,7 @@ let test_build_surfaces_failed_builds = fun () ->
   | Ok result -> result
   | Error err -> Error ("tempdir failed: " ^ IO.error_message err)
 
-let test_build_release_uses_release_lane = fun () ->
+let test_build_release_uses_release_lane = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"tusk_build_release_runtime"
       (fun tmpdir ->

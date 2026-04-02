@@ -27,7 +27,7 @@ let make_package = fun name ->
     publish = { version = None; description = None; license = None; is_public = None };
   }
 
-let test_transitive_closure_dependency_first_order = fun () ->
+let test_transitive_closure_dependency_first_order = fun _ctx ->
   let dep_c =
     Tusk_planner.Dependency.{
       package = make_package "c";
@@ -56,7 +56,7 @@ let test_transitive_closure_dependency_first_order = fun () ->
   else
     Error ("unexpected order: " ^ String.concat "," names)
 
-let test_library_cmxa_uses_store_location = fun () ->
+let test_library_cmxa_uses_store_location = fun _ctx ->
   let dep =
     Tusk_planner.Dependency.{
       package = make_package "std";
@@ -72,7 +72,7 @@ let test_library_cmxa_uses_store_location = fun () ->
   else
     Error ("expected " ^ Path.to_string expected ^ " got " ^ Path.to_string got)
 
-let test_module_graph_prefers_implementation_when_interface_exists = fun () ->
+let test_module_graph_prefers_implementation_when_interface_exists = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"module_graph_prefers_impl"
       (fun tmpdir ->

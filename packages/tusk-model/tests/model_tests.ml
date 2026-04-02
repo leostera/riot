@@ -53,7 +53,7 @@ let with_tempdir = fun prefix fn ->
   | Ok result -> result
   | Error _ -> Error "Tempdir creation failed"
 
-let test_build_scope_drops_commands_and_runtime_outputs = fun () ->
+let test_build_scope_drops_commands_and_runtime_outputs = fun _ctx ->
   let pkg = make_package () in
   let projected = Tusk_model.Package.for_scope Tusk_model.Package.Build pkg in
   let no_commands = projected.commands = [] in
@@ -66,7 +66,7 @@ let test_build_scope_drops_commands_and_runtime_outputs = fun () ->
   else
     Error "build scope should drop commands, binaries, library, and non-build deps"
 
-let test_runtime_scope_keeps_commands = fun () ->
+let test_runtime_scope_keeps_commands = fun _ctx ->
   let pkg = make_package () in
   let projected = Tusk_model.Package.for_scope Tusk_model.Package.Normal pkg in
   if List.length projected.commands = 1 && List.length projected.binaries = 1 then
@@ -74,7 +74,7 @@ let test_runtime_scope_keeps_commands = fun () ->
   else
     Error "runtime scope should preserve package commands and normal binaries"
 
-let test_dev_scope_keeps_only_dev_outputs = fun () ->
+let test_dev_scope_keeps_only_dev_outputs = fun _ctx ->
   let pkg = make_package () in
   let projected = Tusk_model.Package.for_scope Tusk_model.Package.Dev pkg in
   let no_library = projected.library = None in
@@ -99,7 +99,7 @@ let test_dev_scope_keeps_only_dev_outputs = fun () ->
   else
     Error "dev scope should reuse runtime deps while keeping only dev outputs"
 
-let test_explicit_binaries_override_autodiscovery = fun () ->
+let test_explicit_binaries_override_autodiscovery = fun _ctx ->
   with_tempdir "tusk_model_package"
     (fun tmpdir ->
       let src_dir = Path.(tmpdir / Path.v "src") in
@@ -144,7 +144,7 @@ path = "examples/test_https_httpbin.ml"
               duplicate, got: [" ^ String.concat ", " binary_names ^ "]"
           ))
 
-let test_workspace_fmt_ignore_parses = fun () ->
+let test_workspace_fmt_ignore_parses = fun _ctx ->
   let toml =
     Std.Data.Toml.parse
       {|
@@ -160,7 +160,7 @@ ignore = ["fixtures", "generated"]
   Test.assert_equal ~expected:[ "fixtures"; "generated" ] ~actual:config.ignore_patterns;
   Ok ()
 
-let test_package_fmt_ignore_loads = fun () ->
+let test_package_fmt_ignore_loads = fun _ctx ->
   with_tempdir "tusk_model_fmt_config"
     (fun tmpdir ->
       let manifest_path = Path.(tmpdir / Path.v "tusk.toml") in
@@ -178,7 +178,7 @@ ignore = ["tests/fixtures", "vendor"]
       Test.assert_equal ~expected:[ "tests/fixtures"; "vendor" ] ~actual:config.ignore_patterns;
       Ok ())
 
-let test_legacy_fmt_ignore_still_loads = fun () ->
+let test_legacy_fmt_ignore_still_loads = fun _ctx ->
   let toml =
     Std.Data.Toml.parse
       {|
@@ -191,7 +191,7 @@ ignore = ["fixtures"]
   Test.assert_equal ~expected:[ "fixtures" ] ~actual:config.ignore_patterns;
   Ok ()
 
-let test_package_dependency_requirement_parses_structurally = fun () ->
+let test_package_dependency_requirement_parses_structurally = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -228,7 +228,7 @@ std = ">= 1.2.3"
       Ok ()
   | _ -> Error "expected a parsed registry dependency requirement"
 
-let test_package_dependency_invalid_requirement_fails = fun () ->
+let test_package_dependency_invalid_requirement_fails = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -251,7 +251,7 @@ std = "not-a-semver-range"
   | Ok _ -> Error "expected invalid package semver requirement to fail"
   | Error _ -> Ok ()
 
-let test_package_star_requirement_becomes_unconstrained_registry_dep = fun () ->
+let test_package_star_requirement_becomes_unconstrained_registry_dep = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -288,7 +288,7 @@ std = "*"
       Ok ()
   | _ -> Error "expected '*' package dependency to become an unconstrained registry dependency"
 
-let test_package_builtin_dependency_parses_structurally = fun () ->
+let test_package_builtin_dependency_parses_structurally = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -315,7 +315,7 @@ stdlib = "*"
     "*" -> Ok ()
   | _ -> Error "expected stdlib '*' to parse as a builtin dependency"
 
-let test_package_builtin_dependency_rejects_version_constraints = fun () ->
+let test_package_builtin_dependency_rejects_version_constraints = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -338,7 +338,7 @@ stdlib = ">= 1.0.0"
   | Ok _ -> Error "expected builtin dependency version constraints to fail"
   | Error _ -> Ok ()
 
-let test_package_json_roundtrips_registry_requirement = fun () ->
+let test_package_json_roundtrips_registry_requirement = fun _ctx ->
   let requirement = Std.Version.parse_requirement ">= 1.2.3" |> Result.expect ~msg:"expected requirement to parse" in
   let package =
     Tusk_model.Package.{
@@ -384,7 +384,7 @@ let test_package_json_roundtrips_registry_requirement = fun () ->
       Ok ()
   | _ -> Error "expected registry dependency after JSON roundtrip"
 
-let test_workspace_dependency_requirement_parses_structurally = fun () ->
+let test_workspace_dependency_requirement_parses_structurally = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -413,7 +413,7 @@ std = ">= 1.2.3"
       Ok ()
   | _ -> Error "expected a parsed workspace registry dependency requirement"
 
-let test_workspace_star_requirement_becomes_unconstrained_registry_dep = fun () ->
+let test_workspace_star_requirement_becomes_unconstrained_registry_dep = fun _ctx ->
   let manifest =
     Std.Data.Toml.parse
       {|
@@ -442,7 +442,7 @@ std = "*"
       Ok ()
   | _ -> Error "expected '*' workspace dependency to become an unconstrained registry dependency"
 
-let test_workspace_manager_resolves_member_path_dependencies_relative_to_package = fun () ->
+let test_workspace_manager_resolves_member_path_dependencies_relative_to_package = fun _ctx ->
   with_tempdir "tusk_model_workspace_paths"
     (fun root ->
       let write path content = Fs.write content path
@@ -494,7 +494,7 @@ version = "0.1.0"
             Test.assert_equal ~expected:[ "app"; "kernel"; "vendor" ] ~actual:names;
             Ok ())
 
-let test_user_config_parses_registry_api_token = fun () ->
+let test_user_config_parses_registry_api_token = fun _ctx ->
   let toml =
     Std.Data.Toml.parse
       {|
@@ -511,7 +511,7 @@ api_token = "root-secret"
       | _ -> Error "expected pkgs.ml API token to be parsed from config"
     )
 
-let test_user_config_load_reads_config_file = fun () ->
+let test_user_config_load_reads_config_file = fun _ctx ->
   with_tempdir "tusk_model_user_config"
     (fun tmpdir ->
       let config_path = Path.(tmpdir / Path.v "config.toml") in
@@ -529,7 +529,7 @@ api_token = "publish-token"
           | _ -> Error "expected config loader to expose registry token"
         ))
 
-let test_user_config_parses_empty_registry_entry = fun () ->
+let test_user_config_parses_empty_registry_entry = fun _ctx ->
   let toml =
     Std.Data.Toml.parse
       {|
@@ -545,7 +545,7 @@ let test_user_config_parses_empty_registry_entry = fun () ->
       | Some _ -> Error "expected empty registry config to keep missing api_token"
     )
 
-let test_user_config_parses_registry_urls = fun () ->
+let test_user_config_parses_registry_urls = fun _ctx ->
   let toml =
     Std.Data.Toml.parse
       {|
@@ -577,7 +577,7 @@ api_token = "publish-token"
             Ok ()
     )
 
-let test_user_config_save_roundtrips_default_registry_config = fun () ->
+let test_user_config_save_roundtrips_default_registry_config = fun _ctx ->
   with_tempdir "tusk_model_user_config_default"
     (fun tmpdir ->
       let config_path = Path.(tmpdir / Path.v "config.toml") in
@@ -590,7 +590,7 @@ let test_user_config_save_roundtrips_default_registry_config = fun () ->
           | Some _ -> Error "expected saved default config to keep missing api_token"
         ))
 
-let test_debug_profile_defaults_to_native_with_debug_symbols = fun () ->
+let test_debug_profile_defaults_to_native_with_debug_symbols = fun _ctx ->
   let profile = Tusk_model.Profile.debug in
   let flags = Tusk_model.Profile.to_compiler_flags profile in
   if
@@ -607,7 +607,7 @@ let test_debug_profile_defaults_to_native_with_debug_symbols = fun () ->
     ^ String.concat ", " flags
     ^ "]")
 
-let test_release_profile_defaults_to_strict_native_optimization = fun () ->
+let test_release_profile_defaults_to_strict_native_optimization = fun _ctx ->
   let profile = Tusk_model.Profile.release in
   let flags = Tusk_model.Profile.to_compiler_flags profile in
   if not (profile.kind = Tusk_model.Ocaml_compiler.Native) then

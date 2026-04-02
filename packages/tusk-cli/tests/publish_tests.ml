@@ -6,14 +6,14 @@ let parse_publish = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
-let test_publish_accepts_package_option = fun () ->
+let test_publish_accepts_package_option = fun _ctx ->
   match parse_publish [ "publish"; "-p"; "demo" ] with
   | Error err -> Error ("expected publish args to parse: " ^ err)
   | Ok matches ->
       Test.assert_equal ~expected:(Some "demo") ~actual:(ArgParser.get_one matches "package");
       Ok ()
 
-let test_publish_accepts_workspace_flag = fun () ->
+let test_publish_accepts_workspace_flag = fun _ctx ->
   match parse_publish [ "publish"; "--workspace" ] with
   | Error err -> Error ("expected publish args to parse: " ^ err)
   | Ok matches ->
@@ -22,7 +22,7 @@ let test_publish_accepts_workspace_flag = fun () ->
       else
         Error "expected --workspace flag to be parsed"
 
-let test_publish_accepts_dry_run_flag = fun () ->
+let test_publish_accepts_dry_run_flag = fun _ctx ->
   match parse_publish [ "publish"; "--dry-run" ] with
   | Error err -> Error ("expected publish args to parse: " ^ err)
   | Ok matches ->
@@ -31,7 +31,7 @@ let test_publish_accepts_dry_run_flag = fun () ->
       else
         Error "expected --dry-run flag to be parsed"
 
-let test_publish_accepts_skip_check_flag = fun () ->
+let test_publish_accepts_skip_check_flag = fun _ctx ->
   match parse_publish [ "publish"; "--skip-check" ] with
   | Error err -> Error ("expected publish args to parse: " ^ err)
   | Ok matches ->
@@ -40,7 +40,7 @@ let test_publish_accepts_skip_check_flag = fun () ->
       else
         Error "expected --skip-check flag to be parsed"
 
-let test_publish_conflicting_selection_fails = fun () ->
+let test_publish_conflicting_selection_fails = fun _ctx ->
   match Tusk_cli.Publish.resolve_request ~package_name:(Some "demo") ~workspace_mode:true with
   | Error Tusk_cli.Publish.ConflictingSelection -> Ok ()
   | Ok _ -> Error "expected conflicting publish selection to fail"
