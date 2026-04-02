@@ -358,6 +358,34 @@ let approved_fixtures = [
   "0693_let_bool.ml";
   "0694_let_unit.ml";
   "0700_let_in_simple.ml";
+  "0710_type_option_string.ml";
+  "0712_type_tuple_3.ml";
+  "0714_type_arrow_simple.ml";
+  "0715_type_arrow_2.ml";
+  "0718_type_poly_list.ml";
+  "0719_type_poly_option.ml";
+  "0722_type_poly_arrow.ml";
+  "0742_type_option_list.ml";
+  "0744_type_list_tuple.ml";
+  "0747_type_arrow_list_arg.ml";
+  "0751_type_poly_list_option.ml";
+  "0752_type_poly_option_list.ml";
+  "0753_type_poly_tuple.ml";
+  "0754_type_poly_arrow.ml";
+  "0756_type_poly_2_tuple_arrow.ml";
+  "0771_type_complex_arrow.ml";
+  "0774_type_list_tuple_option.ml";
+  "0775_type_option_tuple_list.ml";
+  "0776_type_arrow_complex.ml";
+  "0777_type_poly_complex.ml";
+  "0781_type_triple_nested.ml";
+  "0782_type_list_nested_deep.ml";
+  "0783_type_option_nested_deep.ml";
+  "0784_type_mixed_nesting.ml";
+  "0787_type_poly_nested.ml";
+  "0793_type_json.ml";
+  "0799_type_shape.ml";
+  "0803_type_var_three.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
