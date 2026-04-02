@@ -90,6 +90,16 @@ let green_token_kinds = fun node ->
   in
   loop [] (Ceibo.Green.Node node) |> List.rev
 
+let green_node_kinds = fun node ->
+  let rec loop = fun acc ->
+    function
+    | Ceibo.Green.Token _token -> acc
+    | Ceibo.Green.Node node ->
+        let acc = Ceibo.Green.kind (Ceibo.Green.Node node) :: acc in
+        Ceibo.Green.children node |> Array.to_list |> List.fold_left loop acc
+  in
+  loop [] (Ceibo.Green.Node node) |> List.rev
+
 let tests = [
   Test.case "ceibo tokens preserve leading trivia separately from token body width"
     (fun _ctx ->
@@ -331,6 +341,25 @@ let tests = [
           ~actual:(Syn.Cst.SourceFile.kind cst)
         | None -> ()
       );
+      Ok ());
+  Test.case "parser recognizes function-like macro invocations without whitespace before !"
+    (fun () ->
+      let result = parse_ml "let x = format!(\"hello {}\", name)\n" in
+      Test.assert_equal ~expected:[] ~actual:result.diagnostics;
+      Test.assert_true
+        (List.exists
+           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
+           (green_node_kinds result.tree));
+      Test.assert_true (Option.is_none result.cst);
+      Ok ());
+  Test.case "parser keeps spaced bang applications out of macro syntax"
+    (fun () ->
+      let result = parse_ml "let x = format !(name)\n" in
+      Test.assert_equal ~expected:[] ~actual:result.diagnostics;
+      Test.assert_false
+        (List.exists
+           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
+           (green_node_kinds result.tree));
       Ok ());
   Test.case "cst root distinguishes interfaces from implementations"
     (fun _ctx ->

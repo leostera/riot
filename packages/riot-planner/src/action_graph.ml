@@ -105,6 +105,46 @@ let profile_compile_flags = fun (profile: Profile.t) ->
     @ List.map (fun mod_name -> Riot_toolchain.Ocamlc.Open mod_name) profile.open_modules
     @ List.map (fun flag -> Riot_toolchain.Ocamlc.Raw flag) profile.ocamlc_flags)
 
+type planned_source = {
+  actions: Action.t list;
+  compile_source: Path.t;
+  copied_sources: Path.t list;
+}
+
+let resolve_concrete_source = fun ~(package: Package.t) path ->
+  if Path.is_absolute path then
+    path
+  else
+    Path.join package.path path
+
+let plan_macro_expansion = fun ~(package: Package.t) path ->
+  let readable_path = resolve_concrete_source ~package path in
+  match Fs.read readable_path with
+  | Error err ->
+      panic
+        ("failed to read source for macro expansion: "
+        ^ Path.to_string readable_path
+        ^ " ("
+        ^ IO.error_message err
+        ^ ")")
+  | Ok source -> (
+      match Macro.expand_source ~filename:path source with
+      | Error err ->
+          panic
+            ("macro expansion failed for "
+            ^ Path.to_string path
+            ^ ": "
+            ^ Macro.error_message err)
+      | Ok { changed = false; _ } ->
+          { actions = []; compile_source = path; copied_sources = [ path ] }
+      | Ok { source = expanded_source; changed = true } ->
+          {
+            actions = [ Action.WriteFile { destination = path; content = expanded_source } ];
+            compile_source = path;
+            copied_sources = [ path ];
+          }
+    )
+
 let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get_dep_kind ~depset ~needs_unix ~needs_dynlink (
   module_node: Module_node.t
 ) (deps: G.Node_id.t list):
@@ -112,31 +152,33 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
   let base_compile_flags = stdlib_flags package @ profile_compile_flags profile in
   match module_node with
   | { kind=MLI mod_; file=Concrete path; open_modules; _ } ->
+      let planned_source = plan_macro_expansion ~package path in
       let cmi_output = Module.cmi mod_ in
       let cmti_output = Module.cmti mod_ in
       let outputs = [ cmti_output; cmi_output ] in
-      let sources = [ path ] in
+      let sources = planned_source.copied_sources in
       let compile = Action.CompileInterface {
-        source = path;
+        source = planned_source.compile_source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules
       } in
-      ([ compile ], outputs, sources)
+      (planned_source.actions @ [ compile ], outputs, sources)
   | { kind=ML mod_; file=Concrete path; open_modules; _ } ->
+      let planned_source = plan_macro_expansion ~package path in
       let native_object_output = Module.o mod_ in
       let cmx_output = Module.cmx mod_ in
       let cmi_output = Module.cmi mod_ in
       let cmt_output = Module.cmt mod_ in
       let outputs = [ cmt_output; cmi_output; cmx_output; native_object_output ] in
-      let sources = [ path ] in
+      let sources = planned_source.copied_sources in
       let compile = Action.CompileImplementation {
-        source = path;
+        source = planned_source.compile_source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules
       } in
-      ([ compile ], outputs, sources)
+      (planned_source.actions @ [ compile ], outputs, sources)
   | { kind=ML mod_; file=Generated { path; contents }; open_modules; _ } ->
       let write_action = Action.WriteFile { destination = path; content = contents } in
       let native_object_output = Module.o mod_ in
@@ -238,11 +280,12 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
       let all_outputs = [ library_name; archive_name ] in
       ([ create_lib ], all_outputs, sources)
   | { kind=Binary { name; source; libraries; includes }; _ } ->
+      let planned_source = plan_macro_expansion ~package source in
       let binary_mod = Module.make ~namespace:Namespace.empty ~filename:source in
       let binary_cmx = Module.cmx binary_mod in
-      let sources = [ source ] in
+      let sources = planned_source.copied_sources in
       let compile_action = Action.CompileImplementation {
-        source;
+        source = planned_source.compile_source;
         outputs = [ binary_cmx ];
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags
@@ -334,7 +377,7 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
         cclib_flags;
       }
       in
-      ([ compile_action; link_action ], [ binary_output ], sources)
+      (planned_source.actions @ [ compile_action; link_action ], [ binary_output ], sources)
 
 let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_unix ~needs_dynlink (
   module_graph: Module_node.t G.t

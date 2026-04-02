@@ -204,6 +204,21 @@ let has_custom_index_payload_after_dot = fun parser ->
   in
   loop 0
 
+let matching_close_delim = function
+  | Token.OpenDelim delimiter -> Some (Token.CloseDelim delimiter)
+  | _ -> None
+
+let is_macro_open_delim = function
+  | Token.OpenDelim Token.Paren
+  | Token.OpenDelim Token.Bracket
+  | Token.OpenDelim Token.Brace -> true
+  | _ -> false
+
+let token_has_no_leading_trivia = fun (token: Token.t) ->
+  match token.Token.leading_trivia with
+  | [] -> true
+  | _ -> false
+
 let has_dot_ident_continuation = fun parser ->
   peek_kind parser = Token.Dot && match (peek_n parser 1).Token.kind with
   | Token.Ident _ -> true
@@ -339,6 +354,24 @@ let consume = fun parser ->
   let token = peek parser in
   advance parser;
   token
+
+let collect_balanced_payload_tokens = fun parser ~close_kind ->
+  let payload_tokens = ref [] in
+  let expected_closers = ref [] in
+  let should_stop () = peek_kind parser = close_kind && !expected_closers = [] in
+  while (not (should_stop ())) && peek_kind parser != Token.EOF do
+    let tok = consume parser in
+    (
+      match tok.Token.kind, !expected_closers with
+      | Token.OpenDelim delimiter, _ ->
+          expected_closers := Token.CloseDelim delimiter :: !expected_closers
+      | Token.CloseDelim _, expected :: rest when tok.Token.kind = expected ->
+          expected_closers := rest
+      | _ -> ()
+    );
+    payload_tokens := tok :: !payload_tokens;
+  done;
+  List.rev !payload_tokens
 
 (** Check if a token kind is trivia *)
 let is_trivia_kind = function
@@ -4771,13 +4804,48 @@ and can_start_poly_variant_payload_expr = fun parser ->
   | Token.Question -> false
   | _ -> can_start_arg_expr parser
 
+(** Parse a function-like macro invocation: ident!(...) *)
+and parse_macro_expr = fun parser callee ->
+  let bang = consume parser in
+  let open_delim = consume parser in
+  let close_delim =
+    match matching_close_delim open_delim.Token.kind with
+    | Some close_delim -> close_delim
+    | None -> Token.CloseDelim Token.Paren
+  in
+  let payload_tokens = collect_balanced_payload_tokens parser ~close_kind:close_delim in
+  let close_token =
+    expect
+      parser
+      close_delim
+      (fun found ->
+        Diagnostic.unclosed_delimiter
+          ~opener:(token_text parser open_delim)
+          ~found
+          ~text:(token_text parser found)
+          ~span:(expected_span parser))
+  in
+  make_node
+    Syntax_kind.MACRO_EXPR
+    ([ Ceibo.Green.Node callee ]
+    @ [ make_token parser bang ]
+    @ [ make_token parser open_delim ]
+    @ List.map (make_token parser) payload_tokens
+    @ [ make_token parser close_token ])
+
 (** Parse postfix expressions: field access (.), array indexing (.), etc.
     This has higher precedence than application.
     Grammar: expr ::= primary_expr { '.' ident | '.' '(' expr ')' | '.' '[' expr ']' }* *)
 and parse_postfix_expr = fun parser ->
   let base = parse_primary_expr parser in
   let rec parse_postfix expr =
-    match peek_kind parser with
+    if Ceibo.Green.kind (Ceibo.Green.Node expr) = Syntax_kind.IDENT_EXPR
+       && peek_kind parser = Token.Bang
+       && token_has_no_leading_trivia (peek parser)
+       && is_macro_open_delim (peek_n parser 1).Token.kind then
+      let macro_expr = parse_macro_expr parser expr in
+      parse_postfix macro_expr
+    else match peek_kind parser with
     | Token.Hash ->
         let next_kind = (peek_n parser 1).Token.kind in
         (

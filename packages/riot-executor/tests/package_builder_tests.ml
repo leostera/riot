@@ -5,6 +5,17 @@ module Test = Std.Test
 let test_toolchain = Riot_toolchain.init ~config:Riot_model.Toolchain_config.default
 |> Result.expect ~msg:"Failed to initialize test toolchain"
 
+let stdlib_dependency =
+  Tusk_model.Package.{
+    name = "stdlib";
+    source = {
+      workspace = false;
+      builtin = true;
+      path = None;
+      version = None;
+    };
+  }
+
 let test_collect_source_files = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"pkg_test"
@@ -175,12 +186,85 @@ let test_build_writes_hash_manifest_with_exports = fun _ctx ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
+let test_build_expands_format_macro_in_binary_end_to_end = fun _ctx ->
+  match
+    Fs.with_tempdir ~prefix:"pkg_builder_macro_test"
+      (fun tmpdir ->
+        let package_dir = Path.(tmpdir / Path.v "pkg") in
+        let src_dir = Path.(package_dir / Path.v "src") in
+        let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
+        let _ = Fs.write "let message = format!(\"hello {}\", \"riot\")\n" Path.(src_dir / Path.v "main.ml")
+        |> Result.expect ~msg:"write source failed" in
+        let package =
+          Tusk_model.Package.{
+            name = "pkg";
+            path = package_dir;
+            relative_path = Path.v "pkg";
+            dependencies = [ stdlib_dependency ];
+            dev_dependencies = [];
+            build_dependencies = [];
+            foreign_dependencies = [];
+            binaries = [ { name = "pkg"; path = Path.v "src/main.ml" } ];
+            library = None;
+            sources =
+              {
+                src = [];
+                native = [];
+                tests = [];
+                examples = [];
+                bench = [];
+              };
+            compiler = { profile_overrides = []; target_overrides = [] };
+            commands = [];
+            fix_providers = [];
+            publish = { version = None; description = None; license = None; is_public = None };
+          }
+        in
+        let workspace =
+          Tusk_model.Workspace.{
+            root = tmpdir;
+            target_dir_root =
+              Path.(tmpdir / Path.v "target");
+            packages = [ package ];
+            profile_overrides = [];
+          }
+        in
+        let store = Tusk_store.Store.create ~workspace in
+        let package_graph = Tusk_planner.Package_graph.create
+          ~scope:Tusk_planner.Package_graph.Runtime workspace
+        |> Result.unwrap in
+        let build_ctx =
+          let session_id = Tusk_model.Session_id.make () in
+          Tusk_model.Build_ctx.make ~session_id ~profile:Tusk_model.Profile.debug ()
+        in
+        let result = Tusk_executor.Package_builder.build
+          ~workspace
+          ~toolchain:test_toolchain
+          ~store
+          ~package_graph
+          ~package_key:(Tusk_planner.Package_graph.package_key
+            ~package_name:package.name
+            Tusk_planner.Package_graph.Runtime)
+          ~package
+          ~build_ctx in
+        match result.status with
+        | Tusk_executor.Package_builder.Built _
+        | Tusk_executor.Package_builder.Cached _ -> Ok ()
+        | Tusk_executor.Package_builder.Failed err ->
+            Error ("macro build failed: " ^ Tusk_executor.Package_builder.package_error_to_string err)
+        | Tusk_executor.Package_builder.Skipped { reason } ->
+            Error ("macro build skipped: " ^ reason))
+  with
+  | Ok r -> r
+  | Error _ -> Error "Tempdir creation failed"
+
 let tests =
   Test.[
     case "collect_source_files: filters by extension" test_collect_source_files;
     case "build_result: status variants" test_build_result_status_variants;
     case "package_error: variants" test_package_error_variants;
     case "build writes hash manifest with exports" test_build_writes_hash_manifest_with_exports;
+    case "build expands format! in binary end-to-end" test_build_expands_format_macro_in_binary_end_to_end;
   ]
 
 let name = "Package Builder Tests"

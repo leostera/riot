@@ -15,6 +15,7 @@ members = [
   "packages/krasny",
   "packages/lsp",
   "packages/mcp",
+  "packages/macro",
   "packages/mime",
   "packages/actors",
   "packages/miniriot",
