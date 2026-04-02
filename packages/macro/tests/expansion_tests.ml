@@ -20,6 +20,27 @@ let assert_error_contains = fun ~source ~expected_substring ->
       else
         Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
 
+let assert_validator_error = fun ~source ~expected_substring ->
+  match Validator.validate_source ~filename:sample_file source with
+  | Ok () -> Error "expected validation to fail"
+  | Error err ->
+      if String.contains err.message expected_substring then
+        Ok ()
+      else
+        Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
+
+let assert_expansion_reparses = fun ~source ->
+  match expand_source ~filename:sample_file source with
+  | Error err -> Error ("expected expansion to succeed: " ^ error_message err)
+  | Ok result ->
+      let reparsed = Syn.parse ~filename:sample_file result.source in
+      if reparsed.diagnostics = [] then
+        Ok ()
+      else
+        Error
+          ("expected reparsed expansion to be clean, got: "
+          ^ Syn.Diagnostic.main_message (List.hd reparsed.diagnostics))
+
 let tests = [
   Test.case "format! lowers a bare {} placeholder to Stdlib.Printf.sprintf"
     (fun () ->
@@ -37,6 +58,10 @@ let tests = [
         ~source:"let msg = format! \"{}!\" (format! \"hello {}\" name)\n"
         ~expected:
           "let msg = (Stdlib.Printf.sprintf \"%s!\" ((Stdlib.Printf.sprintf \"hello %s\" (name))))\n");
+  Test.case "successful expansions stay parse-clean after rewriting"
+    (fun () ->
+      assert_expansion_reparses
+        ~source:"let msg = format! \"hello {}\" (if ready then name else fallback)\n");
   Test.case "format! rejects non-literal format strings for the first prototype"
     (fun () ->
       assert_error_contains
@@ -62,6 +87,11 @@ let tests = [
             ~expected:"let msg = format ! name\n"
             ~actual:result.source;
           Ok ());
+  Test.case "validator rejects invalid rewritten OCaml before compile"
+    (fun () ->
+      assert_validator_error
+        ~source:"let msg =\n"
+        ~expected_substring:"macro expansion produced invalid OCaml");
 ]
 
 let () =

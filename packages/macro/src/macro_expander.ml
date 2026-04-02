@@ -69,10 +69,13 @@ let expand_once = fun ~filename source ->
         (
           match build_replacements [] invocations with
           | Error err -> Error err
-          | Ok replacements -> Ok {
-            source = apply_replacements source replacements;
-            changed = true;
-          }
+          | Ok replacements ->
+              let expanded_source = apply_replacements source replacements in
+              (
+                match Macro_validator.validate_source ~filename expanded_source with
+                | Ok () -> Ok { source = expanded_source; changed = true }
+                | Error err -> Error err
+              )
         )
 
 let expand_source = fun ~filename source ->

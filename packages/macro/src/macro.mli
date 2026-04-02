@@ -55,6 +55,10 @@ module Format: sig
   val expand: env:Environment.t -> Parser.invocation -> (string, Error.t) result
 end
 
+module Validator: sig
+  val validate_source: filename:Path.t -> string -> (unit, Error.t) result
+end
+
 module Expander: sig
   type expansion = {
     source: string;

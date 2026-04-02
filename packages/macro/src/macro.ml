@@ -4,6 +4,7 @@ module Error = Macro_error
 module Environment = Macro_environment
 module Parser = Macro_parser
 module Format = Macro_format
+module Validator = Macro_validator
 module Expander = Macro_expander
 
 type error = Error.t = {

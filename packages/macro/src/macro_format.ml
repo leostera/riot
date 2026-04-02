@@ -99,7 +99,7 @@ let expand = fun ~env invocation ->
                   let rendered_args = List.map
                     (fun arg ->
                       let arg = Macro_parser.unwrap_grouping arg in
-                      "(" ^ Macro_environment.source_of_node_with_leading_trivia env arg ^ ")")
+                      "(" ^ Macro_environment.source_of_node env arg ^ ")")
                     value_args in
                   Ok
                     ("("

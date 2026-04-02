@@ -7,4 +7,9 @@ type t = {
 
 let make = fun ?span message -> { message; span }
 
+let of_parse_diagnostic = fun diagnostic ->
+  make
+    ~span:diagnostic.Syn.Diagnostic.span
+    ("macro expansion produced invalid OCaml: " ^ Syn.Diagnostic.main_message diagnostic)
+
 let message = fun error -> error.message
