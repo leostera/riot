@@ -71,6 +71,9 @@ val read_config: t -> (Sparse_index.config option, string) result
 val read_package_document:
   t -> package_name:string -> (Sparse_index.package_document option, string) result
 
+val refresh_package_document:
+  t -> package_name:string -> (Sparse_index.package_document option, string) result
+
 val materialize_release: t -> package_name:string -> version:string -> (materialize_result, string) result
 
 val publish_artifact: t -> api_token:string -> artifact:string -> (published_release, string) result

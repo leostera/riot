@@ -21,7 +21,7 @@ type release = {
   canonical_locator: string;
   repo_url: string;
   subdir: string;
-  sha: string;
+  artifact_sha256: string;
   description: string option;
   license: string option;
   homepage: string option;
@@ -65,6 +65,17 @@ let optional_string_field = fun ~field fields ->
   | Some Data.Json.Null -> Ok None
   | Some (Data.Json.String value) -> Ok (Some value)
   | Some _ -> Error ("field '" ^ field ^ "' must be a string when present")
+
+let string_field_with_fallback = fun ~context ~field ~fallback fields ->
+  match List.assoc_opt field fields with
+  | Some (Data.Json.String value) -> Ok value
+  | Some _ -> Error (context ^ "." ^ field ^ " must be a string")
+  | None -> (
+      match List.assoc_opt fallback fields with
+      | Some (Data.Json.String value) -> Ok value
+      | Some _ -> Error (context ^ "." ^ fallback ^ " must be a string")
+      | None -> Error (context ^ " is missing required field '" ^ field ^ "'")
+    )
 
 let optional_string_list_field = fun ~field fields ->
   match List.assoc_opt field fields with
@@ -117,7 +128,13 @@ let release_of_json = fun json ->
       let* canonical_locator = string_field ~context:"release" ~field:"canonical_locator" fields in
       let* repo_url = string_field ~context:"release" ~field:"repo_url" fields in
       let* subdir = string_field ~context:"release" ~field:"subdir" fields in
-      let* sha = string_field ~context:"release" ~field:"sha" fields in
+      let* artifact_sha256 =
+        string_field_with_fallback
+          ~context:"release"
+          ~field:"artifact_sha256"
+          ~fallback:"sha"
+          fields
+      in
       let* description = optional_string_field ~field:"description" fields in
       let* license = optional_string_field ~field:"license" fields in
       let* homepage = optional_string_field ~field:"homepage" fields in
@@ -135,7 +152,7 @@ let release_of_json = fun json ->
         canonical_locator;
         repo_url;
         subdir;
-        sha;
+        artifact_sha256;
         description;
         license;
         homepage;

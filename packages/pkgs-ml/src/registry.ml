@@ -127,10 +127,8 @@ let default_fetch =
             with
             | exn -> (
                 match result with
-                | Error _ ->
-                    result
-                | Ok _ ->
-                    Error (exn_message exn)
+                | Error _ -> result
+                | Ok _ -> Error (exn_message exn)
               )
           in
           let response =
@@ -146,13 +144,11 @@ let default_fetch =
                   }
                 )
             with
-            | exn ->
-                Error (exn_message exn)
+            | exn -> Error (exn_message exn)
           in
           finish response
     with
-    | exn ->
-        Error (exn_message exn)
+    | exn -> Error (exn_message exn)
   in
   make_fetch
     ~get:(fun uri -> run Net.Http.Method.Get uri ~headers:[] ())
@@ -354,11 +350,43 @@ let read_config = fun registry ->
   | In_memory { config; packages=_; releases=_ } -> Ok config
 
 let read_package_document = fun registry ~package_name ->
+  let fetch_package_document config =
+    match Sparse_index.package_document_url config ~package_name with
+    | Error _ as err -> err
+    | Ok uri -> (
+        match fetch_optional registry uri with
+        | Error _ as err ->
+            err
+        | Ok None ->
+            Ok None
+        | Ok (Some source) -> (
+            match Sparse_index.package_document_of_string source with
+            | Error err -> Error ("failed to decode sparse index package document from '"
+            ^ Net.Uri.to_string uri
+            ^ "': "
+            ^ err)
+            | Ok document -> (
+                match Sparse_index.write_cached_package_document
+                  registry.cache
+                  ~package_name
+                  ~source with
+                | Error _ as err -> err
+                | Ok () -> Ok (Some document)
+              )
+          )
+      )
+  in
   match registry.source with
   | Filesystem -> (
       match Sparse_index.read_cached_package_document registry.cache ~package_name with
-      | Error _ as err ->
-          err
+      | Error _ -> (
+          match read_config registry with
+          | Error _ as err ->
+              err
+          | Ok None ->
+              Error ("filesystem registry '" ^ name registry ^ "' is missing sparse index config")
+          | Ok (Some config) -> fetch_package_document config
+        )
       | Ok (Some _ as cached) ->
           Ok cached
       | Ok None -> (
@@ -367,33 +395,46 @@ let read_package_document = fun registry ~package_name ->
               err
           | Ok None ->
               Error ("filesystem registry '" ^ name registry ^ "' is missing sparse index config")
-          | Ok (Some config) -> (
-              match Sparse_index.package_document_url config ~package_name with
-              | Error _ as err -> err
-              | Ok uri -> (
-                  match fetch_optional registry uri with
-                  | Error _ as err ->
-                      err
-                  | Ok None ->
-                      Ok None
-                  | Ok (Some source) -> (
-                      match Sparse_index.package_document_of_string source with
-                      | Error err -> Error ("failed to decode sparse index package document from '"
-                      ^ Net.Uri.to_string uri
-                      ^ "': "
-                      ^ err)
-                      | Ok document -> (
-                          match Sparse_index.write_cached_package_document
-                            registry.cache
-                            ~package_name
-                            ~source with
-                          | Error _ as err -> err
-                          | Ok () -> Ok (Some document)
-                        )
+          | Ok (Some config) -> fetch_package_document config
+        )
+    )
+  | In_memory { packages; config=_; releases=_ } -> Ok (List.assoc_opt
+    (Sparse_index.normalized_name package_name)
+    packages)
+
+let refresh_package_document = fun registry ~package_name ->
+  match registry.source with
+  | Filesystem -> (
+      match read_config registry with
+      | Error _ as err ->
+          err
+      | Ok None ->
+          Error ("filesystem registry '" ^ name registry ^ "' is missing sparse index config")
+      | Ok (Some config) ->
+          match Sparse_index.package_document_url config ~package_name with
+          | Error _ as err -> err
+          | Ok uri -> (
+              match fetch_optional registry uri with
+              | Error _ as err ->
+                  err
+              | Ok None ->
+                  Ok None
+              | Ok (Some source) -> (
+                  match Sparse_index.package_document_of_string source with
+                  | Error err -> Error ("failed to decode sparse index package document from '"
+                  ^ Net.Uri.to_string uri
+                  ^ "': "
+                  ^ err)
+                  | Ok document -> (
+                      match Sparse_index.write_cached_package_document
+                        registry.cache
+                        ~package_name
+                        ~source with
+                      | Error _ as err -> err
+                      | Ok () -> Ok (Some document)
                     )
                 )
             )
-        )
     )
   | In_memory { packages; config=_; releases=_ } -> Ok (List.assoc_opt
     (Sparse_index.normalized_name package_name)

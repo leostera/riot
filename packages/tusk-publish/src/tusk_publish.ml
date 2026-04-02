@@ -93,11 +93,9 @@ let publish_error_message = function
   | PublishFailed { error; _ } -> Tusk_deps.Publisher.message error
 
 let publish_error_is_already_published = function
-  | Tusk_deps.Publisher.RegistryPublishFailed { error; _ } ->
-      String.starts_with ~prefix:"Package " error
-      && String.ends_with ~suffix:" is already published." error
-  | _ ->
-      false
+  | Tusk_deps.Publisher.RegistryPublishFailed { error; _ } -> String.starts_with ~prefix:"Package " error
+  && String.ends_with ~suffix:" is already published." error
+  | _ -> false
 
 let workspace_packages = fun (workspace: Workspace.t) -> workspace.packages |> List.filter Package.is_workspace_member
 
@@ -356,7 +354,8 @@ let rec run_packages = fun ~(emit:publish_event -> unit) ~registry ~(workspace:W
                   ~mode
                   (outcome :: acc)
                   rest
-            | Error err -> Error (PublishFailed { package = package.name; error = err })
+            | Error err ->
+                Error (PublishFailed { package = package.name; error = err })
             | Ok published ->
                 emit (PackagePublished published);
                 run_packages

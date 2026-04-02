@@ -46,7 +46,7 @@ let test_sparse_index_document_parsing = fun () ->
       "canonical_locator": "github.com/leostera/riot-new/packages/kernel",
       "repo_url": "https://github.com/leostera/riot-new",
       "subdir": "packages/kernel",
-      "sha": "2aef0372bf5b6687db05bda80cde55f960cbfd9d",
+      "artifact_sha256": "2aef0372bf5b6687db05bda80cde55f960cbfd9d",
       "manifest_key": "packages/github.com/leostera/riot-new/packages/kernel/2aef0372bf5b6687db05bda80cde55f960cbfd9d.manifest.json",
       "source_key": "sources/github.com/leostera/riot-new/2aef0372bf5b6687db05bda80cde55f960cbfd9d.tar.gz",
       "dependencies": [{ "name": "std", "path": "../std" }]
@@ -132,7 +132,7 @@ let sparse_index_std_release_json = {|{
       "canonical_locator": "github.com/leostera/riot/packages/std",
       "repo_url": "https://github.com/leostera/riot",
       "subdir": "packages/std",
-      "sha": "deadbeef",
+      "artifact_sha256": "deadbeef",
       "manifest_key": "packages/std/0.1.0.manifest.json",
       "source_key": "sources/std/0.1.0.tar",
       "dependencies": []
@@ -914,14 +914,12 @@ let test_registry_publish_artifact_bubbles_transport_exceptions_as_errors = fun 
   |> Result.expect ~msg:"expected registry cache to be created" in
   let fetch, _requests =
     make_fetch_recorder
-      ~post_handler:(fun _uri ~headers:_ ~body:_ ->
-        raise (Failure "SSL_write error"))
+      ~post_handler:(fun _uri ~headers:_ ~body:_ -> raise (Failure "SSL_write error"))
       (fun uri -> Error ("unexpected GET " ^ Net.Uri.to_string uri))
   in
   let registry = Pkgs_ml.Registry.filesystem ~fetch cache in
   match Pkgs_ml.Registry.publish_artifact registry ~api_token:"root-secret" ~artifact:"tarball" with
-  | Ok _ ->
-      Error "expected publish artifact to return the transport exception as an error"
+  | Ok _ -> Error "expected publish artifact to return the transport exception as an error"
   | Error err ->
       if String.equal err "SSL_write error" then
         Ok ()

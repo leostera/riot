@@ -17,7 +17,7 @@ type release = {
   canonical_locator: string;
   repo_url: string;
   subdir: string;
-  sha: string;
+  artifact_sha256: string;
   description: string option;
   license: string option;
   homepage: string option;
