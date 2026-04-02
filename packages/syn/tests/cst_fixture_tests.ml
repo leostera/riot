@@ -416,6 +416,21 @@ let approved_fixtures = [
   "0858_type_alias_arrow_poly.ml";
   "0860_type_alias_complex.ml";
   "0908_type_rec_multi_constructor.ml";
+  "0909_type_rec_nested_variant.ml";
+  "0910_type_rec_option_self.ml";
+  "0911_type_mutual_two.ml";
+  "0912_type_mutual_tree_forest.ml";
+  "0913_type_mutual_expr.ml";
+  "0914_type_mutual_records.ml";
+  "0915_type_mutual_three.ml";
+  "0916_type_mutual_poly.ml";
+  "0917_type_mutual_variant_record.ml";
+  "0918_type_mutual_complex.ml";
+  "0919_type_mutual_four.ml";
+  "0920_type_mutual_nested.ml";
+  "0924_type_constraint_simple.ml";
+  "0925_type_constraint_multiple.ml";
+  "0929_type_gadt_simple.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"

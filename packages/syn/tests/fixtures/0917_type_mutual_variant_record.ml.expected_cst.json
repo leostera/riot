@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 105
+        "end": 114
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_MUTUAL_DECL",
             "span": {
               "start": 0,
-              "end": 105
+              "end": 114
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_DECL",
               "span": {
                 "start": 0,
-                "end": 45
+                "end": 49
               }
             },
             "constructors": [
@@ -62,7 +62,7 @@
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
                     "start": 11,
-                    "end": 23
+                    "end": 25
                   }
                 },
                 "bar_token": null,
@@ -70,8 +70,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "Leaf",
                   "span": {
-                    "start": 12,
-                    "end": 16
+                    "start": 14,
+                    "end": 18
                   }
                 },
                 "arguments": {
@@ -82,8 +82,8 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 19,
-                          "end": 23
+                          "start": 21,
+                          "end": 25
                         }
                       },
                       "constructor_path": {
@@ -91,16 +91,16 @@
                         "syntax_node": {
                           "kind": "TYPE_CONSTR",
                           "span": {
-                            "start": 19,
-                            "end": 23
+                            "start": 21,
+                            "end": 25
                           }
                         },
                         "name_token": {
                           "kind": "IDENT_EXPR",
                           "text": "int",
                           "span": {
-                            "start": 20,
-                            "end": 23
+                            "start": 22,
+                            "end": 25
                           }
                         }
                       },
@@ -112,8 +112,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "of",
                   "span": {
-                    "start": 17,
-                    "end": 19
+                    "start": 19,
+                    "end": 21
                   }
                 },
                 "payload_type": {
@@ -121,8 +121,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 19,
-                      "end": 23
+                      "start": 21,
+                      "end": 25
                     }
                   },
                   "constructor_path": {
@@ -130,16 +130,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 19,
-                        "end": 23
+                        "start": 21,
+                        "end": 25
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "int",
                       "span": {
-                        "start": 20,
-                        "end": 23
+                        "start": 22,
+                        "end": 25
                       }
                     }
                   },
@@ -151,24 +151,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
-                    "start": 25,
-                    "end": 45
+                    "start": 29,
+                    "end": 49
                   }
                 },
                 "bar_token": {
                   "kind": "IDENT_EXPR",
                   "text": "|",
                   "span": {
-                    "start": 24,
-                    "end": 25
+                    "start": 28,
+                    "end": 29
                   }
                 },
                 "constructor_name": {
                   "kind": "IDENT_EXPR",
                   "text": "Branch",
                   "span": {
-                    "start": 26,
-                    "end": 32
+                    "start": 30,
+                    "end": 36
                   }
                 },
                 "arguments": {
@@ -179,8 +179,8 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 35,
-                          "end": 45
+                          "start": 39,
+                          "end": 49
                         }
                       },
                       "constructor_path": {
@@ -188,16 +188,16 @@
                         "syntax_node": {
                           "kind": "TYPE_CONSTR",
                           "span": {
-                            "start": 35,
-                            "end": 45
+                            "start": 39,
+                            "end": 49
                           }
                         },
                         "name_token": {
                           "kind": "IDENT_EXPR",
                           "text": "tree_info",
                           "span": {
-                            "start": 36,
-                            "end": 45
+                            "start": 40,
+                            "end": 49
                           }
                         }
                       },
@@ -209,8 +209,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "of",
                   "span": {
-                    "start": 33,
-                    "end": 35
+                    "start": 37,
+                    "end": 39
                   }
                 },
                 "payload_type": {
@@ -218,8 +218,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 35,
-                      "end": 45
+                      "start": 39,
+                      "end": 49
                     }
                   },
                   "constructor_path": {
@@ -227,16 +227,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 35,
-                        "end": 45
+                        "start": 39,
+                        "end": 49
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "tree_info",
                       "span": {
-                        "start": 36,
-                        "end": 45
+                        "start": 40,
+                        "end": 49
                       }
                     }
                   },
@@ -250,16 +250,16 @@
             "syntax_node": {
               "kind": "TYPE_DECL",
               "span": {
-                "start": 49,
-                "end": 105
+                "start": 54,
+                "end": 114
               }
             },
             "keyword_token": {
               "kind": "IDENT_EXPR",
               "text": "and",
               "span": {
-                "start": 46,
-                "end": 49
+                "start": 51,
+                "end": 54
               }
             },
             "type_name": {
@@ -267,16 +267,16 @@
               "syntax_node": {
                 "kind": "IDENT_EXPR",
                 "span": {
-                  "start": 49,
-                  "end": 59
+                  "start": 54,
+                  "end": 64
                 }
               },
               "name_token": {
                 "kind": "IDENT_EXPR",
                 "text": "tree_info",
                 "span": {
-                  "start": 50,
-                  "end": 59
+                  "start": 55,
+                  "end": 64
                 }
               }
             },
@@ -286,8 +286,8 @@
               "syntax_node": {
                 "kind": "TYPE_RECORD",
                 "span": {
-                  "start": 61,
-                  "end": 105
+                  "start": 66,
+                  "end": 114
                 }
               },
               "fields": [
@@ -295,16 +295,16 @@
                   "syntax_node": {
                     "kind": "TYPE_RECORD_FIELD",
                     "span": {
-                      "start": 63,
-                      "end": 75
+                      "start": 68,
+                      "end": 81
                     }
                   },
                   "field_name": {
                     "kind": "IDENT_EXPR",
                     "text": "left",
                     "span": {
-                      "start": 64,
-                      "end": 68
+                      "start": 71,
+                      "end": 75
                     }
                   },
                   "mutable_token": null,
@@ -313,8 +313,8 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 70,
-                        "end": 75
+                        "start": 76,
+                        "end": 81
                       }
                     },
                     "constructor_path": {
@@ -322,16 +322,16 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 70,
-                          "end": 75
+                          "start": 76,
+                          "end": 81
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "node",
                         "span": {
-                          "start": 71,
-                          "end": 75
+                          "start": 77,
+                          "end": 81
                         }
                       }
                     },
@@ -342,16 +342,16 @@
                   "syntax_node": {
                     "kind": "TYPE_RECORD_FIELD",
                     "span": {
-                      "start": 76,
-                      "end": 89
+                      "start": 82,
+                      "end": 96
                     }
                   },
                   "field_name": {
                     "kind": "IDENT_EXPR",
                     "text": "right",
                     "span": {
-                      "start": 77,
-                      "end": 82
+                      "start": 85,
+                      "end": 90
                     }
                   },
                   "mutable_token": null,
@@ -360,8 +360,8 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 84,
-                        "end": 89
+                        "start": 91,
+                        "end": 96
                       }
                     },
                     "constructor_path": {
@@ -369,16 +369,16 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 84,
-                          "end": 89
+                          "start": 91,
+                          "end": 96
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "node",
                         "span": {
-                          "start": 85,
-                          "end": 89
+                          "start": 92,
+                          "end": 96
                         }
                       }
                     },
@@ -389,16 +389,16 @@
                   "syntax_node": {
                     "kind": "TYPE_RECORD_FIELD",
                     "span": {
-                      "start": 90,
-                      "end": 103
+                      "start": 97,
+                      "end": 111
                     }
                   },
                   "field_name": {
                     "kind": "IDENT_EXPR",
                     "text": "height",
                     "span": {
-                      "start": 91,
-                      "end": 97
+                      "start": 100,
+                      "end": 106
                     }
                   },
                   "mutable_token": null,
@@ -407,8 +407,8 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 99,
-                        "end": 103
+                        "start": 107,
+                        "end": 111
                       }
                     },
                     "constructor_path": {
@@ -416,16 +416,16 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 99,
-                          "end": 103
+                          "start": 107,
+                          "end": 111
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "int",
                         "span": {
-                          "start": 100,
-                          "end": 103
+                          "start": 108,
+                          "end": 111
                         }
                       }
                     },

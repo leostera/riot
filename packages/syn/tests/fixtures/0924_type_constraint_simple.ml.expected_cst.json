@@ -126,24 +126,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VAR",
                   "span": {
-                    "start": 25,
-                    "end": 28
+                    "start": 27,
+                    "end": 30
                   }
                 },
                 "sigil_token": {
                   "kind": "IDENT_EXPR",
                   "text": "'",
                   "span": {
-                    "start": 26,
-                    "end": 27
+                    "start": 28,
+                    "end": 29
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "a",
                   "span": {
-                    "start": 27,
-                    "end": 28
+                    "start": 29,
+                    "end": 30
                   }
                 }
               },
@@ -152,7 +152,7 @@
                 "syntax_node": {
                   "kind": "TYPE_CONSTR",
                   "span": {
-                    "start": 30,
+                    "start": 31,
                     "end": 34
                   }
                 },
@@ -161,7 +161,7 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 30,
+                      "start": 31,
                       "end": 34
                     }
                   },
