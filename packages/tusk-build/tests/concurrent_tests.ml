@@ -83,6 +83,7 @@ let test_concurrent_builds_different_packages = fun _ctx ->
                 match result.status with
                 | Built _
                 | Cached _ -> Ok ()
+                | Skipped _ -> Error "skipped"
                 | Failed err ->
                     Error (
                       match err with
@@ -113,6 +114,7 @@ let test_concurrent_builds_different_packages = fun _ctx ->
                 match result.status with
                 | Built _
                 | Cached _ -> Ok ()
+                | Skipped _ -> Error "skipped"
                 | Failed err ->
                     Error (
                       match err with
@@ -184,6 +186,7 @@ let test_concurrent_builds_same_package = fun _ctx ->
                 match result.status with
                 | Built _
                 | Cached _ -> Ok ()
+                | Skipped _ -> Error "skipped"
                 | Failed err ->
                     Error (
                       match err with
@@ -214,6 +217,7 @@ let test_concurrent_builds_same_package = fun _ctx ->
                 match result.status with
                 | Built _
                 | Cached _ -> Ok ()
+                | Skipped _ -> Error "skipped"
                 | Failed err ->
                     Error (
                       match err with
@@ -293,12 +297,14 @@ let test_concurrent_builds_with_shared_cache = fun _ctx ->
                     match result.status with
                     | Cached _ -> true
                     | Built _ -> false
+                    | Skipped _ -> false
                     | Failed _ -> false
                   in
                   let status =
                     match result.status with
                     | Cached _
                     | Built _ -> Ok ()
+                    | Skipped _ -> Error "skipped"
                     | Failed err ->
                         Error (
                           match err with
@@ -329,12 +335,14 @@ let test_concurrent_builds_with_shared_cache = fun _ctx ->
                     match result.status with
                     | Cached _ -> true
                     | Built _ -> false
+                    | Skipped _ -> false
                     | Failed _ -> false
                   in
                   let status =
                     match result.status with
                     | Cached _
                     | Built _ -> Ok ()
+                    | Skipped _ -> Error "skipped"
                     | Failed err ->
                         Error (
                           match err with
@@ -369,6 +377,8 @@ let test_concurrent_builds_with_shared_cache = fun _ctx ->
           )
         | Cached _ ->
             Error "First build should not be cached"
+        | Skipped _ ->
+            Error "First build was unexpectedly skipped"
         | Failed err ->
             Error (
               "First build failed: " ^ match err with
