@@ -5,6 +5,8 @@
 #include <caml/alloc.h>
 #include <caml/fail.h>
 #include <caml/custom.h>
+#include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -22,6 +24,82 @@ typedef struct {
     int is_server;
     int handshake_done;
 } tls_engine_t;
+
+static const char *ssl_error_name(int err) {
+    switch (err) {
+        case SSL_ERROR_NONE:
+            return "SSL_ERROR_NONE";
+        case SSL_ERROR_SSL:
+            return "SSL_ERROR_SSL";
+        case SSL_ERROR_WANT_READ:
+            return "SSL_ERROR_WANT_READ";
+        case SSL_ERROR_WANT_WRITE:
+            return "SSL_ERROR_WANT_WRITE";
+        case SSL_ERROR_WANT_X509_LOOKUP:
+            return "SSL_ERROR_WANT_X509_LOOKUP";
+        case SSL_ERROR_SYSCALL:
+            return "SSL_ERROR_SYSCALL";
+        case SSL_ERROR_ZERO_RETURN:
+            return "SSL_ERROR_ZERO_RETURN";
+        case SSL_ERROR_WANT_CONNECT:
+            return "SSL_ERROR_WANT_CONNECT";
+        case SSL_ERROR_WANT_ACCEPT:
+            return "SSL_ERROR_WANT_ACCEPT";
+#ifdef SSL_ERROR_WANT_ASYNC
+        case SSL_ERROR_WANT_ASYNC:
+            return "SSL_ERROR_WANT_ASYNC";
+#endif
+#ifdef SSL_ERROR_WANT_ASYNC_JOB
+        case SSL_ERROR_WANT_ASYNC_JOB:
+            return "SSL_ERROR_WANT_ASYNC_JOB";
+#endif
+#ifdef SSL_ERROR_WANT_CLIENT_HELLO_CB
+        case SSL_ERROR_WANT_CLIENT_HELLO_CB:
+            return "SSL_ERROR_WANT_CLIENT_HELLO_CB";
+#endif
+        default:
+            return "SSL_ERROR_UNKNOWN";
+    }
+}
+
+__attribute__((noreturn))
+static void fail_ssl_operation(const char *operation, int ssl_err) {
+    char message[512];
+    unsigned long openssl_err = ERR_peek_last_error();
+
+    if (openssl_err != 0) {
+        char openssl_message[256];
+        ERR_error_string_n(openssl_err, openssl_message, sizeof(openssl_message));
+        snprintf(
+            message,
+            sizeof(message),
+            "%s failed (%s): %s",
+            operation,
+            ssl_error_name(ssl_err),
+            openssl_message
+        );
+    } else if (ssl_err == SSL_ERROR_SYSCALL && errno != 0) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s failed (%s): errno=%d (%s)",
+            operation,
+            ssl_error_name(ssl_err),
+            errno,
+            strerror(errno)
+        );
+    } else {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s failed (%s)",
+            operation,
+            ssl_error_name(ssl_err)
+        );
+    }
+
+    caml_failwith(message);
+}
 
 /* Custom block operations for garbage collection */
 static void tls_engine_finalize(value v) {
@@ -207,6 +285,8 @@ CAMLprim value kernel_tls_read_decrypted(value v_engine, value buf_val,
     int len = Int_val(len_val);
     
     /* Try to read decrypted data from SSL (never blocks - BIO pair) */
+    errno = 0;
+    ERR_clear_error();
     int bytes_read = SSL_read(engine->ssl, buf + pos, len);
     
     if (bytes_read > 0) {
@@ -227,9 +307,9 @@ CAMLprim value kernel_tls_read_decrypted(value v_engine, value buf_val,
             CAMLreturn(Val_int(0));
         case SSL_ERROR_SYSCALL:
         case SSL_ERROR_SSL:
-            caml_failwith("SSL_read error");
+            fail_ssl_operation("SSL_read", err);
         default:
-            caml_failwith("Unknown SSL error");
+            fail_ssl_operation("SSL_read", err);
     }
 }
 
@@ -245,6 +325,8 @@ CAMLprim value kernel_tls_write_plaintext(value v_engine, value buf_val,
     int len = Int_val(len_val);
     
     /* Write plaintext to SSL (gets encrypted internally, never blocks) */
+    errno = 0;
+    ERR_clear_error();
     int bytes_written = SSL_write(engine->ssl, buf + pos, len);
     
     if (bytes_written > 0) {
@@ -260,9 +342,9 @@ CAMLprim value kernel_tls_write_plaintext(value v_engine, value buf_val,
             CAMLreturn(Val_int(-2));
         case SSL_ERROR_SYSCALL:
         case SSL_ERROR_SSL:
-            caml_failwith("SSL_write error");
+            fail_ssl_operation("SSL_write", err);
         default:
-            caml_failwith("Unknown SSL error");
+            fail_ssl_operation("SSL_write", err);
     }
 }
 
@@ -321,6 +403,8 @@ CAMLprim value kernel_tls_do_handshake(value v_engine) {
     
     tls_engine_t *engine = (tls_engine_t*)Data_custom_val(v_engine);
     
+    errno = 0;
+    ERR_clear_error();
     int result = SSL_do_handshake(engine->ssl);
     
     if (result == 1) {
@@ -336,7 +420,7 @@ CAMLprim value kernel_tls_do_handshake(value v_engine) {
         case SSL_ERROR_WANT_WRITE:
             CAMLreturn(Val_int(-2));
         default:
-            caml_failwith("SSL_do_handshake error");
+            fail_ssl_operation("SSL_do_handshake", err);
     }
 }
 

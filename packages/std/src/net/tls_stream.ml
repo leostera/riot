@@ -190,11 +190,12 @@ let read_plaintext t dst : (int, error) result =
 (* Write plaintext to TLS stream *)
 
 let write_plaintext t src : (int, error) result =
+  let src_bytes = Bytes.of_string src in
+  let src_len = Bytes.length src_bytes in
   let rec write_loop pos remaining =
     if remaining = 0 then
-      Ok (String.length src)
+      Ok src_len
     else
-      let src_bytes = Bytes.of_string src in
       match Kernel.Net.Tls.write_plaintext t.engine src_bytes ~pos ~len:remaining with
       | Written n ->
           (* Flush encrypted data to network *)
@@ -215,7 +216,7 @@ let write_plaintext t src : (int, error) result =
   | `Error e ->
       raise e
   | `Active -> (
-      match write_loop 0 (String.length src) with
+      match write_loop 0 src_len with
       | Ok n -> Ok n
       | Error e ->
           t.state <- `Error (Failure "TLS write error");

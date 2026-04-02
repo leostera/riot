@@ -45,7 +45,7 @@ let request = fun (Conn conn) req ?body () ->
   let method_ = Net.Http.Request.method_ req in
   let version = Net.Http.Request.version req in
   let headers = Net.Http.Request.headers req in
-  let resource = Net.Uri.path conn.uri in
+  let resource = Net.Uri.path_and_query conn.uri in
   let request_line = (Net.Http.Method.to_string method_)
   ^ " "
   ^ resource

@@ -8,7 +8,6 @@ type fetch_response = {
 type fetch
 type published_artifact_location = {
   key: string;
-  url: string option;
   cdn_url: string;
 }
 type published_record = {
@@ -16,15 +15,11 @@ type published_record = {
   created: bool;
 }
 type published_materialization = {
-  manifest_cached: bool;
-  source_cached: bool;
+  manifest: bool;
+  source: bool;
 }
 type published_release = {
-  package_locator: string option;
-  source_url: string option;
-  package_subdir: string option;
-  selector: string;
-  resolved_sha: string;
+  artifact_sha256: string;
   package_name: string;
   package_version: string;
   manifest: published_artifact_location;

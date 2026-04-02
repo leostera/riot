@@ -738,22 +738,16 @@ let test_registry_publish_from_locator_posts_tarball_to_publish_route = fun () -
           Pkgs_ml.Registry.status_code = 200;
           body =
             {|{
-  "package": "github.com/leostera/minttea",
-  "source_url": "https://github.com/leostera/minttea",
-  "package_subdir": ".",
-  "selector": "main",
-  "resolved_sha": "0123456789abcdef0123456789abcdef01234567",
   "package_name": "minttea",
   "package_version": "0.4.2",
+  "artifact_sha256": "0123456789abcdef0123456789abcdef01234567",
   "manifest": {
-    "key": "packages/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.manifest.json",
-    "url": "https://api.pkgs.ml/v1/packages/github.com/leostera/minttea/manifest/0123456789abcdef0123456789abcdef01234567.json",
-    "cdn_url": "https://cdn.pkgs.ml/packages/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.manifest.json"
+    "key": "packages/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.manifest.json",
+    "cdn_url": "https://cdn.pkgs.ml/packages/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.manifest.json"
   },
   "source_archive": {
-    "key": "sources/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.tar.gz",
-    "url": "https://api.pkgs.ml/v1/packages/github.com/leostera/minttea/source/0123456789abcdef0123456789abcdef01234567.tar.gz",
-    "cdn_url": "https://cdn.pkgs.ml/sources/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.tar.gz"
+    "key": "sources/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.tar.gz",
+    "cdn_url": "https://cdn.pkgs.ml/sources/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.tar.gz"
   },
   "claim": {
     "key": "claims/minttea.json",
@@ -791,23 +785,19 @@ let test_registry_publish_from_locator_posts_tarball_to_publish_route = fun () -
           in
           if
             String.equal request.method_ "POST"
-            && String.equal request.url "https://api.pkgs.ml/v1/packages/github.com/leostera/minttea/publish?ref=main"
+            && String.equal request.url "https://api.pkgs.ml/v1/publish"
             && request.body = Some artifact
             && has_header "authorization" "Bearer root-secret"
             && has_header "content-type" "application/gzip"
-            && published.package_locator = Some "github.com/leostera/minttea"
-            && published.source_url = Some "https://github.com/leostera/minttea"
-            && published.package_subdir = Some "."
+            && String.equal published.artifact_sha256 "0123456789abcdef0123456789abcdef01234567"
             && String.equal published.package_name "minttea"
             && String.equal published.package_version "0.4.2"
-            && String.equal published.manifest.key "packages/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.manifest.json"
-            && published.manifest.url = Some "https://api.pkgs.ml/v1/packages/github.com/leostera/minttea/manifest/0123456789abcdef0123456789abcdef01234567.json"
-            && String.equal published.source_archive.key "sources/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.tar.gz"
-            && published.source_archive.url = Some "https://api.pkgs.ml/v1/packages/github.com/leostera/minttea/source/0123456789abcdef0123456789abcdef01234567.tar.gz"
+            && String.equal published.manifest.key "packages/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.manifest.json"
+            && String.equal published.source_archive.key "sources/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.tar.gz"
             && published.claim.created
             && published.release.created
-            && not published.materialization.manifest_cached
-            && not published.materialization.source_cached
+            && not published.materialization.manifest
+            && not published.materialization.source
           then
             Ok ()
           else
@@ -863,15 +853,14 @@ let test_registry_publish_artifact_posts_tarball_to_artifact_publish_route = fun
             {|{
   "package_name": "minttea",
   "package_version": "0.4.2",
-  "selector": "artifact",
-  "resolved_sha": "0123456789abcdef0123456789abcdef01234567",
+  "artifact_sha256": "0123456789abcdef0123456789abcdef01234567",
   "manifest": {
-    "key": "packages/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.manifest.json",
-    "cdn_url": "https://cdn.pkgs.ml/packages/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.manifest.json"
+    "key": "packages/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.manifest.json",
+    "cdn_url": "https://cdn.pkgs.ml/packages/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.manifest.json"
   },
   "source_archive": {
-    "key": "sources/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.tar.gz",
-    "cdn_url": "https://cdn.pkgs.ml/sources/github.com/leostera/minttea/0123456789abcdef0123456789abcdef01234567.tar.gz"
+    "key": "sources/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.tar.gz",
+    "cdn_url": "https://cdn.pkgs.ml/sources/minttea/0.4.2/0123456789abcdef0123456789abcdef01234567.tar.gz"
   },
   "claim": {
     "key": "claims/minttea.json",
@@ -908,13 +897,9 @@ let test_registry_publish_artifact_posts_tarball_to_artifact_publish_route = fun
             && request.body = Some artifact
             && has_header "authorization" "Bearer root-secret"
             && has_header "content-type" "application/gzip"
-            && published.package_locator = None
-            && published.source_url = None
-            && published.package_subdir = None
+            && String.equal published.artifact_sha256 "0123456789abcdef0123456789abcdef01234567"
             && String.equal published.package_name "minttea"
             && String.equal published.package_version "0.4.2"
-            && published.manifest.url = None
-            && published.source_archive.url = None
           then
             Ok ()
           else

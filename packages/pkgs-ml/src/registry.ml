@@ -14,7 +14,6 @@ type fetch = {
 
 type published_artifact_location = {
   key: string;
-  url: string option;
   cdn_url: string;
 }
 
@@ -24,16 +23,12 @@ type published_record = {
 }
 
 type published_materialization = {
-  manifest_cached: bool;
-  source_cached: bool;
+  manifest: bool;
+  source: bool;
 }
 
 type published_release = {
-  package_locator: string option;
-  source_url: string option;
-  package_subdir: string option;
-  selector: string;
-  resolved_sha: string;
+  artifact_sha256: string;
   package_name: string;
   package_version: string;
   manifest: published_artifact_location;
@@ -265,9 +260,8 @@ let published_artifact_location_of_json = fun ~context json ->
   match json with
   | Data.Json.Object fields ->
       let* key = string_field ~context ~field:"key" fields in
-      let* url = optional_string_field ~context ~field:"url" fields in
       let* cdn_url = string_field ~context ~field:"cdn_url" fields in
-      Ok { key; url; cdn_url }
+      Ok { key; cdn_url }
   | _ -> Error (context ^ " must be an object")
 
 let published_record_of_json = fun ~context json ->
@@ -284,7 +278,7 @@ let published_materialization_of_json = fun ~context json ->
   match json with
   | Data.Json.Object fields -> (
       match bool_field ~context ~field:"manifest" fields, bool_field ~context ~field:"source" fields with
-      | Ok manifest_cached, Ok source_cached -> Ok { manifest_cached; source_cached }
+      | Ok manifest, Ok source -> Ok { manifest; source }
       | (Error err, _)
       | (_, Error err) -> Error err
     )
@@ -293,14 +287,7 @@ let published_materialization_of_json = fun ~context json ->
 let published_release_of_json = fun json ->
   match json with
   | Data.Json.Object fields ->
-      let* package_locator = optional_string_field ~context:"publish response" ~field:"package" fields in
-      let* source_url = optional_string_field ~context:"publish response" ~field:"source_url" fields in
-      let* package_subdir = optional_string_field
-        ~context:"publish response"
-        ~field:"package_subdir"
-        fields in
-      let* selector = string_field ~context:"publish response" ~field:"selector" fields in
-      let* resolved_sha = string_field ~context:"publish response" ~field:"resolved_sha" fields in
+      let* artifact_sha256 = string_field ~context:"publish response" ~field:"artifact_sha256" fields in
       let* package_name = string_field ~context:"publish response" ~field:"package_name" fields in
       let* package_version = string_field ~context:"publish response" ~field:"package_version" fields in
       let* manifest_json = object_field ~context:"publish response" ~field:"manifest" fields in
@@ -318,11 +305,7 @@ let published_release_of_json = fun json ->
         ~context:"publish response.materialization"
         materialization_json in
       Ok {
-        package_locator;
-        source_url;
-        package_subdir;
-        selector;
-        resolved_sha;
+        artifact_sha256;
         package_name;
         package_version;
         manifest;
@@ -332,13 +315,6 @@ let published_release_of_json = fun json ->
         materialization;
       }
   | _ -> Error "publish response must be an object"
-
-let publish_from_locator_url = fun ~registry_name ~locator ~selector ->
-  let query = Net.Uri.Query.to_string [ ("ref", selector) ] in
-  let url = "https://api." ^ registry_name ^ "/v1/packages/" ^ locator ^ "/publish?" ^ query in
-  match Net.Uri.of_string url with
-  | Ok uri -> Ok uri
-  | Error _ -> Error ("failed to build publish url '" ^ url ^ "'")
 
 let publish_artifact_url = fun ~registry_name ->
   let url = "https://api." ^ registry_name ^ "/v1/publish" in
@@ -687,7 +663,5 @@ let publish_artifact = fun registry ~api_token ~artifact ->
   | Error _ as err -> err
   | Ok uri -> publish_response registry uri ~api_token ~artifact
 
-let publish_from_locator = fun registry ~locator ~selector ~api_token ~artifact ->
-  match publish_from_locator_url ~registry_name:(name registry) ~locator ~selector with
-  | Error _ as err -> err
-  | Ok uri -> publish_response registry uri ~api_token ~artifact
+let publish_from_locator = fun registry ~locator:_ ~selector:_ ~api_token ~artifact ->
+  publish_artifact registry ~api_token ~artifact

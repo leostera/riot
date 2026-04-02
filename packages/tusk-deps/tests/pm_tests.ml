@@ -357,7 +357,7 @@ public = true
               in
               if
                 String.equal request.method_ "POST"
-                && String.equal request.url "https://api.pkgs.ml/v1/packages/github.com/example/demo/publish?ref=main"
+                && String.equal request.url "https://api.pkgs.ml/v1/publish"
                 && has_header "authorization" "Bearer root-secret"
                 && has_header "content-type" "application/gzip"
                 && String.equal published.package_name "demo"

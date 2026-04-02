@@ -386,17 +386,12 @@ let publish_prepared = fun ~registry ~api_token (prepared: prepared_publish) ->
     error = IO.error_message err
   })
   | Ok artifact -> (
-      match Pkgs_ml.Registry.publish_from_locator
-        registry
-        ~locator:prepared.locator
-        ~selector:prepared.selector
-        ~api_token
-        ~artifact with
+      match Pkgs_ml.Registry.publish_artifact registry ~api_token ~artifact with
       | Ok published -> Ok published
       | Error error -> Error (RegistryPublishFailed { locator = prepared.locator; error })
     )
 
-let publish_from_locator = fun ~registry ~target_dir_root ~(package:Tusk_model.Package.t) ~locator ~selector ~api_token ->
+let publish_from_locator = fun ~registry ~target_dir_root ~(package:Tusk_model.Package.t) ~locator ~selector:_ ~api_token ->
   match validate_publish_metadata ~package with
   | Error _ as err -> err
   | Ok version -> (
@@ -415,12 +410,7 @@ let publish_from_locator = fun ~registry ~target_dir_root ~(package:Tusk_model.P
                     error = IO.error_message err
                   })
                   | Ok artifact -> (
-                      match Pkgs_ml.Registry.publish_from_locator
-                        registry
-                        ~locator
-                        ~selector
-                        ~api_token
-                        ~artifact with
+                      match Pkgs_ml.Registry.publish_artifact registry ~api_token ~artifact with
                       | Ok published -> Ok published
                       | Error error -> Error (RegistryPublishFailed { locator; error })
                     )
