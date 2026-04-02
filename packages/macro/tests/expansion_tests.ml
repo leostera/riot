@@ -82,6 +82,15 @@ let assert_error_contains_with_explicit_providers = fun ~source ~expected_substr
       else
         Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
 
+let assert_error_contains_with_providers = fun ~providers ~source ~expected_substring ->
+  match expand_source ~providers ~filename:sample_file source with
+  | Ok _ -> Error "expected expansion to fail"
+  | Error err ->
+      if String.contains err.message expected_substring then
+        Ok ()
+      else
+        Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
+
 let assert_validator_error = fun ~source ~expected_substring ->
   match Validator.validate_source ~filename:sample_file source with
   | Ok () -> Error "expected validation to fail"
@@ -101,6 +110,11 @@ let assert_expansion_reparses = fun ~source ->
       else
         Error ("expected reparsed expansion to be clean, got: "
         ^ Syn.Diagnostic.main_message (List.hd reparsed.diagnostics))
+
+let provider = fun ~module_path ->
+  Provider.v
+    ~module_path
+    [ Provider.fn "format" Format.expand ]
 
 let tests = [
   Test.case
@@ -144,6 +158,17 @@ let tests = [
       assert_error_contains_with_explicit_providers
         ~source:"let msg = format! \"hello {}\" name\n"
         ~expected_substring:"must be qualified");
+  Test.case
+    "explicit provider contexts reject duplicate qualified module paths"
+    (fun _ctx ->
+      assert_error_contains_with_providers
+        ~providers:
+          [
+            provider ~module_path:[ "Macro" ];
+            provider ~module_path:[ "Macro" ];
+          ]
+        ~source:"let msg = Macro.format! \"hello {}\" name\n"
+        ~expected_substring:"ambiguous qualified macro invocation");
   Test.case "files without macro syntax are left unchanged"
     (fun _ctx ->
       match expand_source ~filename:sample_file "let msg = format ! name\n" with

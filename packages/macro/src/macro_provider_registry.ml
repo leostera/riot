@@ -36,17 +36,24 @@ let resolve = fun ?providers invocation ->
               ("ambiguous bare macro invocation: " ^ qualified_name ^ "!"))
           )
       else
-        let provider =
-          List.find_opt (fun provider -> Macro_provider.module_path provider = module_path) providers
+        let matching_providers =
+          List.filter
+            (fun provider -> Macro_provider.module_path provider = module_path)
+            providers
         in
-        match provider with
-        | None -> Error (Macro_error.make
-          ~span:invocation.span
-          ("unsupported macro invocation: " ^ qualified_name ^ "!"))
-        | Some provider -> (
+        match matching_providers with
+        | [] ->
+            Error (Macro_error.make
+              ~span:invocation.span
+              ("unsupported macro invocation: " ^ qualified_name ^ "!"))
+        | [ provider ] -> (
             match Macro_provider.find_macro provider macro_name with
             | Some macro_ -> Ok macro_
             | None -> Error (Macro_error.make
               ~span:invocation.span
               ("unsupported macro invocation: " ^ qualified_name ^ "!"))
           )
+        | _ ->
+            Error (Macro_error.make
+              ~span:invocation.span
+              ("ambiguous qualified macro invocation: " ^ qualified_name ^ "!"))
