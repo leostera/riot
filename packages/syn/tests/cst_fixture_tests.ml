@@ -431,6 +431,17 @@ let approved_fixtures = [
   "0924_type_constraint_simple.ml";
   "0925_type_constraint_multiple.ml";
   "0929_type_gadt_simple.ml";
+  "0979_expr_coerce_simple.ml";
+  "0980_expr_coerce_with_from.ml";
+  "0981_expr_coerce_expr.ml";
+  "0982_expr_coerce_complex.ml";
+  "0983_expr_assign_ref.ml";
+  "0984_expr_assign_field.ml";
+  "0985_expr_assign_array.ml";
+  "0986_expr_assign_string.ml";
+  "0987_expr_assign_ref_expr.ml";
+  "0988_expr_assign_nested_field.ml";
+  "0989_expr_assign_array_expr.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
