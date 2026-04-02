@@ -21,6 +21,7 @@ type plan = {
   provider_hash: string;
   generated_dir: Path.t;
   workspace_root: Path.t;
+  stamp_path: Path.t;
   workspace_toml_path: Path.t;
   toolchain_toml_path: Path.t;
   build_dir_root: Path.t;
@@ -138,14 +139,6 @@ let provider_fingerprint = fun (provider: Riot_model.Macro_provider.t) ->
       support_hashes;
     ]
 
-let providers_hash = fun providers ->
-  providers
-  |> List.sort Riot_model.Macro_provider.compare
-  |> List.map provider_fingerprint
-  |> String.concat "\n"
-  |> Crypto.hash_string
-  |> Crypto.Digest.hex
-
 let validate_providers = Macro_provider_contract.validate_all
 
 let generated_provider = fun provider ->
@@ -206,6 +199,14 @@ let resolve_dependency_path = fun ~package_path path ->
     Path.normalize path
   else
     Path.normalize Path.(package_path / path)
+
+let is_generated_artifact_entry = fun entry_name ->
+  match entry_name with
+  | ".git"
+  | ".riot"
+  | "_build"
+  | "target" -> true
+  | _ -> false
 
 let dependency_entries_for_workspace = fun workspace_root providers ->
   let consumer_packages = scan_workspace_packages workspace_root in
@@ -311,10 +312,92 @@ let dependency_entries_for_workspace = fun workspace_root providers ->
   in
   expand [] [] (core_dependencies @ provider_dependency_entries)
 
-let plan = fun ~workspace_root ~target_dir_root providers ->
-  let hash = providers_hash providers in
+let rec tree_hash_entry = fun path ->
+  let name = Path.basename path in
+  if is_generated_artifact_entry name then
+    None
+  else
+    match Fs.is_dir path with
+    | Ok true -> (
+        match Fs.read_dir path with
+        | Error _ -> Some ("dir:" ^ name ^ ":missing")
+        | Ok iter ->
+            let children =
+              Std.Iter.MutIterator.to_list iter
+              |> List.filter_map
+                (fun entry ->
+                  tree_hash_entry Path.(path / entry))
+              |> List.sort String.compare
+            in
+            Some ("dir:" ^ name ^ "[" ^ String.concat "," children ^ "]")
+      )
+    | _ ->
+        Some ("file:" ^ name ^ ":" ^ file_content_hash path)
+
+let dependency_fingerprint = fun (dep: dependency) ->
+  let source_tag =
+    match dep.source with
+    | Consumer_workspace -> "consumer"
+    | Tool_workspace -> "tool"
+    | External_path -> "external"
+  in
+  let tree_hash =
+    match tree_hash_entry dep.path with
+    | Some tree_hash -> tree_hash
+    | None -> "skipped"
+  in
+  String.concat ":" [ dep.name; source_tag; Path.to_string dep.path; tree_hash ]
+
+let local_toolchain_source = fun workspace_root ->
+  let direct_config = Path.(workspace_root / Path.v "ocaml-toolchain.toml") in
+  let local_compiler = Path.(workspace_root / Path.v "vendor" / Path.v "ocaml" / Path.v "compiler") in
+  match Fs.exists direct_config with
+  | Ok true -> Some (`Copy direct_config)
+  | _ -> (
+      match Fs.is_dir local_compiler with
+      | Ok true -> Some (`Generate local_compiler)
+      | _ -> None
+    )
+
+let toolchain_input_fingerprint = fun workspace_root ->
+  match local_toolchain_source workspace_root with
+  | Some (`Copy source_path) ->
+      "copy:" ^ Path.to_string source_path ^ ":" ^ file_content_hash source_path
+  | Some (`Generate compiler_path) ->
+      "generate:" ^ Path.to_string compiler_path
+  | None -> "none"
+
+let providers_hash = fun ~workspace_root providers ->
   let generated_providers = List.map generated_provider providers in
   let dependencies = dependency_entries_for_workspace workspace_root generated_providers in
+  let provider_fingerprints =
+    providers
+    |> List.sort Riot_model.Macro_provider.compare
+    |> List.map provider_fingerprint
+  in
+  let dependency_fingerprints =
+    dependencies
+    |> List.sort
+      (fun left right ->
+        match String.compare left.name right.name with
+        | 0 -> String.compare (Path.to_string left.path) (Path.to_string right.path)
+        | cmp -> cmp)
+    |> List.map dependency_fingerprint
+  in
+  String.concat
+    "\n"
+    (
+      [ "toolchain:" ^ toolchain_input_fingerprint workspace_root ]
+      @ provider_fingerprints
+      @ dependency_fingerprints
+    )
+  |> Crypto.hash_string
+  |> Crypto.Digest.hex
+
+let plan = fun ~workspace_root ~target_dir_root providers ->
+  let generated_providers = List.map generated_provider providers in
+  let dependencies = dependency_entries_for_workspace workspace_root generated_providers in
+  let hash = providers_hash ~workspace_root providers in
   let generated_dir = Path.(target_dir_root / Path.v "macro" / Path.v "macro-runner" / Path.v hash) in
   let workspace_root = Path.(generated_dir / Path.v "workspace") in
   let build_dir_root = Path.(generated_dir / Path.v "build") in
@@ -326,6 +409,8 @@ let plan = fun ~workspace_root ~target_dir_root providers ->
     provider_hash = hash;
     generated_dir;
     workspace_root;
+    stamp_path =
+      Path.(generated_dir / Path.v "inputs.sha256");
     workspace_toml_path =
       Path.(workspace_root / Path.v "riot.toml");
     toolchain_toml_path =
@@ -444,17 +529,6 @@ let main_source = String.concat
   "\n"
   [ "open Std"; ""; "let () ="; "  Actors.run ~main:Macro_runner.main ~args:Env.args ()"; ""; ]
 
-let local_toolchain_source = fun workspace_root ->
-  let direct_config = Path.(workspace_root / Path.v "ocaml-toolchain.toml") in
-  let local_compiler = Path.(workspace_root / Path.v "vendor" / Path.v "ocaml" / Path.v "compiler") in
-  match Fs.exists direct_config with
-  | Ok true -> Some (`Copy direct_config)
-  | _ -> (
-      match Fs.is_dir local_compiler with
-      | Ok true -> Some (`Generate local_compiler)
-      | _ -> None
-    )
-
 let toolchain_toml_source = fun compiler_path ->
   String.concat
     "\n"
@@ -485,12 +559,15 @@ let rec copy_directory = fun ~src ~dst ->
   | Ok iter ->
       Std.Iter.MutIterator.to_list iter |> List.iter
         (fun entry ->
-          let src_path = Path.(src / entry) in
-          let dst_path = Path.(dst / entry) in
-          match Fs.is_dir src_path with
-          | Ok true -> copy_directory ~src:src_path ~dst:dst_path
-          | _ -> Fs.copy ~src:src_path ~dst:dst_path
-          |> Result.expect ~msg:(("failed to copy macro dependency file " ^ Path.to_string src_path)))
+          if is_generated_artifact_entry entry then
+            ()
+          else
+            let src_path = Path.(src / entry) in
+            let dst_path = Path.(dst / entry) in
+            match Fs.is_dir src_path with
+            | Ok true -> copy_directory ~src:src_path ~dst:dst_path
+            | _ -> Fs.copy ~src:src_path ~dst:dst_path
+            |> Result.expect ~msg:(("failed to copy macro dependency file " ^ Path.to_string src_path)))
 
 let materialize_dependency_packages = fun plan ->
   List.iter
@@ -511,35 +588,61 @@ let materialize_toolchain = fun workspace_root plan ->
 
 let binary_path = fun plan -> plan.binary_path
 
+let write_stamp = fun plan ->
+  write_file plan.stamp_path plan.provider_hash
+
+let stamp_matches = fun plan ->
+  match Fs.read plan.stamp_path with
+  | Ok stamp -> String.equal (String.trim stamp) plan.provider_hash
+  | Error _ -> false
+
+let has_materialized_workspace = fun plan ->
+  stamp_matches plan
+  && Result.unwrap_or ~default:false (Fs.exists plan.workspace_toml_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.package_toml_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.library_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.main_path)
+
 let materialize = fun ~workspace_root ~target_dir_root providers ->
   let plan = plan ~workspace_root ~target_dir_root providers in
-  trace ("materializing generated runner at " ^ Path.to_string plan.generated_dir);
-  remove_dir_if_exists plan.workspace_root;
-  ensure_directories plan;
-  materialize_dependency_packages plan;
-  write_file plan.workspace_toml_path (workspace_toml_source plan);
-  materialize_toolchain workspace_root plan;
-  write_file plan.package_toml_path (package_toml_source plan);
-  write_file plan.library_path (library_source plan);
-  write_file plan.main_path main_source;
+  if has_materialized_workspace plan then
+    trace ("reusing generated runner workspace " ^ Path.to_string plan.generated_dir)
+  else
+    (
+      trace ("materializing generated runner at " ^ Path.to_string plan.generated_dir);
+      remove_dir_if_exists plan.generated_dir;
+      ensure_directories plan;
+      materialize_dependency_packages plan;
+      write_file plan.workspace_toml_path (workspace_toml_source plan);
+      materialize_toolchain workspace_root plan;
+      write_file plan.package_toml_path (package_toml_source plan);
+      write_file plan.library_path (library_source plan);
+      write_file plan.main_path main_source;
+      write_stamp plan
+    );
   plan
 
 let ensure_built = fun plan ->
-  trace ("building generated runner package " ^ plan.package_name);
-  let shell_command = "cd "
-  ^ shell_quote (Path.to_string plan.workspace_root)
-  ^ " && riot build "
-  ^ shell_quote plan.package_name in
-  let command = Command.make "/bin/sh" ~args:[ "-lc"; shell_command ] in
-  trace ("generated runner build command: " ^ shell_command);
-  match Command.status command with
-  | Ok status when Int.equal status 0 ->
-      trace ("generated runner build finished: " ^ Path.to_string plan.binary_path);
+  match Fs.exists plan.binary_path with
+  | Ok true when stamp_matches plan ->
+      trace ("reusing generated runner binary " ^ Path.to_string plan.binary_path);
       Ok ()
-  | Ok status ->
-      Error ("failed to build macro runner: exited with status " ^ Int.to_string status)
-  | Error (Command.SystemError error) ->
-      Error ("failed to build macro runner: " ^ error)
+  | _ ->
+      trace ("building generated runner package " ^ plan.package_name);
+      let shell_command = "cd "
+      ^ shell_quote (Path.to_string plan.workspace_root)
+      ^ " && riot build "
+      ^ shell_quote plan.package_name in
+      let command = Command.make "/bin/sh" ~args:[ "-lc"; shell_command ] in
+      trace ("generated runner build command: " ^ shell_command);
+      match Command.status command with
+      | Ok status when Int.equal status 0 ->
+          trace ("generated runner build finished: " ^ Path.to_string plan.binary_path);
+          Ok ()
+      | Ok status ->
+          Error ("failed to build macro runner: exited with status " ^ Int.to_string status)
+      | Error (Command.SystemError error) ->
+          Error ("failed to build macro runner: " ^ error)
 
 let run_file = fun ~workspace_root ~target_dir_root providers ~input_path ~output_path ->
   trace

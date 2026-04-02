@@ -85,7 +85,7 @@ module Stage = struct
                     workspace_root;
                     target_dir_root;
                     providers;
-                    provider_hash = Macro.Runner.providers_hash providers;
+                    provider_hash = Macro.Runner.providers_hash ~workspace_root providers;
                   }
                 )
           )

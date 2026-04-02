@@ -86,7 +86,7 @@ end
 
 module Runner: sig
   type plan
-  val providers_hash: Riot_model.Macro_provider.t list -> string
+  val providers_hash: workspace_root:Path.t -> Riot_model.Macro_provider.t list -> string
 
   val validate_providers: Riot_model.Macro_provider.t list -> (unit, Error.t) result
 
