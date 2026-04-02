@@ -1,1 +1,1 @@
-let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer "hello "; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)
+let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer "hello "; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)

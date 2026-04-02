@@ -124,22 +124,22 @@ let provider_with_macros = fun ~module_path macro_names ->
 let tests = [
   Test.case
     "Macro.format! lowers a bare {} placeholder to a buffer builder"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "Macro.format! expansion snapshots the rewritten builder form"
     (fun ctx -> assert_expansion_snapshot ~ctx ~source:"let msg = Macro.format! \"hello {}\" name\n");
   Test.case
     "format! lowers named captures without consuming explicit arguments"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {name}\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 14 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {name}\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 14 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "format! preserves escaped braces in literal segments"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"{{}} 100%\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 11 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"{} 100%\"; Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"{{}} 100%\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 11 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"{} 100%\"; Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "format! expands recursively when another macro invocation appears in an argument"
     (fun _ctx ->
       assert_expansion
         ~source:"let msg = Macro.format! \"{}!\" (Macro.format! \"hello {}\" name)\n"
-        ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 5 in Stdlib.Buffer.add_string __riot_macro_format_buffer ((let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)); Stdlib.Buffer.add_string __riot_macro_format_buffer \"!\"; Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+        ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 5 in Std.IO.Buffer.add_string __riot_macro_format_buffer ((let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)); Std.IO.Buffer.add_string __riot_macro_format_buffer \"!\"; Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "successful expansions stay parse-clean after rewriting"
     (fun _ctx -> assert_expansion_reparses ~source:"let msg = Macro.format! \"hello {}\" (if ready then name else fallback)\n");
@@ -153,10 +153,10 @@ let tests = [
       assert_error_contains ~source:"let msg = Macro.format! \"{:?}\" name\n" ~expected_substring:"{} and {name} placeholders");
   Test.case
     "format! still accepts a parenthesized body while parsing the new macro form"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format!(\"hello {}\", name)\n" ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format!(\"hello {}\", name)\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "bare format! still expands when the provider name is unambiguous"
-    (fun _ctx -> assert_expansion ~source:"let msg = format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion ~source:"let msg = format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "explicit provider contexts require qualified macro paths"
     (fun _ctx ->

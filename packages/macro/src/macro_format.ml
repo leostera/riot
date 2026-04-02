@@ -11,7 +11,7 @@ let buffer_name = fun stream ->
   | None -> "__riot_macro_format_buffer"
 
 let render_builder_program = fun ~buffer_name ~capacity format_items values ->
-  let append statement_source statements_rev = ("Stdlib.Buffer.add_string " ^ buffer_name ^ " " ^ statement_source)
+  let append statement_source statements_rev = ("Std.IO.Buffer.add_string " ^ buffer_name ^ " " ^ statement_source)
   :: statements_rev in
   let rec collect statements_rev remaining_values = function
     | [] ->
@@ -33,10 +33,10 @@ let render_builder_program = fun ~buffer_name ~capacity format_items values ->
   | Error message -> Error message
   | Ok statements -> Ok ("(let "
   ^ buffer_name
-  ^ " = Stdlib.Buffer.create "
+  ^ " = Std.IO.Buffer.create "
   ^ string_of_int capacity
   ^ " in "
-  ^ String.concat "; " (statements @ [ "Stdlib.Buffer.contents " ^ buffer_name ])
+  ^ String.concat "; " (statements @ [ "Std.IO.Buffer.contents " ^ buffer_name ])
   ^ ")")
 
 let render_format_program = fun body literal_text format_items rendered_args ->

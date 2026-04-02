@@ -19,6 +19,7 @@
 13. Macro-runner cache keys must include the effective toolchain input and copied dependency closure, not just provider source files, so reused runners stay valid when helper packages change.
 14. Qualified macro module paths must resolve to exactly one provider. If multiple providers export the same module path, fail explicitly instead of picking one implicitly.
 15. Provider-resolution diagnostics should stay deterministic and actionable. When lookup fails, prefer listing reachable provider paths or exported qualified macro names instead of emitting a context-free "unsupported" error.
+16. Expanded source should target Riot's `Std` surface, not `Stdlib`, `Unix`, or `Sys`, unless a macro is explicitly modeling one of those low-level boundaries.
 
 ## Validate
 
