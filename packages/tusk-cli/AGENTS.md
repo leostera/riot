@@ -20,6 +20,7 @@
 14. `fix_cmd.ml` should parse `matches`, build a `Tusk_fix.fix_request`, call `Tusk_fix.fix`, and render the returned output/events. Do not delegate raw `matches` into `Tusk_fix.Cli.run`.
 15. `publish.ml` should parse `matches`, build a `Tusk_publish.publish_request`, call `Tusk_publish.publish`, and render publish events. Keep the combined publish command surface in `tusk-publish`, not in `tusk-deps`.
 16. `login` and `logout` should stay thin auth-config commands. They manage `~/.tusk/config.toml` through `Tusk_model.User_config`; do not turn them into registry-discovery or profile-management commands while the main registry stays hardcoded.
+17. `tusk snapshots` owns repository-level snapshot review commands. Keep it focused on discovering pending `.expected.new` files, showing review diffs, and promoting or rejecting candidates; do not fold snapshot approval into `tusk test`.
 
 ## Validate
 
