@@ -226,6 +226,9 @@ let test_build_expands_format_macro_in_binary_end_to_end = fun _ctx ->
             target_dir_root =
               Path.(tmpdir / Path.v "target");
             packages = [ package ];
+            dependencies = [];
+            dev_dependencies = [];
+            build_dependencies = [];
             profile_overrides = [];
           }
         in
