@@ -31,8 +31,12 @@ type binary = {
   name: string;
   path: Path.t;
 }
+type library_kind =
+  Runtime
+  | Macro
 type library = {
   path: Path.t;
+  kind: library_kind;
 }
 type sources = {
   src: Path.t list;
@@ -108,6 +112,10 @@ val validate_name: string -> (string, string) result
 val is_builtin_dependency_name: string -> bool
 
 val is_builtin_dependency: dependency -> bool
+
+val is_macro_package: t -> bool
+
+val macro_provider: t -> Macro_provider.t option
 
 val from_toml:
   Std.Data.Toml.value ->

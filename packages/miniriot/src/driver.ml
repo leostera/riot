@@ -72,6 +72,7 @@ let () =
   build_package ~build_results "lsp" "packages/lsp";
   build_package ~build_results "pkgs-ml" "packages/pkgs-ml";
   build_package ~build_results "syn" "packages/syn";
+  build_package ~build_results "macro" "packages/macro";
   build_package ~build_results "fixme" "packages/fixme";
   build_package ~build_results "krasny" "packages/krasny";
   build_package ~build_results "riot-model" "packages/riot-model";

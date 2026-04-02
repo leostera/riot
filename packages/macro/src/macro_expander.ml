@@ -15,18 +15,16 @@ let has_invocations = fun invocations ->
   | _ :: _ -> true
   | [] -> false
 
-let replacement_of_invocation = fun ~env invocation ->
-  match invocation.Macro_parser.name with
-  | "format" -> (
-      match Macro_format.expand ~env invocation with
-      | Ok source -> Ok { span = invocation.span; source }
-      | Error err -> Error err
-    )
-  | name ->
-      Error
-        (Macro_error.make
-           ~span:invocation.span
-           ("unsupported macro invocation: " ^ name ^ "!"))
+let builtin_providers = Macro_provider_registry.builtin_providers
+
+let replacement_of_invocation = fun ?providers invocation ->
+  match Macro_provider_registry.resolve ?providers invocation with
+  | Error err -> Error err
+  | Ok macro_ ->
+      let result = macro_.expand invocation.body in
+      match result.diagnostics with
+      | diagnostic :: _ -> Error diagnostic
+      | [] -> Ok { span = invocation.span; source = Macro_token_stream.source result.output }
 
 let apply_replacements = fun source replacements ->
   let sorted = List.sort
@@ -47,8 +45,9 @@ let apply_replacements = fun source replacements ->
     source
     sorted
 
-let expand_once = fun ~filename source ->
-  let env = Macro_environment.create ~filename source in
+let expand_environment = fun ?providers env ->
+  let source = Macro_environment.source env in
+  let filename = Macro_environment.filename env in
   match Macro_parser.collect_invocations env with
   | Error err -> Error err
   | Ok invocations ->
@@ -61,7 +60,7 @@ let expand_once = fun ~filename source ->
         let rec build_replacements acc = function
           | [] -> Ok (List.rev acc)
           | invocation :: rest -> (
-              match replacement_of_invocation ~env invocation with
+              match replacement_of_invocation ?providers invocation with
               | Ok replacement -> build_replacements (replacement :: acc) rest
               | Error err -> Error err
             )
@@ -78,13 +77,17 @@ let expand_once = fun ~filename source ->
               )
         )
 
-let expand_source = fun ~filename source ->
+let expand_once = fun ?providers ~filename source ->
+  let env = Macro_environment.create ~filename source in
+  expand_environment ?providers env
+
+let expand_source = fun ?providers ~filename source ->
   let rec loop current_source changed_any remaining_passes =
     if remaining_passes = 0 then
       Error
         (Macro_error.make "macro expansion reached the recursive expansion limit")
     else
-      match expand_once ~filename current_source with
+      match expand_once ?providers ~filename current_source with
       | Error err -> Error err
       | Ok { source = next_source; changed = changed_this_pass } ->
           if changed_this_pass then

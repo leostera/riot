@@ -64,46 +64,54 @@ let rewrite_rust_format_string = fun literal_text ~span ->
     in
     loop 1 0
 
-let expand = fun ~env invocation ->
-  match Macro_parser.body_arguments invocation with
-  | [] ->
-      Error
+let expand = fun body ->
+  match Macro_parse.expr_arguments body with
+  | Error err -> Macro_result.error err
+  | Ok [] ->
+      Macro_result.error
         (Macro_error.make
-           ~span:invocation.span
+           ?span:(Macro_token_stream.span body)
            "format! requires a format string argument")
-  | format_arg :: value_args ->
-      let format_arg = Macro_parser.unwrap_grouping format_arg in
+  | Ok (format_arg :: value_args) ->
+      let format_arg = Macro_parse.unwrap_grouping format_arg in
       if Syn.Ceibo.Red.SyntaxNode.kind format_arg != Syn.SyntaxKind.STRING_LITERAL then
-        Error
+        Macro_result.error
           (Macro_error.make
-             ?span:(Macro_environment.span_of_node format_arg)
+             ?span:(Macro_token_stream.span_of_node format_arg)
              "format! currently requires a string literal as its first argument")
       else
-        let literal_text = Macro_environment.source_of_node env format_arg in
-        match Macro_environment.span_of_node format_arg with
+        let literal_text = Macro_token_stream.source_of_node body format_arg in
+        match Macro_token_stream.span_of_node format_arg with
         | None ->
-            Error
+            Macro_result.error
               (Macro_error.make
-                 ~span:invocation.span
+                 ?span:(Macro_token_stream.span body)
                  "format! could not recover the format string span")
         | Some span -> (
             match rewrite_rust_format_string literal_text ~span with
-            | Error err -> Error err
+            | Error err -> Macro_result.error err
             | Ok (printf_format, placeholder_count) ->
                 if placeholder_count != List.length value_args then
-                  Error
+                  Macro_result.error
                     (Macro_error.make
-                       ~span:invocation.span
+                       ?span:(Macro_token_stream.span body)
                        "format! placeholder count does not match the number of supplied arguments")
                 else
                   let rendered_args = List.map
                     (fun arg ->
-                      let arg = Macro_parser.unwrap_grouping arg in
-                      "(" ^ Macro_environment.source_of_node env arg ^ ")")
+                      let arg = Macro_parse.unwrap_grouping arg in
+                      "(" ^ Macro_token_stream.source_of_node body arg ^ ")")
                     value_args in
-                  Ok
+                  Macro_result.ok_source
                     ("("
                      ^ String.concat " "
                        (("Stdlib.Printf.sprintf " ^ printf_format) :: rendered_args)
                      ^ ")")
           )
+
+let provider = fun () ->
+  Macro_provider.v
+    ~module_path:[ "Macro" ]
+    [
+      Macro_provider.fn "format" expand;
+    ]

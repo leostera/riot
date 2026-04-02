@@ -14,6 +14,8 @@ module Fmt_config = Fmt_config
 
 module Lockfile = Lockfile
 
+module Macro_provider = Macro_provider
+
 module Module_name = Module_name
 
 module Module = Module

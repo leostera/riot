@@ -353,6 +353,9 @@ let find_command: t -> string -> Package_command.t option = fun workspace name -
 let discover_fix_providers: t -> Fix_provider.t list = fun workspace ->
   List.concat_map (fun (pkg: Package.t) -> pkg.fix_providers) workspace.packages
 
+let discover_macro_providers : t -> Macro_provider.t list = fun workspace ->
+  List.filter_map Package.macro_provider workspace.packages
+
 module Tests = struct
   let test_parse_workspace_toml (): (unit, string) result = Ok () [@test]
 
@@ -450,6 +453,44 @@ rules = ["no-stdlib"]
     | _ -> Error "expected one fix provider" [@test]
 
   let test_parse_workspace_dependency_classes (): (unit, string) result =
+  let test_discover_macro_providers () : (unit, string) result =
+    let package_toml =
+      Std.Data.Toml.parse
+        {|
+[package]
+name = "sqlx-macro"
+version = "0.1.0"
+
+[lib]
+kind = "macro"
+path = "src/sqlx_macro.ml"
+|}
+      |> Result.expect ~msg:"expected package toml to parse"
+    in
+    let package = Package.from_toml
+      package_toml
+      ~workspace_deps:[]
+      ~workspace_dev_deps:[]
+      ~workspace_build_deps:[]
+      ~path:(Path.v "/tmp/example/packages/sqlx-macro")
+      ~relative_path:(Path.v "packages/sqlx-macro")
+    |> Result.expect ~msg:"expected package manifest" in
+    let workspace = make ~root:(Path.v "/tmp/example") ~packages:[ package ] () in
+    match discover_macro_providers workspace with
+    | [ provider ] ->
+        if
+          String.equal provider.package_name "sqlx-macro"
+          && String.equal provider.module_name "Sqlx_macro"
+          && String.equal
+            (Path.to_string provider.source_path)
+            "/tmp/example/packages/sqlx-macro/src/sqlx_macro.ml"
+        then
+          Ok ()
+        else
+          Error "expected macro provider metadata to round-trip"
+    | _ -> Error "expected one macro provider" [@test]
+
+  let test_parse_workspace_dependency_classes () : (unit, string) result =
     let toml =
       Std.Data.Toml.parse
         {|

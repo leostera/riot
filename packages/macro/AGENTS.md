@@ -12,6 +12,8 @@
 6. Document prototype limitations in tests and API names rather than pretending they are solved.
 7. Keep function-like macro bodies parser-backed in expression position as `name! expr`; only fall back to delimiter-specific handling when the parsed body itself carries those delimiters.
 8. Reparse expanded source before returning it; invalid rewritten OCaml is a macro error, not a later planner/compiler surprise.
+9. Keep the public provider contract token-stream based. Macros may parse OCaml via `syn`, but the core ABI is provider-driven expansion plus diagnostics, not hardcoded AST-only rewrites.
+10. Keep built-in macro providers as bootstrap compatibility only. Package-scoped provider discovery and resolution belong outside ad hoc name matching.
 
 ## Validate
 

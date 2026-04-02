@@ -42,43 +42,48 @@ let assert_expansion_reparses = fun ~source ->
           ^ Syn.Diagnostic.main_message (List.hd reparsed.diagnostics))
 
 let tests = [
-  Test.case "format! lowers a bare {} placeholder to Stdlib.Printf.sprintf"
-    (fun () ->
+  Test.case "Macro.format! lowers a bare {} placeholder to Stdlib.Printf.sprintf"
+    (fun _ctx ->
       assert_expansion
-        ~source:"let msg = format! \"hello {}\" name\n"
+        ~source:"let msg = Macro.format! \"hello {}\" name\n"
         ~expected:"let msg = (Stdlib.Printf.sprintf \"hello %s\" (name))\n");
   Test.case "format! preserves escaped braces while escaping percent signs for Stdlib.Printf"
-    (fun () ->
+    (fun _ctx ->
       assert_expansion
-        ~source:"let msg = format! \"{{}} 100%\"\n"
+        ~source:"let msg = Macro.format! \"{{}} 100%\"\n"
         ~expected:"let msg = (Stdlib.Printf.sprintf \"{} 100%%\")\n");
   Test.case "format! expands recursively when another macro invocation appears in an argument"
-    (fun () ->
+    (fun _ctx ->
       assert_expansion
-        ~source:"let msg = format! \"{}!\" (format! \"hello {}\" name)\n"
+        ~source:"let msg = Macro.format! \"{}!\" (Macro.format! \"hello {}\" name)\n"
         ~expected:
           "let msg = (Stdlib.Printf.sprintf \"%s!\" ((Stdlib.Printf.sprintf \"hello %s\" (name))))\n");
   Test.case "successful expansions stay parse-clean after rewriting"
-    (fun () ->
+    (fun _ctx ->
       assert_expansion_reparses
-        ~source:"let msg = format! \"hello {}\" (if ready then name else fallback)\n");
+        ~source:"let msg = Macro.format! \"hello {}\" (if ready then name else fallback)\n");
   Test.case "format! rejects non-literal format strings for the first prototype"
-    (fun () ->
+    (fun _ctx ->
       assert_error_contains
-        ~source:"let msg = format! template name\n"
+        ~source:"let msg = Macro.format! template name\n"
         ~expected_substring:"string literal");
   Test.case "format! rejects unsupported placeholder forms for the first prototype"
-    (fun () ->
+    (fun _ctx ->
       assert_error_contains
-        ~source:"let msg = format! \"{:?}\" name\n"
+        ~source:"let msg = Macro.format! \"{:?}\" name\n"
         ~expected_substring:"bare {} placeholders");
   Test.case "format! still accepts a parenthesized body while parsing the new macro form"
-    (fun () ->
+    (fun _ctx ->
       assert_expansion
-        ~source:"let msg = format!(\"hello {}\", name)\n"
+        ~source:"let msg = Macro.format!(\"hello {}\", name)\n"
+        ~expected:"let msg = (Stdlib.Printf.sprintf \"hello %s\" (name))\n");
+  Test.case "bare format! still expands when the provider name is unambiguous"
+    (fun _ctx ->
+      assert_expansion
+        ~source:"let msg = format! \"hello {}\" name\n"
         ~expected:"let msg = (Stdlib.Printf.sprintf \"hello %s\" (name))\n");
   Test.case "files without macro syntax are left unchanged"
-    (fun () ->
+    (fun _ctx ->
       match expand_source ~filename:sample_file "let msg = format ! name\n" with
       | Error err -> Error ("expected unchanged source, got error: " ^ error_message err)
       | Ok result ->
@@ -88,7 +93,7 @@ let tests = [
             ~actual:result.source;
           Ok ());
   Test.case "validator rejects invalid rewritten OCaml before compile"
-    (fun () ->
+    (fun _ctx ->
       assert_validator_error
         ~source:"let msg =\n"
         ~expected_substring:"macro expansion produced invalid OCaml");

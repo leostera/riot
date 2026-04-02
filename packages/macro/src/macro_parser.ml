@@ -3,39 +3,19 @@ open Std
 type node = (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node
 
 type invocation = {
-  name: string;
+  callee_path: string list;
   span: Syn.Ceibo.Span.t;
-  body: node;
+  body: Macro_token_stream.t;
 }
 
-let child_nodes = fun node ->
-  Syn.Ceibo.Red.SyntaxNode.children_list node |> List.filter_map
-    (function
-      | Syn.Ceibo.Red.Node child -> Some child
-      | _ -> None)
-
-let rec unwrap_grouping = fun node ->
-  if Syn.Ceibo.Red.SyntaxNode.kind node = Syn.SyntaxKind.PAREN_EXPR then
-    match child_nodes node with
-    | [ inner ] -> unwrap_grouping inner
-    | _ -> node
-  else
-    node
-
-let rec flatten_apply = fun acc node ->
-  if Syn.Ceibo.Red.SyntaxNode.kind node = Syn.SyntaxKind.APPLY_EXPR then
-    match child_nodes node with
-    | [ func; arg ] -> flatten_apply (arg :: acc) func
-    | _ -> node :: acc
-  else
-    node :: acc
-
-let body_arguments = fun invocation ->
-  let body = unwrap_grouping invocation.body in
-  match Syn.Ceibo.Red.SyntaxNode.kind body with
-  | Syn.SyntaxKind.APPLY_EXPR -> flatten_apply [] body
-  | Syn.SyntaxKind.TUPLE_EXPR -> child_nodes body
-  | _ -> [ body ]
+let callee_path_of_node = fun node ->
+  Syn.Ceibo.Red.SyntaxNode.tokens node |> List.filter_map
+    (fun syntax_token ->
+      let text = String.trim (Syn.Ceibo.Red.SyntaxToken.text syntax_token) in
+      if String.equal text "." || String.equal text "" then
+        None
+      else
+        Some text)
 
 let invocation_of_node = fun env node ->
   match Syn.Ceibo.Red.SyntaxNode.children_list node with
@@ -47,9 +27,9 @@ let invocation_of_node = fun env node ->
       (
         match Macro_environment.span_of_node node with
         | Some span -> Ok {
-          name = Macro_environment.source_of_node env callee;
+          callee_path = callee_path_of_node callee;
           span;
-          body;
+          body = Macro_token_stream.of_expr_node ~env body;
         }
         | None ->
             Error

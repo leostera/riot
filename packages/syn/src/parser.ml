@@ -209,11 +209,6 @@ let token_has_no_leading_trivia = fun (token: Token.t) ->
   | [] -> true
   | _ -> false
 
-let has_dot_ident_continuation = fun parser ->
-  peek_kind parser = Token.Dot && match (peek_n parser 1).Token.kind with
-  | Token.Ident _ -> true
-  | _ -> false
-
 let looks_like_record_field_after_offset = fun parser offset ->
   let rec loop index =
     match (peek_n parser index).Token.kind with
@@ -561,6 +556,56 @@ let tokens_to_green = fun parser tokens ->
       else
         Some (make_token parser token))
     tokens
+
+let has_dot_ident_continuation = fun parser ->
+  peek_kind parser = Token.Dot
+  &&
+  match (peek_n parser 1).Token.kind with
+  | Token.Ident _ -> true
+  | _ -> false
+
+let rec macro_callee_ends_with_bang_after = fun parser offset ->
+  match (peek_n parser offset).Token.kind with
+  | Token.Ident _ -> (
+      match (peek_n parser (offset + 1)).Token.kind with
+      | Token.Bang ->
+          token_has_no_leading_trivia (peek_n parser (offset + 1))
+      | Token.Dot -> (
+          match (peek_n parser (offset + 2)).Token.kind with
+          | Token.Ident _ -> macro_callee_ends_with_bang_after parser (offset + 2)
+          | _ -> false
+        )
+      | _ -> false
+    )
+  | _ -> false
+
+let looks_like_macro_callee = fun parser ->
+  macro_callee_ends_with_bang_after parser 0
+
+let parse_macro_callee = fun parser ->
+  let first_ident = consume parser in
+  let rec parse_tail acc saw_path =
+    let trivia_after_ident = consume_trivia parser in
+    let acc = acc @ tokens_to_green parser trivia_after_ident in
+    if has_dot_ident_continuation parser then
+      let dot = consume parser in
+      let trivia_after_dot = consume_trivia parser in
+      let ident = consume parser in
+      parse_tail
+        (acc
+        @ [ make_token parser dot ]
+        @ tokens_to_green parser trivia_after_dot
+        @ [ make_token parser ident ])
+        true
+    else
+      make_node
+        (if saw_path then
+           Syntax_kind.PATH_EXPR
+         else
+           Syntax_kind.IDENT_EXPR)
+        acc
+  in
+  parse_tail [ make_token parser first_ident ] false
 
 let make_error_node = fun parser ~diagnostic ~consumed_tokens ->
   report_diagnostic parser diagnostic;
@@ -4573,10 +4618,11 @@ and parse_primary_expr = fun parser ->
       let dot = consume parser in
       make_node Syntax_kind.UNREACHABLE_EXPR [ make_token parser dot ]
   | Token.Ident _ -> (
-      let ident = consume parser in
-      if peek_kind parser = Token.Bang && token_has_no_leading_trivia (peek parser) then
-        parse_macro_expr parser ident
+      if looks_like_macro_callee parser then
+        let callee = parse_macro_callee parser in
+        parse_macro_expr parser callee
       else
+        let ident = consume parser in
         make_node Syntax_kind.IDENT_EXPR [ make_token parser ident ]
     )
   | Token.Literal _ ->
@@ -4789,9 +4835,8 @@ and can_start_macro_body_expr = fun parser ->
   | Token.Unknown '\'' -> true
   | _ -> can_start_expr parser
 
-(** Parse a function-like macro invocation: ident! expr *)
-and parse_macro_expr = fun parser ident ->
-  let callee = make_node Syntax_kind.IDENT_EXPR [ make_token parser ident ] in
+(** Parse a function-like macro invocation: path! expr *)
+and parse_macro_expr = fun parser callee ->
   let bang = consume parser in
   let trivia_after_bang = consume_trivia parser in
   let body =

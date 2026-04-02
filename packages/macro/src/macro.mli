@@ -11,6 +11,21 @@ module Error: sig
   val message: t -> string
 end
 
+module Token_stream: sig
+  type t
+
+  val source: t -> string
+
+  val span: t -> Syn.Ceibo.Span.t option
+end
+
+module Result: sig
+  type t = {
+    output: Token_stream.t;
+    diagnostics: Error.t list;
+  }
+end
+
 module Environment: sig
   type t
 
@@ -37,22 +52,46 @@ end
 
 module Parser: sig
   type invocation = {
-    name: string;
+    callee_path: string list;
     span: Syn.Ceibo.Span.t;
-    body: (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node;
+    body: Token_stream.t;
   }
 
   val collect_invocations: Environment.t -> (invocation list, Error.t) result
+end
 
+module Parse: sig
   val unwrap_grouping:
     (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node ->
     (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node
 
-  val body_arguments: invocation -> (Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node list
+  val expr:
+    Token_stream.t ->
+    ((Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node, Error.t) result
+
+  val expr_arguments:
+    Token_stream.t ->
+    ((Syn.SyntaxKind.t, string) Syn.Ceibo.Red.syntax_node list, Error.t) result
+end
+
+module Provider: sig
+  type macro_fn = Token_stream.t -> Result.t
+
+  type exported_macro
+
+  type t
+
+  val fn: string -> macro_fn -> exported_macro
+
+  val v: module_path:string list -> exported_macro list -> t
+
+  val module_path: t -> string list
 end
 
 module Format: sig
-  val expand: env:Environment.t -> Parser.invocation -> (string, Error.t) result
+  val expand: Token_stream.t -> Result.t
+
+  val provider: unit -> Provider.t
 end
 
 module Validator: sig
@@ -65,7 +104,11 @@ module Expander: sig
     changed: bool;
   }
 
-  val expand_source: filename:Path.t -> string -> (expansion, Error.t) result
+  val builtin_providers: unit -> Provider.t list
+
+  val expand_environment: ?providers:Provider.t list -> Environment.t -> (expansion, Error.t) result
+
+  val expand_source: ?providers:Provider.t list -> filename:Path.t -> string -> (expansion, Error.t) result
 end
 
 type error = Error.t = {
@@ -80,4 +123,6 @@ type expansion = Expander.expansion = {
 
 val error_message: error -> string
 
-val expand_source: filename: Path.t -> string -> (expansion, error) result
+val builtin_providers: unit -> Provider.t list
+
+val expand_source: ?providers:Provider.t list -> filename:Path.t -> string -> (expansion, error) result
