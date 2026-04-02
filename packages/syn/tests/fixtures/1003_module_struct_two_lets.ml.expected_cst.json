@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 45
+        "end": 46
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "MODULE_DECL",
             "span": {
               "start": 0,
-              "end": 45
+              "end": 46
             }
           },
           "keyword_token": {
@@ -45,7 +45,7 @@
               "kind": "STRUCT_EXPR",
               "span": {
                 "start": 10,
-                "end": 45
+                "end": 46
               }
             },
             "item_syntax_nodes": [
@@ -60,7 +60,7 @@
                 "kind": "LET_BINDING",
                 "span": {
                   "start": 29,
-                  "end": 41
+                  "end": 42
                 }
               }
             ]

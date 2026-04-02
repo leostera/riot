@@ -442,6 +442,14 @@ let approved_fixtures = [
   "0987_expr_assign_ref_expr.ml";
   "0988_expr_assign_nested_field.ml";
   "0989_expr_assign_array_expr.ml";
+  "1001_module_struct_empty.ml";
+  "1003_module_struct_two_lets.ml";
+  "1010_module_struct_complex.ml";
+  "1011_module_sig_empty.ml";
+  "1012_module_sig_val.ml";
+  "1014_module_sig_type_val.ml";
+  "1016_module_sig_module.ml";
+  "1018_module_sig_multiple.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
