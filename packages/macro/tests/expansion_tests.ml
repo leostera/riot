@@ -116,6 +116,11 @@ let provider = fun ~module_path ->
     ~module_path
     [ Provider.fn "format" Format.expand ]
 
+let provider_with_macros = fun ~module_path macro_names ->
+  Provider.v
+    ~module_path
+    (List.map (fun macro_name -> Provider.fn macro_name Format.expand) macro_names)
+
 let tests = [
   Test.case
     "Macro.format! lowers a bare {} placeholder to a buffer builder"
@@ -159,6 +164,13 @@ let tests = [
         ~source:"let msg = format! \"hello {}\" name\n"
         ~expected_substring:"must be qualified");
   Test.case
+    "explicit provider contexts list reachable providers for unqualified macros"
+    (fun _ctx ->
+      assert_error_contains_with_providers
+        ~providers:[ provider ~module_path:[ "Macro" ] ]
+        ~source:"let msg = format! \"hello {}\" name\n"
+        ~expected_substring:"reachable providers: Macro");
+  Test.case
     "explicit provider contexts reject duplicate qualified module paths"
     (fun _ctx ->
       assert_error_contains_with_providers
@@ -169,6 +181,24 @@ let tests = [
           ]
         ~source:"let msg = Macro.format! \"hello {}\" name\n"
         ~expected_substring:"ambiguous qualified macro invocation");
+  Test.case
+    "qualified macro misses list the provider exports"
+    (fun _ctx ->
+      assert_error_contains_with_providers
+        ~providers:[ provider_with_macros ~module_path:[ "Macro" ] [ "debug"; "format" ] ]
+        ~source:"let msg = Macro.printf! \"hello {}\" name\n"
+        ~expected_substring:"provider Macro exports: Macro.debug!, Macro.format!");
+  Test.case
+    "unknown qualified providers list the reachable provider paths"
+    (fun _ctx ->
+      assert_error_contains_with_providers
+        ~providers:
+          [
+            provider ~module_path:[ "Macro" ];
+            provider ~module_path:[ "Sqlx_macro" ];
+          ]
+        ~source:"let msg = Missing.format! \"hello {}\" name\n"
+        ~expected_substring:"reachable providers: Macro, Sqlx_macro");
   Test.case "files without macro syntax are left unchanged"
     (fun _ctx ->
       match expand_source ~filename:sample_file "let msg = format ! name\n" with
