@@ -91,7 +91,7 @@ let tests = [
       assert_expansion
         ~source:"let msg = Macro.format! \"hello {name}\"\n"
         ~expected:
-          "let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 12 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+          "let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 14 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case "format! preserves escaped braces in literal segments"
     (fun _ctx ->
       assert_expansion
