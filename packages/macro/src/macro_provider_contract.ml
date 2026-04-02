@@ -37,14 +37,55 @@ let parse_provider_source = fun (provider: Riot_model.Macro_provider.t) source_p
         ^ "' provider source must parse cleanly: "
         ^ Syn.Diagnostic.main_message diagnostic))
 
-let provider_binding_exists = fun source_file ->
+let find_provider_binding = fun source_file ->
+  let rec loop = function
+    | [] -> None
+    | Syn.Cst.StructureItem.LetBinding binding :: rest ->
+        if String.equal (Syn.Cst.LetBinding.name binding) "provider" then
+          Some binding
+        else
+          loop rest
+    | _ :: rest -> loop rest
+  in
   Syn.Cst.SourceFile.structure_items source_file
   |> Option.unwrap_or ~default:[]
-  |> List.exists
-    (function
-      | Syn.Cst.StructureItem.LetBinding binding ->
-          String.equal (Syn.Cst.LetBinding.name binding) "provider"
-      | _ -> false)
+  |> loop
+
+let rec is_unit_pattern = function
+  | Syn.Cst.Pattern.Literal { literal=Syn.Cst.PatternLiteral.Unit _; _ } -> true
+  | Syn.Cst.Pattern.Parenthesized pattern -> is_unit_pattern pattern.inner
+  | _ -> false
+
+let is_unit_parameter = function
+  | Syn.Cst.Parameter.Positional parameter -> is_unit_pattern parameter.pattern
+  | _ -> false
+
+let has_single_unit_parameter = fun parameters ->
+  match parameters with
+  | [ parameter ] -> is_unit_parameter parameter
+  | _ -> false
+
+let rec unwrap_parenthesized_expression = function
+  | Syn.Cst.Expression.Parenthesized expr -> unwrap_parenthesized_expression expr.inner
+  | expr -> expr
+
+let binding_is_provider_thunk = fun binding ->
+  if has_single_unit_parameter (Syn.Cst.LetBinding.parameters binding) then
+    true
+  else
+    match unwrap_parenthesized_expression (Syn.Cst.LetBinding.value binding) with
+    | Syn.Cst.Expression.Fun expr -> has_single_unit_parameter expr.parameters
+    | _ -> false
+
+let validate_provider_binding_shape = fun (provider: Riot_model.Macro_provider.t) binding ->
+  if binding_is_provider_thunk binding then
+    Ok ()
+  else
+    Error (Macro_error.make
+      ("macro package '"
+      ^ provider.package_name
+      ^ "' must expose `let provider () = ...` in "
+      ^ display_source_path provider))
 
 let validate = fun (provider: Riot_model.Macro_provider.t) ->
   match read_provider_source provider with
@@ -76,14 +117,14 @@ let validate = fun (provider: Riot_model.Macro_provider.t) ->
                 ^ "' provider source could not be lifted to the typed syntax tree: "
                 ^ err.message))
           | Ok source_file ->
-              if provider_binding_exists source_file then
-                Ok ()
-              else
-                Error (Macro_error.make
-                  ("macro package '"
-                  ^ provider.package_name
-                  ^ "' must expose a top-level `let provider` entrypoint in "
-                  ^ display_source_path provider))
+              match find_provider_binding source_file with
+              | Some binding -> validate_provider_binding_shape provider binding
+              | None ->
+                  Error (Macro_error.make
+                    ("macro package '"
+                    ^ provider.package_name
+                    ^ "' must expose a top-level `let provider` entrypoint in "
+                    ^ display_source_path provider))
         ))
 
 let validate_all = fun providers ->

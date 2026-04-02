@@ -36,6 +36,19 @@ let assert_provider_valid = fun ~source ->
       | Ok () -> Ok ()
       | Error err -> Error ("expected provider contract validation to succeed: " ^ error_message err))
 
+let assert_provider_error_contains = fun ~source ~expected_substring ->
+  with_temp_provider_result
+    ~prefix:"macro_provider_invalid"
+    ~source
+    (fun provider ->
+      match Provider_contract.validate provider with
+      | Ok () -> Error "expected provider contract validation to fail"
+      | Error err ->
+          if String.contains err.message expected_substring then
+            Ok ()
+          else
+            Error ("expected provider error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'"))
+
 let snapshot_provider_error = fun ~ctx ~source ->
   with_temp_provider_result
     ~prefix:"macro_provider_invalid"
@@ -63,6 +76,18 @@ let tests = [
       snapshot_provider_error
         ~ctx
         ~source:"let provider () =\n");
+  Test.case
+    "provider contract rejects non-callable provider bindings"
+    (fun _ctx ->
+      assert_provider_error_contains
+        ~source:"let provider = Macro.Provider.v ~module_path:[ \"Macro\" ] []\n"
+        ~expected_substring:"let provider () = ...");
+  Test.case
+    "provider contract rejects provider functions without a unit parameter"
+    (fun _ctx ->
+      assert_provider_error_contains
+        ~source:"let provider value = Macro.Provider.v ~module_path:[ \"Macro\" ] []\n"
+        ~expected_substring:"let provider () = ...");
 ]
 
 let () =

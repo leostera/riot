@@ -15,7 +15,7 @@
 9. Keep the public provider contract token-stream based. Macros may parse OCaml via `syn`, but the core ABI is provider-driven expansion plus diagnostics, not hardcoded AST-only rewrites.
 10. Keep built-in macro providers as bootstrap compatibility only. Package-scoped provider discovery and resolution belong outside ad hoc name matching.
 11. Generated macro runners must build from a self-contained workspace closure. Do not assume external path dependencies or ambient `cwd` are enough for nested `riot build` invocations.
-12. Macro packages must expose an explicit top-level `let provider` entrypoint. Validate that contract before runner materialization so invalid providers fail in macro planning, not as nested-build surprises.
+12. Macro packages must expose an explicit top-level `let provider () = ...` entrypoint. Validate that contract before runner materialization so invalid providers fail in macro planning, not as nested-build surprises.
 13. Macro-runner cache keys must include the effective toolchain input and copied dependency closure, not just provider source files, so reused runners stay valid when helper packages change.
 
 ## Validate
