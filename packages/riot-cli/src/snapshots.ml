@@ -5,6 +5,28 @@ type pending_snapshot = {
   approved: Path.t;
   pending: Path.t;
 }
+type review_decision =
+[
+  `Approve
+  | `Reject
+  | `Ignore
+  | `Quit
+]
+type review_summary = {
+  approved_count: int;
+  rejected_count: int;
+  ignored_count: int;
+  quit: bool;
+}
+
+let empty_review_summary = {
+  approved_count = 0;
+  rejected_count = 0;
+  ignored_count = 0;
+  quit = false;
+}
+
+let ( let* ) = Result.and_then
 
 let command =
   let open ArgParser in
@@ -19,7 +41,7 @@ let command =
       |> about "Review and manage pending snapshot candidates"
       |> subcommands
         [
-          make_subcommand "review" "Show pending snapshot diffs";
+          make_subcommand "review" "Interactively review pending snapshot diffs";
           make_subcommand "approve" "Promote pending snapshots to approved files";
           make_subcommand "reject" "Delete pending snapshot candidates";
         ]
@@ -133,6 +155,19 @@ let reject_pending_snapshots = fun snapshots ->
   in
   loop snapshots
 
+let parse_review_decision = fun input ->
+  match input |> String.trim |> String.lowercase_ascii with
+  | "a"
+  | "approve" -> Some `Approve
+  | "r"
+  | "reject" -> Some `Reject
+  | ""
+  | "i"
+  | "ignore" -> Some `Ignore
+  | "q"
+  | "quit" -> Some `Quit
+  | _ -> None
+
 let print_blob = fun value ->
   print value;
   if not (String.ends_with ~suffix:"\n" value) then
@@ -206,6 +241,85 @@ let print_approved = fun ~workspace_root snapshot ->
 let print_rejected = fun ~workspace_root snapshot ->
   println ("Rejected " ^ display_path ~workspace_root snapshot.pending)
 
+let print_ignored = fun ~workspace_root snapshot ->
+  println ("Ignored " ^ display_path ~workspace_root snapshot.pending)
+
+let print_review_help = fun () ->
+  println "Actions: [a]pprove, [r]eject, [i]gnore, [q]uit"
+
+let print_review_prompt = fun () ->
+  eprint "Decision [a/r/i/q]: "
+
+let rec prompt_review_decision = fun tty ->
+  print_review_prompt ();
+  match Tty.read_line tty with
+  | Error err -> Error err
+  | Ok line -> (
+      match parse_review_decision line with
+      | Some decision -> Ok decision
+      | None ->
+          eprintln "Please enter a, r, i, or q.";
+          prompt_review_decision tty
+    )
+
+let print_review_outcome = fun summary ->
+  let prefix =
+    if summary.quit then
+      "Snapshot review stopped:"
+    else
+      "Snapshot review finished:"
+  in
+  println (prefix
+  ^ " "
+  ^ Int.to_string summary.approved_count
+  ^ " approved, "
+  ^ Int.to_string summary.rejected_count
+  ^ " rejected, "
+  ^ Int.to_string summary.ignored_count
+  ^ " ignored")
+
+let review_pending_snapshots_with_decider = fun ~workspace_root snapshots ~decide ->
+  let rec loop summary = function
+    | [] -> Ok summary
+    | snapshot :: rest ->
+        let* () = review_pending_snapshot ~workspace_root snapshot in
+        let* decision = decide snapshot in
+        (
+          match decision with
+          | `Approve ->
+              let* () = approve_pending_snapshot snapshot in
+              print_approved ~workspace_root snapshot;
+              loop { summary with approved_count = summary.approved_count + 1 } rest
+          | `Reject ->
+              let* () = Fs.remove_file snapshot.pending in
+              print_rejected ~workspace_root snapshot;
+              loop { summary with rejected_count = summary.rejected_count + 1 } rest
+          | `Ignore ->
+              print_ignored ~workspace_root snapshot;
+              loop { summary with ignored_count = summary.ignored_count + 1 } rest
+          | `Quit ->
+              Ok { summary with quit = true }
+        )
+  in
+  loop empty_review_summary snapshots
+
+let review_pending_snapshots_interactively = fun ~workspace_root snapshots ->
+  match Tty.make ~stdin:IO.stdin () with
+  | Error Tty.NoTtyConnected ->
+      review_pending_snapshots ~workspace_root snapshots |> Result.map (fun () -> empty_review_summary)
+  | Error (Tty.SystemError err) ->
+      Error err
+  | Ok tty ->
+      print_review_help ();
+      let result =
+        review_pending_snapshots_with_decider
+          ~workspace_root
+          snapshots
+          ~decide:(fun _snapshot -> prompt_review_decision tty)
+      in
+      Tty.restore tty;
+      result
+
 let run_action = fun ~workspace_root ?query action ->
   match discover_pending_snapshots ~workspace_root ?query () with
   | Error err ->
@@ -218,8 +332,10 @@ let run_action = fun ~workspace_root ?query action ->
       | `Review ->
           print_review_summary (List.length snapshots);
           (
-            match review_pending_snapshots ~workspace_root snapshots with
-            | Ok () -> Ok ()
+            match review_pending_snapshots_interactively ~workspace_root snapshots with
+            | Ok summary ->
+                print_review_outcome summary;
+                Ok ()
             | Error err -> Error (Failure (IO.error_message err))
           )
       | `Approve -> (

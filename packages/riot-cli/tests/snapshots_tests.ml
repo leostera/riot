@@ -187,6 +187,140 @@ let test_snapshots_command_parses_subcommands =
           | _ -> Error "expected approve subcommand to be selected"
         ))
 
+let test_parse_review_decision =
+  Test.case "snapshots: parse review decision aliases"
+    (fun _ctx ->
+      let actual = [
+        Riot_cli.Snapshots.parse_review_decision "a";
+        Riot_cli.Snapshots.parse_review_decision "approve";
+        Riot_cli.Snapshots.parse_review_decision "r";
+        Riot_cli.Snapshots.parse_review_decision "reject";
+        Riot_cli.Snapshots.parse_review_decision "";
+        Riot_cli.Snapshots.parse_review_decision "i";
+        Riot_cli.Snapshots.parse_review_decision "ignore";
+        Riot_cli.Snapshots.parse_review_decision "q";
+        Riot_cli.Snapshots.parse_review_decision "quit";
+        Riot_cli.Snapshots.parse_review_decision "wat";
+      ] in
+      let expected = [
+        Some `Approve;
+        Some `Approve;
+        Some `Reject;
+        Some `Reject;
+        Some `Ignore;
+        Some `Ignore;
+        Some `Ignore;
+        Some `Quit;
+        Some `Quit;
+        None;
+      ] in
+      Test.assert_equal ~expected ~actual;
+      Ok ())
+
+let test_review_pending_snapshots_with_decider =
+  Test.case "snapshots: review applies approve reject ignore decisions"
+    (fun _ctx ->
+      with_tempdir_result "snapshots_review"
+        (fun workspace_root ->
+          let fixture_pending, fixture_approved, custom_pending, custom_approved, workspace_pending, workspace_approved, _ =
+            pending_paths workspace_root in
+          let setup_result =
+            match write_file fixture_pending "fixture pending\n" with
+            | Error _ as err -> err
+            | Ok () -> (
+                match write_file custom_pending "custom pending\n" with
+                | Error _ as err -> err
+                | Ok () -> write_file workspace_pending "workspace pending\n"
+              )
+          in
+          match setup_result with
+          | Error msg -> Error msg
+          | Ok () -> (
+              match Riot_cli.Snapshots.discover_pending_snapshots ~workspace_root () with
+              | Error err -> Error (IO.error_message err)
+              | Ok snapshots -> (
+                  let decide snapshot =
+                    match Path.basename snapshot.Riot_cli.Snapshots.pending with
+                    | "sample.expected.new" -> Ok `Approve
+                    | "sample.expected_lossless.json.new" -> Ok `Reject
+                    | "case.expected.new" -> Ok `Ignore
+                    | other -> Error (IO.Unknown_error ("unexpected pending snapshot " ^ other))
+                  in
+                  match Riot_cli.Snapshots.review_pending_snapshots_with_decider
+                    ~workspace_root
+                    snapshots
+                    ~decide with
+                  | Error err -> Error (IO.error_message err)
+                  | Ok summary ->
+                      let fixture_approved_content = Fs.read fixture_approved |> Result.expect ~msg:"read approved fixture snapshot" in
+                      let fixture_pending_exists = Fs.exists fixture_pending |> Result.expect ~msg:"stat fixture pending snapshot" in
+                      let custom_approved_exists = Fs.exists custom_approved |> Result.expect ~msg:"stat custom approved snapshot" in
+                      let custom_pending_exists = Fs.exists custom_pending |> Result.expect ~msg:"stat custom pending snapshot" in
+                      let workspace_approved_exists = Fs.exists workspace_approved |> Result.expect ~msg:"stat workspace approved snapshot" in
+                      let workspace_pending_exists = Fs.exists workspace_pending |> Result.expect ~msg:"stat workspace pending snapshot" in
+                      if not (String.equal fixture_approved_content "fixture pending\n") then
+                        Error ("unexpected approved snapshot content: " ^ fixture_approved_content)
+                      else if fixture_pending_exists then
+                        Error "expected approved pending snapshot to be removed"
+                      else if custom_approved_exists then
+                        Error "expected rejected snapshot not to create an approved file"
+                      else if custom_pending_exists then
+                        Error "expected rejected pending snapshot to be removed"
+                      else if workspace_approved_exists then
+                        Error "expected ignored snapshot not to create an approved file"
+                      else if not workspace_pending_exists then
+                        Error "expected ignored pending snapshot to remain"
+                      else if not (Int.equal summary.Riot_cli.Snapshots.approved_count 1)
+                        || not (Int.equal summary.rejected_count 1)
+                        || not (Int.equal summary.ignored_count 1)
+                        || summary.quit then
+                        Error "unexpected review summary"
+                      else
+                        Ok ()
+                )
+            )))
+
+let test_review_pending_snapshots_with_quit =
+  Test.case "snapshots: review quit stops before mutating snapshots"
+    (fun _ctx ->
+      with_tempdir_result "snapshots_quit"
+        (fun workspace_root ->
+          let fixture_pending, fixture_approved, custom_pending, _, _, _, _ = pending_paths workspace_root in
+          let setup_result =
+            match write_file fixture_pending "fixture pending\n" with
+            | Error _ as err -> err
+            | Ok () -> write_file custom_pending "custom pending\n"
+          in
+          match setup_result with
+          | Error msg -> Error msg
+          | Ok () -> (
+              match Riot_cli.Snapshots.discover_pending_snapshots ~workspace_root () with
+              | Error err -> Error (IO.error_message err)
+              | Ok snapshots -> (
+                  let decide _snapshot = Ok `Quit in
+                  match Riot_cli.Snapshots.review_pending_snapshots_with_decider
+                    ~workspace_root
+                    snapshots
+                    ~decide with
+                  | Error err -> Error (IO.error_message err)
+                  | Ok summary ->
+                      let approved_exists = Fs.exists fixture_approved |> Result.expect ~msg:"stat approved snapshot" in
+                      let fixture_pending_exists = Fs.exists fixture_pending |> Result.expect ~msg:"stat fixture pending snapshot" in
+                      let custom_pending_exists = Fs.exists custom_pending |> Result.expect ~msg:"stat custom pending snapshot" in
+                      if approved_exists then
+                        Error "expected quit not to approve any snapshot"
+                      else if not fixture_pending_exists || not custom_pending_exists then
+                        Error "expected quit to leave pending snapshots untouched"
+                      else if not summary.Riot_cli.Snapshots.quit
+                        || not (Int.equal summary.approved_count 0)
+                        || not (Int.equal summary.rejected_count 0)
+                        || not (Int.equal summary.ignored_count 0) then
+                        Error "unexpected quit summary"
+                      else
+                        Ok ()
+                )
+            )))
+
 let tests =
   Test.[
     test_discover_pending_snapshots;
@@ -194,6 +328,9 @@ let tests =
     test_approve_pending_snapshots;
     test_reject_pending_snapshots;
     test_snapshots_command_parses_subcommands;
+    test_parse_review_decision;
+    test_review_pending_snapshots_with_decider;
+    test_review_pending_snapshots_with_quit;
   ]
 
 let name = "Riot CLI Snapshots Tests"
