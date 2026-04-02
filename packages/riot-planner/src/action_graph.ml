@@ -387,7 +387,6 @@ let from_module_graph ~package ~workspace ~profile ~ctx ~toolchain ~store ~depse
 ):
   t * Path.t list =
   let transitive_deps = Dependency.runtime_closure depset in
-): t * Path.t list =
   (* Extract dependency cache include paths - no file copying needed! *)
   let dep_cache_includes =
     List.map (fun (dep: Dependency.t) -> dep.artifact_dir) transitive_deps

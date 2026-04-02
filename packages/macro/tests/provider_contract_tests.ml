@@ -1,6 +1,14 @@
 open Std
 open Macro
 
+let snapshot_ctx = fun (ctx: Test.ctx) ->
+  let workspace_root =
+    match ctx.workspace_root with
+    | Some _ -> ctx.workspace_root
+    | None -> Env.current_dir () |> Std.Result.to_option
+  in
+  { ctx with package_name = Some "macro"; workspace_root }
+
 let with_temp_provider_result = fun ~prefix ~source fn ->
   match
     Fs.with_tempdir ~prefix
@@ -35,7 +43,7 @@ let snapshot_provider_error = fun ~ctx ~source ->
     (fun provider ->
       match Provider_contract.validate provider with
       | Ok () -> Error "expected provider contract validation to fail"
-      | Error err -> Test.Snapshot.assert_text ~ctx ~actual:(error_message err ^ "\n"))
+      | Error err -> Test.Snapshot.assert_text ~ctx:(snapshot_ctx ctx) ~actual:(error_message err ^ "\n"))
 
 let tests = [
   Test.case

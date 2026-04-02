@@ -3,6 +3,14 @@ open Macro
 
 let sample_file = Path.v "sample.ml"
 
+let snapshot_ctx = fun (ctx: Test.ctx) ->
+  let workspace_root =
+    match ctx.workspace_root with
+    | Some _ -> ctx.workspace_root
+    | None -> Env.current_dir () |> Std.Result.to_option
+  in
+  { ctx with package_name = Some "macro"; workspace_root }
+
 let normalize_generated_names = fun source ->
   let prefix = "__riot_macro_format_buffer_" in
   let prefix_len = String.length prefix in
@@ -54,7 +62,7 @@ let assert_expansion_snapshot = fun ~ctx ~source ->
   | Error err -> Error ("expected expansion to succeed: " ^ error_message err)
   | Ok result ->
       Test.assert_true result.changed;
-      Test.Snapshot.assert_text ~ctx ~actual:(normalize_generated_names result.source)
+      Test.Snapshot.assert_text ~ctx:(snapshot_ctx ctx) ~actual:(normalize_generated_names result.source)
 
 let assert_error_contains = fun ~source ~expected_substring ->
   match expand_source ~filename:sample_file source with

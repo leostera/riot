@@ -6,82 +6,58 @@ let with_temp_workspace_result = fun ~prefix fn ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
-let workspace_dependency = fun name ->
-  Riot_model.Package.{
-    name;
-    source = {
-      workspace = true;
-      builtin = false;
-      path = None;
-      source_locator = None;
-      ref_ = None;
-      version = None;
-    };
-  }
+let write_file = fun path contents ->
+  Fs.write contents path |> Std.Result.expect ~msg:(("write failed: " ^ Path.to_string path))
 
 let write_macro_workspace = fun ~tmpdir ~helper_source ~provider_source ->
+  let workspace_toml = Path.(tmpdir / Path.v "riot.toml") in
   let helper_root = Path.(tmpdir / Path.v "packages" / Path.v "helper") in
   let macro_root = Path.(tmpdir / Path.v "packages" / Path.v "macro-demo") in
   let helper_src_dir = Path.(helper_root / Path.v "src") in
   let macro_src_dir = Path.(macro_root / Path.v "src") in
-  let _ = Fs.create_dir_all helper_src_dir |> Result.expect ~msg:"create helper src dir failed" in
-  let _ = Fs.create_dir_all macro_src_dir |> Result.expect ~msg:"create macro src dir failed" in
-  let _ = Fs.write helper_source Path.(helper_src_dir / Path.v "helper.ml")
-  |> Result.expect ~msg:"write helper source failed" in
-  let _ = Fs.write provider_source Path.(macro_src_dir / Path.v "macro.ml")
-  |> Result.expect ~msg:"write macro provider source failed" in
-  let helper_package =
-    Riot_model.Package.{
-      name = "helper";
-      path = helper_root;
-      relative_path = Path.v "packages/helper";
-      dependencies = [];
-      dev_dependencies = [];
-      build_dependencies = [];
-      foreign_dependencies = [];
-      binaries = [];
-      library = Some { path = Path.v "src/helper.ml"; kind = Riot_model.Package.Runtime };
-      sources = {
-        src = [ Path.v "src/helper.ml" ];
-        native = [];
-        tests = [];
-        examples = [];
-        bench = [];
-      };
-      compiler = { profile_overrides = []; target_overrides = [] };
-      commands = [];
-      fix_providers = [];
-      publish = { version = None; description = None; license = None; is_public = None };
-    }
-  in
-  let macro_package =
-    Riot_model.Package.{
-      name = "macro-demo";
-      path = macro_root;
-      relative_path = Path.v "packages/macro-demo";
-      dependencies = [];
-      dev_dependencies = [];
-      build_dependencies = [ workspace_dependency "helper" ];
-      foreign_dependencies = [];
-      binaries = [];
-      library = Some { path = Path.v "src/macro.ml"; kind = Riot_model.Package.Macro };
-      sources = {
-        src = [ Path.v "src/macro.ml" ];
-        native = [];
-        tests = [];
-        examples = [];
-        bench = [];
-      };
-      compiler = { profile_overrides = []; target_overrides = [] };
-      commands = [];
-      fix_providers = [];
-      publish = { version = None; description = None; license = None; is_public = None };
-    }
-  in
-  let workspace =
-    Riot_model.Workspace.make ~root:tmpdir ~packages:[ helper_package; macro_package ] () in
-  let providers = Riot_model.Workspace.discover_macro_providers workspace in
-  (workspace, providers)
+  let _ = Fs.create_dir_all helper_src_dir |> Std.Result.expect ~msg:"create helper src dir failed" in
+  let _ = Fs.create_dir_all macro_src_dir |> Std.Result.expect ~msg:"create macro src dir failed" in
+  let _ = write_file
+    workspace_toml
+    {|
+[workspace]
+members = [
+  "packages/helper",
+  "packages/macro-demo",
+]
+|} in
+  let _ = write_file
+    Path.(helper_root / Path.v "riot.toml")
+    {|
+[package]
+name = "helper"
+version = "0.0.1"
+
+[lib]
+path = "src/helper.ml"
+|} in
+  let _ = write_file
+    Path.(macro_root / Path.v "riot.toml")
+    {|
+[package]
+name = "macro-demo"
+version = "0.0.1"
+
+[lib]
+kind = "macro"
+path = "src/macro.ml"
+
+[build-dependencies]
+helper = { path = "../helper", version = "*" }
+|} in
+  let _ = write_file Path.(helper_src_dir / Path.v "helper.ml") helper_source in
+  let _ = write_file Path.(macro_src_dir / Path.v "macro.ml") provider_source in
+  [
+    Riot_model.Macro_provider.make
+      ~package_name:"macro-demo"
+      ~package_path:macro_root
+      ~source_path:Path.(macro_root / Path.v "src" / Path.v "macro.ml");
+  ]
 
 let test_provider_hash_tracks_dependency_closure_sources = Test.case
   "runner hash tracks dependency closure source changes"
@@ -89,7 +65,7 @@ let test_provider_hash_tracks_dependency_closure_sources = Test.case
     with_temp_workspace_result
       ~prefix:"macro_runner_hash"
       (fun tmpdir ->
-        let _workspace, providers =
+        let providers =
           write_macro_workspace
             ~tmpdir
             ~helper_source:"let version = \"one\"\n"
@@ -98,7 +74,7 @@ let test_provider_hash_tracks_dependency_closure_sources = Test.case
         let _ = Fs.write
           "let version = \"two\"\n"
           Path.(tmpdir / Path.v "packages" / Path.v "helper" / Path.v "src" / Path.v "helper.ml")
-        |> Result.expect ~msg:"rewrite helper source failed" in
+        |> Std.Result.expect ~msg:"rewrite helper source failed" in
         let second_hash = Runner.providers_hash ~workspace_root:tmpdir providers in
         if String.equal first_hash second_hash then
           Error "expected provider hash to change when dependency closure sources change"
@@ -111,15 +87,15 @@ let test_runner_materialize_reuses_existing_workspace = Test.case
     with_temp_workspace_result
       ~prefix:"macro_runner_reuse"
       (fun tmpdir ->
-        let _workspace, providers =
+        let providers =
           write_macro_workspace
             ~tmpdir
             ~helper_source:"let version = \"one\"\n"
             ~provider_source:"let provider () = Macro.Provider.v ~module_path:[ \"MacroDemo\" ] []\n" in
         let target_dir_root = Path.(tmpdir / Path.v "target") in
         let plan = Runner.materialize ~workspace_root:tmpdir ~target_dir_root providers in
-        let sentinel = Path.(plan.workspace_root / Path.v "sentinel.txt") in
-        let _ = Fs.write "keep me\n" sentinel |> Result.expect ~msg:"write sentinel failed" in
+        let sentinel = Path.(Runner.workspace_root plan / Path.v "sentinel.txt") in
+        let _ = Fs.write "keep me\n" sentinel |> Std.Result.expect ~msg:"write sentinel failed" in
         let _ = Runner.materialize ~workspace_root:tmpdir ~target_dir_root providers in
         match Fs.read sentinel with
         | Ok "keep me\n" -> Ok ()

@@ -102,17 +102,18 @@ let support_module_sources = fun (provider: Riot_model.Macro_provider.t) ->
   match Fs.read_dir provider_dir with
   | Error _ -> []
   | Ok iter ->
-      Std.Iter.MutIterator.to_list iter |> List.filter_map
-        (fun entry ->
-          let source_path = Path.(provider_dir / entry) in
-          let entry_name = Path.basename source_path in
-          if
-            String.equal entry_name provider_basename
-            || not (String.ends_with ~suffix:".ml" entry_name)
-          then
-            None
-          else
-            Some (ocaml_module_name_of_path source_path, source_path)) |> List.sort
+      Std.Iter.MutIterator.to_list iter
+      |> List.filter_map (fun entry ->
+        let source_path = Path.(provider_dir / entry) in
+        let entry_name = Path.basename entry in
+        if
+          String.equal entry_name provider_basename
+          || not (String.ends_with ~suffix:".ml" entry_name)
+        then
+          None
+        else
+          Some (ocaml_module_name_of_path source_path, source_path))
+      |> List.sort
         (fun (left_name, left_path) (right_name, right_path) ->
           match String.compare left_name right_name with
           | 0 -> String.compare (Path.to_string left_path) (Path.to_string right_path)
@@ -161,7 +162,8 @@ let option_or_else_lazy = fun fallback value ->
   | None -> fallback ()
 
 let scan_workspace_packages = fun workspace_root ->
-  match Riot_model.Workspace_manager.scan workspace_root with
+  let workspace_manager = Riot_model.Workspace_manager.create () in
+  match Riot_model.Workspace_manager.scan workspace_manager workspace_root with
   | Ok (workspace, _errors) -> Riot_model.Workspace.(workspace.packages)
   | Error _ -> []
 
@@ -559,7 +561,7 @@ let rec copy_directory = fun ~src ~dst ->
   | Ok iter ->
       Std.Iter.MutIterator.to_list iter |> List.iter
         (fun entry ->
-          if is_generated_artifact_entry entry then
+          if is_generated_artifact_entry (Path.basename entry) then
             ()
           else
             let src_path = Path.(src / entry) in
