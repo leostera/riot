@@ -115,6 +115,40 @@ let approved_fixtures = [
   "0207_record_field_access.ml";
   "0208_record_nested_access.ml";
   "0209_record_update.ml";
+  "0210_record_update_multi.ml";
+  "0212_record_in_tuple.ml";
+  "0213_record_in_list.ml";
+  "0216_array_empty.ml";
+  "0221_array_access.ml";
+  "0222_array_nested_access.ml";
+  "0227_array_string_index.ml";
+  "0229_array_make.ml";
+  "0230_array_of_list.ml";
+  "0231_string_concat.ml";
+  "0232_string_concat_chain.ml";
+  "0233_string_concat_expr.ml";
+  "0237_list_append_chain.ml";
+  "0238_list_append_expr.ml";
+  "0239_list_append_empty.ml";
+  "0241_ref_create.ml";
+  "0244_ref_chain.ml";
+  "0245_ref_in_expr.ml";
+  "0247_ref_in_tuple.ml";
+  "0248_ref_in_list.ml";
+  "0249_ref_pattern.ml";
+  "0250_ref_mutable.ml";
+  "0271_begin_simple.ml";
+  "0274_begin_sequence.ml";
+  "0275_begin_as_paren.ml";
+  "0281_for_simple.ml";
+  "0282_for_downto.ml";
+  "0283_for_nested.ml";
+  "0285_while_simple.ml";
+  "0286_while_true.ml";
+  "0287_while_nested.ml";
+  "0288_while_in_let.ml";
+  "0292_lazy_force.ml";
+  "0299_new_object.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
