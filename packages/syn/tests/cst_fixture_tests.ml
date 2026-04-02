@@ -386,6 +386,36 @@ let approved_fixtures = [
   "0793_type_json.ml";
   "0799_type_shape.ml";
   "0803_type_var_three.ml";
+  "0811_type_tuple_two.ml";
+  "0813_type_tuple_nested.ml";
+  "0814_type_tuple_poly.ml";
+  "0817_type_named_result.ml";
+  "0818_type_named_array.ml";
+  "0821_type_param_two.ml";
+  "0826_type_option_tuple.ml";
+  "0828_type_result_arrow.ml";
+  "0834_type_constraint_as.ml";
+  "0835_type_constraint_tuple.ml";
+  "0836_type_underscore.ml";
+  "0837_type_underscore_tuple.ml";
+  "0838_type_nested_arrows.ml";
+  "0839_type_list_tuple_arrow.ml";
+  "0840_type_option_arrow_result.ml";
+  "0843_type_arrow_mixed_labels.ml";
+  "0844_type_deeply_nested.ml";
+  "0845_type_complex_arrow_chain.ml";
+  "0846_type_list_option_result.ml";
+  "0849_type_multiple_params_arrow.ml";
+  "0850_type_higher_order.ml";
+  "0852_type_alias_arrow.ml";
+  "0853_type_alias_poly.ml";
+  "0854_type_alias_nested.ml";
+  "0855_type_alias_two_params.ml";
+  "0856_type_alias_option.ml";
+  "0857_type_alias_result.ml";
+  "0858_type_alias_arrow_poly.ml";
+  "0860_type_alias_complex.ml";
+  "0908_type_rec_multi_constructor.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
