@@ -116,23 +116,18 @@ let available_macro_providers = fun ~depset ->
     Dependency.macro_closure depset |> List.filter_map
       (fun (dep: Dependency.t) -> Package.macro_provider dep.package)
   in
-  match reachable_macro_packages with
-  | [] -> None
-  | providers ->
-      let linked_module_names = List.map
-        (fun (provider: Riot_model.Macro_provider.t) -> provider.module_name)
-        providers in
-      let builtin_providers = Macro.builtin_providers () |> List.filter
-        (fun provider ->
-          match List.rev (Macro.Provider.module_path provider) with
-          | module_name :: _ -> List.mem module_name linked_module_names
-          | [] -> false)
-      in
-      Some builtin_providers
+  let linked_module_names = List.map
+    (fun (provider: Riot_model.Macro_provider.t) -> provider.module_name)
+    reachable_macro_packages in
+  Macro.builtin_providers () |> List.filter
+    (fun provider ->
+      match List.rev (Macro.Provider.module_path provider) with
+      | module_name :: _ -> List.mem module_name linked_module_names
+      | [] -> false)
 
 let plan_compilation_pipeline = fun ~(package: Package.t) ~depset path ->
   match Compilation_pipeline.plan_concrete_source
-    ?providers:(available_macro_providers ~depset)
+    ~providers:(available_macro_providers ~depset)
     ~package
     path with
   | Ok planned_source -> planned_source

@@ -6,10 +6,10 @@ let builtin_providers = fun () ->
   ]
 
 let resolve = fun ?providers invocation ->
-  let providers =
+  let explicit_providers, providers =
     match providers with
-    | Some providers -> providers
-    | None -> builtin_providers ()
+    | Some providers -> (true, providers)
+    | None -> (false, builtin_providers ())
   in
   let callee_path = invocation.Macro_parser.callee_path in
   let qualified_name = String.concat "." callee_path in
@@ -22,26 +22,32 @@ let resolve = fun ?providers invocation ->
   | macro_name :: rev_module_path ->
       let module_path = List.rev rev_module_path in
       if module_path = [] then
-        let matches =
-          providers |> List.filter_map
-            (fun provider ->
-              Macro_provider.find_macro provider macro_name |> Option.map
-                (fun macro_ -> (provider, macro_)))
-        in
-        (
-          match matches with
-          | [] ->
-              Error
-                (Macro_error.make
-                   ~span:invocation.span
-                   ("unsupported macro invocation: " ^ qualified_name ^ "!"))
-          | [ (_, macro_) ] -> Ok macro_
-          | _ ->
-              Error
-                (Macro_error.make
-                   ~span:invocation.span
-                   ("ambiguous bare macro invocation: " ^ qualified_name ^ "!"))
-        )
+        if explicit_providers then
+          Error
+            (Macro_error.make
+               ~span:invocation.span
+               ("macro invocation must be qualified: " ^ qualified_name ^ "!"))
+        else
+          let matches =
+            providers |> List.filter_map
+              (fun provider ->
+                Macro_provider.find_macro provider macro_name |> Option.map
+                  (fun macro_ -> (provider, macro_)))
+          in
+          (
+            match matches with
+            | [] ->
+                Error
+                  (Macro_error.make
+                     ~span:invocation.span
+                     ("unsupported macro invocation: " ^ qualified_name ^ "!"))
+            | [ (_, macro_) ] -> Ok macro_
+            | _ ->
+                Error
+                  (Macro_error.make
+                     ~span:invocation.span
+                     ("ambiguous bare macro invocation: " ^ qualified_name ^ "!"))
+          )
       else
         let provider =
           List.find_opt

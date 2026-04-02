@@ -58,6 +58,15 @@ let assert_error_contains = fun ~source ~expected_substring ->
       else
         Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
 
+let assert_error_contains_with_explicit_providers = fun ~source ~expected_substring ->
+  match expand_source ~providers:(builtin_providers ()) ~filename:sample_file source with
+  | Ok _ -> Error "expected expansion to fail"
+  | Error err ->
+      if String.contains err.message expected_substring then
+        Ok ()
+      else
+        Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
+
 let assert_validator_error = fun ~source ~expected_substring ->
   match Validator.validate_source ~filename:sample_file source with
   | Ok () -> Error "expected validation to fail"
@@ -130,6 +139,11 @@ let tests = [
         ~source:"let msg = format! \"hello {}\" name\n"
         ~expected:
           "let msg = (let __riot_macro_format_buffer = Stdlib.Buffer.create 10 in Stdlib.Buffer.add_string __riot_macro_format_buffer \"hello \"; Stdlib.Buffer.add_string __riot_macro_format_buffer (name); Stdlib.Buffer.contents __riot_macro_format_buffer)\n");
+  Test.case "explicit provider contexts require qualified macro paths"
+    (fun _ctx ->
+      assert_error_contains_with_explicit_providers
+        ~source:"let msg = format! \"hello {}\" name\n"
+        ~expected_substring:"must be qualified");
   Test.case "files without macro syntax are left unchanged"
     (fun _ctx ->
       match expand_source ~filename:sample_file "let msg = format ! name\n" with
