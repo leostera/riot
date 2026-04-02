@@ -342,9 +342,9 @@ let tests = [
         | None -> ()
       );
       Ok ());
-  Test.case "parser recognizes function-like macro invocations without whitespace before !"
+  Test.case "parser recognizes function-like macro invocations in expression position"
     (fun () ->
-      let result = parse_ml "let x = format!(\"hello {}\", name)\n" in
+      let result = parse_ml "let x = format! \"hello {}\" name\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_true
         (List.exists
@@ -352,9 +352,27 @@ let tests = [
            (green_node_kinds result.tree));
       Test.assert_true (Option.is_none result.cst);
       Ok ());
+  Test.case "parser still accepts parenthesized macro bodies"
+    (fun () ->
+      let result = parse_ml "let x = format!(\"hello {}\", name)\n" in
+      Test.assert_equal ~expected:[] ~actual:result.diagnostics;
+      Test.assert_true
+        (List.exists
+           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
+           (green_node_kinds result.tree));
+      Ok ());
+  Test.case "macro bodies stop at enclosing let-in boundaries"
+    (fun () ->
+      let result = parse_ml "let y = let x = format! \"hello\" in x\n" in
+      Test.assert_equal ~expected:[] ~actual:result.diagnostics;
+      Test.assert_true
+        (List.exists
+           (fun kind -> kind = Syn.SyntaxKind.MACRO_EXPR)
+           (green_node_kinds result.tree));
+      Ok ());
   Test.case "parser keeps spaced bang applications out of macro syntax"
     (fun () ->
-      let result = parse_ml "let x = format !(name)\n" in
+      let result = parse_ml "let x = format ! name\n" in
       Test.assert_equal ~expected:[] ~actual:result.diagnostics;
       Test.assert_false
         (List.exists

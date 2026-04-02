@@ -193,7 +193,7 @@ let test_build_expands_format_macro_in_binary_end_to_end = fun _ctx ->
         let package_dir = Path.(tmpdir / Path.v "pkg") in
         let src_dir = Path.(package_dir / Path.v "src") in
         let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
-        let _ = Fs.write "let message = format!(\"hello {}\", \"riot\")\n" Path.(src_dir / Path.v "main.ml")
+        let _ = Fs.write "let message = format! \"hello {}\" \"riot\"\n" Path.(src_dir / Path.v "main.ml")
         |> Result.expect ~msg:"write source failed" in
         let package =
           Tusk_model.Package.{

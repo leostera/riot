@@ -24,37 +24,42 @@ let tests = [
   Test.case "format! lowers a bare {} placeholder to Stdlib.Printf.sprintf"
     (fun () ->
       assert_expansion
-        ~source:"let msg = format!(\"hello {}\", name)\n"
+        ~source:"let msg = format! \"hello {}\" name\n"
         ~expected:"let msg = (Stdlib.Printf.sprintf \"hello %s\" (name))\n");
   Test.case "format! preserves escaped braces while escaping percent signs for Stdlib.Printf"
     (fun () ->
       assert_expansion
-        ~source:"let msg = format!(\"{{}} 100%\")\n"
+        ~source:"let msg = format! \"{{}} 100%\"\n"
         ~expected:"let msg = (Stdlib.Printf.sprintf \"{} 100%%\")\n");
   Test.case "format! expands recursively when another macro invocation appears in an argument"
     (fun () ->
       assert_expansion
-        ~source:"let msg = format!(\"{}!\", format!(\"hello {}\", name))\n"
+        ~source:"let msg = format! \"{}!\" (format! \"hello {}\" name)\n"
         ~expected:
           "let msg = (Stdlib.Printf.sprintf \"%s!\" ((Stdlib.Printf.sprintf \"hello %s\" (name))))\n");
   Test.case "format! rejects non-literal format strings for the first prototype"
     (fun () ->
       assert_error_contains
-        ~source:"let msg = format!(template, name)\n"
+        ~source:"let msg = format! template name\n"
         ~expected_substring:"string literal");
   Test.case "format! rejects unsupported placeholder forms for the first prototype"
     (fun () ->
       assert_error_contains
-        ~source:"let msg = format!(\"{:?}\", name)\n"
+        ~source:"let msg = format! \"{:?}\" name\n"
         ~expected_substring:"bare {} placeholders");
+  Test.case "format! still accepts a parenthesized body while parsing the new macro form"
+    (fun () ->
+      assert_expansion
+        ~source:"let msg = format!(\"hello {}\", name)\n"
+        ~expected:"let msg = (Stdlib.Printf.sprintf \"hello %s\" (name))\n");
   Test.case "files without macro syntax are left unchanged"
     (fun () ->
-      match expand_source ~filename:sample_file "let msg = format !(name)\n" with
+      match expand_source ~filename:sample_file "let msg = format ! name\n" with
       | Error err -> Error ("expected unchanged source, got error: " ^ error_message err)
       | Ok result ->
           Test.assert_false result.changed;
           Test.assert_equal
-            ~expected:"let msg = format !(name)\n"
+            ~expected:"let msg = format ! name\n"
             ~actual:result.source;
           Ok ());
 ]

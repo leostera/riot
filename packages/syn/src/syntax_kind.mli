@@ -71,7 +71,7 @@ type t =
   | PREFIX_EXPR
   (** Prefix operator: `-x`, `!ref` *)
   | MACRO_EXPR
-  (** Function-like macro invocation: `format!(...)` *)
+  (** Function-like macro invocation: `format! expr` *)
   | IF_EXPR
   (** If expression: `if cond then e1 else e2` *)
   | MATCH_EXPR

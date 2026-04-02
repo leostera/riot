@@ -10,6 +10,7 @@
 4. If the current prototype cannot lower a macro faithfully, fail explicitly instead of emitting lossy fallback code.
 5. Keep runtime dependencies out of expanded output when a pure source rewrite is enough.
 6. Document prototype limitations in tests and API names rather than pretending they are solved.
+7. Keep function-like macro bodies parser-backed in expression position as `name! expr`; only fall back to delimiter-specific handling when the parsed body itself carries those delimiters.
 
 ## Validate
 

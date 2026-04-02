@@ -35,7 +35,7 @@ type t =
   | PREFIX_EXPR
   (* -x, !ref *)
   | MACRO_EXPR
-  (* format!(...) *)
+  (* format! expr *)
   | IF_EXPR
   (* if c then e1 else e2 *)
   | MATCH_EXPR

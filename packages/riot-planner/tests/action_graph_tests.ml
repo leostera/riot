@@ -359,7 +359,7 @@ let test_macro_modules_write_expanded_source_before_compile = fun () ->
         let src_dir = Path.(package_root / Path.v "src") in
         let source_path = Path.(src_dir / Path.v "demo.ml") in
         let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
-        let _ = Fs.write "let message name = format!(\"hello {}\", name)\n" source_path
+        let _ = Fs.write "let message name = format! \"hello {}\" name\n" source_path
         |> Result.expect ~msg:"write ml source failed" in
         let workspace = Tusk_model.Workspace.make ~root:tmpdir ~packages:[] () in
         let store = Tusk_store.Store.create ~workspace in
@@ -424,7 +424,7 @@ let test_macro_binaries_write_expanded_source_before_compile = fun () ->
         let bin_dir = Path.(package_root / Path.v "bin") in
         let source_path = Path.(bin_dir / Path.v "main.ml") in
         let _ = Fs.create_dir_all bin_dir |> Result.expect ~msg:"create bin dir failed" in
-        let _ = Fs.write "let () = ignore (format!(\"hello {}\", name))\n" source_path
+        let _ = Fs.write "let () = ignore (format! \"hello {}\" name)\n" source_path
         |> Result.expect ~msg:"write binary source failed" in
         let workspace = Tusk_model.Workspace.make ~root:tmpdir ~packages:[] () in
         let store = Tusk_store.Store.create ~workspace in
