@@ -12,7 +12,7 @@ let to_rgb = fun c ->
   | ANSI256 i -> Colors.ANSI.to_rgb (`ansi i)
   | No_color -> raise (Invalid_gradient_color c)
 
-let make ~start ~finish ~steps: color array =
+let make ~start ~finish ~steps : color array =
   let colors = Array.make steps start in
   let start = to_rgb start in
   let finish = to_rgb finish in

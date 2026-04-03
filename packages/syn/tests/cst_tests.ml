@@ -3511,6 +3511,13 @@ val decode : Outer.Inner (* c *).(request -> response)
           | _ -> Error "expected structural optional parameters with preserved defaults"
         )
       | [] -> Error "expected let binding");
+  Test.case "cst rejects spaced renamed labeled parameters"
+    (fun _ctx ->
+      let source = "let foo ~v: hello = v\n" in
+      let result = parse_ml source in
+      Test.assert_true (List.length result.diagnostics > 0);
+      Test.assert_equal ~expected:None ~actual:result.cst;
+      Ok ());
   Test.case "cst let bindings preserve locally abstract type parameters"
     (fun _ctx ->
       let source = "let id (type a b) value = value\n" in

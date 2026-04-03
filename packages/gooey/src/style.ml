@@ -189,7 +189,7 @@ module Padding = struct
 
   let all n: padding = { left = n; right = n; top = n; bottom = n }
 
-  let symmetric ~h ~v: padding = { left = h; right = h; top = v; bottom = v }
+  let symmetric ~h ~v : padding = { left = h; right = h; top = v; bottom = v }
 
   let empty: padding = { left = 0; right = 0; top = 0; bottom = 0 }
 end
@@ -204,7 +204,7 @@ module Margin = struct
 
   let all n: margin = { left = n; right = n; top = n; bottom = n }
 
-  let symmetric ~h ~v: margin = { left = h; right = h; top = v; bottom = v }
+  let symmetric ~h ~v : margin = { left = h; right = h; top = v; bottom = v }
 
   let empty: margin = { left = 0; right = 0; top = 0; bottom = 0 }
 end

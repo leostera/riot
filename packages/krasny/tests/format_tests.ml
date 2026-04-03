@@ -266,6 +266,23 @@ let map (type a b) (iter : a t) ~(fn : a -> b) : b t = failwith "todo"
 |}
         ~actual;
       Ok ());
+  Test.case "keep binding return type annotations loose after named parameters"
+    (fun _ctx ->
+      let source = {|type color
+
+let make ~start ~finish ~steps : color array =
+  steps
+|}
+      in
+      let actual = parse_ml source |> Krasny.format |> Result.expect
+        ~msg:"binding return-type annotations after named parameters should stay loose" in
+      Test.assert_equal
+        ~expected:{|type color
+
+let make ~start ~finish ~steps : color array = steps
+|}
+        ~actual;
+      Ok ());
   Test.case "format index expressions from explicit delimiter tokens"
     (fun ctx ->
       let source = {|let x = s.[0]

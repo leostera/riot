@@ -3721,7 +3721,11 @@ and parse_extension = fun parser ->
         ~span:(expected_span parser) in
       make_error_node parser ~diagnostic ~consumed_tokens:[]
 
-(** Parse labeled parameter: ~label or ~label:pattern or ~(label) or ~(label:pattern) *)
+(** Parse labeled parameter: ~label or ~label:pattern or ~(label) or ~(label:pattern)
+
+    Non-parenthesized renames must stay tight (`~label:name`). A spaced form such
+    as `~label: name` is ambiguous with a whole-binding type annotation and is
+    therefore rejected with a parse diagnostic. *)
 and parse_labeled_param = fun parser ->
   (* MUST start with ~ *)
   let tilde =
@@ -3752,6 +3756,14 @@ and parse_labeled_param = fun parser ->
       if peek_kind parser = Token.Colon && trivia_after_label = [] then
         let colon = consume parser in
         let trivia_after_colon = consume_trivia parser in
+        if not (List.is_empty trivia_after_colon) then (
+          let found = peek parser in
+          let diagnostic = Diagnostic.invalid_pattern
+            ~found
+            ~text:(token_text parser found)
+            ~span:(current_span parser) in
+          report_diagnostic parser diagnostic
+        );
         let pattern = parse_pattern parser in
         [ make_token parser colon ]
         @ tokens_to_green parser trivia_after_colon
@@ -3815,7 +3827,11 @@ and parse_labeled_param = fun parser ->
       report_diagnostic parser diagnostic;
       make_error_node parser ~diagnostic ~consumed_tokens:[ tilde ]
 
-(** Parse optional parameter: ?label, ?label:pattern, or ?(label = expr) *)
+(** Parse optional parameter: ?label, ?label:pattern, or ?(label = expr)
+
+    Like labeled renames, non-parenthesized optional renames stay tight
+    (`?label:name`). The spaced form `?label: name` is rejected so it cannot be
+    confused with a whole-binding type annotation. *)
 and parse_optional_param = fun parser ->
   let parse_default_param_content parser =
     let binding = parse_pattern parser in
@@ -3893,6 +3909,14 @@ and parse_optional_param = fun parser ->
           if peek_kind parser = Token.Colon && trivia_after_label = [] then
             let colon = consume parser in
             let trivia_after_colon = consume_trivia parser in
+            if not (List.is_empty trivia_after_colon) then (
+              let found = peek parser in
+              let diagnostic = Diagnostic.invalid_pattern
+                ~found
+                ~text:(token_text parser found)
+                ~span:(current_span parser) in
+              report_diagnostic parser diagnostic
+            );
             if peek_kind parser = Token.OpenDelim Token.Paren then
               let open_p, content, close_p = parse_parens parser parse_default_param_content in
               [ make_token parser colon ]

@@ -952,6 +952,16 @@ and render_tight_token_rhs = fun head token rhs ->
 and render_tight_doc_rhs = fun head separator rhs ->
   Doc.group (Doc.concat [ head; separator; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ])
 
+and render_loose_token_rhs = fun head token rhs ->
+  Doc.group
+    (
+      Doc.concat
+        [ head; Doc.space; doc_of_token token; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ]
+    )
+
+and render_loose_doc_rhs = fun head separator rhs ->
+  Doc.group (Doc.concat [ head; Doc.space; separator; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ])
+
 and render_tight_colon_rhs = fun head colon_token rhs -> render_tight_token_rhs head colon_token rhs
 
 and render_tight_colon_block_rhs = fun head colon_token rhs ->
@@ -4914,6 +4924,11 @@ let make_lowerer =
     | _ -> stays_after_equals
   and local_binding_keeps_parameters_in_header ~parameters ~rendered_type_annotation ~synthesized_type_annotation =
     not (parameters = []) && not synthesized_type_annotation
+  and local_binding_type_annotation_requires_loose_colon = fun ~parameters ->
+    match List.rev parameters with
+    | Syn.Cst.Parameter.Labeled _ :: _
+    | Syn.Cst.Parameter.Optional _ :: _ -> true
+    | _ -> false
   and local_binding_forces_multiline_body ~local_context ~rec_token value =
     local_context
     && Option.is_some rec_token
@@ -4983,11 +4998,17 @@ let make_lowerer =
     in
     let header =
       match rendered_type_annotation with
-      | None -> header
+      | None ->
+          header
       | Some (colon_token, type_doc) -> (
-          match colon_token with
-          | Some colon_token -> render_tight_token_rhs header colon_token type_doc
-          | None -> render_tight_doc_rhs header Doc.colon type_doc
+          let loose_colon =
+            local_binding_type_annotation_requires_loose_colon ~parameters
+          in
+          match colon_token, loose_colon with
+          | Some colon_token, true -> render_loose_token_rhs header colon_token type_doc
+          | None, true -> render_loose_doc_rhs header Doc.colon type_doc
+          | Some colon_token, false -> render_tight_token_rhs header colon_token type_doc
+          | None, false -> render_tight_doc_rhs header Doc.colon type_doc
         )
     in
     let force_multiline_body = local_binding_forces_multiline_body ~local_context ~rec_token value in

@@ -1,3 +1,3 @@
 type color
 
-let make ~start ~finish ~steps: color array = steps
+let make ~start ~finish ~steps : color array = steps
