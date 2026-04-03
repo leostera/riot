@@ -99,6 +99,7 @@ type t = {
   compiler: compiler_config;
   commands: Package_command.t list;
   fix_providers: Fix_provider.t list;
+  macro_providers: Macro_provider.t list;
   publish: publish_metadata;
 }
 
@@ -294,6 +295,12 @@ let is_builtin_dependency_name = fun name ->
 
 let is_builtin_dependency = fun (dep: dependency) -> dep.source.builtin
 
+let is_macro_package = fun (pkg: t) -> pkg.macro_providers != []
+
+let macro_provider = fun (pkg: t) ->
+  match pkg.macro_providers with
+  | provider :: _ -> Some provider
+  | [] -> None
 let binary_scope = fun (bin: binary) ->
   let path_str = Path.to_string bin.path in
   if
@@ -1190,6 +1197,15 @@ let parse_binaries: (string * Toml.value) list -> package_path:Path.t -> (binary
   | Some _ ->
       Error "[[bin]] must be an array of tables"
 
+let parse_library_kind = fun lib_items ->
+  match List.assoc_opt "kind" lib_items with
+  | None -> Ok Runtime
+  | Some (Toml.String "runtime") -> Ok Runtime
+  | Some (Toml.String "macro") -> Error "Library 'kind = \"macro\"' has been replaced by [riot.macro.provider]"
+  | Some (Toml.String kind) -> Error ("Library 'kind' field must be \"runtime\", got \""
+  ^ kind
+  ^ "\"")
+  | Some _ -> Error "Library 'kind' field must be a string"
 let parse_library:
   (string * Toml.value) list ->
   package_path:Path.t ->
@@ -1206,15 +1222,21 @@ let parse_library:
         | Error _ -> Ok None
       )
   | Some (Toml.Table lib_items) -> (
-      match List.assoc_opt "path" lib_items with
-      | Some (Toml.String path_str) ->
-          let lib_path = Path.(package_path / Path.v path_str) in
-          Ok (Some { path = lib_path })
-      | None ->
-          let default_path = Path.(package_path / Path.v "src" / Path.v (package_name ^ ".ml")) in
-          Ok (Some { path = default_path })
-      | Some _ ->
-          Error "Library 'path' field must be a string"
+      match parse_library_kind lib_items with
+      | Error _ as err -> err
+      | Ok Runtime -> (
+          match List.assoc_opt "path" lib_items with
+          | Some (Toml.String path_str) ->
+              let lib_path = Path.(package_path / Path.v path_str) in
+              Ok (Some { path = lib_path })
+          | None ->
+              let default_path = Path.(package_path / Path.v "src" / Path.v (package_name ^ ".ml")) in
+              Ok (Some { path = default_path })
+          | Some _ ->
+              Error "Library 'path' field must be a string"
+        )
+      | Ok Macro ->
+          Error "Library 'kind = \"macro\"' has been replaced by [riot.macro.provider]"
     )
   | Some _ ->
       Error "[lib] must be a table"
@@ -1316,6 +1338,17 @@ let provider_excluded_relpaths = fun ~(package_path:Path.t) providers ->
       match Path.strip_prefix provider.source_path ~prefix:package_path with
       | Ok rel_path -> Some (collect_provider_tree rel_path)
       | Error _ -> None) |> List.concat |> List.sort_uniq
+    (fun left right ->
+      String.compare (Path.to_string left) (Path.to_string right))
+
+let macro_provider_excluded_relpaths = fun ~(package_path:Path.t) providers ->
+  providers
+  |> List.filter_map
+    (fun (provider: Macro_provider.t) ->
+      match Path.strip_prefix provider.source_path ~prefix:package_path with
+      | Ok rel_path -> Some rel_path
+      | Error _ -> None)
+  |> List.sort_uniq
     (fun left right ->
       String.compare (Path.to_string left) (Path.to_string right))
 
@@ -1510,58 +1543,67 @@ let from_toml:
                         items
                         ~package_name:name
                         ~package_path:path in
-                      let excluded_relpaths = provider_excluded_relpaths ~package_path:path fix_providers in
-                      let sources = scan_sources ~package_path:path ~excluded_relpaths () in
-                      let compiler = parse_compiler_config items in
-                      let main_binaries = autodiscover_main_binary sources ~package_name:name in
-                      let test_binaries = autodiscover_test_binaries sources ~package_path:path in
-                      let example_binaries = autodiscover_example_binaries sources ~package_path:path in
-                      let bench_binaries = autodiscover_bench_binaries sources ~package_path:path in
-                      Log.debug
-                        ("[PACKAGE] "
-                        ^ name
-                        ^ ": discovered "
-                        ^ Int.to_string (List.length main_binaries)
-                        ^ " runtime binaries from src/main.ml");
-                      Log.debug
-                        ("[PACKAGE] "
-                        ^ name
-                        ^ ": discovered "
-                        ^ Int.to_string (List.length test_binaries)
-                        ^ " test binaries from "
-                        ^ Int.to_string (List.length sources.tests)
-                        ^ " test files");
-                      Log.debug
-                        ("[PACKAGE] "
-                        ^ name
-                        ^ ": discovered "
-                        ^ Int.to_string (List.length example_binaries)
-                        ^ " example binaries from "
-                        ^ Int.to_string (List.length sources.examples)
-                        ^ " example files");
-                      Log.debug
-                        ("[PACKAGE] "
-                        ^ name
-                        ^ ": discovered "
-                        ^ Int.to_string (List.length bench_binaries)
-                        ^ " benchmark binaries from "
-                        ^ Int.to_string (List.length sources.bench)
-                        ^ " benchmark files");
-                      let runtime_binaries = merge_binaries ~declared:binaries ~autodiscovered:main_binaries in
-                      let all_binaries = merge_binaries
-                        ~declared:runtime_binaries
-                        ~autodiscovered:((test_binaries @ example_binaries @ bench_binaries)) in
-                      let commands =
-                        match List.assoc_opt "command" items with
-                        | Some (Toml.Array cmd_entries) -> Package_command.parse_from_toml
-                          cmd_entries
-                          ~package_name:name
-                          ~package_path:path
-                        | _ -> []
-                      in
-                      Ok (
-                        canonicalize
-                          {
+                      match Macro_provider.parse_from_toml items ~package_name:name ~package_path:path with
+                      | Error _ as err -> err
+                      | Ok macro_providers ->
+                          let excluded_relpaths =
+                            provider_excluded_relpaths ~package_path:path fix_providers
+                            @ macro_provider_excluded_relpaths ~package_path:path macro_providers
+                            |> List.sort_uniq
+                              (fun left right ->
+                                String.compare (Path.to_string left) (Path.to_string right))
+                          in
+                          let sources = scan_sources ~package_path:path ~excluded_relpaths () in
+                          let compiler = parse_compiler_config items in
+                          let main_binaries = autodiscover_main_binary sources ~package_name:name in
+                          let test_binaries = autodiscover_test_binaries sources ~package_path:path in
+                          let example_binaries = autodiscover_example_binaries sources ~package_path:path in
+                          let bench_binaries = autodiscover_bench_binaries sources ~package_path:path in
+                          Log.debug
+                            ("[PACKAGE] "
+                            ^ name
+                            ^ ": discovered "
+                            ^ Int.to_string (List.length main_binaries)
+                            ^ " runtime binaries from src/main.ml");
+                          Log.debug
+                            ("[PACKAGE] "
+                            ^ name
+                            ^ ": discovered "
+                            ^ Int.to_string (List.length test_binaries)
+                            ^ " test binaries from "
+                            ^ Int.to_string (List.length sources.tests)
+                            ^ " test files");
+                          Log.debug
+                            ("[PACKAGE] "
+                            ^ name
+                            ^ ": discovered "
+                            ^ Int.to_string (List.length example_binaries)
+                            ^ " example binaries from "
+                            ^ Int.to_string (List.length sources.examples)
+                            ^ " example files");
+                          Log.debug
+                            ("[PACKAGE] "
+                            ^ name
+                            ^ ": discovered "
+                            ^ Int.to_string (List.length bench_binaries)
+                            ^ " benchmark binaries from "
+                            ^ Int.to_string (List.length sources.bench)
+                            ^ " benchmark files");
+                          let runtime_binaries = merge_binaries ~declared:binaries ~autodiscovered:main_binaries in
+                          let all_binaries = merge_binaries
+                            ~declared:runtime_binaries
+                            ~autodiscovered:((test_binaries @ example_binaries @ bench_binaries)) in
+                          let commands =
+                            match List.assoc_opt "command" items with
+                            | Some (Toml.Array cmd_entries) -> Package_command.parse_from_toml
+                              cmd_entries
+                              ~package_name:name
+                              ~package_path:path
+                            | _ -> []
+                          in
+                          Ok (
+                            canonicalize
+                              {
                             name;
                             path;
                             relative_path;
@@ -1575,9 +1617,10 @@ let from_toml:
                             compiler;
                             commands;
                             fix_providers;
+                            macro_providers;
                             publish;
                           }
-                      )
+                          )
     )
   | _ -> Error "TOML is not a table"
 
@@ -1616,6 +1659,7 @@ let to_json: t -> Json.t = fun pkg ->
     | None -> Json.Null
   in
   let fix_providers_json = Json.Array (List.map Fix_provider.to_json pkg.fix_providers) in
+  let macro_providers_json = Json.Array (List.map Macro_provider.to_json pkg.macro_providers) in
   Json.Object [
     ("name", Json.String pkg.name);
     ("path", Json.String (Path.to_string pkg.path));
@@ -1626,6 +1670,7 @@ let to_json: t -> Json.t = fun pkg ->
     ("binaries", binaries_json);
     ("library", library_json);
     ("fix_providers", fix_providers_json);
+    ("macro_providers", macro_providers_json);
     (
       "publish",
       Json.Object (
@@ -1727,6 +1772,20 @@ let from_json: Json.t -> (t, string) result = fun json ->
                                   )
                                 | _ -> None
                               in
+                              let macro_providers =
+                                match List.assoc_opt "macro_providers" fields with
+                                | Some (Json.Array providers) ->
+                                    let rec loop acc = function
+                                      | [] -> Ok (List.rev acc)
+                                      | provider_json :: rest -> (
+                                          match Macro_provider.of_json provider_json with
+                                          | Ok provider -> loop (provider :: acc) rest
+                                          | Error _ as err -> err
+                                        )
+                                    in
+                                    loop [] providers
+                                | _ -> Ok []
+                              in
                               let publish =
                                 match List.assoc_opt "publish" fields with
                                 | Some (Json.Object publish_fields) ->
@@ -1783,35 +1842,42 @@ let from_json: Json.t -> (t, string) result = fun json ->
                                 | None ->
                                     Ok default_publish_metadata
                               in
-                              match publish with
-                              | Error _ as err -> err
-                              | Ok publish ->
-                                  Ok (
-                                    canonicalize
-                                      {
-                                        name;
-                                        path;
-                                        relative_path;
-                                        dependencies;
-                                        dev_dependencies;
-                                        build_dependencies;
-                                        foreign_dependencies = [];
-                                        binaries;
-                                        library;
-                                        sources =
-                                          {
-                                            src = [];
-                                            native = [];
-                                            tests = [];
-                                            examples = [];
-                                            bench = [];
-                                          };
-                                        compiler = { profile_overrides = []; target_overrides = [] };
-                                        commands = [];
-                                        fix_providers = [];
-                                        publish;
-                                      }
+                              (
+                                match macro_providers with
+                                | Error _ as err -> err
+                                | Ok macro_providers -> (
+                                    match publish with
+                                    | Error _ as err -> err
+                                    | Ok publish ->
+                                        Ok (
+                                          canonicalize
+                                            {
+                                          name;
+                                          path;
+                                          relative_path;
+                                          dependencies;
+                                          dev_dependencies;
+                                          build_dependencies;
+                                          foreign_dependencies = [];
+                                          binaries;
+                                          library;
+                                          sources =
+                                            {
+                                              src = [];
+                                              native = [];
+                                              tests = [];
+                                              examples = [];
+                                              bench = [];
+                                            };
+                                          compiler = { profile_overrides = []; target_overrides = [] };
+                                          commands = [];
+                                          fix_providers = [];
+                                          macro_providers;
+                                          publish;
+                                        }
+                                        )
                                   )
+                              )
                         )
                     )
                 )
@@ -1995,6 +2061,19 @@ let hash_with = fun (type s) ((module H : Hash_writer with type state = s)) stat
       H.write state (Path.to_string provider.source_path);
       H.write_list H.write state provider.rules)
     pkg.fix_providers;
+  let sorted_macro_providers =
+    List.sort
+      (fun (a: Macro_provider.t) (b: Macro_provider.t) ->
+        Macro_provider.compare a b)
+      pkg.macro_providers
+  in
+  List.iter
+    (fun (provider: Macro_provider.t) ->
+      H.write state provider.package_name;
+      H.write state (Path.to_string provider.source_path);
+      H.write_list H.write state provider.module_path;
+      H.write_list H.write state provider.macros)
+    sorted_macro_providers;
   (* Library metadata *)
   (
     match pkg.library with
@@ -2330,6 +2409,7 @@ std = "definitely-not-semver"
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];
       fix_providers = [];
+      macro_providers = [];
       publish;
     }
     in
@@ -2380,6 +2460,7 @@ std = "definitely-not-semver"
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];
       fix_providers = [];
+      macro_providers = [];
       publish;
     }
     in
@@ -2528,6 +2609,7 @@ std = {}
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];
       fix_providers = [];
+      macro_providers = [];
       publish;
     }
     in
@@ -2571,6 +2653,7 @@ std = {}
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];
       fix_providers = [];
+      macro_providers = [];
       publish;
     }
     in

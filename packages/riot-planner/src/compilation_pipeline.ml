@@ -7,6 +7,87 @@ type planned_source = {
   copied_sources: Path.t list;
 }
 
+let provider_path_string = fun (provider: Riot_model.Macro_provider.t) ->
+  match provider.module_path with
+  | [] -> "<root>"
+  | module_path -> String.concat "." module_path
+
+let qualified_macro_name = fun (provider: Riot_model.Macro_provider.t) macro_name ->
+  let provider_path = provider_path_string provider in
+  if String.equal provider_path "<root>" then
+    macro_name ^ "!"
+  else
+    provider_path ^ "." ^ macro_name ^ "!"
+
+let sort_uniq_strings = fun values ->
+  List.sort_uniq String.compare values
+
+let available_provider_paths = fun providers ->
+  providers
+  |> List.map provider_path_string
+  |> List.filter (fun path -> not (String.equal path "<root>"))
+  |> sort_uniq_strings
+
+let provider_exported_macros = fun (provider: Riot_model.Macro_provider.t) ->
+  provider.macros
+  |> List.map (qualified_macro_name provider)
+  |> sort_uniq_strings
+
+let with_list_suffix = fun label values ->
+  match values with
+  | [] -> ""
+  | _ -> "; " ^ label ^ ": " ^ String.concat ", " values
+
+let validate_macro_invocation = fun ~providers (invocation: Macro.Parser.invocation) ->
+  let qualified_name = String.concat "." invocation.callee_path in
+  match List.rev invocation.callee_path with
+  | [] -> Error "macro invocation is missing a callee path"
+  | macro_name :: rev_module_path ->
+      let module_path = List.rev rev_module_path in
+      if module_path = [] then
+        Error ("macro invocation must be qualified: "
+        ^ qualified_name
+        ^ "!"
+        ^ with_list_suffix "reachable providers" (available_provider_paths providers))
+      else
+        let matching_providers =
+          List.filter
+            (fun (provider: Riot_model.Macro_provider.t) -> provider.module_path = module_path)
+            providers
+        in
+        match matching_providers with
+        | [] ->
+            Error ("unsupported macro invocation: "
+            ^ qualified_name
+            ^ "!"
+            ^ with_list_suffix "reachable providers" (available_provider_paths providers))
+        | [ provider ] ->
+            if List.mem macro_name provider.macros then
+              Ok ()
+            else
+              Error ("unsupported macro invocation: "
+              ^ qualified_name
+              ^ "!"
+              ^ with_list_suffix
+                ("provider " ^ provider_path_string provider ^ " exports")
+                (provider_exported_macros provider))
+        | _ ->
+            Error ("ambiguous qualified macro invocation: "
+            ^ qualified_name
+            ^ "!"
+            ^ "; multiple providers export module path "
+            ^ String.concat "." module_path)
+
+let validate_macro_invocations = fun ~providers invocations ->
+  let rec loop = function
+    | [] -> Ok ()
+    | invocation :: rest -> (
+        match validate_macro_invocation ~providers invocation with
+        | Ok () -> loop rest
+        | Error _ as err -> err)
+  in
+  loop invocations
+
 let resolve_concrete_source = fun ~(package:Package.t) path ->
   if Path.is_absolute path then
     path
@@ -71,24 +152,27 @@ module Stage = struct
         else if providers = [] then
           Error ("macro expansion failed for " ^ Path.to_string parsed.source.path ^ ": explicit macro expansion requires at least one reachable macro provider")
         else
-          (
-            match Macro.Runner.validate_providers providers with
-            | Error err ->
-                Error ("macro expansion failed for "
-                ^ Path.to_string parsed.source.path
-                ^ ": "
-                ^ Macro.error_message err)
-            | Ok () ->
-                Ok (
-                  Some {
-                    parsed;
-                    workspace_root;
-                    target_dir_root;
-                    providers;
-                    provider_hash = Macro.Runner.providers_hash ~workspace_root providers;
-                  }
-                )
-          )
+          match validate_macro_invocations ~providers _invocations with
+          | Error message ->
+              Error ("macro expansion failed for " ^ Path.to_string parsed.source.path ^ ": " ^ message)
+          | Ok () -> (
+              match Macro.Runner.validate_providers providers with
+              | Error err ->
+                  Error ("macro expansion failed for "
+                  ^ Path.to_string parsed.source.path
+                  ^ ": "
+                  ^ Macro.error_message err)
+              | Ok () ->
+                  Ok (
+                    Some {
+                      parsed;
+                      workspace_root;
+                      target_dir_root;
+                      providers;
+                      provider_hash = Macro.Runner.providers_hash ~workspace_root providers;
+                    }
+                  )
+            )
 
   let to_planned_source = fun expanded ->
     match expanded.result with

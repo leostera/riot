@@ -354,7 +354,7 @@ let discover_fix_providers: t -> Fix_provider.t list = fun workspace ->
   List.concat_map (fun (pkg: Package.t) -> pkg.fix_providers) workspace.packages
 
 let discover_macro_providers: t -> Macro_provider.t list = fun workspace ->
-  List.filter_map Package.macro_provider workspace.packages
+  List.concat_map (fun (pkg: Package.t) -> pkg.macro_providers) workspace.packages
 
 module Tests = struct
   let test_parse_workspace_toml (): (unit, string) result = Ok () [@test]
@@ -457,12 +457,16 @@ rules = ["no-stdlib"]
       Std.Data.Toml.parse
         {|
 [package]
-name = "sqlx-macro"
+name = "sqlx"
 version = "0.1.0"
 
 [lib]
-kind = "macro"
+path = "src/sqlx.ml"
+
+[riot.macro.provider]
 path = "src/sqlx_macro.ml"
+module_path = "Sqlx"
+macros = ["query", "query_as"]
 |}
       |> Result.expect ~msg:"expected package toml to parse"
     in
@@ -471,16 +475,18 @@ path = "src/sqlx_macro.ml"
       ~workspace_deps:[]
       ~workspace_dev_deps:[]
       ~workspace_build_deps:[]
-      ~path:(Path.v "/tmp/example/packages/sqlx-macro")
-      ~relative_path:(Path.v "packages/sqlx-macro")
+      ~path:(Path.v "/tmp/example/packages/sqlx")
+      ~relative_path:(Path.v "packages/sqlx")
     |> Result.expect ~msg:"expected package manifest" in
     let workspace = make ~root:(Path.v "/tmp/example") ~packages:[ package ] () in
     match discover_macro_providers workspace with
     | [ provider ] ->
         if
-          String.equal provider.package_name "sqlx-macro"
-          && String.equal provider.module_name "Sqlx_macro"
-          && String.equal (Path.to_string provider.source_path) "/tmp/example/packages/sqlx-macro/src/sqlx_macro.ml"
+          String.equal provider.package_name "sqlx"
+          && String.equal provider.module_name "Sqlx"
+          && provider.module_path = [ "Sqlx" ]
+          && provider.macros = [ "query"; "query_as" ]
+          && String.equal (Path.to_string provider.source_path) "/tmp/example/packages/sqlx/src/sqlx_macro.ml"
         then
           Ok ()
         else

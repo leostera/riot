@@ -5,8 +5,23 @@ type t = {
   package_path: Path.t;
   source_path: Path.t;
   module_name: string;
+  module_path: string list;
+  macros: string list;
 }
-val make: package_name:string -> package_path:Path.t -> source_path:Path.t -> t
+val make:
+  ?module_path:string list ->
+  ?macros:string list ->
+  package_name:string ->
+  package_path:Path.t ->
+  source_path:Path.t ->
+  unit ->
+  t
+
+val parse_from_toml:
+  (string * Data.Toml.value) list ->
+  package_name:string ->
+  package_path:Path.t ->
+  (t list, string) result
 
 val fingerprint: t -> string
 

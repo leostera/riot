@@ -16,7 +16,7 @@
 10. Resolved profile-owned compile flags must flow into planned OCaml compile actions. If release/debug profile settings change emitted compiler args, the action graph and planner artifact version must change with them.
 11. Warm cached packages should short-circuit from the hash-addressed artifact manifest when possible. Do not require full module/action graph decode on cache hits unless execution really needs the full plan.
 12. Macro expansion is planner-owned invalidation work: hash original concrete sources, but emit explicit `WriteFile` actions that rewrite copied sandbox sources before OCaml compile actions run.
-13. Keep macro availability and runtime linkage separate in planner dependency closures. Macro packages participate in expansion-provider resolution, not ordinary compile/link include paths.
+13. Keep macro availability and runtime linkage separate in planner dependency closures. Packages that expose `[riot.macro.provider]` participate in expansion-provider resolution, not ordinary compile/link include paths.
 14. Do not implicitly fall back to built-in macro providers for packages with no reachable macro dependencies. Planner-owned macro expansion should only see providers that are explicitly reachable through the dependency graph.
 15. Prefer explicit compilation-unit stages over one-off planner hooks when adding source-processing steps. Macro expansion should live in a narrow pipeline stage that lowers cleanly into action-graph writes and compile actions.
 

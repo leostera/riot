@@ -21,7 +21,8 @@ let with_temp_provider_result = fun ~prefix ~source fn ->
         let provider = Riot_model.Macro_provider.make
           ~package_name:"demo-macro"
           ~package_path:package_root
-          ~source_path:(Path.v "src/macro.ml") in
+          ~source_path:(Path.v "src/macro.ml")
+          () in
         fn provider)
   with
   | Ok result -> result

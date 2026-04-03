@@ -44,8 +44,12 @@ name = "macro-demo"
 version = "0.0.1"
 
 [lib]
-kind = "macro"
 path = "src/macro.ml"
+
+[riot.macro.provider]
+path = "src/macro.ml"
+module_path = "MacroDemo"
+macros = ["demo"]
 
 [build-dependencies]
 helper = { path = "../helper", version = "*" }
@@ -56,7 +60,10 @@ helper = { path = "../helper", version = "*" }
     Riot_model.Macro_provider.make
       ~package_name:"macro-demo"
       ~package_path:macro_root
-      ~source_path:Path.(macro_root / Path.v "src" / Path.v "macro.ml");
+      ~source_path:(Path.(macro_root / Path.v "src" / Path.v "macro.ml"))
+      ~module_path:[ "MacroDemo" ]
+      ~macros:[ "demo" ]
+      ();
   ]
 
 let test_provider_hash_tracks_dependency_closure_sources = Test.case
@@ -69,7 +76,7 @@ let test_provider_hash_tracks_dependency_closure_sources = Test.case
           write_macro_workspace
             ~tmpdir
             ~helper_source:"let version = \"one\"\n"
-            ~provider_source:"let provider () = Macro.Provider.v ~module_path:[ \"MacroDemo\" ] []\n" in
+            ~provider_source:"let provider () = Macro.Provider.v ~module_path:[ \"MacroDemo\" ] [ Macro.Provider.fn \"demo\" (fun tokens -> { Macro.Result.output = tokens; diagnostics = [] }) ]\n" in
         let first_hash = Runner.providers_hash ~workspace_root:tmpdir providers in
         let _ = Fs.write
           "let version = \"two\"\n"
@@ -91,7 +98,7 @@ let test_runner_materialize_reuses_existing_workspace = Test.case
           write_macro_workspace
             ~tmpdir
             ~helper_source:"let version = \"one\"\n"
-            ~provider_source:"let provider () = Macro.Provider.v ~module_path:[ \"MacroDemo\" ] []\n" in
+            ~provider_source:"let provider () = Macro.Provider.v ~module_path:[ \"MacroDemo\" ] [ Macro.Provider.fn \"demo\" (fun tokens -> { Macro.Result.output = tokens; diagnostics = [] }) ]\n" in
         let target_dir_root = Path.(tmpdir / Path.v "target") in
         let plan = Runner.materialize ~workspace_root:tmpdir ~target_dir_root providers in
         let sentinel = Path.(Runner.workspace_root plan / Path.v "sentinel.txt") in
