@@ -67,12 +67,8 @@ The active manifest now follows two rules:
 
 ## Audit
 
-Use the audit script to inspect both exact duplicates and near-duplicate families:
+For now, audit the fixture corpus manually:
 
-`python3 packages/krasny/tests/fixture_audit.py`
-
-Useful variants:
-
-`python3 packages/krasny/tests/fixture_audit.py --duplicates pair`
-`python3 packages/krasny/tests/fixture_audit.py --near-threshold 0.92`
-`python3 packages/krasny/tests/fixture_audit.py --near-field pair`
+- scan `format_expectations.txt` before adding a new case so you do not duplicate an existing behavior band
+- compare both the source fixture and its approved `.expected` output before keeping near-duplicate cases
+- if two fixtures end up asserting the same formatter behavior, keep the clearest name and drop the rest from the active manifest

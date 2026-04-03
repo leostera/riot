@@ -11,7 +11,7 @@
 5. Keep the public surface writer-oriented and `Std.IO`-friendly.
 6. Treat comments and trivia as part of the formatter design, not as a post-processing hack.
 7. Keep workspace formatting runners streaming-friendly: file discovery and per-file check results should be able to flow incrementally instead of requiring a full precollected file list.
-8. Keep the active fixture manifest intentionally curated; prefer one category corpus per supported syntax band and add individual edge-case fixtures only after real code exposes a regression. Use `tests/FIXTURES.md` and `tests/fixture_audit.py` before adding overlapping cases.
+8. Keep the active fixture manifest intentionally curated; prefer one category corpus per supported syntax band and add individual edge-case fixtures only after real code exposes a regression. Use `tests/FIXTURES.md` and manual manifest review before adding overlapping cases.
 9. When a copied real-file regression exposes a missing formatter behavior, add the smallest representative example back into the relevant `0X00` category corpus so the feature is isolated before or alongside the fix.
 10. `--verify` is a normalized semantic-hash safety preflight, not another formatting-state check. Report files that would reformat safely separately from files that are unsafe to format.
 11. Keep lowering context explicit and per-invocation. Do not reintroduce global mutable source/render state in `Lower`; each format run must be multicore-safe on its own.
@@ -95,5 +95,4 @@
 `timeout 30 riot test krasny:format_tests`
 `timeout 180 riot test krasny:fixture_tests`
 
-Audit fixture taxonomy and duplicate pressure when curating the corpus:
-`python3 packages/krasny/tests/fixture_audit.py`
+Audit fixture taxonomy and duplicate pressure manually when curating the corpus by reviewing `tests/FIXTURES.md` and `tests/format_expectations.txt` together before adding overlapping cases.
