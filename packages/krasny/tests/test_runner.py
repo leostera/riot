@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """
-Fixture runner for krasny.
-
-Every fixture in the manifest is validated in two ways:
-  1. formatter output matches the adjacent .expected file
-  2. the formatted output round-trips its CST syntax hash
+Legacy helper for non-fixture krasny workflows.
 
 Usage:
-  python3 test_runner.py
-  python3 test_runner.py --filter 0100
-  python3 test_runner.py --refresh
+  python3 test_runner.py --verify-workspace
 """
 
 import argparse
@@ -489,7 +483,7 @@ class WorkspaceVerifier:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run krasny fixture expectations and syntax-hash roundtrips",
+        description="Legacy helper for workspace-wide krasny verification",
     )
     parser.add_argument(
         "--filter",
@@ -518,8 +512,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         verifier = WorkspaceVerifier(context)
         return verifier.run(args.filter, fail_fast=args.fail_fast)
 
-    runner = FixtureRunner(context)
-    return runner.run(args.filter, refresh=args.refresh, fail_fast=args.fail_fast)
+    print(f"{YELLOW}Fixture coverage moved to the native snapshot suite.{NC}")
+    print("  riot test krasny:fixture_tests")
+    return 1
 
 
 if __name__ == "__main__":

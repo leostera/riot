@@ -1,27 +1,13 @@
 #!/usr/bin/env python3
 """
-Unified test runner for syn parser.
+Legacy helper for non-fixture syn parser workflows.
 
 Usage:
-  # Run Ceibo fixture tests
-  python3 test_runner.py fixtures
-  python3 test_runner.py cst
-  
-  # Run specific fixture tests (filter by prefix/pattern)
-  python3 test_runner.py fixtures --filter 08
-  python3 test_runner.py fixtures --filter type
-  
-  # Run diagnostic tests (bad syntax with expected errors)
-  python3 test_runner.py diagnostics
-  
   # Test entire codebase
   python3 test_runner.py codebase
   
   # Debug a specific file with trivia analysis
   python3 test_runner.py debug <file>
-  
-  # Run all tests (ceibo fixtures + cst fixtures + diagnostics + codebase)
-  python3 test_runner.py all
 """
 
 import sys
@@ -1051,6 +1037,13 @@ def main():
     workspace_root = script_dir.parent.parent.parent
     
     runner = TestRunner(workspace_root, parse_timeout_seconds=args.timeout)
+
+    if args.command in {"fixtures", "cst", "diagnostics", "all"}:
+        print(f"{YELLOW}Fixture coverage moved to native snapshot suites.{NC}")
+        print("  riot test syn:fixture_tests")
+        print("  riot test syn:diagnostic_tests")
+        print("  riot test syn:cst_fixture_tests")
+        sys.exit(1)
     
     # Check if syn binary exists
     if not runner.syn_binary.exists():

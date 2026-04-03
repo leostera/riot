@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """
-Fixture-style end-to-end runner for `riot fix`.
+Legacy helper for non-fixture `riot fix` workflows.
 
 Usage:
-  python3 test_runner.py
-  python3 test_runner.py fixtures
-  python3 test_runner.py fixtures --filter 0001
-  python3 test_runner.py fixtures --refresh
   python3 test_runner.py codebase
-  python3 test_runner.py all
 """
 
 import argparse
@@ -253,7 +248,7 @@ class TestRunner:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="End-to-end riot-fix runner")
+    parser = argparse.ArgumentParser(description="Legacy riot-fix helper")
     parser.add_argument(
         "command",
         nargs="?",
@@ -266,6 +261,11 @@ def main() -> int:
     args = parser.parse_args()
 
     runner = TestRunner(Path(__file__).resolve().parents[3], args.timeout)
+
+    if args.command in ("fixtures", "all"):
+        print("Fixture coverage moved to the native snapshot suite:")
+        print("  riot test riot-fix:fixture_tests")
+        return 1
 
     if args.command == "fixtures":
         return runner.run_fixtures(args.pattern, args.refresh)
