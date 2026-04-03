@@ -991,6 +991,12 @@ let approved_fixtures = [
   "9127_optional_param_typed.ml";
   "9128_local_module_simple.ml";
   "9129_local_module_types.ml";
+  "9130_local_open_pattern.ml";
+  "9131_module_type_constraint_poly.ml";
+  "9132_private_type_alias_record.ml";
+  "9133_abstract_type_multiline_val.mli";
+  "9135_instance_variable_assign.ml";
+  "9137_class_type_arrow.mli";
   "9140_trailing_dot_float_literals.ml";
   "9201_qualified_record_field_pattern.ml";
   "9202_locally_abstract_types.ml";
@@ -1002,6 +1008,21 @@ let approved_fixtures = [
   "gadts.ml";
   "labeled_param_trivia.mli";
   "module_functors.ml";
+  "ocaml_assert_location.ml";
+  "ocaml_attributes.ml";
+  "ocaml_broken_invariants.ml";
+  "ocaml_change_start_loc.ml";
+  "ocaml_extended_indexoperators.ml";
+  "ocaml_extension_operators.ml";
+  "ocaml_illegal_ppx.ml";
+  "ocaml_int_and_float_with_modifier.ml";
+  "ocaml_multi_indices.ml";
+  "ocaml_parenthesized_letop_and_alias_cons.ml";
+  "ocaml_pr10468.ml";
+  "ocaml_pr6865.ml";
+  "ocaml_prefix_op.ml";
+  "ocaml_rawidents.ml";
+  "ocaml_reloc.ml";
 ]
 
 let fixture_root = Path.v "packages/syn/tests/fixtures"
