@@ -23,9 +23,7 @@ let tracked_fixtures = fun () ->
         else
           let relpath = Path.of_string line |> Result.expect ~msg:"fixture manifest entry should be valid UTF-8" in
           let name = Path.basename relpath in
-          let () =
-            ignore (HashSet.insert tracked name)
-          in
+          let () = ignore (HashSet.insert tracked name) in
           loop rest
   in
   loop lines

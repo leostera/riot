@@ -5,6 +5,7 @@ type pending_snapshot = {
   approved: Path.t;
   pending: Path.t;
 }
+
 type review_decision =
 [
   `Approve
@@ -12,6 +13,7 @@ type review_decision =
   | `Ignore
   | `Quit
 ]
+
 type review_summary = {
   approved_count: int;
   rejected_count: int;
@@ -23,7 +25,7 @@ let empty_review_summary = {
   approved_count = 0;
   rejected_count = 0;
   ignored_count = 0;
-  quit = false;
+  quit = false
 }
 
 let ( let* ) = Result.and_then
@@ -244,11 +246,9 @@ let print_rejected = fun ~workspace_root snapshot ->
 let print_ignored = fun ~workspace_root snapshot ->
   println ("Ignored " ^ display_path ~workspace_root snapshot.pending)
 
-let print_review_help = fun () ->
-  println "Actions: [a]pprove, [r]eject, [i]gnore, [q]uit"
+let print_review_help = fun () -> println "Actions: [a]pprove, [r]eject, [i]gnore, [q]uit"
 
-let print_review_prompt = fun () ->
-  eprint "Decision [a/r/i/q]: "
+let print_review_prompt = fun () -> eprint "Decision [a/r/i/q]: "
 
 let rec prompt_review_decision = fun tty ->
   print_review_prompt ();
@@ -269,14 +269,15 @@ let print_review_outcome = fun summary ->
     else
       "Snapshot review finished:"
   in
-  println (prefix
-  ^ " "
-  ^ Int.to_string summary.approved_count
-  ^ " approved, "
-  ^ Int.to_string summary.rejected_count
-  ^ " rejected, "
-  ^ Int.to_string summary.ignored_count
-  ^ " ignored")
+  println
+    (prefix
+    ^ " "
+    ^ Int.to_string summary.approved_count
+    ^ " approved, "
+    ^ Int.to_string summary.rejected_count
+    ^ " rejected, "
+    ^ Int.to_string summary.ignored_count
+    ^ " ignored")
 
 let review_pending_snapshots_with_decider = fun ~workspace_root snapshots ~decide ->
   let rec loop summary = function
@@ -306,7 +307,8 @@ let review_pending_snapshots_with_decider = fun ~workspace_root snapshots ~decid
 let review_pending_snapshots_interactively = fun ~workspace_root snapshots ->
   match Tty.make ~stdin:IO.stdin () with
   | Error Tty.NoTtyConnected ->
-      review_pending_snapshots ~workspace_root snapshots |> Result.map (fun () -> empty_review_summary)
+      review_pending_snapshots ~workspace_root snapshots
+      |> Result.map (fun () -> empty_review_summary)
   | Error (Tty.SystemError err) ->
       Error err
   | Ok tty ->

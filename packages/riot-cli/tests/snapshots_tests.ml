@@ -201,7 +201,8 @@ let test_parse_review_decision =
         Riot_cli.Snapshots.parse_review_decision "q";
         Riot_cli.Snapshots.parse_review_decision "quit";
         Riot_cli.Snapshots.parse_review_decision "wat";
-      ] in
+      ]
+      in
       let expected = [
         Some `Approve;
         Some `Approve;
@@ -213,7 +214,8 @@ let test_parse_review_decision =
         Some `Quit;
         Some `Quit;
         None;
-      ] in
+      ]
+      in
       Test.assert_equal ~expected ~actual;
       Ok ())
 
@@ -222,8 +224,8 @@ let test_review_pending_snapshots_with_decider =
     (fun _ctx ->
       with_tempdir_result "snapshots_review"
         (fun workspace_root ->
-          let fixture_pending, fixture_approved, custom_pending, custom_approved, workspace_pending, workspace_approved, _ =
-            pending_paths workspace_root in
+          let fixture_pending, fixture_approved, custom_pending, custom_approved, workspace_pending, workspace_approved, _ = pending_paths
+            workspace_root in
           let setup_result =
             match write_file fixture_pending "fixture pending\n" with
             | Error _ as err -> err
@@ -256,8 +258,10 @@ let test_review_pending_snapshots_with_decider =
                       let fixture_pending_exists = Fs.exists fixture_pending |> Result.expect ~msg:"stat fixture pending snapshot" in
                       let custom_approved_exists = Fs.exists custom_approved |> Result.expect ~msg:"stat custom approved snapshot" in
                       let custom_pending_exists = Fs.exists custom_pending |> Result.expect ~msg:"stat custom pending snapshot" in
-                      let workspace_approved_exists = Fs.exists workspace_approved |> Result.expect ~msg:"stat workspace approved snapshot" in
-                      let workspace_pending_exists = Fs.exists workspace_pending |> Result.expect ~msg:"stat workspace pending snapshot" in
+                      let workspace_approved_exists = Fs.exists workspace_approved
+                      |> Result.expect ~msg:"stat workspace approved snapshot" in
+                      let workspace_pending_exists = Fs.exists workspace_pending
+                      |> Result.expect ~msg:"stat workspace pending snapshot" in
                       if not (String.equal fixture_approved_content "fixture pending\n") then
                         Error ("unexpected approved snapshot content: " ^ fixture_approved_content)
                       else if fixture_pending_exists then
@@ -270,10 +274,12 @@ let test_review_pending_snapshots_with_decider =
                         Error "expected ignored snapshot not to create an approved file"
                       else if not workspace_pending_exists then
                         Error "expected ignored pending snapshot to remain"
-                      else if not (Int.equal summary.Riot_cli.Snapshots.approved_count 1)
+                      else if
+                        not (Int.equal summary.Riot_cli.Snapshots.approved_count 1)
                         || not (Int.equal summary.rejected_count 1)
                         || not (Int.equal summary.ignored_count 1)
-                        || summary.quit then
+                        || summary.quit
+                      then
                         Error "unexpected review summary"
                       else
                         Ok ()
@@ -311,10 +317,12 @@ let test_review_pending_snapshots_with_quit =
                         Error "expected quit not to approve any snapshot"
                       else if not fixture_pending_exists || not custom_pending_exists then
                         Error "expected quit to leave pending snapshots untouched"
-                      else if not summary.Riot_cli.Snapshots.quit
+                      else if
+                        not summary.Riot_cli.Snapshots.quit
                         || not (Int.equal summary.approved_count 0)
                         || not (Int.equal summary.rejected_count 0)
-                        || not (Int.equal summary.ignored_count 0) then
+                        || not (Int.equal summary.ignored_count 0)
+                      then
                         Error "unexpected quit summary"
                       else
                         Ok ()
