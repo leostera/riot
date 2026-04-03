@@ -9,7 +9,7 @@ open Std.Collections
     - Explicit trivia control (not everywhere!)
     - Flat function structure (no nesting)
     - Grammar-driven (one function per EBNF rule)
-    - TDD approach with test_runner.py *)
+    - TDD approach with snapshot-backed fixture suites *)
 (** Parse result type *)
 type parse_result = {
   source: string;

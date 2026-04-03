@@ -95,8 +95,5 @@
 `timeout 30 riot test krasny:format_tests`
 `timeout 180 riot test krasny:fixture_tests`
 
-Use the legacy Python helper only for workspace-wide syntax-hash verification:
-`timeout 900 python3 packages/krasny/tests/test_runner.py --verify-workspace`
-
 Audit fixture taxonomy and duplicate pressure when curating the corpus:
 `python3 packages/krasny/tests/fixture_audit.py`

@@ -10,7 +10,6 @@ unit tests.
   result on that fixture
 - `fixture_tests.ml`: native `Std.Test.FixtureRunner` suite for the fixture corpus
 - `runner_tests.ml`: unit and integration coverage for the library/runtime pieces
-- `test_runner.py`: legacy helper kept only for codebase-oriented experiments
 
 ## Running fixture snapshots
 
@@ -29,5 +28,5 @@ riot snapshots reject packages/riot-fix/tests
 ## Codebase audit
 
 ```bash
-python3 packages/riot-fix/tests/test_runner.py codebase
+packages/riot-fix/tests/lint_codebase.sh
 ```

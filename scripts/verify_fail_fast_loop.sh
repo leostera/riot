@@ -16,12 +16,11 @@ while true; do
   {
     echo "started_at=${started_at}"
     echo "cwd=${REPO_ROOT}"
-    echo "cmd=timeout ${RUN_TIMEOUT_SECONDS} python3 -u ./packages/krasny/tests/test_runner.py --verify-workspace --fail-fast"
+    echo "cmd=timeout ${RUN_TIMEOUT_SECONDS} riot test krasny:fixture_tests"
     echo "------------------------------------------------------------"
     (
       cd "${REPO_ROOT}"
-      timeout "${RUN_TIMEOUT_SECONDS}" \
-        python3 -u ./packages/krasny/tests/test_runner.py --verify-workspace --fail-fast
+      timeout "${RUN_TIMEOUT_SECONDS}" riot test krasny:fixture_tests
     )
     rc=$?
     echo "------------------------------------------------------------"
