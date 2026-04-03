@@ -1,29 +1,29 @@
 # riot-fix test suite
 
-This directory contains end-to-end fixtures for `riot fix` plus OCaml unit tests.
+This directory contains fixture-backed snapshot tests for `riot fix` plus OCaml
+unit tests.
 
 ## Structure
 
 - `000*_*.ml`: fixture inputs
-- `*.ml.expected`: pretty-printed snapshots aggregated from `riot fix --check --json` JSONL events
-- `test_runner.py`: fixture runner modeled after `syn`'s runner
-- `run_tests.sh`: shell wrapper around the Python runner
-- `regenerate_expected.sh`: refresh fixture snapshots
-- `lint_codebase.sh`: run `riot fix` over the repo and report files with issues
+- `*.ml.expected`: approved JSON snapshots for the aggregated `riot fix --check`
+  result on that fixture
+- `fixture_tests.ml`: native `Std.Test.FixtureRunner` suite for the fixture corpus
+- `runner_tests.ml`: unit and integration coverage for the library/runtime pieces
+- `test_runner.py`: legacy helper kept only for codebase-oriented experiments
 
-## Running tests
+## Running fixture snapshots
 
 ```bash
-python3 packages/riot-fix/tests/test_runner.py fixtures
-python3 packages/riot-fix/tests/test_runner.py fixtures --filter 0001
-python3 packages/riot-fix/tests/test_runner.py all
+riot test riot-fix:fixture_tests
 ```
 
-## Refreshing expected output
+## Reviewing snapshot changes
 
 ```bash
-python3 packages/riot-fix/tests/test_runner.py fixtures --refresh
-python3 packages/riot-fix/tests/test_runner.py fixtures --refresh --filter 0001
+riot snapshots review packages/riot-fix/tests
+riot snapshots approve packages/riot-fix/tests
+riot snapshots reject packages/riot-fix/tests
 ```
 
 ## Codebase audit

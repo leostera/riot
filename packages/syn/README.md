@@ -87,19 +87,20 @@ The main validation surfaces are:
 
 ```sh
 timeout 30 riot build syn
-timeout 180 riot test syn:cst_tests
-timeout 900 python3 packages/syn/tests/test_runner.py fixtures
-timeout 900 python3 packages/syn/tests/test_runner.py cst
-timeout 900 python3 packages/syn/tests/test_runner.py diagnostics
+timeout 180 riot test syn:fixture_tests
+timeout 180 riot test syn:diagnostic_tests
+timeout 600 riot test syn:cst_fixture_tests
 ```
 
-The fixture runner compares:
+The native fixture suites compare:
 
 - `*.expected_lossless.json` for Ceibo output
 - `*.expected_cst.json` for typed CST output
 - `*.diagnostic` files for diagnostic expectations
 
-Both the lossless and CST fixture modes reject parses that produce diagnostics.
+The lossless fixture suite snapshots the full parse result, while the CST suite
+snapshots the public `print-cst` result contract, including parser failures when
+they are the approved behavior for a fixture.
 
 ## Contributing
 

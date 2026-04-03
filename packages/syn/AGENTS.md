@@ -88,6 +88,6 @@
 ## Validate
 
 `timeout 30 riot build syn`
-`timeout 180 riot test syn:cst_tests`
-`timeout 900 python3 packages/syn/tests/test_runner.py fixtures`
-`timeout 900 python3 packages/syn/tests/test_runner.py cst`
+`timeout 180 riot test syn:fixture_tests`
+`timeout 180 riot test syn:diagnostic_tests`
+`timeout 600 riot test syn:cst_fixture_tests`
