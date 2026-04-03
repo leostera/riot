@@ -134,8 +134,6 @@ module Expander: sig
     source: string;
     changed: bool;
   }
-  val builtin_providers: unit -> Provider.t list
-
   val expand_environment: ?providers:Provider.t list -> Environment.t -> (expansion, Error.t) result
 
   val expand_source:
@@ -151,7 +149,5 @@ type expansion = Expander.expansion = {
   changed: bool;
 }
 val error_message: error -> string
-
-val builtin_providers: unit -> Provider.t list
 
 val expand_source: ?providers:Provider.t list -> filename:Path.t -> string -> (expansion, error) result

@@ -49,38 +49,20 @@ let normalize_generated_names = fun source ->
   in
   loop 0
 
-let assert_expansion = fun ~source ~expected ->
-  match expand_source ~filename:sample_file source with
+let assert_expansion_with_providers = fun ~providers ~source ~expected ->
+  match expand_source ~providers ~filename:sample_file source with
   | Error err -> Error ("expected expansion to succeed: " ^ error_message err)
   | Ok result ->
       Test.assert_true result.changed;
       Test.assert_equal ~expected ~actual:(normalize_generated_names result.source);
       Ok ()
 
-let assert_expansion_snapshot = fun ~ctx ~source ->
-  match expand_source ~filename:sample_file source with
+let assert_expansion_snapshot_with_providers = fun ~providers ~ctx ~source ->
+  match expand_source ~providers ~filename:sample_file source with
   | Error err -> Error ("expected expansion to succeed: " ^ error_message err)
   | Ok result ->
       Test.assert_true result.changed;
       Test.Snapshot.assert_text ~ctx:(snapshot_ctx ctx) ~actual:(normalize_generated_names result.source)
-
-let assert_error_contains = fun ~source ~expected_substring ->
-  match expand_source ~filename:sample_file source with
-  | Ok _ -> Error "expected expansion to fail"
-  | Error err ->
-      if String.contains err.message expected_substring then
-        Ok ()
-      else
-        Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
-
-let assert_error_contains_with_explicit_providers = fun ~source ~expected_substring ->
-  match expand_source ~providers:(builtin_providers ()) ~filename:sample_file source with
-  | Ok _ -> Error "expected expansion to fail"
-  | Error err ->
-      if String.contains err.message expected_substring then
-        Ok ()
-      else
-        Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
 
 let assert_error_contains_with_providers = fun ~providers ~source ~expected_substring ->
   match expand_source ~providers ~filename:sample_file source with
@@ -100,8 +82,8 @@ let assert_validator_error = fun ~source ~expected_substring ->
       else
         Error ("expected error containing '" ^ expected_substring ^ "', got '" ^ err.message ^ "'")
 
-let assert_expansion_reparses = fun ~source ->
-  match expand_source ~filename:sample_file source with
+let assert_expansion_reparses_with_providers = fun ~providers ~source ->
+  match expand_source ~providers ~filename:sample_file source with
   | Error err -> Error ("expected expansion to succeed: " ^ error_message err)
   | Ok result ->
       let reparsed = Syn.parse ~filename:sample_file result.source in
@@ -116,6 +98,8 @@ let provider = fun ~module_path ->
     ~module_path
     [ Provider.fn "format" Format.expand ]
 
+let macro_providers = [ provider ~module_path:[ "Macro" ] ]
+
 let provider_with_macros = fun ~module_path macro_names ->
   Provider.v
     ~module_path
@@ -124,50 +108,49 @@ let provider_with_macros = fun ~module_path macro_names ->
 let tests = [
   Test.case
     "Macro.format! lowers a bare {} placeholder to a buffer builder"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "Macro.format! expansion snapshots the rewritten builder form"
-    (fun ctx -> assert_expansion_snapshot ~ctx ~source:"let msg = Macro.format! \"hello {}\" name\n");
+    (fun ctx -> assert_expansion_snapshot_with_providers ~providers:macro_providers ~ctx ~source:"let msg = Macro.format! \"hello {}\" name\n");
   Test.case
     "format! lowers named captures without consuming explicit arguments"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"hello {name}\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 14 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! \"hello {name}\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 14 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "format! preserves escaped braces in literal segments"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format! \"{{}} 100%\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 11 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"{} 100%\"; Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! \"{{}} 100%\"\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 11 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"{} 100%\"; Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "format! expands recursively when another macro invocation appears in an argument"
     (fun _ctx ->
-      assert_expansion
+      assert_expansion_with_providers
+        ~providers:macro_providers
         ~source:"let msg = Macro.format! \"{}!\" (Macro.format! \"hello {}\" name)\n"
         ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 5 in Std.IO.Buffer.add_string __riot_macro_format_buffer ((let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)); Std.IO.Buffer.add_string __riot_macro_format_buffer \"!\"; Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
     "successful expansions stay parse-clean after rewriting"
-    (fun _ctx -> assert_expansion_reparses ~source:"let msg = Macro.format! \"hello {}\" (if ready then name else fallback)\n");
+    (fun _ctx -> assert_expansion_reparses_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! \"hello {}\" (if ready then name else fallback)\n");
   Test.case
     "format! rejects non-literal format strings for the first prototype"
     (fun _ctx ->
-      assert_error_contains ~source:"let msg = Macro.format! template name\n" ~expected_substring:"string literal");
+      assert_error_contains_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! template name\n" ~expected_substring:"string literal");
   Test.case
     "format! rejects unsupported placeholder forms for the first prototype"
     (fun _ctx ->
-      assert_error_contains ~source:"let msg = Macro.format! \"{:?}\" name\n" ~expected_substring:"{} and {name} placeholders");
+      assert_error_contains_with_providers ~providers:macro_providers ~source:"let msg = Macro.format! \"{:?}\" name\n" ~expected_substring:"{} and {name} placeholders");
   Test.case
     "format! still accepts a parenthesized body while parsing the new macro form"
-    (fun _ctx -> assert_expansion ~source:"let msg = Macro.format!(\"hello {}\", name)\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
+    (fun _ctx -> assert_expansion_with_providers ~providers:macro_providers ~source:"let msg = Macro.format!(\"hello {}\", name)\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
   Test.case
-    "bare format! still expands when the provider name is unambiguous"
-    (fun _ctx -> assert_expansion ~source:"let msg = format! \"hello {}\" name\n" ~expected:"let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer \"hello \"; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)\n");
-  Test.case
-    "explicit provider contexts require qualified macro paths"
+    "bare format! requires qualification even when the provider name is unambiguous"
     (fun _ctx ->
-      assert_error_contains_with_explicit_providers
+      assert_error_contains_with_providers
+        ~providers:macro_providers
         ~source:"let msg = format! \"hello {}\" name\n"
         ~expected_substring:"must be qualified");
   Test.case
     "explicit provider contexts list reachable providers for unqualified macros"
     (fun _ctx ->
       assert_error_contains_with_providers
-        ~providers:[ provider ~module_path:[ "Macro" ] ]
+        ~providers:macro_providers
         ~source:"let msg = format! \"hello {}\" name\n"
         ~expected_substring:"reachable providers: Macro");
   Test.case

@@ -15,8 +15,6 @@ let has_invocations = fun invocations ->
   | _ :: _ -> true
   | [] -> false
 
-let builtin_providers = Macro_provider_registry.builtin_providers
-
 let replacement_of_invocation = fun ?providers invocation ->
   match Macro_provider_registry.resolve ?providers invocation with
   | Error err -> Error err

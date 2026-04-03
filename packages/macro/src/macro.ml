@@ -25,6 +25,4 @@ type expansion = Expander.expansion = {
 
 let error_message = Error.message
 
-let builtin_providers = Expander.builtin_providers
-
 let expand_source = Expander.expand_source
