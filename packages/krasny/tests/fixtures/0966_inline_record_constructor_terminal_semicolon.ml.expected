@@ -1,5 +1,2 @@
 type t =
-  | Conn of {
-      fd: int;
-      active: bool;
-    }
+  | Conn of { fd: int; active: bool }

@@ -10,8 +10,15 @@ let frame_type_gen = Generator.one_of
 (* Generator for frame flags *)
 
 let frame_flags_gen =
-  let open Generator in map2
-    (fun (end_stream, end_headers, padded) (priority_flag, ack) ->
-      Http2.Frame.{end_stream; end_headers; padded; priority = priority_flag; ack;})
-    (map3 (fun a b c -> (a, b, c)) bool bool bool)
-    (map2 (fun a b -> (a, b)) bool bool)
+  let open Generator in
+    map2
+      (fun (end_stream, end_headers, padded) (priority_flag, ack) ->
+        Http2.Frame.{
+          end_stream;
+          end_headers;
+          padded;
+          priority = priority_flag;
+          ack;
+        })
+      (map3 (fun a b c -> (a, b, c)) bool bool bool)
+      (map2 (fun a b -> (a, b)) bool bool)

@@ -29,8 +29,8 @@
           "severity": "warning",
           "message": "Direct usage of Sys is discouraged. Use package-owned Riot abstractions instead.",
           "span": {
-            "start": 73,
-            "end": 76
+            "start": 75,
+            "end": 78
           },
           "rule_id": "std:no-stdlib",
           "suggestion": null,

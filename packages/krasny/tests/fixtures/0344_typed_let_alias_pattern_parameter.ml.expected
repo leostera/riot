@@ -3,4 +3,4 @@ type ('a, 'b) t =
       x: int;
     } -> ('a, 'b) t
 
-let send_request (type req res) (Client c as client: (req, res) t) (request: req) : (unit, string) result = body
+let send_request (type req res) (Client c as client: (req, res) t) (request: req): (unit, string) result = body

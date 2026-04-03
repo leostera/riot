@@ -2,10 +2,10 @@ let lifted =
   match suffix_class_body, declaration_class_type with
   | Some declaration_class_body, declaration_class_type -> Some (`Definition Cst.ClassDefinition.{
     syntax_node = node;
-    class_body = declaration_class_body;
+    class_body = declaration_class_body
   })
   | None, Some declaration_class_type -> Some (`Declaration Cst.ClassDeclaration.{
     syntax_node = node;
-    class_type = declaration_class_type;
+    class_type = declaration_class_type
   })
   | None, None -> None

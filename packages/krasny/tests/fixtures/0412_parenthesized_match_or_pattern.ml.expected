@@ -1,6 +1,6 @@
 type source =
   | Concrete of string
-  | Generated of { path: string; kind: string; }
+  | Generated of { path: string; kind: string }
 
 let source_path node =
   (

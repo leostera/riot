@@ -132,14 +132,8 @@ type ('ok, 'err) result_like =
   | Error of 'err
 
 type message =
-  | Ping of {
-      id: int;
-      sent_at: float;
-    }
-  | Pong of {
-      id: int;
-      ok: bool;
-    }
+  | Ping of { id: int; sent_at: float }
+  | Pong of { id: int; ok: bool }
 
 type opaque
 
