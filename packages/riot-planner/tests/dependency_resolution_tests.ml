@@ -97,45 +97,46 @@ let test_module_graph_prefers_implementation_when_interface_exists = fun _ctx ->
             workspace;
           }
         in
-        let sandbox_dir = Path.(package_root / Path.v "src") in
-        let _ = Riot_planner.Module_graph.wire_dependencies graph_builder sandbox_dir in
-        let graph = Riot_planner.Module_graph.graph graph_builder in
-        let find_node_id expected_kind expected_name =
-          let matches ((_id, (node: Riot_planner.Module_node.t G.node))) =
-            match node.value.kind with
-            | Riot_planner.Module_node.ML mod_ when expected_kind = `implementation ->
-                String.equal
-                  (Riot_model.Module.module_name mod_ |> Riot_model.Module_name.to_string)
-                  expected_name
-            | Riot_planner.Module_node.MLI mod_ when expected_kind = `interface ->
-                String.equal
-                  (Riot_model.Module.module_name mod_ |> Riot_model.Module_name.to_string)
-                  expected_name
-            | _ -> false
-          in
-          match List.find_opt matches (G.map graph ~fn:(fun x -> x)) with
-          | Some (node_id, _) -> Ok node_id
-          | None -> Error ("expected node not found: " ^ expected_name)
-        in
-        match (
-          find_node_id `interface "Bar",
-          find_node_id `implementation "Foo",
-          find_node_id `interface "Foo"
-        ) with
-        | Ok bar_mli_id, Ok foo_ml_id, Ok foo_mli_id -> (
-            match G.get_node graph bar_mli_id with
-            | None -> Error "expected bar.mli node to exist"
-            | Some node ->
-                let depends_on_impl = List.exists (G.Node_id.eq foo_ml_id) node.deps in
-                let depends_on_intf = List.exists (G.Node_id.eq foo_mli_id) node.deps in
-                if depends_on_impl && not depends_on_intf then
-                  Ok ()
-                else
-                  Error "expected bar.mli to depend on foo.ml implementation node only"
-          )
-        | (Error msg, _, _)
-        | (_, Error msg, _)
-        | (_, _, Error msg) -> Error msg)
+        match Riot_planner.Module_graph.wire_dependencies graph_builder with
+        | Error err -> Error (Riot_planner.Planning_error.to_string err)
+        | Ok () ->
+            let graph = Riot_planner.Module_graph.graph graph_builder in
+            let find_node_id expected_kind expected_name =
+              let matches ((_id, (node: Riot_planner.Module_node.t G.node))) =
+                match node.value.kind with
+                | Riot_planner.Module_node.ML mod_ when expected_kind = `implementation ->
+                    String.equal
+                      (Riot_model.Module.module_name mod_ |> Riot_model.Module_name.to_string)
+                      expected_name
+                | Riot_planner.Module_node.MLI mod_ when expected_kind = `interface ->
+                    String.equal
+                      (Riot_model.Module.module_name mod_ |> Riot_model.Module_name.to_string)
+                      expected_name
+                | _ -> false
+              in
+              match List.find_opt matches (G.map graph ~fn:(fun x -> x)) with
+              | Some (node_id, _) -> Ok node_id
+              | None -> Error ("expected node not found: " ^ expected_name)
+            in
+            match (
+              find_node_id `interface "Bar",
+              find_node_id `implementation "Foo",
+              find_node_id `interface "Foo"
+            ) with
+            | Ok bar_mli_id, Ok foo_ml_id, Ok foo_mli_id -> (
+                match G.get_node graph bar_mli_id with
+                | None -> Error "expected bar.mli node to exist"
+                | Some node ->
+                    let depends_on_impl = List.exists (G.Node_id.eq foo_ml_id) node.deps in
+                    let depends_on_intf = List.exists (G.Node_id.eq foo_mli_id) node.deps in
+                    if depends_on_impl && not depends_on_intf then
+                      Ok ()
+                    else
+                      Error "expected bar.mli to depend on foo.ml implementation node only"
+              )
+            | (Error msg, _, _)
+            | (_, Error msg, _)
+            | (_, _, Error msg) -> Error msg)
   with
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"

@@ -112,6 +112,9 @@ module Visit: module type of Visit
 (** JSON serialization helpers for the typed CST and lift errors. *)
 module CstBuilder: module type of Cst_builder
 
+(** Syntactic module dependency extraction. *)
+module Deps: module type of Deps
+
 (** OCaml parser that produces Ceibo trees. *)
 module CstJson: module type of Cst_json
 

@@ -1,0 +1,19 @@
+{
+  "modules": [
+    "Actors",
+    "Component",
+    "Conn",
+    "Data",
+    "Env",
+    "Int",
+    "LiveView",
+    "Log",
+    "Middleware",
+    "Net",
+    "Path",
+    "Std",
+    "Supervisor",
+    "Suri",
+    "Time"
+  ]
+}

@@ -15,7 +15,7 @@ type config = {
 type t
 val create: config -> t
 
-val wire_dependencies: t -> Path.t -> unit
+val wire_dependencies: t -> (unit, Planning_error.t) result
 
 val add_library_node: t -> name:string -> includes:Path.t list -> unit
 

@@ -85,10 +85,12 @@
 75. Keep object/class member modifiers token-backed too. Preserve `!`, `private`, `mutable`, and `virtual` as ordered modifier tokens or definition-local tokens instead of collapsing them to booleans that drop attached comments/docstrings.
 76. Prefer shared `Std.Test.FixtureRunner` plus `Std.Test.Snapshot` for fixture-backed parser/diagnostic suites instead of package-local expected-file harnesses; keep fixture selection path-typed with `Std.Path.t`.
 77. In the shared root worktree, fixture-backed `syn` suites may skip fixture source files that already have local edits so snapshot churn stays scoped to the agent editing those inputs. Clean trees should still exercise the full approved fixture corpus.
+78. Keep `Syn.Deps` differential against the vendored `ocamldep` algorithm. When extending deps coverage, add oracles under `packages/syn/tests/deps_fixtures/` and regenerate adjacent `*.expected.ocamldep` files from the real tool before approving the JSON snapshots.
 
 ## Validate
 
 `timeout 30 riot build syn`
+`timeout 180 riot test syn:deps_fixture_tests`
 `timeout 180 riot test syn:fixture_tests`
 `timeout 180 riot test syn:diagnostic_tests`
 `timeout 600 riot test syn:cst_fixture_tests`

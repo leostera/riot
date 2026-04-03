@@ -1,0 +1,24 @@
+{
+  "modules": [
+    "Buffer",
+    "Bytes",
+    "Char",
+    "Color",
+    "Escape_seq",
+    "Exception",
+    "Fs",
+    "IO",
+    "Input",
+    "Int",
+    "Kernel",
+    "Option",
+    "Path",
+    "Profile",
+    "Size",
+    "Std",
+    "String",
+    "Style",
+    "Terminal",
+    "Terminal_control"
+  ]
+}

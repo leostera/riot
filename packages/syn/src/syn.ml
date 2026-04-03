@@ -13,6 +13,7 @@ module Cst = Cst
 module Visit = Visit
 module CstBuilder = Cst_builder
 module CstJson = Cst_json
+module Deps = Deps
 
 type build_cst_error =
   | Parse_diagnostics of Diagnostic.t list

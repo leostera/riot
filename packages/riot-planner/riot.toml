@@ -13,3 +13,4 @@ std = { path = "../std", version = "*" }
 riot-model = { path = "../riot-model", version = "*" }
 riot-store = { path = "../riot-store", version = "*" }
 riot-toolchain = { path = "../riot-toolchain", version = "*" }
+syn = { path = "../syn", version = "*" }

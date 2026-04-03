@@ -9,9 +9,10 @@
     - Creates alias modules for namespace flattening
     - Adds structural edges (parent-child, ML->MLI, library dependencies)
 
-    2. WIRING PHASE: Runs ocamldep to discover module-level dependencies
+    2. WIRING PHASE: Runs syntactic dependency analysis to discover
+    module-level dependencies
     - Collects all concrete ML/MLI files from the graph
-    - Executes ocamldep in batch mode for performance
+    - Parses each file in memory and extracts raw module references
     - Adds dependency edges based on `open` statements and module references
     - Skips MLI -> ML edges (interfaces shouldn't depend on implementations)
 
@@ -350,28 +351,25 @@ let create = fun config ->
   scan_sources t entries;
   t
 
-(** Wire module dependencies using ocamldep.
+(** Wire module dependencies using `Syn.Deps`.
 
     This function implements Phase 2 of graph construction by analyzing source
-    files with ocamldep to discover which modules reference which other modules
+    files in memory to discover which modules reference which other modules
     (via `open` statements, direct module references, etc.).
 
     Algorithm: 1. Collect all concrete ML/MLI nodes (skip generated files and
-    non-OCaml files) 2. Run ocamldep in batch mode on all collected files
-    (single process call) 3. Build hashtable for O(1) lookup of dependencies by
-    file path 4. For each file's dependencies, add graph edges to the referenced
-    modules 5. Skip MLI -> ML edges (interface files shouldn't depend on
+    non-OCaml files) 2. Parse each file and extract raw module dependencies with
+    `Syn.Deps` 3. Resolve dependency names using the file's namespace 4. Add
+    graph edges to the referenced modules 5. Skip MLI -> ML edges (interfaces
+    shouldn't depend on
     implementations)
-
-    Performance: Uses batch ocamldep call instead of per-file calls for 10-100x
-    speedup.
 
     Edge cases:
     - Generated files are excluded (they have no `open` statements to analyze)
     - Missing dependencies are silently skipped (external modules, stdlib)
     - MLI -> ML dependencies are filtered out to maintain proper compilation
       order *)
-let wire_dependencies = fun t sandbox_dir ->
+let wire_dependencies = fun t ->
   let preferred_dependency_nodes dep_node_ids =
     let rec collect acc has_ml = function
       | [] -> (List.rev acc, has_ml)
@@ -424,8 +422,74 @@ let wire_dependencies = fun t sandbox_dir ->
     List.map (fun ((path, _)) -> path) files_with_nodes
   in
   let namespace = Namespace.of_string t.config.namespace in
-  let ocamldep = Riot_toolchain.ocamldep t.config.toolchain in
-  (* ocamldep is run with cwd=sandbox_dir, so paths need to be relative to source_dir *)
+  let source_dir_prefix = Path.to_string t.config.source_dir ^ "/" in
+  let stringify_dependency_error = fun path ->
+    function
+    | Syn.Deps.Parse_diagnostics diagnostics ->
+        let messages = List.map Syn.Diagnostic.to_string diagnostics in
+        "failed to parse "
+        ^ Path.to_string path
+        ^ " for dependency analysis: "
+        ^ String.concat "; " messages
+    | Syn.Deps.Cst_builder_error err ->
+        "failed to build CST for "
+        ^ Path.to_string path
+        ^ " during dependency analysis: "
+        ^ err.message
+  in
+  let file_namespace = fun path ->
+    let file_str = Path.to_string path in
+    let rel_path =
+      if String.starts_with ~prefix:source_dir_prefix file_str then
+        let len = String.length source_dir_prefix in
+        String.sub file_str len (String.length file_str - len)
+      else
+        Path.basename path
+    in
+    let file_dir =
+      match Path.parent (Path.v rel_path) with
+      | Some p -> Path.to_string p
+      | None -> "."
+    in
+    let subdir_parts =
+      if file_dir = "." then
+        []
+      else
+        String.split_on_char '/' file_dir |> List.map String.capitalize_ascii
+    in
+    List.fold_left Namespace.append namespace subdir_parts
+  in
+  let analyze_file = fun path ->
+    let absolute_path =
+      if Path.is_absolute path then
+        path
+      else
+        Path.(t.config.root / path)
+    in
+    match Fs.read absolute_path with
+    | Error err ->
+        Error (Planning_error.DependencyAnalysisFailed {
+          reason =
+            "failed to read "
+            ^ Path.to_string absolute_path
+            ^ " for dependency analysis: "
+            ^ IO.error_message err
+        })
+    | Ok source -> (
+        let parse_result = Syn.parse ~filename:path source in
+        match Syn.Deps.of_parse_result parse_result with
+        | Ok deps ->
+            let names =
+              Syn.Deps.modules deps
+              |> List.map (fun modname -> Module_name.of_string ~namespace:(file_namespace path) modname)
+            in
+            Ok names
+        | Error err ->
+            Error (Planning_error.DependencyAnalysisFailed {
+              reason = stringify_dependency_error path err
+            })
+      )
+  in
   (* Sort files deterministically to ensure consistent hashing *)
   let sorted_files =
     List.sort
@@ -433,89 +497,54 @@ let wire_dependencies = fun t sandbox_dir ->
         String.compare (Path.to_string a) (Path.to_string b))
       files
   in
-  let source_dir_prefix = Path.to_string t.config.source_dir ^ "/" in
-  let files_relative_to_cwd =
-    List.map
-      (fun file ->
-        let file_str = Path.to_string file in
-        if String.starts_with ~prefix:source_dir_prefix file_str then
-          let len = String.length source_dir_prefix in
-          Path.v (String.sub file_str len (String.length file_str - len))
-        else
-          Path.basename file |> Path.v)
+  let nodes_by_path = HashMap.with_capacity (List.length files_with_nodes) in
+  List.iter
+    (fun ((path, node)) ->
+      let _ = HashMap.insert nodes_by_path (Path.to_string path) node in
+      ())
+    files_with_nodes;
+  let deps =
+    List.fold_left
+      (fun acc path ->
+        match acc with
+        | Error _ as error -> error
+        | Ok deps -> (
+            match analyze_file path with
+            | Error _ as error -> error
+            | Ok module_deps -> (
+                match HashMap.get nodes_by_path (Path.to_string path) with
+                | Some node -> Ok ((node, module_deps) :: deps)
+                | None -> Ok deps
+              )
+          ))
+      (Ok [])
       sorted_files
   in
-  let file_deps_map = Riot_toolchain.Ocamldep.batch_deps
-    ocamldep
-    ~cwd:sandbox_dir
-    ~files:files_relative_to_cwd
-    ~package_namespace:namespace in
-  (* Build mapping from relative path -> raw deps (module names as strings) *)
-  let deps_by_path = HashMap.with_capacity (List.length file_deps_map) in
-  List.iter
-    (fun ((file, deps)) ->
-      (* Convert Module_name.t back to plain strings *)
-      let dep_strs = List.map Module_name.to_string deps in
-      let _ = HashMap.insert deps_by_path (Path.to_string file) dep_strs in
-      ())
-    file_deps_map;
-  (* Match files to deps and resolve module names using the file's own namespace *)
-  let deps =
-    List.filter_map
-      (fun ((path, node)) ->
-        (* Get the relative path that was passed to ocamldep *)
-        let file_str = Path.to_string path in
-        let rel_path =
-          if String.starts_with ~prefix:source_dir_prefix file_str then
-            let len = String.length source_dir_prefix in
-            String.sub file_str len (String.length file_str - len)
-          else
-            Path.basename path
-        in
-        match HashMap.get deps_by_path rel_path with
-        | Some dep_names ->
-            (* Get the namespace for this file from its directory *)
-            let file_dir =
-              match Path.parent (Path.v rel_path) with
-              | Some p -> Path.to_string p
-              | None -> "."
-            in
-            let subdir_parts =
-              if file_dir = "." then
-                []
-              else
-                String.split_on_char '/' file_dir |> List.map String.capitalize_ascii
-            in
-            let file_namespace = List.fold_left Namespace.append namespace subdir_parts in
-            (* Convert dep names to Module_name.t using the file's namespace *)
-            let resolved_deps =
-              List.map (fun modname -> Module_name.of_string ~namespace:file_namespace modname) dep_names
-            in
-            Some (node, resolved_deps)
-        | None -> Some (node, []))
-      files_with_nodes
-  in
-  List.iter
-    (fun (((node: Module_node.t G.node), module_deps)) ->
+  match deps with
+  | Error _ as error -> error
+  | Ok deps ->
       List.iter
-        (fun dep_mod_name ->
-          let dep_name = Module_name.to_string dep_mod_name in
-          try
-            let dep_node_ids = Module_registry.get_by_name t.registry dep_name in
-            List.iter
-              (fun (dep_node_id, dep_node) ->
-                (* Skip self-references: a module can't depend on itself.
-                   This happens when ocamldep reports "A" as a dependency of A.ml,
-                   which actually refers to a different module A (e.g., Bar.A when using 'open Bar'). *)
-                if G.Node_id.eq dep_node_id node.id then
-                  ()
-                else
-                  G.add_edge node ~depends_on:dep_node)
-              (preferred_dependency_nodes dep_node_ids)
-          with
-          | Not_found -> ())
-        module_deps)
-    deps
+        (fun (((node: Module_node.t G.node), module_deps)) ->
+          List.iter
+            (fun dep_mod_name ->
+              let dep_name = Module_name.to_string dep_mod_name in
+              try
+                let dep_node_ids = Module_registry.get_by_name t.registry dep_name in
+                List.iter
+                  (fun (dep_node_id, dep_node) ->
+                    (* Skip self-references: a module can't depend on itself.
+                       This happens when dependency analysis reports "A" as a dependency of A.ml,
+                       which actually refers to a different module A (e.g., Bar.A when using 'open Bar'). *)
+                    if G.Node_id.eq dep_node_id node.id then
+                      ()
+                    else
+                      G.add_edge node ~depends_on:dep_node)
+                  (preferred_dependency_nodes dep_node_ids)
+              with
+              | Not_found -> ())
+            module_deps)
+        deps;
+      Ok ()
 
 let add_library_node = fun t ~name ~includes ->
   let lib_node_value = Module_node.make_library ~name ~includes in

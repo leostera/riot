@@ -1,0 +1,1 @@
+module X = Foo.Bar

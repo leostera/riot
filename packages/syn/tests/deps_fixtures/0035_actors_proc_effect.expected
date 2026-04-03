@@ -1,0 +1,7 @@
+{
+  "modules": [
+    "Effect",
+    "Kernel",
+    "Message"
+  ]
+}

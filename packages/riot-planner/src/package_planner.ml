@@ -327,7 +327,7 @@ let plan_bundle_of_json = fun ~(package:Package.t) json ->
       )
     | _ -> Error "plan bundle must be a JSON object"
 
-(** Compute input hash - fast path that doesn't require ocamldep.
+(** Compute input hash - fast path that doesn't require dependency analysis.
 
     This hash includes:
     - Build context (host/target platform, session ID, resolved profile)
@@ -337,7 +337,7 @@ let plan_bundle_of_json = fun ~(package:Package.t) json ->
     - Dependency hashes (for transitive invalidation)
 
     It does NOT depend on:
-    - Module graph (requires ocamldep)
+    - Module graph (requires dependency analysis)
     - Action graph (derived from module graph)
 
     If input_hash hasn't changed, we know the full hash is the same! *)
@@ -347,7 +347,7 @@ let compute_input_hash = fun ~package ~depset ~workspace ~profile ~build_ctx ~to
   (* Planner artifact contract version.
      Bump this when planned output shapes or link-time artifact requirements
      change in ways that must invalidate cached package artifacts. *)
-  H.write state "planner-artifacts:v8";
+  H.write state "planner-artifacts:v11";
   (* Build context (includes resolved profile) *)
   Build_ctx.hash state build_ctx;
   (* Toolchain identity must participate in package cache invalidation so

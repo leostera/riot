@@ -1,0 +1,18 @@
+{
+  "modules": [
+    "Actors",
+    "Array",
+    "Ceibo",
+    "Env",
+    "Fs",
+    "List",
+    "Option",
+    "Path",
+    "Result",
+    "Std",
+    "String",
+    "Syn",
+    "SyntaxKind",
+    "Test"
+  ]
+}

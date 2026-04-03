@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "c70b8e12a89da2bd"
+dependency_hash = "66ac8ea40847aa79"
 
 [[packages]]
 name = "blink"
@@ -302,7 +302,7 @@ dev_dependencies = []
 name = "riot-planner"
 root = "packages/riot-planner"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "riot-model", package = { name = "riot-model" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "std", package = { name = "std" } }]
+dependencies = [{ name = "riot-model", package = { name = "riot-model" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
 dev_dependencies = []
 

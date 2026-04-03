@@ -3,7 +3,8 @@
 
     This module provides a high-level interface for planning package builds: 1.
     Creates module dependency graph from source files 2. Wires dependencies
-    using ocamldep 3. Generates action graph for parallel execution *)
+    using syntactic dependency analysis 3. Generates action graph for parallel
+    execution *)
 open Std
 open Riot_model
 
@@ -21,7 +22,7 @@ type plan_input = {
     
     This function orchestrates the entire planning process:
     1. Scans source directory to build module graph
-    2. Wires module dependencies via ocamldep  
+    2. Wires module dependencies via syntactic dependency analysis
     3. Topologically sorts modules
     4. Generates compilation actions
     5. Returns action graph ready for parallel execution

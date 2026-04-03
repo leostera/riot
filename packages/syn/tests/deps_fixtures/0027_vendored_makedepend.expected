@@ -1,0 +1,28 @@
+{
+  "modules": [
+    "Arg",
+    "Array",
+    "Bytes",
+    "Clflags",
+    "Compenv",
+    "Config",
+    "Depend",
+    "Filename",
+    "Format",
+    "Fun",
+    "Hashtbl",
+    "In_channel",
+    "Lexer",
+    "Lexing",
+    "List",
+    "Location",
+    "Misc",
+    "Parse",
+    "Parser",
+    "Parsetree",
+    "Pparse",
+    "Printf",
+    "Sys",
+    "Unit_info"
+  ]
+}
