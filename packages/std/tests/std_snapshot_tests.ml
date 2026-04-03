@@ -93,14 +93,20 @@ let test_snapshot_mismatch_writes_pending =
                   let ctx = make_ctx ~test_name:"mismatch_snapshot" workspace_root in
                   match Test.Snapshot.assert_text ~ctx ~actual:"new text\n" with
                   | Ok () -> Error "expected snapshot mismatch to fail"
-                  | Error _ ->
+                  | Error msg ->
                       let pending = Path.of_string (Path.to_string approved ^ ".new")
                       |> Result.expect ~msg:"pending snapshot path should be valid" in
                       let pending_content = Fs.read pending |> Result.expect ~msg:"read pending snapshot" in
-                      if String.equal pending_content "new text\n" then
-                        Ok ()
-                      else
+                      if not (String.equal pending_content "new text\n") then
                         Error ("expected pending snapshot to contain new text, got " ^ pending_content)
+                      else if not (String.contains msg "Review the pending candidate with `riot snapshots review`.") then
+                        Error ("expected mismatch message to point at snapshot review, got " ^ msg)
+                      else if not (String.contains msg "Diff:") then
+                        Error ("expected mismatch message to include a diff, got " ^ msg)
+                      else if not (String.contains msg "--- ") then
+                        Error ("expected mismatch message to include a unified diff header, got " ^ msg)
+                      else
+                        Ok ()
             )))
 
 let test_inline_snapshot_mismatch_reports_error =
@@ -109,10 +115,17 @@ let test_inline_snapshot_mismatch_reports_error =
       match Test.Snapshot.assert_inline_text ~ctx ~actual:"alpha\nbeta\n" ~expected:"alpha\ncharlie\n" with
       | Ok () -> Error "expected inline snapshot mismatch to fail"
       | Error msg ->
-          if String.contains msg "Inline snapshot mismatch." then
-            Ok ()
+          if not (String.contains msg "Inline snapshot mismatch.") then
+            Error ("unexpected inline snapshot mismatch message: " ^ msg)
+          else if not (String.contains msg "Diff:") then
+            Error ("expected inline mismatch to include a diff, got " ^ msg)
+          else if not (String.contains msg "-charlie") then
+            Error ("expected inline mismatch to include removed line, got " ^ msg)
+          else if not (String.contains msg "+beta") then
+            Error ("expected inline mismatch to include added line, got " ^ msg)
           else
-            Error ("unexpected inline snapshot mismatch message: " ^ msg))
+            Ok ()
+          )
 
 let test_json_snapshot_canonicalizes_object_keys =
   Test.case "json snapshot canonicalizes object keys"
@@ -135,6 +148,14 @@ let test_json_snapshot_canonicalizes_object_keys =
                     ~ctx
                     ~actual:(Data.Json.obj [ ("b", Data.Json.int 2); ("a", Data.Json.int 1) ])
             )))
+
+let test_inline_json_snapshot_canonicalizes_object_keys =
+  Test.case "inline json snapshot canonicalizes object keys"
+    (fun ctx ->
+      Test.Snapshot.assert_inline_json
+        ~ctx
+        ~actual:(Data.Json.obj [ ("b", Data.Json.int 2); ("a", Data.Json.int 1) ])
+        ~expected:(Data.Json.obj [ ("a", Data.Json.int 1); ("b", Data.Json.int 2) ]))
 
 let test_fixture_snapshot_uses_explicit_snapshot_path =
   Test.case "fixture snapshot uses explicit snapshot path"
@@ -167,6 +188,7 @@ let tests = [
   test_snapshot_mismatch_writes_pending;
   test_inline_snapshot_mismatch_reports_error;
   test_json_snapshot_canonicalizes_object_keys;
+  test_inline_json_snapshot_canonicalizes_object_keys;
   test_fixture_snapshot_uses_explicit_snapshot_path;
 ]
 

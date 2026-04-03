@@ -14,7 +14,7 @@
 8. Binary/text codecs belong under `Std.Encoding`. Keep `Std.Data` focused on structured data formats like JSON, TOML, CSV, XML, and S-expressions.
 9. `Std.Test` owns the shared test-binary contract. Per-test callbacks now receive a `Std.Test.ctx`; future snapshot and fixture helpers should extend that context instead of inventing parallel identity plumbing.
 10. Keep `Std.Test.FixtureRunner` path-typed. Fixture roots and discovery filters should use `Std.Path.t`, and mixed fixture directories should narrow discovery through the shared `~filter` hook instead of package-local file scanning.
-11. Keep snapshot approval routing explicit in shared test helpers. Use fixture-provided `snapshot_path` when a suite already has a package-specific approved filename convention, and render JSON snapshots through `Std.Data.Json.to_string_pretty` so approved files stay reviewable.
+11. Keep snapshot approval routing explicit in shared test helpers. Use fixture-provided `snapshot_path` when a suite already has a package-specific approved filename convention, render JSON snapshots through `Std.Data.Json.to_string_pretty` so approved files stay reviewable, and treat `.expected.new` files as visible review artifacts rather than ignored scratch output.
 12. Keep `Std.Crypto.Hasher.Intf` string-first. Callers that need to mix existing digests into a hash state should use `write_hash` rather than passing mutable raw bytes through the public API.
 
 ## Validate
