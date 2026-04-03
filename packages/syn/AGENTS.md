@@ -20,7 +20,7 @@
 14. Keep expression attributes orthogonal to expression shape; attach them via `Expression.attributes` instead of wrapper nodes or postfix-shell `Apply` artifacts.
 15. Keep record-expression fields parsetree-like: always lift a field value expression, and preserve punning with explicit metadata instead of `None`.
 16. Keep packed first-class module expressions direct: `Expression.ModulePack.module_expression` should be the packed payload itself, and any `: S` ascription should stay in explicit `package_type` fields instead of being rewritten as an inner `ModuleExpression.Constraint`.
-16. Keep grouped declaration families recursive by construction. Use `and_binding` / `next_and_declaration` links on the owning node and expose flattened helper accessors such as `TypeDeclaration.and_declarations` only as read APIs; do not reintroduce separate mutual-group wrapper nodes.
+16. Keep grouped declaration families recursive by construction. Use `and_binding` / `next_and_declaration` links on the owning node; do not expose list-materializing grouped-declaration helpers or reintroduce separate mutual-group wrapper nodes.
 17. Keep standalone top-level comments and docstrings explicit in the CST item stream; do not bury their ownership in enclosing declaration spans.
 18. Keep nested `sig ... end` and `struct ... end` syntax-node lifts normalized the same way as file-level lifts; callers should not have to provide extra source text just to get correct trivia ownership.
 19. Keep raw trivia ownership explicit on declaration nodes that can carry inline comments/docstrings, even before higher-level sequence normalization decides whether adjacent docstrings stay standalone or attach to a neighbor.

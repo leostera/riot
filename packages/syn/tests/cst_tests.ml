@@ -575,8 +575,8 @@ let tests = [
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
       match structure_items cst with
       | Syn.Cst.StructureItem.TypeDeclaration decl :: _ -> (
-          match Syn.Cst.TypeDeclaration.and_declarations decl with
-          | [ second ] ->
+          match Syn.Cst.TypeDeclaration.next_and_declaration decl with
+          | Some second when Option.is_none (Syn.Cst.TypeDeclaration.next_and_declaration second) ->
               Test.assert_equal
                 ~expected:(Some "node")
                 ~actual:(Syn.Cst.Ident.name (Syn.Cst.TypeDeclaration.type_name decl));
@@ -598,12 +598,13 @@ let tests = [
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
       match structure_items cst with
       | Syn.Cst.StructureItem.TypeDeclaration decl :: _ -> (
-          match Syn.Cst.TypeDeclaration.type_definition decl, Syn.Cst.TypeDeclaration.and_declarations
-            decl with
-          | Syn.Cst.TypeDefinition.Variant { constructors=[ head_constr ]; _ }, [
-            alias_decl;
-            variant_decl
-          ] ->
+          match
+            Syn.Cst.TypeDeclaration.type_definition decl,
+            Syn.Cst.TypeDeclaration.next_and_declaration decl
+          with
+          | Syn.Cst.TypeDefinition.Variant { constructors=[ head_constr ]; _ }, Some alias_decl -> (
+              match Syn.Cst.TypeDeclaration.next_and_declaration alias_decl with
+              | Some variant_decl when Option.is_none (Syn.Cst.TypeDeclaration.next_and_declaration variant_decl) ->
               Test.assert_equal ~expected:"A" ~actual:(Syn.Cst.VariantConstructor.name head_constr);
               (
                 match Syn.Cst.TypeDeclaration.type_definition alias_decl with
@@ -625,6 +626,8 @@ let tests = [
                     Ok ()
                 | _ -> Error "expected trailing grouped declaration to stay a bare variant"
               )
+              | _ -> Error "expected grouped type declaration with alias and trailing variant"
+            )
           | _ -> Error "expected grouped type declaration with alias and trailing variant"
         )
       | _ -> Error "expected grouped type declaration");
@@ -638,8 +641,8 @@ let tests = [
       |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
       match signature_items cst with
       | Syn.Cst.SignatureItem.TypeDeclaration decl :: _ -> (
-          match Syn.Cst.TypeDeclaration.and_declarations decl with
-          | [ packed_decl ] -> (
+          match Syn.Cst.TypeDeclaration.next_and_declaration decl with
+          | Some packed_decl when Option.is_none (Syn.Cst.TypeDeclaration.next_and_declaration packed_decl) -> (
               match Syn.Cst.TypeDeclaration.type_definition packed_decl with
               | Syn.Cst.TypeDefinition.Variant { constructors=[ packed_constr ]; _ } ->
                   Test.assert_equal

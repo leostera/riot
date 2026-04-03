@@ -258,9 +258,14 @@ let let_bindings_of_structure_item = fun item ->
   | Syn.Cst.StructureItem.ClassDeclaration { class_body; _ } ->
       [ class_body ] |> List.concat_map let_bindings_of_class_expression
   | Syn.Cst.StructureItem.ModuleDeclaration decl ->
-      let rec let_bindings_of_module_structure decl = let_bindings_of_module_expression
-        (Syn.Cst.ModuleStructure.module_expression decl)
-      @ (Syn.Cst.ModuleStructure.and_declarations decl |> List.concat_map let_bindings_of_module_structure) in
+      let rec let_bindings_of_module_structure decl =
+        let rest =
+          match Syn.Cst.ModuleStructure.next_and_declaration decl with
+          | Some next -> let_bindings_of_module_structure next
+          | None -> []
+        in
+        let_bindings_of_module_expression (Syn.Cst.ModuleStructure.module_expression decl) @ rest
+      in
       let_bindings_of_module_structure decl
   | Syn.Cst.StructureItem.OpenStatement stmt -> (
       match Syn.Cst.OpenStatement.module_expression stmt with

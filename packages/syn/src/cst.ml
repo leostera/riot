@@ -2520,11 +2520,6 @@ module TypeDeclaration = struct
 
   let attributes = fun decl -> decl.attributes
 
-  let rec and_declarations = fun decl ->
-    match decl.next_and_declaration with
-    | None -> []
-    | Some next -> next :: and_declarations next
-
   let next_and_declaration = fun decl -> decl.next_and_declaration
 
   let is_private = fun decl -> PrivateFlag.is_private decl.private_flag
@@ -2673,11 +2668,6 @@ module ModuleSignature = struct
     | { definition=Signature _; _ } -> None
     | { definition=Alias module_expression; _ } -> Some module_expression
 
-  let rec and_declarations = fun decl ->
-    match decl.next_and_declaration with
-    | None -> []
-    | Some next -> next :: and_declarations next
-
   let next_and_declaration = fun decl -> decl.next_and_declaration
 
   let has_direct_token_text = fun node expected ->
@@ -2724,11 +2714,6 @@ module ModuleStructure = struct
   let module_type = fun decl -> decl.module_type
 
   let module_expression = fun decl -> decl.module_expression
-
-  let rec and_declarations = fun decl ->
-    match decl.next_and_declaration with
-    | None -> []
-    | Some next -> next :: and_declarations next
 
   let next_and_declaration = fun decl -> decl.next_and_declaration
 

@@ -1609,28 +1609,16 @@ let render_type_declaration_member_with_keyword = fun ~leading_after keyword dec
   render_single_type_declaration_with_keyword ~leading_after keyword decl
 
 let render_type_declaration_with_keyword = fun ?(leading_after = 0) keyword decl ->
-  let and_declarations = Syn.Cst.TypeDeclaration.and_declarations decl in
+  let rec render_rest acc declaration =
+    match Syn.Cst.TypeDeclaration.next_and_declaration declaration with
+    | Some next ->
+        let rendered = render_type_declaration_member_with_keyword ~leading_after:0 kw_and next in
+        render_rest (rendered :: acc) next
+    | None -> List.rev acc
+  in
   let base =
-    if and_declarations = [] then
-      render_type_declaration_member_with_keyword ~leading_after keyword decl
-    else
-      let rec render_items = fun previous_end ->
-        function
-        | [] -> []
-        | declaration :: rest ->
-            let rendered = render_type_declaration_member_with_keyword ~leading_after:0 kw_and declaration in
-            let next_previous_end =
-              let span = Syn.Cst.token_body_span declaration.Syn.Cst.TypeDeclaration.syntax_node in
-              span.end_
-            in
-            rendered :: render_items next_previous_end rest
-      in
-      let first = render_type_declaration_member_with_keyword ~leading_after keyword decl in
-      let first_end =
-        let span = Syn.Cst.token_body_span decl.Syn.Cst.TypeDeclaration.syntax_node in
-        span.end_
-      in
-      Doc.join blank_line (first :: render_items first_end and_declarations)
+    let first = render_type_declaration_member_with_keyword ~leading_after keyword decl in
+    Doc.join blank_line (first :: render_rest [] decl)
   in
   match Syn.Cst.TypeDeclaration.attributes decl with
   | [] -> base
@@ -5323,11 +5311,19 @@ let make_lowerer =
     | Syn.Cst.ModuleExpression.Extension extension ->
         render_extension_doc extension
   and render_module_signature_with_keyword _keyword_doc (decl: Syn.Cst.ModuleSignature.t) =
-    let rest = Syn.Cst.ModuleSignature.and_declarations decl in
+    let rec render_rest acc declaration =
+      match Syn.Cst.ModuleSignature.next_and_declaration declaration with
+      | Some next ->
+          let rendered = render_module_signature_header ~include_keyword_leading_trivia:true next in
+          render_rest (rendered :: acc) next
+      | None -> List.rev acc
+    in
     Doc.join
       blank_line
-      (render_module_signature_header ~include_keyword_leading_trivia:false decl
-      :: List.map (render_module_signature_header ~include_keyword_leading_trivia:true) rest)
+      (
+        render_module_signature_header ~include_keyword_leading_trivia:false decl
+        :: render_rest [] decl
+      )
   and render_module_signature_header ~include_keyword_leading_trivia (
     decl: Syn.Cst.ModuleSignature.t
   ) =
@@ -5379,11 +5375,19 @@ let make_lowerer =
             render_module_expression_doc module_expression
           ]
   and render_module_structure_with_keyword _keyword_doc (decl: Syn.Cst.ModuleStructure.t) =
-    let rest = Syn.Cst.ModuleStructure.and_declarations decl in
+    let rec render_rest acc declaration =
+      match Syn.Cst.ModuleStructure.next_and_declaration declaration with
+      | Some next ->
+          let rendered = render_module_structure_header ~include_keyword_leading_trivia:true next in
+          render_rest (rendered :: acc) next
+      | None -> List.rev acc
+    in
     Doc.join
       blank_line
-      (render_module_structure_header ~include_keyword_leading_trivia:false decl
-      :: List.map (render_module_structure_header ~include_keyword_leading_trivia:true) rest)
+      (
+        render_module_structure_header ~include_keyword_leading_trivia:false decl
+        :: render_rest [] decl
+      )
   and render_module_structure_header ~include_keyword_leading_trivia (
     decl: Syn.Cst.ModuleStructure.t
   ) =

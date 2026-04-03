@@ -3823,8 +3823,6 @@ module TypeDeclaration: sig
   (** Declaration-level attributes such as `type t = int [@@immediate]`. *)
   val attributes: t -> attribute list
 
-  val and_declarations: t -> t list
-
   val next_and_declaration: t -> t option
 
   val is_private: t -> bool
@@ -3965,8 +3963,6 @@ module ModuleSignature: sig
 
   val module_expression: t -> module_expression option
 
-  val and_declarations: t -> t list
-
   val next_and_declaration: t -> t option
 
   val is_recursive: t -> bool
@@ -4013,8 +4009,6 @@ module ModuleStructure: sig
   val module_type: t -> module_type option
 
   val module_expression: t -> module_expression
-
-  val and_declarations: t -> t list
 
   val next_and_declaration: t -> t option
 

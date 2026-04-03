@@ -1147,6 +1147,20 @@ let rec type_declaration_chain_of_list = function
     with next_and_declaration = type_declaration_chain_of_list rest
   }
 
+let type_declaration_group_members = fun (decl: Cst.TypeDeclaration.t) ->
+  let rec loop acc declaration =
+    let acc = declaration :: acc in
+    match Cst.TypeDeclaration.next_and_declaration declaration with
+    | Some next -> loop acc next
+    | None -> List.rev acc
+  in
+  loop [] decl
+
+let has_no_next_type_declaration = fun (decl: Cst.TypeDeclaration.t) ->
+  match Cst.TypeDeclaration.next_and_declaration decl with
+  | None -> true
+  | Some _ -> false
+
 let rec module_signature_chain_of_list = function
   | [] -> None
   | (decl: Cst.ModuleSignature.t) :: rest -> Some {
@@ -1176,7 +1190,7 @@ let normalize_type_declaration_group = fun ~source ~has_next_sibling ?(initial_l
     match Ceibo.Red.SyntaxNode.kind group_syntax_node with
     | Syntax_kind.TYPE_MUTUAL_DECL -> direct_non_trivia_nodes group_syntax_node
     |> List.filter (fun child -> Ceibo.Red.SyntaxNode.kind child = Syntax_kind.TYPE_DECL)
-    | _ -> decl :: Cst.TypeDeclaration.and_declarations decl |> List.map Cst.TypeDeclaration.syntax_node
+    | _ -> type_declaration_group_members decl |> List.map Cst.TypeDeclaration.syntax_node
   in
   let rec restore_member_nodes acc nodes decls =
     match nodes, decls with
@@ -1191,9 +1205,9 @@ let normalize_type_declaration_group = fun ~source ~has_next_sibling ?(initial_l
     match restore_member_nodes
       []
       member_syntax_nodes
-      (decl :: Cst.TypeDeclaration.and_declarations decl) with
+      (type_declaration_group_members decl) with
     | Some member_decls -> member_decls
-    | None -> decl :: Cst.TypeDeclaration.and_declarations decl
+    | None -> type_declaration_group_members decl
     |> List.map (fun (decl: Cst.TypeDeclaration.t) -> { decl with next_and_declaration = None })
   in
   let normalized_decls, bubbled_to_next = normalize_type_declaration_sequence
@@ -1228,15 +1242,13 @@ let normalize_type_declaration_group = fun ~source ~has_next_sibling ?(initial_l
       ({ first with next_and_declaration = type_declaration_chain_of_list rest }, bubbled_to_next)
 
 let map_last_type_declaration_in_group = fun decl f ->
-  match List.rev (Cst.TypeDeclaration.and_declarations decl) with
-  | [] -> f decl
-  | last :: previous_rev ->
-      let updated_last = f last in
-      {
-        decl
-        with next_and_declaration = type_declaration_chain_of_list
-          (List.rev (updated_last :: previous_rev))
-      }
+  let rec loop declaration =
+    match Cst.TypeDeclaration.next_and_declaration declaration with
+    | None -> f declaration
+    | Some next ->
+        { declaration with next_and_declaration = Some (loop next) }
+  in
+  loop decl
 
 let absorb_next_type_declaration_leading_trivia = fun ~source:_ current_decl next_decl ->
   (current_decl, next_decl)
@@ -8092,11 +8104,16 @@ let rec flatten_type_declaration_group = fun (decl: Cst.TypeDeclaration.t) ->
   match grouped_type_declaration_from_nodes
     ~group_syntax_node:(Cst.TypeDeclaration.syntax_node decl)
     direct_type_decl_nodes with
-  | Some grouped_decl -> grouped_decl :: Cst.TypeDeclaration.and_declarations grouped_decl
+  | Some grouped_decl -> type_declaration_group_members grouped_decl
   | None ->
-      let existing_and_declarations = Cst.TypeDeclaration.and_declarations decl in
+      let next_and_declaration = Cst.TypeDeclaration.next_and_declaration decl in
       let decl = { decl with next_and_declaration = None } in
-      decl :: (existing_and_declarations |> List.concat_map flatten_type_declaration_group)
+      decl
+      :: (
+        match next_and_declaration with
+        | Some next -> flatten_type_declaration_group next
+        | None -> []
+      )
 
 and grouped_type_declaration_from_nodes = fun ~group_syntax_node nodes ->
   let and_keyword_tokens =
@@ -8143,7 +8160,7 @@ let merge_type_declaration_groups = fun (first: Cst.TypeDeclaration.t) (next: Cs
 let rec coalesce_structure_type_declaration_groups = function
   | Cst.StructureItem.TypeDeclaration first :: Cst.StructureItem.TypeDeclaration next :: rest when type_declaration_starts_with_and
     next
-  && Cst.TypeDeclaration.and_declarations next = [] -> coalesce_structure_type_declaration_groups
+  && has_no_next_type_declaration next -> coalesce_structure_type_declaration_groups
     (Cst.StructureItem.TypeDeclaration (merge_type_declaration_groups first next) :: rest)
   | item :: rest -> item :: coalesce_structure_type_declaration_groups rest
   | [] -> []
@@ -8151,7 +8168,7 @@ let rec coalesce_structure_type_declaration_groups = function
 let rec coalesce_signature_type_declaration_groups = function
   | Cst.SignatureItem.TypeDeclaration first :: Cst.SignatureItem.TypeDeclaration next :: rest when type_declaration_starts_with_and
     next
-  && Cst.TypeDeclaration.and_declarations next = [] -> coalesce_signature_type_declaration_groups
+  && has_no_next_type_declaration next -> coalesce_signature_type_declaration_groups
     (Cst.SignatureItem.TypeDeclaration (merge_type_declaration_groups first next) :: rest)
   | item :: rest -> item :: coalesce_signature_type_declaration_groups rest
   | [] -> []
@@ -10487,7 +10504,7 @@ let rec validate_type_declaration = fun ~context (decl: Cst.TypeDeclaration.t) -
     function
     | Some declaration ->
         validate_type_declaration
-          ~context:((("item.type_declaration.and_declarations[" ^ Int.to_string index ^ "]") :: context))
+          ~context:((("item.type_declaration.next_and_declaration[" ^ Int.to_string index ^ "]") :: context))
           declaration;
         validate_tail (index + 1) (Cst.TypeDeclaration.next_and_declaration declaration)
     | None -> ()

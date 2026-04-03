@@ -345,9 +345,14 @@ let binding_sites_of_structure_item structure_item =
   | Syn.Cst.StructureItem.ClassDeclaration { class_body; _ } ->
       [ class_body ] |> List.concat_map binding_sites_of_class_expression
   | Syn.Cst.StructureItem.ModuleDeclaration decl ->
-      let rec binding_sites_of_module_structure decl = binding_sites_of_module_expression
-        (Syn.Cst.ModuleStructure.module_expression decl)
-      @ (Syn.Cst.ModuleStructure.and_declarations decl |> List.concat_map binding_sites_of_module_structure) in
+      let rec binding_sites_of_module_structure decl =
+        let rest =
+          match Syn.Cst.ModuleStructure.next_and_declaration decl with
+          | Some next -> binding_sites_of_module_structure next
+          | None -> []
+        in
+        binding_sites_of_module_expression (Syn.Cst.ModuleStructure.module_expression decl) @ rest
+      in
       binding_sites_of_module_structure decl
   | Syn.Cst.StructureItem.OpenStatement stmt -> (
       match Syn.Cst.OpenStatement.module_expression stmt with

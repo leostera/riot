@@ -1,7 +1,6 @@
 {
   "modules": [
     "Actors",
-    "Array",
     "Ceibo",
     "Env",
     "Fs",

@@ -81,12 +81,20 @@ let diagnostic_for_module_type_decl = fun decl ->
     None
 
 let rec diagnostics_for_module_structure = fun decl ->
-  Option.to_list (diagnostic_for_module_structure decl)
-  @ (Syn.Cst.ModuleStructure.and_declarations decl |> List.concat_map diagnostics_for_module_structure)
+  let rest =
+    match Syn.Cst.ModuleStructure.next_and_declaration decl with
+    | Some next -> diagnostics_for_module_structure next
+    | None -> []
+  in
+  Option.to_list (diagnostic_for_module_structure decl) @ rest
 
 let rec diagnostics_for_module_signature = fun decl ->
-  Option.to_list (diagnostic_for_module_signature decl)
-  @ (Syn.Cst.ModuleSignature.and_declarations decl |> List.concat_map diagnostics_for_module_signature)
+  let rest =
+    match Syn.Cst.ModuleSignature.next_and_declaration decl with
+    | Some next -> diagnostics_for_module_signature next
+    | None -> []
+  in
+  Option.to_list (diagnostic_for_module_signature decl) @ rest
 
 let diagnostics_for_items = fun source_file ->
   match source_file with
