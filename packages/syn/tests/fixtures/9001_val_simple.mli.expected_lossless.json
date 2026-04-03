@@ -30,33 +30,24 @@
     {
       "kind": ":",
       "span": {
-        "start": 9,
-        "end": 10
+        "start": 8,
+        "end": 9
       },
       "text": ":",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 8,
-            "end": 9
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
+      "leading_trivia": []
     },
     {
       "kind": "identifier",
       "span": {
-        "start": 11,
-        "end": 17
+        "start": 10,
+        "end": 16
       },
       "text": "string",
       "leading_trivia": [
         {
           "span": {
-            "start": 10,
-            "end": 11
+            "start": 9,
+            "end": 10
           },
           "text": " ",
           "kind": "whitespace"
@@ -66,15 +57,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 18,
-        "end": 18
+        "start": 17,
+        "end": 17
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 17,
-            "end": 18
+            "start": 16,
+            "end": 17
           },
           "text": "\n",
           "kind": "whitespace"
@@ -85,12 +76,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 17,
+    "width": 16,
     "children": [
       {
         "type": "node",
         "kind": "VAL_DECL",
-        "width": 17,
+        "width": 16,
         "children": [
           {
             "type": "token",
@@ -126,14 +117,8 @@
             "kind": "IDENT_EXPR",
             "text": ":",
             "width": 1,
-            "full_width": 2,
-            "leading_trivia": [
-              {
-                "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
-              }
-            ]
+            "full_width": 1,
+            "leading_trivia": []
           },
           {
             "type": "node",

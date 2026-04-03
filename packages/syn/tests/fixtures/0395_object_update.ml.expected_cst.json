@@ -58,29 +58,48 @@
           },
           "parameters": [],
           "value": {
-            "tag": "object_override",
+            "tag": "record",
             "syntax_node": {
-              "kind": "OBJECT_UPDATE_EXPR",
+              "kind": "RECORD_EXPR",
               "span": {
                 "start": 7,
                 "end": 17
               }
             },
+            "shape": "literal",
             "fields": [
               {
                 "syntax_node": {
                   "kind": "RECORD_FIELD",
                   "span": {
-                    "start": 10,
+                    "start": 11,
                     "end": 15
+                  }
+                },
+                "field_path": {
+                  "tag": "ident",
+                  "syntax_node": {
+                    "kind": "RECORD_FIELD",
+                    "span": {
+                      "start": 11,
+                      "end": 15
+                    }
+                  },
+                  "name_token": {
+                    "kind": "IDENT_EXPR",
+                    "text": "y",
+                    "span": {
+                      "start": 12,
+                      "end": 13
+                    }
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "y",
                   "span": {
-                    "start": 10,
-                    "end": 11
+                    "start": 12,
+                    "end": 13
                   }
                 },
                 "value": {
@@ -90,7 +109,7 @@
                     "syntax_node": {
                       "kind": "INT_LITERAL",
                       "span": {
-                        "start": 13,
+                        "start": 14,
                         "end": 15
                       }
                     },
@@ -107,7 +126,8 @@
                     "digits": "1",
                     "suffix": null
                   }
-                }
+                },
+                "source": "explicit"
               }
             ]
           },

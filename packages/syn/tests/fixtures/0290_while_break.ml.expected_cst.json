@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 70
+        "end": 76
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 70
+              "end": 76
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "WHILE_EXPR",
               "span": {
                 "start": 7,
-                "end": 70
+                "end": 76
               }
             },
             "condition": {
@@ -118,7 +118,7 @@
                 "kind": "IF_EXPR",
                 "span": {
                   "start": 28,
-                  "end": 63
+                  "end": 69
                 }
               },
               "keyword_token": {
@@ -172,7 +172,7 @@
                   "kind": "ASSIGN_EXPR",
                   "span": {
                     "start": 45,
-                    "end": 63
+                    "end": 69
                   }
                 },
                 "target": {
@@ -181,7 +181,7 @@
                     "kind": "IDENT_EXPR",
                     "span": {
                       "start": 45,
-                      "end": 54
+                      "end": 60
                     }
                   },
                   "path": {
@@ -190,15 +190,15 @@
                       "kind": "IDENT_EXPR",
                       "span": {
                         "start": 45,
-                        "end": 54
+                        "end": 60
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "continue",
                       "span": {
-                        "start": 46,
-                        "end": 54
+                        "start": 52,
+                        "end": 60
                       }
                     }
                   }
@@ -207,8 +207,8 @@
                   "kind": "IDENT_EXPR",
                   "text": ":=",
                   "span": {
-                    "start": 55,
-                    "end": 57
+                    "start": 61,
+                    "end": 63
                   }
                 },
                 "value": {
@@ -218,16 +218,16 @@
                     "syntax_node": {
                       "kind": "BOOL_LITERAL",
                       "span": {
-                        "start": 57,
-                        "end": 63
+                        "start": 63,
+                        "end": 69
                       }
                     },
                     "literal_token": {
                       "kind": "BOOL_LITERAL",
                       "text": "false",
                       "span": {
-                        "start": 58,
-                        "end": 63
+                        "start": 64,
+                        "end": 69
                       }
                     },
                     "value": false

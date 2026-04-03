@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 61
+        "end": 60
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "MODULE_DECL",
             "span": {
               "start": 0,
-              "end": 61
+              "end": 60
             }
           },
           "keyword_token": {
@@ -45,16 +45,16 @@
               "syntax_node": {
                 "kind": "MODULE_TYPE_PATH",
                 "span": {
-                  "start": 10,
-                  "end": 12
+                  "start": 9,
+                  "end": 11
                 }
               },
               "name_token": {
                 "kind": "IDENT_EXPR",
                 "text": "S",
                 "span": {
-                  "start": 11,
-                  "end": 12
+                  "start": 10,
+                  "end": 11
                 }
               }
             }
@@ -65,7 +65,7 @@
               "kind": "MODULE_DECL",
               "span": {
                 "start": 0,
-                "end": 61
+                "end": 60
               }
             },
             "module_expression": {
@@ -73,23 +73,23 @@
               "syntax_node": {
                 "kind": "STRUCT_EXPR",
                 "span": {
-                  "start": 14,
-                  "end": 61
+                  "start": 13,
+                  "end": 60
                 }
               },
               "item_syntax_nodes": [
                 {
                   "kind": "TYPE_DECL",
                   "span": {
-                    "start": 21,
-                    "end": 36
+                    "start": 20,
+                    "end": 35
                   }
                 },
                 {
                   "kind": "LET_BINDING",
                   "span": {
-                    "start": 36,
-                    "end": 57
+                    "start": 35,
+                    "end": 56
                   }
                 }
               ]
@@ -101,16 +101,16 @@
                 "syntax_node": {
                   "kind": "MODULE_TYPE_PATH",
                   "span": {
-                    "start": 10,
-                    "end": 12
+                    "start": 9,
+                    "end": 11
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "S",
                   "span": {
-                    "start": 11,
-                    "end": 12
+                    "start": 10,
+                    "end": 11
                   }
                 }
               }

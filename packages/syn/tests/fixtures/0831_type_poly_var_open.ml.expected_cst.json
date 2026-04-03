@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 21
+        "end": 25
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 21
+              "end": 25
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_POLY_VARIANT",
               "span": {
                 "start": 8,
-                "end": 21
+                "end": 25
               }
             },
             "kind": {
@@ -75,7 +75,7 @@
                     "kind": "POLY_VARIANT_TAG",
                     "span": {
                       "start": 11,
-                      "end": 14
+                      "end": 16
                     }
                   },
                   "bar_token": null,
@@ -83,8 +83,8 @@
                     "kind": "IDENT_EXPR",
                     "text": "A",
                     "span": {
-                      "start": 13,
-                      "end": 14
+                      "start": 15,
+                      "end": 16
                     }
                   },
                   "separator_token": null,
@@ -97,24 +97,24 @@
                   "syntax_node": {
                     "kind": "POLY_VARIANT_TAG",
                     "span": {
-                      "start": 16,
-                      "end": 19
+                      "start": 20,
+                      "end": 23
                     }
                   },
                   "bar_token": {
                     "kind": "IDENT_EXPR",
                     "text": "|",
                     "span": {
-                      "start": 15,
-                      "end": 16
+                      "start": 19,
+                      "end": 20
                     }
                   },
                   "tag_name": {
                     "kind": "IDENT_EXPR",
                     "text": "B",
                     "span": {
-                      "start": 18,
-                      "end": 19
+                      "start": 22,
+                      "end": 23
                     }
                   },
                   "separator_token": null,

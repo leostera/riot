@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 46
+        "end": 54
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 46
+              "end": 54
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_DECL",
               "span": {
                 "start": 0,
-                "end": 46
+                "end": 54
               }
             },
             "constructors": [
@@ -62,7 +62,7 @@
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
                     "start": 12,
-                    "end": 17
+                    "end": 19
                   }
                 },
                 "bar_token": null,
@@ -70,8 +70,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "Init",
                   "span": {
-                    "start": 13,
-                    "end": 17
+                    "start": 15,
+                    "end": 19
                   }
                 },
                 "separator_token": null,
@@ -82,24 +82,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
-                    "start": 19,
-                    "end": 27
+                    "start": 23,
+                    "end": 31
                   }
                 },
                 "bar_token": {
                   "kind": "IDENT_EXPR",
                   "text": "|",
                   "span": {
-                    "start": 18,
-                    "end": 19
+                    "start": 22,
+                    "end": 23
                   }
                 },
                 "constructor_name": {
                   "kind": "IDENT_EXPR",
                   "text": "Running",
                   "span": {
-                    "start": 20,
-                    "end": 27
+                    "start": 24,
+                    "end": 31
                   }
                 },
                 "separator_token": null,
@@ -110,24 +110,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
-                    "start": 29,
-                    "end": 36
+                    "start": 35,
+                    "end": 42
                   }
                 },
                 "bar_token": {
                   "kind": "IDENT_EXPR",
                   "text": "|",
                   "span": {
-                    "start": 28,
-                    "end": 29
+                    "start": 34,
+                    "end": 35
                   }
                 },
                 "constructor_name": {
                   "kind": "IDENT_EXPR",
                   "text": "Paused",
                   "span": {
-                    "start": 30,
-                    "end": 36
+                    "start": 36,
+                    "end": 42
                   }
                 },
                 "separator_token": null,
@@ -138,24 +138,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
-                    "start": 38,
-                    "end": 46
+                    "start": 46,
+                    "end": 54
                   }
                 },
                 "bar_token": {
                   "kind": "IDENT_EXPR",
                   "text": "|",
                   "span": {
-                    "start": 37,
-                    "end": 38
+                    "start": 45,
+                    "end": 46
                   }
                 },
                 "constructor_name": {
                   "kind": "IDENT_EXPR",
                   "text": "Stopped",
                   "span": {
-                    "start": 39,
-                    "end": 46
+                    "start": 47,
+                    "end": 54
                   }
                 },
                 "separator_token": null,

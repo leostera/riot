@@ -56,42 +56,42 @@
               }
             },
             "inner": {
-              "tag": "alias",
+              "tag": "cons",
               "syntax_node": {
-                "kind": "AS_PATTERN",
+                "kind": "CONS_PATTERN",
                 "span": {
                   "start": 5,
                   "end": 19
                 }
               },
-              "pattern": {
-                "tag": "cons",
+              "head": {
+                "tag": "identifier",
                 "syntax_node": {
-                  "kind": "CONS_PATTERN",
+                  "kind": "IDENT_PATTERN",
                   "span": {
                     "start": 5,
-                    "end": 11
+                    "end": 6
                   }
                 },
-                "head": {
-                  "tag": "identifier",
-                  "syntax_node": {
-                    "kind": "IDENT_PATTERN",
-                    "span": {
-                      "start": 5,
-                      "end": 6
-                    }
-                  },
-                  "name_token": {
-                    "kind": "IDENT_EXPR",
-                    "text": "x",
-                    "span": {
-                      "start": 5,
-                      "end": 6
-                    }
+                "name_token": {
+                  "kind": "IDENT_EXPR",
+                  "text": "x",
+                  "span": {
+                    "start": 5,
+                    "end": 6
+                  }
+                }
+              },
+              "tail": {
+                "tag": "alias",
+                "syntax_node": {
+                  "kind": "AS_PATTERN",
+                  "span": {
+                    "start": 9,
+                    "end": 19
                   }
                 },
-                "tail": {
+                "pattern": {
                   "tag": "wildcard",
                   "syntax_node": {
                     "kind": "WILDCARD_PATTERN",
@@ -100,14 +100,14 @@
                       "end": 11
                     }
                   }
-                }
-              },
-              "name_token": {
-                "kind": "IDENT_EXPR",
-                "text": "full",
-                "span": {
-                  "start": 15,
-                  "end": 19
+                },
+                "name_token": {
+                  "kind": "IDENT_EXPR",
+                  "text": "full",
+                  "span": {
+                    "start": 15,
+                    "end": 19
+                  }
                 }
               }
             }

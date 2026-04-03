@@ -102,17 +102,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 18,
-        "end": 24
+        "start": 22,
+        "end": 28
       },
       "text": "assert",
       "leading_trivia": [
         {
           "span": {
             "start": 17,
-            "end": 18
+            "end": 22
           },
-          "text": " ",
+          "text": "\n    ",
           "kind": "whitespace"
         }
       ]
@@ -120,15 +120,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 25,
-        "end": 29
+        "start": 29,
+        "end": 33
       },
       "text": "true",
       "leading_trivia": [
         {
           "span": {
-            "start": 24,
-            "end": 25
+            "start": 28,
+            "end": 29
           },
           "text": " ",
           "kind": "whitespace"
@@ -138,17 +138,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 30,
-        "end": 32
+        "start": 36,
+        "end": 38
       },
       "text": "in",
       "leading_trivia": [
         {
           "span": {
-            "start": 29,
-            "end": 30
+            "start": 33,
+            "end": 36
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -156,15 +156,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 35,
-        "end": 36
+        "start": 41,
+        "end": 42
       },
       "text": "y",
       "leading_trivia": [
         {
           "span": {
-            "start": 32,
-            "end": 35
+            "start": 38,
+            "end": 41
           },
           "text": "\n  ",
           "kind": "whitespace"
@@ -174,15 +174,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 37,
-        "end": 37
+        "start": 43,
+        "end": 43
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 36,
-            "end": 37
+            "start": 42,
+            "end": 43
           },
           "text": "\n",
           "kind": "whitespace"
@@ -193,12 +193,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 36,
+    "width": 42,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 36,
+        "width": 42,
         "children": [
           {
             "type": "token",
@@ -246,7 +246,7 @@
           {
             "type": "node",
             "kind": "LET_EXPR",
-            "width": 29,
+            "width": 35,
             "children": [
               {
                 "type": "token",
@@ -300,19 +300,19 @@
               {
                 "type": "node",
                 "kind": "ASSERT_EXPR",
-                "width": 12,
+                "width": 16,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "assert",
                     "width": 6,
-                    "full_width": 7,
+                    "full_width": 11,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n    ",
+                        "width": 5
                       }
                     ]
                   },
@@ -344,12 +344,12 @@
                 "kind": "IDENT_EXPR",
                 "text": "in",
                 "width": 2,
-                "full_width": 3,
+                "full_width": 5,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " ",
-                    "width": 1
+                    "text": "\n  ",
+                    "width": 3
                   }
                 ]
               },

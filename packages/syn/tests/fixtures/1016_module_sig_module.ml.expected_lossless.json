@@ -120,33 +120,24 @@
     {
       "kind": ":",
       "span": {
-        "start": 31,
-        "end": 32
+        "start": 30,
+        "end": 31
       },
       "text": ":",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 30,
-            "end": 31
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
+      "leading_trivia": []
     },
     {
       "kind": "sig",
       "span": {
-        "start": 33,
-        "end": 36
+        "start": 32,
+        "end": 35
       },
       "text": "sig",
       "leading_trivia": [
         {
           "span": {
-            "start": 32,
-            "end": 33
+            "start": 31,
+            "end": 32
           },
           "text": " ",
           "kind": "whitespace"
@@ -156,15 +147,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 41,
-        "end": 44
+        "start": 40,
+        "end": 43
       },
       "text": "val",
       "leading_trivia": [
         {
           "span": {
-            "start": 36,
-            "end": 41
+            "start": 35,
+            "end": 40
           },
           "text": "\n    ",
           "kind": "whitespace"
@@ -174,15 +165,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 45,
-        "end": 46
+        "start": 44,
+        "end": 45
       },
       "text": "x",
       "leading_trivia": [
         {
           "span": {
-            "start": 44,
-            "end": 45
+            "start": 43,
+            "end": 44
           },
           "text": " ",
           "kind": "whitespace"
@@ -192,10 +183,19 @@
     {
       "kind": ":",
       "span": {
-        "start": 47,
-        "end": 48
+        "start": 45,
+        "end": 46
       },
       "text": ":",
+      "leading_trivia": []
+    },
+    {
+      "kind": "identifier",
+      "span": {
+        "start": 47,
+        "end": 50
+      },
+      "text": "int",
       "leading_trivia": [
         {
           "span": {
@@ -208,35 +208,17 @@
       ]
     },
     {
-      "kind": "identifier",
-      "span": {
-        "start": 49,
-        "end": 52
-      },
-      "text": "int",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 48,
-            "end": 49
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
-    },
-    {
       "kind": "end",
       "span": {
-        "start": 55,
-        "end": 58
+        "start": 53,
+        "end": 56
       },
       "text": "end",
       "leading_trivia": [
         {
           "span": {
-            "start": 52,
-            "end": 55
+            "start": 50,
+            "end": 53
           },
           "text": "\n  ",
           "kind": "whitespace"
@@ -246,15 +228,15 @@
     {
       "kind": "end",
       "span": {
-        "start": 59,
-        "end": 62
+        "start": 57,
+        "end": 60
       },
       "text": "end",
       "leading_trivia": [
         {
           "span": {
-            "start": 58,
-            "end": 59
+            "start": 56,
+            "end": 57
           },
           "text": "\n",
           "kind": "whitespace"
@@ -264,15 +246,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 63,
-        "end": 63
+        "start": 61,
+        "end": 61
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 62,
-            "end": 63
+            "start": 60,
+            "end": 61
           },
           "text": "\n",
           "kind": "whitespace"
@@ -283,12 +265,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 62,
+    "width": 60,
     "children": [
       {
         "type": "node",
         "kind": "MODULE_TYPE_DECL",
-        "width": 62,
+        "width": 60,
         "children": [
           {
             "type": "token",
@@ -343,7 +325,7 @@
           {
             "type": "node",
             "kind": "SIG_EXPR",
-            "width": 47,
+            "width": 45,
             "children": [
               {
                 "type": "token",
@@ -362,7 +344,7 @@
               {
                 "type": "node",
                 "kind": "MODULE_DECL",
-                "width": 39,
+                "width": 37,
                 "children": [
                   {
                     "type": "token",
@@ -397,19 +379,13 @@
                     "kind": "IDENT_EXPR",
                     "text": ":",
                     "width": 1,
-                    "full_width": 2,
-                    "leading_trivia": [
-                      {
-                        "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
-                      }
-                    ]
+                    "full_width": 1,
+                    "leading_trivia": []
                   },
                   {
                     "type": "node",
                     "kind": "SIG_EXPR",
-                    "width": 26,
+                    "width": 25,
                     "children": [
                       {
                         "type": "token",
@@ -428,7 +404,7 @@
                       {
                         "type": "node",
                         "kind": "VAL_DECL",
-                        "width": 16,
+                        "width": 15,
                         "children": [
                           {
                             "type": "token",
@@ -470,14 +446,8 @@
                             "kind": "IDENT_EXPR",
                             "text": ":",
                             "width": 1,
-                            "full_width": 2,
-                            "leading_trivia": [
-                              {
-                                "kind": "WHITESPACE",
-                                "text": " ",
-                                "width": 1
-                              }
-                            ]
+                            "full_width": 1,
+                            "leading_trivia": []
                           },
                           {
                             "type": "node",

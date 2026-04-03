@@ -57,17 +57,17 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 9,
-        "end": 10
+        "start": 11,
+        "end": 12
       },
       "text": "r",
       "leading_trivia": [
         {
           "span": {
             "start": 8,
-            "end": 9
+            "end": 11
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -75,15 +75,15 @@
     {
       "kind": ":=",
       "span": {
-        "start": 11,
-        "end": 13
+        "start": 13,
+        "end": 15
       },
       "text": ":=",
       "leading_trivia": [
         {
           "span": {
-            "start": 10,
-            "end": 11
+            "start": 12,
+            "end": 13
           },
           "text": " ",
           "kind": "whitespace"
@@ -93,15 +93,15 @@
     {
       "kind": "integer",
       "span": {
-        "start": 14,
-        "end": 16
+        "start": 16,
+        "end": 18
       },
       "text": "42",
       "leading_trivia": [
         {
           "span": {
-            "start": 13,
-            "end": 14
+            "start": 15,
+            "end": 16
           },
           "text": " ",
           "kind": "whitespace"
@@ -111,15 +111,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 17,
-        "end": 17
+        "start": 19,
+        "end": 19
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 16,
-            "end": 17
+            "start": 18,
+            "end": 19
           },
           "text": "\n",
           "kind": "whitespace"
@@ -130,12 +130,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 16,
+    "width": 18,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 16,
+        "width": 18,
         "children": [
           {
             "type": "token",
@@ -191,24 +191,24 @@
           {
             "type": "node",
             "kind": "ASSIGN_EXPR",
-            "width": 8,
+            "width": 10,
             "children": [
               {
                 "type": "node",
                 "kind": "IDENT_EXPR",
-                "width": 2,
+                "width": 4,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "r",
                     "width": 1,
-                    "full_width": 2,
+                    "full_width": 4,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n  ",
+                        "width": 3
                       }
                     ]
                   }

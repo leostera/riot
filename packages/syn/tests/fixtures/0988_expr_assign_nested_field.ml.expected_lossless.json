@@ -57,17 +57,17 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 9,
-        "end": 12
+        "start": 11,
+        "end": 14
       },
       "text": "obj",
       "leading_trivia": [
         {
           "span": {
             "start": 8,
-            "end": 9
+            "end": 11
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -75,8 +75,8 @@
     {
       "kind": ".",
       "span": {
-        "start": 12,
-        "end": 13
+        "start": 14,
+        "end": 15
       },
       "text": ".",
       "leading_trivia": []
@@ -84,8 +84,8 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 13,
-        "end": 17
+        "start": 15,
+        "end": 19
       },
       "text": "data",
       "leading_trivia": []
@@ -93,8 +93,8 @@
     {
       "kind": ".",
       "span": {
-        "start": 17,
-        "end": 18
+        "start": 19,
+        "end": 20
       },
       "text": ".",
       "leading_trivia": []
@@ -102,8 +102,8 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 18,
-        "end": 23
+        "start": 20,
+        "end": 25
       },
       "text": "value",
       "leading_trivia": []
@@ -111,15 +111,15 @@
     {
       "kind": "<-",
       "span": {
-        "start": 24,
-        "end": 26
+        "start": 26,
+        "end": 28
       },
       "text": "<-",
       "leading_trivia": [
         {
           "span": {
-            "start": 23,
-            "end": 24
+            "start": 25,
+            "end": 26
           },
           "text": " ",
           "kind": "whitespace"
@@ -129,15 +129,15 @@
     {
       "kind": "integer",
       "span": {
-        "start": 27,
-        "end": 30
+        "start": 29,
+        "end": 32
       },
       "text": "100",
       "leading_trivia": [
         {
           "span": {
-            "start": 26,
-            "end": 27
+            "start": 28,
+            "end": 29
           },
           "text": " ",
           "kind": "whitespace"
@@ -147,15 +147,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 31,
-        "end": 31
+        "start": 33,
+        "end": 33
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 30,
-            "end": 31
+            "start": 32,
+            "end": 33
           },
           "text": "\n",
           "kind": "whitespace"
@@ -166,12 +166,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 30,
+    "width": 32,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 30,
+        "width": 32,
         "children": [
           {
             "type": "token",
@@ -227,34 +227,34 @@
           {
             "type": "node",
             "kind": "ASSIGN_EXPR",
-            "width": 22,
+            "width": 24,
             "children": [
               {
                 "type": "node",
                 "kind": "FIELD_ACCESS_EXPR",
-                "width": 15,
+                "width": 17,
                 "children": [
                   {
                     "type": "node",
                     "kind": "FIELD_ACCESS_EXPR",
-                    "width": 9,
+                    "width": 11,
                     "children": [
                       {
                         "type": "node",
                         "kind": "IDENT_EXPR",
-                        "width": 4,
+                        "width": 6,
                         "children": [
                           {
                             "type": "token",
                             "kind": "IDENT_EXPR",
                             "text": "obj",
                             "width": 3,
-                            "full_width": 4,
+                            "full_width": 6,
                             "leading_trivia": [
                               {
                                 "kind": "WHITESPACE",
-                                "text": " ",
-                                "width": 1
+                                "text": "\n  ",
+                                "width": 3
                               }
                             ]
                           }

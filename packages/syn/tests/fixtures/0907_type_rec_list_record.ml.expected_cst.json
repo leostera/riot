@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 54
+        "end": 57
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 54
+              "end": 57
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_RECORD",
               "span": {
                 "start": 13,
-                "end": 54
+                "end": 57
               }
             },
             "fields": [
@@ -62,15 +62,15 @@
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
                     "start": 15,
-                    "end": 29
+                    "end": 30
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "name",
                   "span": {
-                    "start": 16,
-                    "end": 20
+                    "start": 18,
+                    "end": 22
                   }
                 },
                 "mutable_token": null,
@@ -79,8 +79,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 22,
-                      "end": 29
+                      "start": 23,
+                      "end": 30
                     }
                   },
                   "constructor_path": {
@@ -88,16 +88,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 22,
-                        "end": 29
+                        "start": 23,
+                        "end": 30
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "string",
                       "span": {
-                        "start": 23,
-                        "end": 29
+                        "start": 24,
+                        "end": 30
                       }
                     }
                   },
@@ -108,16 +108,16 @@
                 "syntax_node": {
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
-                    "start": 30,
-                    "end": 52
+                    "start": 31,
+                    "end": 54
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "friends",
                   "span": {
-                    "start": 31,
-                    "end": 38
+                    "start": 34,
+                    "end": 41
                   }
                 },
                 "mutable_token": null,
@@ -126,8 +126,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 40,
-                      "end": 52
+                      "start": 42,
+                      "end": 54
                     }
                   },
                   "constructor_path": {
@@ -135,16 +135,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 40,
-                        "end": 52
+                        "start": 42,
+                        "end": 54
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "list",
                       "span": {
-                        "start": 48,
-                        "end": 52
+                        "start": 50,
+                        "end": 54
                       }
                     }
                   },
@@ -154,8 +154,8 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 40,
-                          "end": 47
+                          "start": 42,
+                          "end": 49
                         }
                       },
                       "constructor_path": {
@@ -163,16 +163,16 @@
                         "syntax_node": {
                           "kind": "TYPE_CONSTR",
                           "span": {
-                            "start": 40,
-                            "end": 47
+                            "start": 42,
+                            "end": 49
                           }
                         },
                         "name_token": {
                           "kind": "IDENT_EXPR",
                           "text": "person",
                           "span": {
-                            "start": 41,
-                            "end": 47
+                            "start": 43,
+                            "end": 49
                           }
                         }
                       },

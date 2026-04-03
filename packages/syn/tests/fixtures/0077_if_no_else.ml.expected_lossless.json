@@ -48,17 +48,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 8,
-        "end": 10
+        "start": 10,
+        "end": 12
       },
       "text": "if",
       "leading_trivia": [
         {
           "span": {
             "start": 7,
-            "end": 8
+            "end": 10
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -66,15 +66,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 11,
-        "end": 15
+        "start": 13,
+        "end": 17
       },
       "text": "true",
       "leading_trivia": [
         {
           "span": {
-            "start": 10,
-            "end": 11
+            "start": 12,
+            "end": 13
           },
           "text": " ",
           "kind": "whitespace"
@@ -84,15 +84,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 16,
-        "end": 20
+        "start": 18,
+        "end": 22
       },
       "text": "then",
       "leading_trivia": [
         {
           "span": {
-            "start": 15,
-            "end": 16
+            "start": 17,
+            "end": 18
           },
           "text": " ",
           "kind": "whitespace"
@@ -102,17 +102,17 @@
     {
       "kind": "(",
       "span": {
-        "start": 21,
-        "end": 22
+        "start": 27,
+        "end": 28
       },
       "text": "(",
       "leading_trivia": [
         {
           "span": {
-            "start": 20,
-            "end": 21
+            "start": 22,
+            "end": 27
           },
-          "text": " ",
+          "text": "\n    ",
           "kind": "whitespace"
         }
       ]
@@ -120,8 +120,8 @@
     {
       "kind": ")",
       "span": {
-        "start": 22,
-        "end": 23
+        "start": 28,
+        "end": 29
       },
       "text": ")",
       "leading_trivia": []
@@ -129,15 +129,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 24,
-        "end": 24
+        "start": 30,
+        "end": 30
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 23,
-            "end": 24
+            "start": 29,
+            "end": 30
           },
           "text": "\n",
           "kind": "whitespace"
@@ -148,12 +148,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 23,
+    "width": 29,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 23,
+        "width": 29,
         "children": [
           {
             "type": "token",
@@ -201,19 +201,19 @@
           {
             "type": "node",
             "kind": "IF_EXPR",
-            "width": 16,
+            "width": 22,
             "children": [
               {
                 "type": "token",
                 "kind": "IDENT_EXPR",
                 "text": "if",
                 "width": 2,
-                "full_width": 3,
+                "full_width": 5,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " ",
-                    "width": 1
+                    "text": "\n  ",
+                    "width": 3
                   }
                 ]
               },
@@ -255,19 +255,19 @@
               {
                 "type": "node",
                 "kind": "UNIT_LITERAL",
-                "width": 3,
+                "width": 7,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "(",
                     "width": 1,
-                    "full_width": 2,
+                    "full_width": 6,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n    ",
+                        "width": 5
                       }
                     ]
                   },

@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 26
+        "end": 25
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 26
+              "end": 25
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "COERCE_EXPR",
               "span": {
                 "start": 7,
-                "end": 26
+                "end": 25
               }
             },
             "expression": {
@@ -101,16 +101,16 @@
                   "kind": "IDENT_EXPR",
                   "text": ":",
                   "span": {
-                    "start": 13,
-                    "end": 14
+                    "start": 12,
+                    "end": 13
                   }
                 },
                 {
                   "kind": "IDENT_EXPR",
                   "text": ">",
                   "span": {
-                    "start": 14,
-                    "end": 15
+                    "start": 13,
+                    "end": 14
                   }
                 }
               ],
@@ -119,8 +119,8 @@
                 "syntax_node": {
                   "kind": "TYPE_CONSTR",
                   "span": {
-                    "start": 15,
-                    "end": 25
+                    "start": 14,
+                    "end": 24
                   }
                 },
                 "constructor_path": {
@@ -128,16 +128,16 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 15,
-                      "end": 25
+                      "start": 14,
+                      "end": 24
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "base_type",
                     "span": {
-                      "start": 16,
-                      "end": 25
+                      "start": 15,
+                      "end": 24
                     }
                   }
                 },

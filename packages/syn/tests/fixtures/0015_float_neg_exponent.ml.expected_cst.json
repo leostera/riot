@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 14
+        "end": 16
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 14
+              "end": 16
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "INFIX_EXPR",
               "span": {
                 "start": 7,
-                "end": 14
+                "end": 16
               }
             },
             "left": {
@@ -96,8 +96,8 @@
                 "kind": "IDENT_EXPR",
                 "text": "-",
                 "span": {
-                  "start": 12,
-                  "end": 13
+                  "start": 13,
+                  "end": 14
                 }
               }
             ],
@@ -108,16 +108,16 @@
                 "syntax_node": {
                   "kind": "INT_LITERAL",
                   "span": {
-                    "start": 13,
-                    "end": 14
+                    "start": 14,
+                    "end": 16
                   }
                 },
                 "literal_token": {
                   "kind": "INT_LITERAL",
                   "text": "5",
                   "span": {
-                    "start": 13,
-                    "end": 14
+                    "start": 15,
+                    "end": 16
                   }
                 },
                 "base": "decimal",

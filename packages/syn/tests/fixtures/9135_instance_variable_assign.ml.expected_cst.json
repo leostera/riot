@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 90
+        "end": 85
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 90
+              "end": 85
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "OBJECT_EXPR",
               "span": {
                 "start": 13,
-                "end": 90
+                "end": 85
               }
             },
             "self_pattern": null,
@@ -130,7 +130,7 @@
                   "kind": "OBJECT_METHOD",
                   "span": {
                     "start": 48,
-                    "end": 84
+                    "end": 79
                   }
                 },
                 "attributes": [],
@@ -147,24 +147,24 @@
                   "syntax_node": {
                     "kind": "ASSIGN_EXPR",
                     "span": {
-                      "start": 70,
-                      "end": 84
+                      "start": 65,
+                      "end": 79
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "count",
                     "span": {
-                      "start": 71,
-                      "end": 76
+                      "start": 66,
+                      "end": 71
                     }
                   },
                   "operator_token": {
                     "kind": "IDENT_EXPR",
                     "text": "<-",
                     "span": {
-                      "start": 77,
-                      "end": 79
+                      "start": 72,
+                      "end": 74
                     }
                   },
                   "value": {
@@ -172,8 +172,8 @@
                     "syntax_node": {
                       "kind": "IDENT_EXPR",
                       "span": {
-                        "start": 79,
-                        "end": 84
+                        "start": 74,
+                        "end": 79
                       }
                     },
                     "path": {
@@ -181,16 +181,16 @@
                       "syntax_node": {
                         "kind": "IDENT_EXPR",
                         "span": {
-                          "start": 79,
-                          "end": 84
+                          "start": 74,
+                          "end": 79
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "next",
                         "span": {
-                          "start": 80,
-                          "end": 84
+                          "start": 75,
+                          "end": 79
                         }
                       }
                     }

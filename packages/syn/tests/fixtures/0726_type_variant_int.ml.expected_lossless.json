@@ -48,17 +48,17 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 9,
-        "end": 14
+        "start": 11,
+        "end": 16
       },
       "text": "Value",
       "leading_trivia": [
         {
           "span": {
             "start": 8,
-            "end": 9
+            "end": 11
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -66,15 +66,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 15,
-        "end": 17
+        "start": 17,
+        "end": 19
       },
       "text": "of",
       "leading_trivia": [
         {
           "span": {
-            "start": 14,
-            "end": 15
+            "start": 16,
+            "end": 17
           },
           "text": " ",
           "kind": "whitespace"
@@ -84,15 +84,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 18,
-        "end": 21
+        "start": 20,
+        "end": 23
       },
       "text": "int",
       "leading_trivia": [
         {
           "span": {
-            "start": 17,
-            "end": 18
+            "start": 19,
+            "end": 20
           },
           "text": " ",
           "kind": "whitespace"
@@ -102,15 +102,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 22,
-        "end": 22
+        "start": 24,
+        "end": 24
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 21,
-            "end": 22
+            "start": 23,
+            "end": 24
           },
           "text": "\n",
           "kind": "whitespace"
@@ -121,12 +121,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 21,
+    "width": 23,
     "children": [
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 21,
+        "width": 23,
         "children": [
           {
             "type": "token",
@@ -174,24 +174,24 @@
           {
             "type": "node",
             "kind": "TYPE_VARIANT_CONSTR",
-            "width": 13,
+            "width": 15,
             "children": [
               {
                 "type": "node",
                 "kind": "IDENT_EXPR",
-                "width": 6,
+                "width": 8,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "Value",
                     "width": 5,
-                    "full_width": 6,
+                    "full_width": 8,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n  ",
+                        "width": 3
                       }
                     ]
                   }

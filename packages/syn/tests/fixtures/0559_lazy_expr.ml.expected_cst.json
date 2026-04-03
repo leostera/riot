@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 39
+        "end": 41
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 39
+              "end": 41
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "LAZY_EXPR",
               "span": {
                 "start": 7,
-                "end": 39
+                "end": 41
               }
             },
             "body": {
@@ -71,24 +71,24 @@
               "syntax_node": {
                 "kind": "PAREN_EXPR",
                 "span": {
-                  "start": 12,
-                  "end": 39
+                  "start": 14,
+                  "end": 41
                 }
               },
               "opening_token": {
                 "kind": "IDENT_EXPR",
                 "text": "(",
                 "span": {
-                  "start": 13,
-                  "end": 14
+                  "start": 15,
+                  "end": 16
                 }
               },
               "closing_token": {
                 "kind": "IDENT_EXPR",
                 "text": ")",
                 "span": {
-                  "start": 38,
-                  "end": 39
+                  "start": 40,
+                  "end": 41
                 }
               },
               "grouping": "parens",
@@ -97,8 +97,8 @@
                 "syntax_node": {
                   "kind": "APPLY_EXPR",
                   "span": {
-                    "start": 14,
-                    "end": 38
+                    "start": 16,
+                    "end": 40
                   }
                 },
                 "callee": {
@@ -106,8 +106,8 @@
                   "syntax_node": {
                     "kind": "IDENT_EXPR",
                     "span": {
-                      "start": 14,
-                      "end": 35
+                      "start": 16,
+                      "end": 37
                     }
                   },
                   "path": {
@@ -115,16 +115,16 @@
                     "syntax_node": {
                       "kind": "IDENT_EXPR",
                       "span": {
-                        "start": 14,
-                        "end": 35
+                        "start": 16,
+                        "end": 37
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "expensive_computation",
                       "span": {
-                        "start": 14,
-                        "end": 35
+                        "start": 16,
+                        "end": 37
                       }
                     }
                   }
@@ -138,8 +138,8 @@
                       "syntax_node": {
                         "kind": "UNIT_LITERAL",
                         "span": {
-                          "start": 35,
-                          "end": 38
+                          "start": 37,
+                          "end": 40
                         }
                       }
                     }

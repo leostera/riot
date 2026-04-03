@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 26
+        "end": 30
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 26
+              "end": 30
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_DECL",
               "span": {
                 "start": 0,
-                "end": 26
+                "end": 30
               }
             },
             "constructors": [
@@ -62,7 +62,7 @@
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
                     "start": 13,
-                    "end": 18
+                    "end": 20
                   }
                 },
                 "bar_token": null,
@@ -70,8 +70,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "True",
                   "span": {
-                    "start": 14,
-                    "end": 18
+                    "start": 16,
+                    "end": 20
                   }
                 },
                 "separator_token": null,
@@ -82,24 +82,24 @@
                 "syntax_node": {
                   "kind": "TYPE_VARIANT_CONSTR",
                   "span": {
-                    "start": 20,
-                    "end": 26
+                    "start": 24,
+                    "end": 30
                   }
                 },
                 "bar_token": {
                   "kind": "IDENT_EXPR",
                   "text": "|",
                   "span": {
-                    "start": 19,
-                    "end": 20
+                    "start": 23,
+                    "end": 24
                   }
                 },
                 "constructor_name": {
                   "kind": "IDENT_EXPR",
                   "text": "False",
                   "span": {
-                    "start": 21,
-                    "end": 26
+                    "start": 25,
+                    "end": 30
                   }
                 },
                 "separator_token": null,

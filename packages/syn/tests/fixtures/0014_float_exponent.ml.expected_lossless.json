@@ -66,24 +66,33 @@
     {
       "kind": "integer",
       "span": {
-        "start": 12,
-        "end": 14
+        "start": 13,
+        "end": 15
       },
       "text": "10",
-      "leading_trivia": []
+      "leading_trivia": [
+        {
+          "span": {
+            "start": 12,
+            "end": 13
+          },
+          "text": " ",
+          "kind": "whitespace"
+        }
+      ]
     },
     {
       "kind": "end of file",
       "span": {
-        "start": 15,
-        "end": 15
+        "start": 16,
+        "end": 16
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 14,
-            "end": 15
+            "start": 15,
+            "end": 16
           },
           "text": "\n",
           "kind": "whitespace"
@@ -94,12 +103,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 14,
+    "width": 15,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 14,
+        "width": 15,
         "children": [
           {
             "type": "token",
@@ -147,7 +156,7 @@
           {
             "type": "node",
             "kind": "APPLY_EXPR",
-            "width": 7,
+            "width": 8,
             "children": [
               {
                 "type": "node",
@@ -173,15 +182,21 @@
               {
                 "type": "node",
                 "kind": "INT_LITERAL",
-                "width": 2,
+                "width": 3,
                 "children": [
                   {
                     "type": "token",
                     "kind": "INT_LITERAL",
                     "text": "10",
                     "width": 2,
-                    "full_width": 2,
-                    "leading_trivia": []
+                    "full_width": 3,
+                    "leading_trivia": [
+                      {
+                        "kind": "WHITESPACE",
+                        "text": " ",
+                        "width": 1
+                      }
+                    ]
                   }
                 ]
               }

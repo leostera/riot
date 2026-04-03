@@ -66,17 +66,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 15,
-        "end": 18
+        "start": 16,
+        "end": 19
       },
       "text": "and",
       "leading_trivia": [
         {
           "span": {
             "start": 14,
-            "end": 15
+            "end": 16
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -84,15 +84,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 19,
-        "end": 22
+        "start": 20,
+        "end": 23
       },
       "text": "bar",
       "leading_trivia": [
         {
           "span": {
-            "start": 18,
-            "end": 19
+            "start": 19,
+            "end": 20
           },
           "text": " ",
           "kind": "whitespace"
@@ -102,15 +102,15 @@
     {
       "kind": "=",
       "span": {
-        "start": 23,
-        "end": 24
+        "start": 24,
+        "end": 25
       },
       "text": "=",
       "leading_trivia": [
         {
           "span": {
-            "start": 22,
-            "end": 23
+            "start": 23,
+            "end": 24
           },
           "text": " ",
           "kind": "whitespace"
@@ -127,10 +127,10 @@
       "leading_trivia": [
         {
           "span": {
-            "start": 24,
+            "start": 25,
             "end": 28
           },
-          "text": " \n  ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -366,19 +366,19 @@
             "kind": "IDENT_EXPR",
             "text": "and",
             "width": 3,
-            "full_width": 4,
+            "full_width": 5,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },
           {
             "type": "node",
             "kind": "TYPE_DECL",
-            "width": 36,
+            "width": 35,
             "children": [
               {
                 "type": "node",
@@ -420,12 +420,12 @@
                 "kind": "IDENT_EXPR",
                 "text": "|",
                 "width": 1,
-                "full_width": 5,
+                "full_width": 4,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " \n  ",
-                    "width": 4
+                    "text": "\n  ",
+                    "width": 3
                   }
                 ]
               },

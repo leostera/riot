@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 23
+        "end": 29
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 23
+              "end": 29
             }
           },
           "keyword_token": {
@@ -63,23 +63,23 @@
               "kind": "IF_EXPR",
               "span": {
                 "start": 7,
-                "end": 23
+                "end": 29
               }
             },
             "keyword_token": {
               "kind": "IDENT_EXPR",
               "text": "if",
               "span": {
-                "start": 8,
-                "end": 10
+                "start": 10,
+                "end": 12
               }
             },
             "then_token": {
               "kind": "IDENT_EXPR",
               "text": "then",
               "span": {
-                "start": 16,
-                "end": 20
+                "start": 18,
+                "end": 22
               }
             },
             "else_token": null,
@@ -90,16 +90,16 @@
                 "syntax_node": {
                   "kind": "BOOL_LITERAL",
                   "span": {
-                    "start": 10,
-                    "end": 15
+                    "start": 12,
+                    "end": 17
                   }
                 },
                 "literal_token": {
                   "kind": "BOOL_LITERAL",
                   "text": "true",
                   "span": {
-                    "start": 11,
-                    "end": 15
+                    "start": 13,
+                    "end": 17
                   }
                 },
                 "value": true
@@ -112,8 +112,8 @@
                 "syntax_node": {
                   "kind": "UNIT_LITERAL",
                   "span": {
-                    "start": 20,
-                    "end": 23
+                    "start": 22,
+                    "end": 29
                   }
                 }
               }

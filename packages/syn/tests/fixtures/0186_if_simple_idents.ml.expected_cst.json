@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 26
+        "end": 38
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 26
+              "end": 38
             }
           },
           "keyword_token": {
@@ -63,31 +63,31 @@
               "kind": "IF_EXPR",
               "span": {
                 "start": 7,
-                "end": 26
+                "end": 38
               }
             },
             "keyword_token": {
               "kind": "IDENT_EXPR",
               "text": "if",
               "span": {
-                "start": 8,
-                "end": 10
+                "start": 10,
+                "end": 12
               }
             },
             "then_token": {
               "kind": "IDENT_EXPR",
               "text": "then",
               "span": {
-                "start": 13,
-                "end": 17
+                "start": 15,
+                "end": 19
               }
             },
             "else_token": {
               "kind": "IDENT_EXPR",
               "text": "else",
               "span": {
-                "start": 20,
-                "end": 24
+                "start": 28,
+                "end": 32
               }
             },
             "condition": {
@@ -95,8 +95,8 @@
               "syntax_node": {
                 "kind": "IDENT_EXPR",
                 "span": {
-                  "start": 10,
-                  "end": 12
+                  "start": 12,
+                  "end": 14
                 }
               },
               "path": {
@@ -104,16 +104,16 @@
                 "syntax_node": {
                   "kind": "IDENT_EXPR",
                   "span": {
-                    "start": 10,
-                    "end": 12
+                    "start": 12,
+                    "end": 14
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "p",
                   "span": {
-                    "start": 11,
-                    "end": 12
+                    "start": 13,
+                    "end": 14
                   }
                 }
               }
@@ -123,8 +123,8 @@
               "syntax_node": {
                 "kind": "IDENT_EXPR",
                 "span": {
-                  "start": 17,
-                  "end": 19
+                  "start": 19,
+                  "end": 25
                 }
               },
               "path": {
@@ -132,16 +132,16 @@
                 "syntax_node": {
                   "kind": "IDENT_EXPR",
                   "span": {
-                    "start": 17,
-                    "end": 19
+                    "start": 19,
+                    "end": 25
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "q",
                   "span": {
-                    "start": 18,
-                    "end": 19
+                    "start": 24,
+                    "end": 25
                   }
                 }
               }
@@ -151,8 +151,8 @@
               "syntax_node": {
                 "kind": "IDENT_EXPR",
                 "span": {
-                  "start": 24,
-                  "end": 26
+                  "start": 32,
+                  "end": 38
                 }
               },
               "path": {
@@ -160,16 +160,16 @@
                 "syntax_node": {
                   "kind": "IDENT_EXPR",
                   "span": {
-                    "start": 24,
-                    "end": 26
+                    "start": 32,
+                    "end": 38
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "r",
                   "span": {
-                    "start": 25,
-                    "end": 26
+                    "start": 37,
+                    "end": 38
                   }
                 }
               }

@@ -75,17 +75,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 79,
-        "end": 85
+        "start": 81,
+        "end": 87
       },
       "text": "assert",
       "leading_trivia": [
         {
           "span": {
             "start": 78,
-            "end": 79
+            "end": 81
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -93,15 +93,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 86,
-        "end": 91
+        "start": 88,
+        "end": 93
       },
       "text": "false",
       "leading_trivia": [
         {
           "span": {
-            "start": 85,
-            "end": 86
+            "start": 87,
+            "end": 88
           },
           "text": " ",
           "kind": "whitespace"
@@ -111,23 +111,23 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 124,
-        "end": 124
+        "start": 126,
+        "end": 126
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 91,
-            "end": 93
+            "start": 93,
+            "end": 95
           },
           "text": "\n\n",
           "kind": "whitespace"
         },
         {
           "span": {
-            "start": 93,
-            "end": 123
+            "start": 95,
+            "end": 125
           },
           "text": "(* TEST\n exit_status = \"2\";\n*)",
           "kind": "comment",
@@ -135,8 +135,8 @@
         },
         {
           "span": {
-            "start": 123,
-            "end": 124
+            "start": 125,
+            "end": 126
           },
           "text": "\n",
           "kind": "whitespace"
@@ -147,12 +147,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 91,
+    "width": 93,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 91,
+        "width": 93,
         "children": [
           {
             "type": "token",
@@ -219,19 +219,19 @@
           {
             "type": "node",
             "kind": "ASSERT_EXPR",
-            "width": 13,
+            "width": 15,
             "children": [
               {
                 "type": "token",
                 "kind": "IDENT_EXPR",
                 "text": "assert",
                 "width": 6,
-                "full_width": 7,
+                "full_width": 9,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " ",
-                    "width": 1
+                    "text": "\n  ",
+                    "width": 3
                   }
                 ]
               },

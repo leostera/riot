@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 20
+        "end": 22
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 20
+              "end": 22
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_RECORD",
               "span": {
                 "start": 8,
-                "end": 20
+                "end": 22
               }
             },
             "fields": [
@@ -62,15 +62,15 @@
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
                     "start": 10,
-                    "end": 18
+                    "end": 19
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "x",
                   "span": {
-                    "start": 11,
-                    "end": 12
+                    "start": 13,
+                    "end": 14
                   }
                 },
                 "mutable_token": null,
@@ -79,8 +79,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 14,
-                      "end": 18
+                      "start": 15,
+                      "end": 19
                     }
                   },
                   "constructor_path": {
@@ -88,16 +88,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 14,
-                        "end": 18
+                        "start": 15,
+                        "end": 19
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "int",
                       "span": {
-                        "start": 15,
-                        "end": 18
+                        "start": 16,
+                        "end": 19
                       }
                     }
                   },

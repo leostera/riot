@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 30
+        "end": 24
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 30
+              "end": 24
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "ARRAY_EXPR",
               "span": {
                 "start": 7,
-                "end": 30
+                "end": 24
               }
             },
             "elements": [
@@ -73,7 +73,7 @@
                   "kind": "ARRAY_EXPR",
                   "span": {
                     "start": 10,
-                    "end": 18
+                    "end": 15
                   }
                 },
                 "elements": [
@@ -84,16 +84,16 @@
                       "syntax_node": {
                         "kind": "INT_LITERAL",
                         "span": {
-                          "start": 13,
-                          "end": 15
+                          "start": 12,
+                          "end": 13
                         }
                       },
                       "literal_token": {
                         "kind": "INT_LITERAL",
                         "text": "1",
                         "span": {
-                          "start": 14,
-                          "end": 15
+                          "start": 12,
+                          "end": 13
                         }
                       },
                       "base": "decimal",
@@ -109,8 +109,8 @@
                 "syntax_node": {
                   "kind": "ARRAY_EXPR",
                   "span": {
-                    "start": 19,
-                    "end": 27
+                    "start": 16,
+                    "end": 22
                   }
                 },
                 "elements": [
@@ -121,16 +121,16 @@
                       "syntax_node": {
                         "kind": "INT_LITERAL",
                         "span": {
-                          "start": 22,
-                          "end": 24
+                          "start": 19,
+                          "end": 20
                         }
                       },
                       "literal_token": {
                         "kind": "INT_LITERAL",
                         "text": "2",
                         "span": {
-                          "start": 23,
-                          "end": 24
+                          "start": 19,
+                          "end": 20
                         }
                       },
                       "base": "decimal",

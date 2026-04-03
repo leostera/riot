@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 40
+        "end": 41
       }
     },
     "items": [
@@ -93,15 +93,15 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 12,
-              "end": 40
+              "end": 41
             }
           },
           "keyword_token": {
             "kind": "IDENT_EXPR",
             "text": "let",
             "span": {
-              "start": 13,
-              "end": 16
+              "start": 14,
+              "end": 17
             }
           },
           "rec_token": null,
@@ -109,8 +109,8 @@
             "kind": "IDENT_EXPR",
             "text": "=",
             "span": {
-              "start": 23,
-              "end": 24
+              "start": 24,
+              "end": 25
             }
           },
           "attributes": [],
@@ -119,16 +119,16 @@
             "syntax_node": {
               "kind": "IDENT_PATTERN",
               "span": {
-                "start": 16,
-                "end": 22
+                "start": 17,
+                "end": 23
               }
             },
             "name_token": {
               "kind": "IDENT_EXPR",
               "text": "three",
               "span": {
-                "start": 17,
-                "end": 22
+                "start": 18,
+                "end": 23
               }
             }
           },
@@ -138,8 +138,8 @@
             "syntax_node": {
               "kind": "APPLY_EXPR",
               "span": {
-                "start": 24,
-                "end": 40
+                "start": 25,
+                "end": 41
               }
             },
             "callee": {
@@ -147,8 +147,8 @@
               "syntax_node": {
                 "kind": "APPLY_EXPR",
                 "span": {
-                  "start": 24,
-                  "end": 37
+                  "start": 25,
+                  "end": 38
                 }
               },
               "callee": {
@@ -156,8 +156,8 @@
                 "syntax_node": {
                   "kind": "FIELD_ACCESS_EXPR",
                   "span": {
-                    "start": 24,
-                    "end": 34
+                    "start": 25,
+                    "end": 35
                   }
                 },
                 "receiver": {
@@ -165,8 +165,8 @@
                   "syntax_node": {
                     "kind": "IDENT_EXPR",
                     "span": {
-                      "start": 24,
-                      "end": 30
+                      "start": 25,
+                      "end": 31
                     }
                   },
                   "path": {
@@ -174,16 +174,16 @@
                     "syntax_node": {
                       "kind": "IDENT_EXPR",
                       "span": {
-                        "start": 24,
-                        "end": 30
+                        "start": 25,
+                        "end": 31
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "Float",
                       "span": {
-                        "start": 25,
-                        "end": 30
+                        "start": 26,
+                        "end": 31
                       }
                     }
                   }
@@ -192,8 +192,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "pow",
                   "span": {
-                    "start": 31,
-                    "end": 34
+                    "start": 32,
+                    "end": 35
                   }
                 }
               },
@@ -206,16 +206,16 @@
                     "syntax_node": {
                       "kind": "FLOAT_LITERAL",
                       "span": {
-                        "start": 34,
-                        "end": 37
+                        "start": 35,
+                        "end": 38
                       }
                     },
                     "literal_token": {
                       "kind": "FLOAT_LITERAL",
                       "text": "2.",
                       "span": {
-                        "start": 35,
-                        "end": 37
+                        "start": 36,
+                        "end": 38
                       }
                     },
                     "integral_digits": "2",
@@ -235,16 +235,16 @@
                   "syntax_node": {
                     "kind": "FLOAT_LITERAL",
                     "span": {
-                      "start": 37,
-                      "end": 40
+                      "start": 38,
+                      "end": 41
                     }
                   },
                   "literal_token": {
                     "kind": "FLOAT_LITERAL",
                     "text": "3.",
                     "span": {
-                      "start": 38,
-                      "end": 40
+                      "start": 39,
+                      "end": 41
                     }
                   },
                   "integral_digits": "3",

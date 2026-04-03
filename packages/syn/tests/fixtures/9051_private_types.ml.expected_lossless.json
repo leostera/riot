@@ -3,8 +3,8 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 32,
-        "end": 36
+        "start": 33,
+        "end": 37
       },
       "text": "type",
       "leading_trivia": [
@@ -20,9 +20,9 @@
         {
           "span": {
             "start": 31,
-            "end": 32
+            "end": 33
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -30,15 +30,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 37,
-        "end": 38
+        "start": 38,
+        "end": 39
       },
       "text": "t",
       "leading_trivia": [
         {
           "span": {
-            "start": 36,
-            "end": 37
+            "start": 37,
+            "end": 38
           },
           "text": " ",
           "kind": "whitespace"
@@ -48,15 +48,15 @@
     {
       "kind": "=",
       "span": {
-        "start": 39,
-        "end": 40
+        "start": 40,
+        "end": 41
       },
       "text": "=",
       "leading_trivia": [
         {
           "span": {
-            "start": 38,
-            "end": 39
+            "start": 39,
+            "end": 40
           },
           "text": " ",
           "kind": "whitespace"
@@ -66,15 +66,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 41,
-        "end": 48
+        "start": 42,
+        "end": 49
       },
       "text": "private",
       "leading_trivia": [
         {
           "span": {
-            "start": 40,
-            "end": 41
+            "start": 41,
+            "end": 42
           },
           "text": " ",
           "kind": "whitespace"
@@ -84,15 +84,15 @@
     {
       "kind": "{",
       "span": {
-        "start": 49,
-        "end": 50
+        "start": 50,
+        "end": 51
       },
       "text": "{",
       "leading_trivia": [
         {
           "span": {
-            "start": 48,
-            "end": 49
+            "start": 49,
+            "end": 50
           },
           "text": " ",
           "kind": "whitespace"
@@ -102,17 +102,17 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 51,
-        "end": 52
+        "start": 54,
+        "end": 55
       },
       "text": "x",
       "leading_trivia": [
         {
           "span": {
-            "start": 50,
-            "end": 51
+            "start": 51,
+            "end": 54
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -120,33 +120,24 @@
     {
       "kind": ":",
       "span": {
-        "start": 53,
-        "end": 54
+        "start": 55,
+        "end": 56
       },
       "text": ":",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 52,
-            "end": 53
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
+      "leading_trivia": []
     },
     {
       "kind": "identifier",
       "span": {
-        "start": 55,
-        "end": 58
+        "start": 57,
+        "end": 60
       },
       "text": "int",
       "leading_trivia": [
         {
           "span": {
-            "start": 54,
-            "end": 55
+            "start": 56,
+            "end": 57
           },
           "text": " ",
           "kind": "whitespace"
@@ -156,8 +147,8 @@
     {
       "kind": ";",
       "span": {
-        "start": 58,
-        "end": 59
+        "start": 60,
+        "end": 61
       },
       "text": ";",
       "leading_trivia": []
@@ -165,17 +156,17 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 60,
-        "end": 61
+        "start": 64,
+        "end": 65
       },
       "text": "y",
       "leading_trivia": [
         {
           "span": {
-            "start": 59,
-            "end": 60
+            "start": 61,
+            "end": 64
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -183,33 +174,24 @@
     {
       "kind": ":",
       "span": {
-        "start": 62,
-        "end": 63
+        "start": 65,
+        "end": 66
       },
       "text": ":",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 61,
-            "end": 62
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
+      "leading_trivia": []
     },
     {
       "kind": "identifier",
       "span": {
-        "start": 64,
-        "end": 67
+        "start": 67,
+        "end": 70
       },
       "text": "int",
       "leading_trivia": [
         {
           "span": {
-            "start": 63,
-            "end": 64
+            "start": 66,
+            "end": 67
           },
           "text": " ",
           "kind": "whitespace"
@@ -217,19 +199,28 @@
       ]
     },
     {
+      "kind": ";",
+      "span": {
+        "start": 70,
+        "end": 71
+      },
+      "text": ";",
+      "leading_trivia": []
+    },
+    {
       "kind": "}",
       "span": {
-        "start": 68,
-        "end": 69
+        "start": 72,
+        "end": 73
       },
       "text": "}",
       "leading_trivia": [
         {
           "span": {
-            "start": 67,
-            "end": 68
+            "start": 71,
+            "end": 72
           },
-          "text": " ",
+          "text": "\n",
           "kind": "whitespace"
         }
       ]
@@ -237,23 +228,23 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 99,
-        "end": 103
+        "start": 104,
+        "end": 108
       },
       "text": "type",
       "leading_trivia": [
         {
           "span": {
-            "start": 69,
-            "end": 71
+            "start": 73,
+            "end": 75
           },
           "text": "\n\n",
           "kind": "whitespace"
         },
         {
           "span": {
-            "start": 71,
-            "end": 98
+            "start": 75,
+            "end": 102
           },
           "text": "(* Private abstract type *)",
           "kind": "comment",
@@ -261,10 +252,10 @@
         },
         {
           "span": {
-            "start": 98,
-            "end": 99
+            "start": 102,
+            "end": 104
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -272,33 +263,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 104,
-        "end": 109
+        "start": 109,
+        "end": 114
       },
       "text": "state",
       "leading_trivia": [
         {
           "span": {
-            "start": 103,
-            "end": 104
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
-    },
-    {
-      "kind": "=",
-      "span": {
-        "start": 110,
-        "end": 111
-      },
-      "text": "=",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 109,
-            "end": 110
+            "start": 108,
+            "end": 109
           },
           "text": " ",
           "kind": "whitespace"
@@ -308,41 +281,23 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 112,
-        "end": 119
-      },
-      "text": "private",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 111,
-            "end": 112
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
-    },
-    {
-      "kind": "keyword",
-      "span": {
-        "start": 143,
-        "end": 147
+        "start": 139,
+        "end": 143
       },
       "text": "type",
       "leading_trivia": [
         {
           "span": {
-            "start": 119,
-            "end": 121
+            "start": 114,
+            "end": 116
           },
           "text": "\n\n",
           "kind": "whitespace"
         },
         {
           "span": {
-            "start": 121,
-            "end": 142
+            "start": 116,
+            "end": 137
           },
           "text": "(* Private variant *)",
           "kind": "comment",
@@ -350,10 +305,10 @@
         },
         {
           "span": {
-            "start": 142,
-            "end": 143
+            "start": 137,
+            "end": 139
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -361,15 +316,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 148,
-        "end": 153
+        "start": 144,
+        "end": 149
       },
       "text": "color",
       "leading_trivia": [
         {
           "span": {
-            "start": 147,
-            "end": 148
+            "start": 143,
+            "end": 144
           },
           "text": " ",
           "kind": "whitespace"
@@ -379,15 +334,15 @@
     {
       "kind": "=",
       "span": {
-        "start": 154,
-        "end": 155
+        "start": 150,
+        "end": 151
       },
       "text": "=",
       "leading_trivia": [
         {
           "span": {
-            "start": 153,
-            "end": 154
+            "start": 149,
+            "end": 150
           },
           "text": " ",
           "kind": "whitespace"
@@ -397,17 +352,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 156,
-        "end": 163
+        "start": 154,
+        "end": 161
       },
       "text": "private",
       "leading_trivia": [
         {
           "span": {
-            "start": 155,
-            "end": 156
+            "start": 151,
+            "end": 154
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -415,15 +370,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 164,
-        "end": 167
+        "start": 162,
+        "end": 165
       },
       "text": "Red",
       "leading_trivia": [
         {
           "span": {
-            "start": 163,
-            "end": 164
+            "start": 161,
+            "end": 162
           },
           "text": " ",
           "kind": "whitespace"
@@ -440,10 +395,10 @@
       "leading_trivia": [
         {
           "span": {
-            "start": 167,
+            "start": 165,
             "end": 168
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -469,17 +424,17 @@
     {
       "kind": "|",
       "span": {
-        "start": 176,
-        "end": 177
+        "start": 178,
+        "end": 179
       },
       "text": "|",
       "leading_trivia": [
         {
           "span": {
             "start": 175,
-            "end": 176
+            "end": 178
           },
-          "text": " ",
+          "text": "\n  ",
           "kind": "whitespace"
         }
       ]
@@ -487,15 +442,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 178,
-        "end": 182
+        "start": 180,
+        "end": 184
       },
       "text": "Blue",
       "leading_trivia": [
         {
           "span": {
-            "start": 177,
-            "end": 178
+            "start": 179,
+            "end": 180
           },
           "text": " ",
           "kind": "whitespace"
@@ -505,23 +460,23 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 209,
-        "end": 213
+        "start": 212,
+        "end": 216
       },
       "text": "type",
       "leading_trivia": [
         {
           "span": {
-            "start": 182,
-            "end": 184
+            "start": 184,
+            "end": 186
           },
           "text": "\n\n",
           "kind": "whitespace"
         },
         {
           "span": {
-            "start": 184,
-            "end": 208
+            "start": 186,
+            "end": 210
           },
           "text": "(* Private type alias *)",
           "kind": "comment",
@@ -529,10 +484,10 @@
         },
         {
           "span": {
-            "start": 208,
-            "end": 209
+            "start": 210,
+            "end": 212
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -540,28 +495,10 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 214,
-        "end": 216
+        "start": 217,
+        "end": 219
       },
       "text": "id",
-      "leading_trivia": [
-        {
-          "span": {
-            "start": 213,
-            "end": 214
-          },
-          "text": " ",
-          "kind": "whitespace"
-        }
-      ]
-    },
-    {
-      "kind": "=",
-      "span": {
-        "start": 217,
-        "end": 218
-      },
-      "text": "=",
       "leading_trivia": [
         {
           "span": {
@@ -574,17 +511,35 @@
       ]
     },
     {
+      "kind": "=",
+      "span": {
+        "start": 220,
+        "end": 221
+      },
+      "text": "=",
+      "leading_trivia": [
+        {
+          "span": {
+            "start": 219,
+            "end": 220
+          },
+          "text": " ",
+          "kind": "whitespace"
+        }
+      ]
+    },
+    {
       "kind": "keyword",
       "span": {
-        "start": 219,
-        "end": 226
+        "start": 222,
+        "end": 229
       },
       "text": "private",
       "leading_trivia": [
         {
           "span": {
-            "start": 218,
-            "end": 219
+            "start": 221,
+            "end": 222
           },
           "text": " ",
           "kind": "whitespace"
@@ -594,15 +549,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 227,
-        "end": 230
+        "start": 230,
+        "end": 233
       },
       "text": "int",
       "leading_trivia": [
         {
           "span": {
-            "start": 226,
-            "end": 227
+            "start": 229,
+            "end": 230
           },
           "text": " ",
           "kind": "whitespace"
@@ -612,15 +567,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 231,
-        "end": 231
+        "start": 234,
+        "end": 234
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 230,
-            "end": 231
+            "start": 233,
+            "end": 234
           },
           "text": "\n",
           "kind": "whitespace"
@@ -631,19 +586,19 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 230,
+    "width": 233,
     "children": [
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 69,
+        "width": 73,
         "children": [
           {
             "type": "token",
             "kind": "IDENT_EXPR",
             "text": "type",
             "width": 4,
-            "full_width": 36,
+            "full_width": 37,
             "leading_trivia": [
               {
                 "kind": "COMMENT",
@@ -652,8 +607,8 @@
               },
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },
@@ -709,7 +664,7 @@
           {
             "type": "node",
             "kind": "TYPE_RECORD",
-            "width": 21,
+            "width": 24,
             "children": [
               {
                 "type": "token",
@@ -728,19 +683,19 @@
               {
                 "type": "node",
                 "kind": "TYPE_RECORD_FIELD",
-                "width": 8,
+                "width": 9,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "x",
                     "width": 1,
-                    "full_width": 2,
+                    "full_width": 4,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n  ",
+                        "width": 3
                       }
                     ]
                   },
@@ -749,14 +704,8 @@
                     "kind": "IDENT_EXPR",
                     "text": ":",
                     "width": 1,
-                    "full_width": 2,
-                    "leading_trivia": [
-                      {
-                        "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
-                      }
-                    ]
+                    "full_width": 1,
+                    "leading_trivia": []
                   },
                   {
                     "type": "node",
@@ -792,19 +741,19 @@
               {
                 "type": "node",
                 "kind": "TYPE_RECORD_FIELD",
-                "width": 8,
+                "width": 9,
                 "children": [
                   {
                     "type": "token",
                     "kind": "IDENT_EXPR",
                     "text": "y",
                     "width": 1,
-                    "full_width": 2,
+                    "full_width": 4,
                     "leading_trivia": [
                       {
                         "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
+                        "text": "\n  ",
+                        "width": 3
                       }
                     ]
                   },
@@ -813,14 +762,8 @@
                     "kind": "IDENT_EXPR",
                     "text": ":",
                     "width": 1,
-                    "full_width": 2,
-                    "leading_trivia": [
-                      {
-                        "kind": "WHITESPACE",
-                        "text": " ",
-                        "width": 1
-                      }
-                    ]
+                    "full_width": 1,
+                    "leading_trivia": []
                   },
                   {
                     "type": "node",
@@ -848,13 +791,21 @@
               {
                 "type": "token",
                 "kind": "IDENT_EXPR",
+                "text": ";",
+                "width": 1,
+                "full_width": 1,
+                "leading_trivia": []
+              },
+              {
+                "type": "token",
+                "kind": "IDENT_EXPR",
                 "text": "}",
                 "width": 1,
                 "full_width": 2,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " ",
+                    "text": "\n",
                     "width": 1
                   }
                 ]
@@ -866,14 +817,14 @@
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 50,
+        "width": 41,
         "children": [
           {
             "type": "token",
             "kind": "IDENT_EXPR",
             "text": "type",
             "width": 4,
-            "full_width": 34,
+            "full_width": 35,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
@@ -887,8 +838,8 @@
               },
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },
@@ -912,48 +863,20 @@
                 ]
               }
             ]
-          },
-          {
-            "type": "token",
-            "kind": "IDENT_EXPR",
-            "text": "=",
-            "width": 1,
-            "full_width": 2,
-            "leading_trivia": [
-              {
-                "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
-              }
-            ]
-          },
-          {
-            "type": "token",
-            "kind": "IDENT_EXPR",
-            "text": "private",
-            "width": 7,
-            "full_width": 8,
-            "leading_trivia": [
-              {
-                "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
-              }
-            ]
           }
         ]
       },
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 63,
+        "width": 70,
         "children": [
           {
             "type": "token",
             "kind": "IDENT_EXPR",
             "text": "type",
             "width": 4,
-            "full_width": 28,
+            "full_width": 29,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
@@ -967,8 +890,8 @@
               },
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },
@@ -1012,12 +935,12 @@
             "kind": "IDENT_EXPR",
             "text": "private",
             "width": 7,
-            "full_width": 8,
+            "full_width": 10,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
+                "text": "\n  ",
+                "width": 3
               }
             ]
           },
@@ -1054,12 +977,12 @@
             "kind": "IDENT_EXPR",
             "text": "|",
             "width": 1,
-            "full_width": 2,
+            "full_width": 4,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
+                "text": "\n  ",
+                "width": 3
               }
             ]
           },
@@ -1096,12 +1019,12 @@
             "kind": "IDENT_EXPR",
             "text": "|",
             "width": 1,
-            "full_width": 2,
+            "full_width": 4,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": " ",
-                "width": 1
+                "text": "\n  ",
+                "width": 3
               }
             ]
           },
@@ -1138,14 +1061,14 @@
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 48,
+        "width": 49,
         "children": [
           {
             "type": "token",
             "kind": "IDENT_EXPR",
             "text": "type",
             "width": 4,
-            "full_width": 31,
+            "full_width": 32,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
@@ -1159,8 +1082,8 @@
               },
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },

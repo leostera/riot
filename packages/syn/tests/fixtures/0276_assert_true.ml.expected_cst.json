@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 19
+        "end": 21
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 19
+              "end": 21
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "ASSERT_EXPR",
               "span": {
                 "start": 7,
-                "end": 19
+                "end": 21
               }
             },
             "asserted": {
@@ -73,16 +73,16 @@
                 "syntax_node": {
                   "kind": "BOOL_LITERAL",
                   "span": {
-                    "start": 14,
-                    "end": 19
+                    "start": 16,
+                    "end": 21
                   }
                 },
                 "literal_token": {
                   "kind": "BOOL_LITERAL",
                   "text": "true",
                   "span": {
-                    "start": 15,
-                    "end": 19
+                    "start": 17,
+                    "end": 21
                   }
                 },
                 "value": true

@@ -130,7 +130,7 @@
             "start": 17,
             "end": 18
           },
-          "text": " ",
+          "text": "\n",
           "kind": "whitespace"
         }
       ]
@@ -444,7 +444,7 @@
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": " ",
+                "text": "\n",
                 "width": 1
               }
             ]

@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 18
+        "end": 20
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 18
+              "end": 20
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "OBJECT_EXPR",
               "span": {
                 "start": 7,
-                "end": 18
+                "end": 20
               }
             },
             "self_pattern": null,

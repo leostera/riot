@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 91
+        "end": 93
       }
     },
     "items": [
@@ -37,7 +37,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 91
+              "end": 93
             }
           },
           "keyword_token": {
@@ -85,7 +85,7 @@
               "kind": "ASSERT_EXPR",
               "span": {
                 "start": 78,
-                "end": 91
+                "end": 93
               }
             },
             "asserted": {
@@ -95,16 +95,16 @@
                 "syntax_node": {
                   "kind": "BOOL_LITERAL",
                   "span": {
-                    "start": 85,
-                    "end": 91
+                    "start": 87,
+                    "end": 93
                   }
                 },
                 "literal_token": {
                   "kind": "BOOL_LITERAL",
                   "text": "false",
                   "span": {
-                    "start": 86,
-                    "end": 91
+                    "start": 88,
+                    "end": 93
                   }
                 },
                 "value": false
@@ -121,16 +121,16 @@
           "syntax_node": {
             "kind": "COMMENT",
             "span": {
-              "start": 93,
-              "end": 123
+              "start": 95,
+              "end": 125
             }
           },
           "comment_token": {
             "kind": "COMMENT",
             "text": "(* TEST\n exit_status = \"2\";\n*)",
             "span": {
-              "start": 93,
-              "end": 123
+              "start": 95,
+              "end": 125
             }
           }
         }

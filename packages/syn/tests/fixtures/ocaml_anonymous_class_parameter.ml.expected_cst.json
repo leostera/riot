@@ -1,346 +1,54 @@
 {
-  "status": "ok",
-  "cst": {
-    "kind": "implementation",
-    "syntax_node": {
-      "kind": "SOURCE_FILE",
+  "status": "parse_error",
+  "diagnostics": [
+    {
+      "kind": {
+        "id": "E0008",
+        "name": "invalid-expression",
+        "expected": "expression",
+        "found": {
+          "kind": "(",
+          "text": "("
+        },
+        "hint": "Expected a value, function call, or operator expression."
+      },
       "span": {
-        "start": 0,
-        "end": 401
+        "start": 333,
+        "end": 333
       }
     },
-    "items": [
-      {
-        "tag": "comment",
-        "item": {
-          "syntax_node": {
-            "kind": "COMMENT",
-            "span": {
-              "start": 0,
-              "end": 96
-            }
-          },
-          "comment_token": {
-            "kind": "COMMENT",
-            "text": "(* TEST\n flags = \"-i\";\n setup-ocamlc.byte-build-env;\n ocamlc.byte;\n check-ocamlc.byte-output;\n*)",
-            "span": {
-              "start": 0,
-              "end": 96
-            }
-          }
-        }
+    {
+      "kind": {
+        "id": "E0018",
+        "name": "unclosed-char-literal",
+        "expected": "' (closing quote)",
+        "found": {
+          "kind": "char literal",
+          "text": "'a"
+        },
+        "fix": "add a closing ' (quote) after the character",
+        "hint": "Character literals must be closed with a single quote '."
       },
-      {
-        "tag": "comment",
-        "item": {
-          "syntax_node": {
-            "kind": "COMMENT",
-            "span": {
-              "start": 98,
-              "end": 326
-            }
-          },
-          "comment_token": {
-            "kind": "COMMENT",
-            "text": "(* This test is valid OCaml code.\n   It uses an anonymous type variable as a formal parameter in a class\n   declaration. This used to be rejected by the parser, even though the\n   printer (ocamlc -i) could in fact produce it. *)",
-            "span": {
-              "start": 98,
-              "end": 326
-            }
-          }
-        }
-      },
-      {
-        "tag": "class_declaration",
-        "item": {
-          "tag": "definition",
-          "syntax_node": {
-            "kind": "CLASS_DECL",
-            "span": {
-              "start": 0,
-              "end": 401
-            }
-          },
-          "type_params": [
-            {
-              "syntax_node": {
-                "kind": "TYPE_PARAM",
-                "span": {
-                  "start": 335,
-                  "end": 337
-                }
-              },
-              "variance": null,
-              "injectivity_token": null,
-              "type_variable": {
-                "syntax_node": {
-                  "kind": "TYPE_VAR",
-                  "span": {
-                    "start": 335,
-                    "end": 337
-                  }
-                },
-                "name_token": {
-                  "kind": "IDENT_EXPR",
-                  "text": "a",
-                  "span": {
-                    "start": 336,
-                    "end": 337
-                  }
-                }
-              }
-            },
-            {
-              "syntax_node": {
-                "kind": "TYPE_PARAM",
-                "span": {
-                  "start": 338,
-                  "end": 340
-                }
-              },
-              "variance": null,
-              "injectivity_token": null,
-              "type_variable": {
-                "syntax_node": {
-                  "kind": "TYPE_VAR",
-                  "span": {
-                    "start": 338,
-                    "end": 340
-                  }
-                },
-                "name_token": {
-                  "kind": "WILDCARD_PATTERN",
-                  "text": "_",
-                  "span": {
-                    "start": 339,
-                    "end": 340
-                  }
-                }
-              }
-            }
-          ],
-          "declaration_extension": null,
-          "declaration_attributes": [],
-          "class_name": {
-            "kind": "IDENT_EXPR",
-            "text": "foo",
-            "span": {
-              "start": 342,
-              "end": 345
-            }
-          },
-          "class_type": null,
-          "class_body": {
-            "tag": "structure",
-            "syntax_node": {
-              "kind": "OBJECT_EXPR",
-              "span": {
-                "start": 347,
-                "end": 401
-              }
-            },
-            "self_pattern": null,
-            "fields": [
-              {
-                "tag": "method",
-                "syntax_node": {
-                  "kind": "OBJECT_METHOD",
-                  "span": {
-                    "start": 356,
-                    "end": 395
-                  }
-                },
-                "name_token": {
-                  "kind": "IDENT_EXPR",
-                  "text": "bar",
-                  "span": {
-                    "start": 368,
-                    "end": 371
-                  }
-                },
-                "virtual_colon_token": {
-                  "kind": "IDENT_EXPR",
-                  "text": ":",
-                  "span": {
-                    "start": 372,
-                    "end": 373
-                  }
-                },
-                "definition": {
-                  "tag": "concrete",
-                  "body": {
-                    "tag": "fun",
-                    "syntax_node": {
-                      "kind": "FUN_EXPR",
-                      "span": {
-                        "start": 384,
-                        "end": 395
-                      }
-                    },
-                    "keyword_token": {
-                      "kind": "IDENT_EXPR",
-                      "text": "fun",
-                      "span": {
-                        "start": 385,
-                        "end": 388
-                      }
-                    },
-                    "arrow_token": {
-                      "kind": "IDENT_EXPR",
-                      "text": "->",
-                      "span": {
-                        "start": 391,
-                        "end": 393
-                      }
-                    },
-                    "parameters": [
-                      {
-                        "tag": "positional",
-                        "syntax_node": {
-                          "kind": "IDENT_PATTERN",
-                          "span": {
-                            "start": 388,
-                            "end": 390
-                          }
-                        },
-                        "pattern": {
-                          "tag": "identifier",
-                          "syntax_node": {
-                            "kind": "IDENT_PATTERN",
-                            "span": {
-                              "start": 388,
-                              "end": 390
-                            }
-                          },
-                          "name_token": {
-                            "kind": "IDENT_EXPR",
-                            "text": "x",
-                            "span": {
-                              "start": 389,
-                              "end": 390
-                            }
-                          }
-                        },
-                        "name_token": {
-                          "kind": "IDENT_EXPR",
-                          "text": "x",
-                          "span": {
-                            "start": 389,
-                            "end": 390
-                          }
-                        }
-                      }
-                    ],
-                    "body": {
-                      "tag": "expression",
-                      "expression": {
-                        "tag": "path",
-                        "syntax_node": {
-                          "kind": "IDENT_EXPR",
-                          "span": {
-                            "start": 393,
-                            "end": 395
-                          }
-                        },
-                        "path": {
-                          "tag": "ident",
-                          "syntax_node": {
-                            "kind": "IDENT_EXPR",
-                            "span": {
-                              "start": 393,
-                              "end": 395
-                            }
-                          },
-                          "name_token": {
-                            "kind": "IDENT_EXPR",
-                            "text": "x",
-                            "span": {
-                              "start": 394,
-                              "end": 395
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "colon_token": {
-                    "kind": "IDENT_EXPR",
-                    "text": ":",
-                    "span": {
-                      "start": 372,
-                      "end": 373
-                    }
-                  },
-                  "type": {
-                    "tag": "arrow",
-                    "syntax_node": {
-                      "kind": "TYPE_ARROW",
-                      "span": {
-                        "start": 373,
-                        "end": 382
-                      }
-                    },
-                    "label": null,
-                    "parameter_type": {
-                      "tag": "var",
-                      "syntax_node": {
-                        "kind": "TYPE_VAR",
-                        "span": {
-                          "start": 373,
-                          "end": 376
-                        }
-                      },
-                      "sigil_token": {
-                        "kind": "IDENT_EXPR",
-                        "text": "'",
-                        "span": {
-                          "start": 374,
-                          "end": 375
-                        }
-                      },
-                      "name_token": {
-                        "kind": "IDENT_EXPR",
-                        "text": "a",
-                        "span": {
-                          "start": 375,
-                          "end": 376
-                        }
-                      }
-                    },
-                    "result_type": {
-                      "tag": "var",
-                      "syntax_node": {
-                        "kind": "TYPE_VAR",
-                        "span": {
-                          "start": 379,
-                          "end": 382
-                        }
-                      },
-                      "sigil_token": {
-                        "kind": "IDENT_EXPR",
-                        "text": "'",
-                        "span": {
-                          "start": 380,
-                          "end": 381
-                        }
-                      },
-                      "name_token": {
-                        "kind": "IDENT_EXPR",
-                        "text": "a",
-                        "span": {
-                          "start": 381,
-                          "end": 382
-                        }
-                      }
-                    }
-                  }
-                },
-                "modifier_tokens": []
-              }
-            ]
-          }
-        }
+      "span": {
+        "start": 337,
+        "end": 337
       }
-    ]
-  }
+    },
+    {
+      "kind": {
+        "id": "E0008",
+        "name": "invalid-expression",
+        "expected": "expression",
+        "found": {
+          "kind": "_",
+          "text": "_"
+        },
+        "hint": "Expected a value, function call, or operator expression."
+      },
+      "span": {
+        "start": 340,
+        "end": 341
+      }
+    }
+  ]
 }

@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 103
+        "end": 104
       }
     },
     "items": [
@@ -37,15 +37,15 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 103
+              "end": 104
             }
           },
           "keyword_token": {
             "kind": "IDENT_EXPR",
             "text": "let",
             "span": {
-              "start": 37,
-              "end": 40
+              "start": 38,
+              "end": 41
             }
           },
           "rec_token": null,
@@ -53,8 +53,8 @@
             "kind": "IDENT_EXPR",
             "text": "=",
             "span": {
-              "start": 48,
-              "end": 49
+              "start": 49,
+              "end": 50
             }
           },
           "attributes": [],
@@ -63,16 +63,16 @@
             "syntax_node": {
               "kind": "IDENT_PATTERN",
               "span": {
-                "start": 40,
-                "end": 47
+                "start": 41,
+                "end": 48
               }
             },
             "name_token": {
               "kind": "IDENT_EXPR",
               "text": "result",
               "span": {
-                "start": 41,
-                "end": 47
+                "start": 42,
+                "end": 48
               }
             }
           },
@@ -82,16 +82,16 @@
             "syntax_node": {
               "kind": "LET_MODULE_EXPR",
               "span": {
-                "start": 49,
-                "end": 103
+                "start": 50,
+                "end": 104
               }
             },
             "module_name_token": {
               "kind": "IDENT_EXPR",
               "text": "M",
               "span": {
-                "start": 63,
-                "end": 64
+                "start": 64,
+                "end": 65
               }
             },
             "module_expression": {
@@ -99,16 +99,16 @@
               "syntax_node": {
                 "kind": "STRUCT_EXPR",
                 "span": {
-                  "start": 66,
-                  "end": 94
+                  "start": 67,
+                  "end": 95
                 }
               },
               "item_syntax_nodes": [
                 {
                   "kind": "LET_BINDING",
                   "span": {
-                    "start": 73,
-                    "end": 88
+                    "start": 74,
+                    "end": 89
                   }
                 }
               ]
@@ -118,8 +118,8 @@
               "syntax_node": {
                 "kind": "FIELD_ACCESS_EXPR",
                 "span": {
-                  "start": 97,
-                  "end": 103
+                  "start": 98,
+                  "end": 104
                 }
               },
               "receiver": {
@@ -127,8 +127,8 @@
                 "syntax_node": {
                   "kind": "IDENT_EXPR",
                   "span": {
-                    "start": 97,
-                    "end": 101
+                    "start": 98,
+                    "end": 102
                   }
                 },
                 "path": {
@@ -136,16 +136,16 @@
                   "syntax_node": {
                     "kind": "IDENT_EXPR",
                     "span": {
-                      "start": 97,
-                      "end": 101
+                      "start": 98,
+                      "end": 102
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "M",
                     "span": {
-                      "start": 100,
-                      "end": 101
+                      "start": 101,
+                      "end": 102
                     }
                   }
                 }
@@ -154,8 +154,8 @@
                 "kind": "IDENT_EXPR",
                 "text": "x",
                 "span": {
-                  "start": 102,
-                  "end": 103
+                  "start": 103,
+                  "end": 104
                 }
               }
             }

@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 30
+        "end": 32
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 30
+              "end": 32
             }
           },
           "keyword_token": {
@@ -53,7 +53,7 @@
               "kind": "TYPE_RECORD",
               "span": {
                 "start": 14,
-                "end": 30
+                "end": 32
               }
             },
             "fields": [
@@ -62,15 +62,15 @@
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
                     "start": 16,
-                    "end": 28
+                    "end": 29
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "value",
                   "span": {
-                    "start": 17,
-                    "end": 22
+                    "start": 19,
+                    "end": 24
                   }
                 },
                 "mutable_token": null,
@@ -79,8 +79,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTR",
                     "span": {
-                      "start": 24,
-                      "end": 28
+                      "start": 25,
+                      "end": 29
                     }
                   },
                   "constructor_path": {
@@ -88,16 +88,16 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 24,
-                        "end": 28
+                        "start": 25,
+                        "end": 29
                       }
                     },
                     "name_token": {
                       "kind": "IDENT_EXPR",
                       "text": "int",
                       "span": {
-                        "start": 25,
-                        "end": 28
+                        "start": 26,
+                        "end": 29
                       }
                     }
                   },

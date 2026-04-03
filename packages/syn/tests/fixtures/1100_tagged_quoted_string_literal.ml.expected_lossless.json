@@ -48,17 +48,17 @@
     {
       "kind": "string",
       "span": {
-        "start": 20,
-        "end": 129
+        "start": 18,
+        "end": 127
       },
       "text": "{explain|\nThis is one static block of text.\nIt should lex as a single tagged quoted string literal.\n|explain}",
       "leading_trivia": [
         {
           "span": {
             "start": 17,
-            "end": 20
+            "end": 18
           },
-          "text": "\n  ",
+          "text": " ",
           "kind": "whitespace"
         }
       ]
@@ -66,15 +66,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 130,
-        "end": 130
+        "start": 128,
+        "end": 128
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 129,
-            "end": 130
+            "start": 127,
+            "end": 128
           },
           "text": "\n",
           "kind": "whitespace"
@@ -85,12 +85,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 129,
+    "width": 127,
     "children": [
       {
         "type": "node",
         "kind": "LET_BINDING",
-        "width": 129,
+        "width": 127,
         "children": [
           {
             "type": "token",
@@ -138,19 +138,19 @@
           {
             "type": "node",
             "kind": "STRING_LITERAL",
-            "width": 112,
+            "width": 110,
             "children": [
               {
                 "type": "token",
                 "kind": "STRING_LITERAL",
                 "text": "{explain|\nThis is one static block of text.\nIt should lex as a single tagged quoted string literal.\n|explain}",
                 "width": 109,
-                "full_width": 112,
+                "full_width": 110,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": "\n  ",
-                    "width": 3
+                    "text": " ",
+                    "width": 1
                   }
                 ]
               }

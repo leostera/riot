@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 17
+        "end": 16
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "VAL_DECL",
             "span": {
               "start": 0,
-              "end": 17
+              "end": 16
             }
           },
           "keyword_token": {
@@ -42,8 +42,8 @@
             "kind": "IDENT_EXPR",
             "text": ":",
             "span": {
-              "start": 9,
-              "end": 10
+              "start": 8,
+              "end": 9
             }
           },
           "type": {
@@ -51,8 +51,8 @@
             "syntax_node": {
               "kind": "TYPE_CONSTR",
               "span": {
-                "start": 10,
-                "end": 17
+                "start": 9,
+                "end": 16
               }
             },
             "constructor_path": {
@@ -60,8 +60,8 @@
               "syntax_node": {
                 "kind": "TYPE_CONSTR",
                 "span": {
-                  "start": 10,
-                  "end": 17
+                  "start": 9,
+                  "end": 16
                 }
               },
               "prefix": {
@@ -69,16 +69,16 @@
                 "syntax_node": {
                   "kind": "TYPE_CONSTR",
                   "span": {
-                    "start": 10,
-                    "end": 17
+                    "start": 9,
+                    "end": 16
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "Unix",
                   "span": {
-                    "start": 11,
-                    "end": 15
+                    "start": 10,
+                    "end": 14
                   }
                 }
               },
@@ -86,16 +86,16 @@
                 "kind": "IDENT_EXPR",
                 "text": ".",
                 "span": {
-                  "start": 15,
-                  "end": 16
+                  "start": 14,
+                  "end": 15
                 }
               },
               "name_token": {
                 "kind": "IDENT_EXPR",
                 "text": "t",
                 "span": {
-                  "start": 16,
-                  "end": 17
+                  "start": 15,
+                  "end": 16
                 }
               }
             },

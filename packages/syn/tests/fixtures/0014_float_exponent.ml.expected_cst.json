@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 14
+        "end": 15
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 14
+              "end": 15
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "APPLY_EXPR",
               "span": {
                 "start": 7,
-                "end": 14
+                "end": 15
               }
             },
             "callee": {
@@ -101,15 +101,15 @@
                     "kind": "INT_LITERAL",
                     "span": {
                       "start": 12,
-                      "end": 14
+                      "end": 15
                     }
                   },
                   "literal_token": {
                     "kind": "INT_LITERAL",
                     "text": "10",
                     "span": {
-                      "start": 12,
-                      "end": 14
+                      "start": 13,
+                      "end": 15
                     }
                   },
                   "base": "decimal",

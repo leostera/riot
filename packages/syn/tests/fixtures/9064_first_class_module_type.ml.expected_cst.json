@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 88
+        "end": 89
       }
     },
     "items": [
@@ -96,15 +96,15 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 35,
-              "end": 88
+              "end": 89
             }
           },
           "keyword_token": {
             "kind": "IDENT_EXPR",
             "text": "type",
             "span": {
-              "start": 36,
-              "end": 40
+              "start": 37,
+              "end": 41
             }
           },
           "type_name": {
@@ -112,16 +112,16 @@
             "syntax_node": {
               "kind": "IDENT_EXPR",
               "span": {
-                "start": 40,
-                "end": 47
+                "start": 41,
+                "end": 48
               }
             },
             "name_token": {
               "kind": "IDENT_EXPR",
               "text": "driver",
               "span": {
-                "start": 41,
-                "end": 47
+                "start": 42,
+                "end": 48
               }
             }
           },
@@ -131,16 +131,16 @@
             "syntax_node": {
               "kind": "FIRST_CLASS_MODULE_TYPE",
               "span": {
-                "start": 49,
-                "end": 88
+                "start": 50,
+                "end": 89
               }
             },
             "package_type": {
               "syntax_node": {
                 "kind": "FIRST_CLASS_MODULE_TYPE",
                 "span": {
-                  "start": 49,
-                  "end": 88
+                  "start": 50,
+                  "end": 89
                 }
               },
               "module_type_path": {
@@ -148,16 +148,16 @@
                 "syntax_node": {
                   "kind": "MODULE_TYPE_PATH",
                   "span": {
-                    "start": 57,
-                    "end": 64
+                    "start": 58,
+                    "end": 65
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "Driver",
                   "span": {
-                    "start": 58,
-                    "end": 64
+                    "start": 59,
+                    "end": 65
                   }
                 }
               },
@@ -166,8 +166,8 @@
                   "syntax_node": {
                     "kind": "TYPE_CONSTRAINT",
                     "span": {
-                      "start": 69,
-                      "end": 87
+                      "start": 70,
+                      "end": 88
                     }
                   },
                   "constrained_type": {
@@ -175,8 +175,8 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 74,
-                        "end": 81
+                        "start": 75,
+                        "end": 82
                       }
                     },
                     "constructor_path": {
@@ -184,16 +184,16 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 74,
-                          "end": 81
+                          "start": 75,
+                          "end": 82
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "config",
                         "span": {
-                          "start": 75,
-                          "end": 81
+                          "start": 76,
+                          "end": 82
                         }
                       }
                     },
@@ -204,8 +204,8 @@
                     "syntax_node": {
                       "kind": "TYPE_CONSTR",
                       "span": {
-                        "start": 83,
-                        "end": 87
+                        "start": 84,
+                        "end": 88
                       }
                     },
                     "constructor_path": {
@@ -213,16 +213,16 @@
                       "syntax_node": {
                         "kind": "TYPE_CONSTR",
                         "span": {
-                          "start": 83,
-                          "end": 87
+                          "start": 84,
+                          "end": 88
                         }
                       },
                       "name_token": {
                         "kind": "IDENT_EXPR",
                         "text": "int",
                         "span": {
-                          "start": 84,
-                          "end": 87
+                          "start": 85,
+                          "end": 88
                         }
                       }
                     },
@@ -232,8 +232,8 @@
                     "kind": "IDENT_EXPR",
                     "text": "=",
                     "span": {
-                      "start": 82,
-                      "end": 83
+                      "start": 83,
+                      "end": 84
                     }
                   }
                 }

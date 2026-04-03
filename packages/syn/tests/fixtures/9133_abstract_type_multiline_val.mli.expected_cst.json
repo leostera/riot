@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 214
+        "end": 191
       }
     },
     "items": [
@@ -37,15 +37,15 @@
             "kind": "MODULE_DECL",
             "span": {
               "start": 0,
-              "end": 214
+              "end": 191
             }
           },
           "keyword_token": {
             "kind": "IDENT_EXPR",
             "text": "module",
             "span": {
-              "start": 71,
-              "end": 77
+              "start": 72,
+              "end": 78
             }
           },
           "rec_token": null,
@@ -53,8 +53,8 @@
             "kind": "IDENT_EXPR",
             "text": "Border",
             "span": {
-              "start": 78,
-              "end": 84
+              "start": 79,
+              "end": 85
             }
           },
           "functor_parameters": [],
@@ -66,14 +66,14 @@
                 "kind": "SIG_EXPR",
                 "span": {
                   "start": 86,
-                  "end": 214
+                  "end": 191
                 }
               },
               "signature_syntax_node": {
                 "kind": "SIG_EXPR",
                 "span": {
                   "start": 86,
-                  "end": 214
+                  "end": 191
                 }
               }
             }

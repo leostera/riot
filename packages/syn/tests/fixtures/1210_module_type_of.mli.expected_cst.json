@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 43
+        "end": 42
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "MODULE_DECL",
             "span": {
               "start": 0,
-              "end": 43
+              "end": 42
             }
           },
           "keyword_token": {
@@ -45,8 +45,8 @@
               "syntax_node": {
                 "kind": "MODULE_TYPE_OF",
                 "span": {
-                  "start": 18,
-                  "end": 43
+                  "start": 17,
+                  "end": 42
                 }
               },
               "module_path": {
@@ -54,16 +54,16 @@
                 "syntax_node": {
                   "kind": "MODULE_TYPE_PATH",
                   "span": {
-                    "start": 33,
-                    "end": 43
+                    "start": 32,
+                    "end": 42
                   }
                 },
                 "name_token": {
                   "kind": "IDENT_EXPR",
                   "text": "Websocket",
                   "span": {
-                    "start": 34,
-                    "end": 43
+                    "start": 33,
+                    "end": 42
                   }
                 }
               }

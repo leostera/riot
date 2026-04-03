@@ -66,17 +66,17 @@
     {
       "kind": "end",
       "span": {
-        "start": 18,
-        "end": 21
+        "start": 19,
+        "end": 22
       },
       "text": "end",
       "leading_trivia": [
         {
           "span": {
             "start": 17,
-            "end": 18
+            "end": 19
           },
-          "text": " ",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -84,15 +84,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 22,
-        "end": 22
+        "start": 23,
+        "end": 23
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 21,
-            "end": 22
+            "start": 22,
+            "end": 23
           },
           "text": "\n",
           "kind": "whitespace"
@@ -103,12 +103,12 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 21,
+    "width": 22,
     "children": [
       {
         "type": "node",
         "kind": "MODULE_DECL",
-        "width": 21,
+        "width": 22,
         "children": [
           {
             "type": "token",
@@ -149,7 +149,7 @@
           {
             "type": "node",
             "kind": "STRUCT_EXPR",
-            "width": 11,
+            "width": 12,
             "children": [
               {
                 "type": "token",
@@ -170,12 +170,12 @@
                 "kind": "IDENT_EXPR",
                 "text": "end",
                 "width": 3,
-                "full_width": 4,
+                "full_width": 5,
                 "leading_trivia": [
                   {
                     "kind": "WHITESPACE",
-                    "text": " ",
-                    "width": 1
+                    "text": "\n\n",
+                    "width": 2
                   }
                 ]
               }

@@ -76,7 +76,7 @@
             "start": 16,
             "end": 17
           },
-          "text": "\n",
+          "text": " ",
           "kind": "whitespace"
         }
       ]
@@ -220,7 +220,7 @@
                         "leading_trivia": [
                           {
                             "kind": "WHITESPACE",
-                            "text": "\n",
+                            "text": " ",
                             "width": 1
                           }
                         ]

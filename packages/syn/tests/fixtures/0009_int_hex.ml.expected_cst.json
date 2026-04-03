@@ -70,7 +70,7 @@
               },
               "literal_token": {
                 "kind": "INT_LITERAL",
-                "text": "0xFF",
+                "text": "0xff",
                 "span": {
                   "start": 8,
                   "end": 12
@@ -78,7 +78,7 @@
               },
               "base": "hexadecimal",
               "prefix": "0x",
-              "digits": "FF",
+              "digits": "ff",
               "suffix": null
             }
           },

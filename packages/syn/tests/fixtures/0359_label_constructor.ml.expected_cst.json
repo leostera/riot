@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 19
+        "end": 17
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 19
+              "end": 17
             }
           },
           "keyword_token": {
@@ -63,88 +63,61 @@
               "kind": "APPLY_EXPR",
               "span": {
                 "start": 7,
-                "end": 19
+                "end": 17
               }
             },
             "callee": {
-              "tag": "parenthesized",
+              "tag": "constructor",
               "syntax_node": {
-                "kind": "PAREN_EXPR",
+                "kind": "IDENT_EXPR",
                 "span": {
                   "start": 7,
-                  "end": 14
+                  "end": 12
                 }
               },
-              "opening_token": {
-                "kind": "IDENT_EXPR",
-                "text": "(",
-                "span": {
-                  "start": 8,
-                  "end": 9
-                }
-              },
-              "closing_token": {
-                "kind": "IDENT_EXPR",
-                "text": ")",
-                "span": {
-                  "start": 13,
-                  "end": 14
-                }
-              },
-              "grouping": "parens",
-              "inner": {
-                "tag": "constructor",
+              "constructor_path": {
+                "tag": "ident",
                 "syntax_node": {
                   "kind": "IDENT_EXPR",
                   "span": {
-                    "start": 9,
-                    "end": 13
+                    "start": 7,
+                    "end": 12
                   }
                 },
-                "constructor_path": {
-                  "tag": "ident",
-                  "syntax_node": {
-                    "kind": "IDENT_EXPR",
-                    "span": {
-                      "start": 9,
-                      "end": 13
-                    }
-                  },
-                  "name_token": {
-                    "kind": "IDENT_EXPR",
-                    "text": "Some",
-                    "span": {
-                      "start": 9,
-                      "end": 13
-                    }
+                "name_token": {
+                  "kind": "IDENT_EXPR",
+                  "text": "Some",
+                  "span": {
+                    "start": 8,
+                    "end": 12
                   }
-                },
-                "payload": null
-              }
+                }
+              },
+              "payload": null
             },
             "argument": {
               "tag": "labeled",
               "syntax_node": {
                 "kind": "LABELED_ARG",
                 "span": {
-                  "start": 14,
-                  "end": 19
+                  "start": 12,
+                  "end": 17
                 }
               },
               "sigil_token": {
                 "kind": "IDENT_EXPR",
                 "text": "~",
                 "span": {
-                  "start": 15,
-                  "end": 16
+                  "start": 13,
+                  "end": 14
                 }
               },
               "label_token": {
                 "kind": "IDENT_EXPR",
                 "text": "y",
                 "span": {
-                  "start": 16,
-                  "end": 17
+                  "start": 14,
+                  "end": 15
                 }
               },
               "value": {
@@ -154,16 +127,16 @@
                   "syntax_node": {
                     "kind": "INT_LITERAL",
                     "span": {
-                      "start": 18,
-                      "end": 19
+                      "start": 16,
+                      "end": 17
                     }
                   },
                   "literal_token": {
                     "kind": "INT_LITERAL",
                     "text": "1",
                     "span": {
-                      "start": 18,
-                      "end": 19
+                      "start": 16,
+                      "end": 17
                     }
                   },
                   "base": "decimal",

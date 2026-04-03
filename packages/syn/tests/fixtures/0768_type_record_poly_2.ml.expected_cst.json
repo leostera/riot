@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 43
+        "end": 46
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "TYPE_DECL",
             "span": {
               "start": 0,
-              "end": 43
+              "end": 46
             }
           },
           "keyword_token": {
@@ -110,7 +110,7 @@
               "kind": "TYPE_RECORD",
               "span": {
                 "start": 20,
-                "end": 43
+                "end": 46
               }
             },
             "fields": [
@@ -119,15 +119,15 @@
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
                     "start": 22,
-                    "end": 31
+                    "end": 32
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "fst",
                   "span": {
-                    "start": 23,
-                    "end": 26
+                    "start": 25,
+                    "end": 28
                   }
                 },
                 "mutable_token": null,
@@ -136,24 +136,24 @@
                   "syntax_node": {
                     "kind": "TYPE_VAR",
                     "span": {
-                      "start": 28,
-                      "end": 31
+                      "start": 29,
+                      "end": 32
                     }
                   },
                   "sigil_token": {
                     "kind": "IDENT_EXPR",
                     "text": "'",
                     "span": {
-                      "start": 29,
-                      "end": 30
+                      "start": 30,
+                      "end": 31
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "a",
                     "span": {
-                      "start": 30,
-                      "end": 31
+                      "start": 31,
+                      "end": 32
                     }
                   }
                 }
@@ -162,16 +162,16 @@
                 "syntax_node": {
                   "kind": "TYPE_RECORD_FIELD",
                   "span": {
-                    "start": 32,
-                    "end": 41
+                    "start": 33,
+                    "end": 43
                   }
                 },
                 "field_name": {
                   "kind": "IDENT_EXPR",
                   "text": "snd",
                   "span": {
-                    "start": 33,
-                    "end": 36
+                    "start": 36,
+                    "end": 39
                   }
                 },
                 "mutable_token": null,
@@ -180,24 +180,24 @@
                   "syntax_node": {
                     "kind": "TYPE_VAR",
                     "span": {
-                      "start": 38,
-                      "end": 41
+                      "start": 40,
+                      "end": 43
                     }
                   },
                   "sigil_token": {
                     "kind": "IDENT_EXPR",
                     "text": "'",
                     "span": {
-                      "start": 39,
-                      "end": 40
+                      "start": 41,
+                      "end": 42
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "b",
                     "span": {
-                      "start": 40,
-                      "end": 41
+                      "start": 42,
+                      "end": 43
                     }
                   }
                 }

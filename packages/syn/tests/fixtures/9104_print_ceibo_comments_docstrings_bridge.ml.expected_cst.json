@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 54
+        "end": 55
       }
     },
     "items": [
@@ -57,15 +57,15 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 54
+              "end": 55
             }
           },
           "keyword_token": {
             "kind": "IDENT_EXPR",
             "text": "let",
             "span": {
-              "start": 29,
-              "end": 32
+              "start": 30,
+              "end": 33
             }
           },
           "rec_token": null,
@@ -73,8 +73,8 @@
             "kind": "IDENT_EXPR",
             "text": "=",
             "span": {
-              "start": 35,
-              "end": 36
+              "start": 36,
+              "end": 37
             }
           },
           "attributes": [],
@@ -83,16 +83,16 @@
             "syntax_node": {
               "kind": "IDENT_PATTERN",
               "span": {
-                "start": 32,
-                "end": 34
+                "start": 33,
+                "end": 35
               }
             },
             "name_token": {
               "kind": "IDENT_EXPR",
               "text": "x",
               "span": {
-                "start": 33,
-                "end": 34
+                "start": 34,
+                "end": 35
               }
             }
           },
@@ -104,16 +104,16 @@
               "syntax_node": {
                 "kind": "INT_LITERAL",
                 "span": {
-                  "start": 36,
-                  "end": 54
+                  "start": 37,
+                  "end": 55
                 }
               },
               "literal_token": {
                 "kind": "INT_LITERAL",
                 "text": "1",
                 "span": {
-                  "start": 53,
-                  "end": 54
+                  "start": 54,
+                  "end": 55
                 }
               },
               "base": "decimal",

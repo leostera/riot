@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 22
+        "end": 24
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 22
+              "end": 24
             }
           },
           "keyword_token": {
@@ -63,7 +63,7 @@
               "kind": "ASSIGN_EXPR",
               "span": {
                 "start": 7,
-                "end": 22
+                "end": 24
               }
             },
             "target": {
@@ -72,7 +72,7 @@
                 "kind": "STRING_INDEX_EXPR",
                 "span": {
                   "start": 7,
-                  "end": 15
+                  "end": 17
                 }
               },
               "collection": {
@@ -81,7 +81,7 @@
                   "kind": "IDENT_EXPR",
                   "span": {
                     "start": 7,
-                    "end": 11
+                    "end": 13
                   }
                 },
                 "path": {
@@ -90,15 +90,15 @@
                     "kind": "IDENT_EXPR",
                     "span": {
                       "start": 7,
-                      "end": 11
+                      "end": 13
                     }
                   },
                   "name_token": {
                     "kind": "IDENT_EXPR",
                     "text": "str",
                     "span": {
-                      "start": 8,
-                      "end": 11
+                      "start": 10,
+                      "end": 13
                     }
                   }
                 }
@@ -108,16 +108,16 @@
                   "kind": "IDENT_EXPR",
                   "text": ".",
                   "span": {
-                    "start": 11,
-                    "end": 12
+                    "start": 13,
+                    "end": 14
                   }
                 },
                 {
                   "kind": "IDENT_EXPR",
                   "text": "[",
                   "span": {
-                    "start": 12,
-                    "end": 13
+                    "start": 14,
+                    "end": 15
                   }
                 }
               ],
@@ -128,16 +128,16 @@
                   "syntax_node": {
                     "kind": "INT_LITERAL",
                     "span": {
-                      "start": 13,
-                      "end": 14
+                      "start": 15,
+                      "end": 16
                     }
                   },
                   "literal_token": {
                     "kind": "INT_LITERAL",
                     "text": "0",
                     "span": {
-                      "start": 13,
-                      "end": 14
+                      "start": 15,
+                      "end": 16
                     }
                   },
                   "base": "decimal",
@@ -150,8 +150,8 @@
                 "kind": "IDENT_EXPR",
                 "text": "]",
                 "span": {
-                  "start": 14,
-                  "end": 15
+                  "start": 16,
+                  "end": 17
                 }
               }
             },
@@ -159,8 +159,8 @@
               "kind": "IDENT_EXPR",
               "text": "<-",
               "span": {
-                "start": 16,
-                "end": 18
+                "start": 18,
+                "end": 20
               }
             },
             "value": {
@@ -170,16 +170,16 @@
                 "syntax_node": {
                   "kind": "CHAR_LITERAL",
                   "span": {
-                    "start": 18,
-                    "end": 22
+                    "start": 20,
+                    "end": 24
                   }
                 },
                 "literal_token": {
                   "kind": "CHAR_LITERAL",
                   "text": "'a'",
                   "span": {
-                    "start": 19,
-                    "end": 22
+                    "start": 21,
+                    "end": 24
                   }
                 },
                 "contents": "a"

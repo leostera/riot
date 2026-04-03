@@ -86,7 +86,7 @@
             "inner": {
               "tag": "tuple",
               "syntax_node": {
-                "kind": "APPLY_EXPR",
+                "kind": "TUPLE_EXPR",
                 "span": {
                   "start": 9,
                   "end": 31
@@ -99,7 +99,7 @@
                     "kind": "APPLY_EXPR",
                     "span": {
                       "start": 9,
-                      "end": 31
+                      "end": 28
                     }
                   },
                   "callee": {
@@ -108,7 +108,7 @@
                       "kind": "APPLY_EXPR",
                       "span": {
                         "start": 9,
-                        "end": 31
+                        "end": 28
                       }
                     },
                     "callee": {
@@ -117,7 +117,7 @@
                         "kind": "APPLY_EXPR",
                         "span": {
                           "start": 9,
-                          "end": 31
+                          "end": 28
                         }
                       },
                       "callee": {
@@ -154,7 +154,7 @@
                           "kind": "LABELED_ARG",
                           "span": {
                             "start": 10,
-                            "end": 31
+                            "end": 28
                           }
                         },
                         "sigil_token": {
@@ -209,7 +209,7 @@
                         "kind": "OPTIONAL_ARG",
                         "span": {
                           "start": 15,
-                          "end": 31
+                          "end": 28
                         }
                       },
                       "sigil_token": {

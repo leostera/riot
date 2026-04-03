@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 129
+        "end": 127
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 129
+              "end": 127
             }
           },
           "keyword_token": {
@@ -65,15 +65,15 @@
                 "kind": "STRING_LITERAL",
                 "span": {
                   "start": 17,
-                  "end": 129
+                  "end": 127
                 }
               },
               "literal_token": {
                 "kind": "STRING_LITERAL",
                 "text": "{explain|\nThis is one static block of text.\nIt should lex as a single tagged quoted string literal.\n|explain}",
                 "span": {
-                  "start": 20,
-                  "end": 129
+                  "start": 18,
+                  "end": 127
                 }
               },
               "delimiter": {

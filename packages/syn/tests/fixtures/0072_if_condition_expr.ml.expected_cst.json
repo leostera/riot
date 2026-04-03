@@ -6,7 +6,7 @@
       "kind": "SOURCE_FILE",
       "span": {
         "start": 0,
-        "end": 37
+        "end": 49
       }
     },
     "items": [
@@ -17,7 +17,7 @@
             "kind": "LET_BINDING",
             "span": {
               "start": 0,
-              "end": 37
+              "end": 49
             }
           },
           "keyword_token": {
@@ -63,31 +63,31 @@
               "kind": "IF_EXPR",
               "span": {
                 "start": 7,
-                "end": 37
+                "end": 49
               }
             },
             "keyword_token": {
               "kind": "IDENT_EXPR",
               "text": "if",
               "span": {
-                "start": 8,
-                "end": 10
+                "start": 10,
+                "end": 12
               }
             },
             "then_token": {
               "kind": "IDENT_EXPR",
               "text": "then",
               "span": {
-                "start": 17,
-                "end": 21
+                "start": 19,
+                "end": 23
               }
             },
             "else_token": {
               "kind": "IDENT_EXPR",
               "text": "else",
               "span": {
-                "start": 28,
-                "end": 32
+                "start": 36,
+                "end": 40
               }
             },
             "condition": {
@@ -95,8 +95,8 @@
               "syntax_node": {
                 "kind": "INFIX_EXPR",
                 "span": {
-                  "start": 10,
-                  "end": 16
+                  "start": 12,
+                  "end": 18
                 }
               },
               "left": {
@@ -106,16 +106,16 @@
                   "syntax_node": {
                     "kind": "INT_LITERAL",
                     "span": {
-                      "start": 10,
-                      "end": 12
+                      "start": 12,
+                      "end": 14
                     }
                   },
                   "literal_token": {
                     "kind": "INT_LITERAL",
                     "text": "1",
                     "span": {
-                      "start": 11,
-                      "end": 12
+                      "start": 13,
+                      "end": 14
                     }
                   },
                   "base": "decimal",
@@ -129,8 +129,8 @@
                   "kind": "IDENT_EXPR",
                   "text": "<",
                   "span": {
-                    "start": 13,
-                    "end": 14
+                    "start": 15,
+                    "end": 16
                   }
                 }
               ],
@@ -141,16 +141,16 @@
                   "syntax_node": {
                     "kind": "INT_LITERAL",
                     "span": {
-                      "start": 14,
-                      "end": 16
+                      "start": 16,
+                      "end": 18
                     }
                   },
                   "literal_token": {
                     "kind": "INT_LITERAL",
                     "text": "2",
                     "span": {
-                      "start": 15,
-                      "end": 16
+                      "start": 17,
+                      "end": 18
                     }
                   },
                   "base": "decimal",
@@ -167,16 +167,16 @@
                 "syntax_node": {
                   "kind": "STRING_LITERAL",
                   "span": {
-                    "start": 21,
-                    "end": 27
+                    "start": 23,
+                    "end": 33
                   }
                 },
                 "literal_token": {
                   "kind": "STRING_LITERAL",
                   "text": "\"yes\"",
                   "span": {
-                    "start": 22,
-                    "end": 27
+                    "start": 28,
+                    "end": 33
                   }
                 },
                 "delimiter": {
@@ -193,16 +193,16 @@
                 "syntax_node": {
                   "kind": "STRING_LITERAL",
                   "span": {
-                    "start": 32,
-                    "end": 37
+                    "start": 40,
+                    "end": 49
                   }
                 },
                 "literal_token": {
                   "kind": "STRING_LITERAL",
                   "text": "\"no\"",
                   "span": {
-                    "start": 33,
-                    "end": 37
+                    "start": 45,
+                    "end": 49
                   }
                 },
                 "delimiter": {

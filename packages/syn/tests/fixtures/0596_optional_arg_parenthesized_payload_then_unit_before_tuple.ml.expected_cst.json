@@ -86,7 +86,7 @@
             "inner": {
               "tag": "tuple",
               "syntax_node": {
-                "kind": "APPLY_EXPR",
+                "kind": "TUPLE_EXPR",
                 "span": {
                   "start": 9,
                   "end": 26
@@ -99,7 +99,7 @@
                     "kind": "APPLY_EXPR",
                     "span": {
                       "start": 9,
-                      "end": 26
+                      "end": 23
                     }
                   },
                   "callee": {
@@ -108,7 +108,7 @@
                       "kind": "APPLY_EXPR",
                       "span": {
                         "start": 9,
-                        "end": 26
+                        "end": 23
                       }
                     },
                     "callee": {
@@ -145,7 +145,7 @@
                         "kind": "OPTIONAL_ARG",
                         "span": {
                           "start": 10,
-                          "end": 26
+                          "end": 23
                         }
                       },
                       "sigil_token": {

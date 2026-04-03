@@ -102,17 +102,17 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 36,
-        "end": 40
+        "start": 37,
+        "end": 41
       },
       "text": "type",
       "leading_trivia": [
         {
           "span": {
             "start": 35,
-            "end": 36
+            "end": 37
           },
-          "text": "\n",
+          "text": "\n\n",
           "kind": "whitespace"
         }
       ]
@@ -120,15 +120,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 41,
-        "end": 47
+        "start": 42,
+        "end": 48
       },
       "text": "driver",
       "leading_trivia": [
         {
           "span": {
-            "start": 40,
-            "end": 41
+            "start": 41,
+            "end": 42
           },
           "text": " ",
           "kind": "whitespace"
@@ -138,15 +138,15 @@
     {
       "kind": "=",
       "span": {
-        "start": 48,
-        "end": 49
+        "start": 49,
+        "end": 50
       },
       "text": "=",
       "leading_trivia": [
         {
           "span": {
-            "start": 47,
-            "end": 48
+            "start": 48,
+            "end": 49
           },
           "text": " ",
           "kind": "whitespace"
@@ -156,15 +156,15 @@
     {
       "kind": "(",
       "span": {
-        "start": 50,
-        "end": 51
+        "start": 51,
+        "end": 52
       },
       "text": "(",
       "leading_trivia": [
         {
           "span": {
-            "start": 49,
-            "end": 50
+            "start": 50,
+            "end": 51
           },
           "text": " ",
           "kind": "whitespace"
@@ -174,8 +174,8 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 51,
-        "end": 57
+        "start": 52,
+        "end": 58
       },
       "text": "module",
       "leading_trivia": []
@@ -183,15 +183,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 58,
-        "end": 64
+        "start": 59,
+        "end": 65
       },
       "text": "Driver",
       "leading_trivia": [
         {
           "span": {
-            "start": 57,
-            "end": 58
+            "start": 58,
+            "end": 59
           },
           "text": " ",
           "kind": "whitespace"
@@ -201,15 +201,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 65,
-        "end": 69
+        "start": 66,
+        "end": 70
       },
       "text": "with",
       "leading_trivia": [
         {
           "span": {
-            "start": 64,
-            "end": 65
+            "start": 65,
+            "end": 66
           },
           "text": " ",
           "kind": "whitespace"
@@ -219,15 +219,15 @@
     {
       "kind": "keyword",
       "span": {
-        "start": 70,
-        "end": 74
+        "start": 71,
+        "end": 75
       },
       "text": "type",
       "leading_trivia": [
         {
           "span": {
-            "start": 69,
-            "end": 70
+            "start": 70,
+            "end": 71
           },
           "text": " ",
           "kind": "whitespace"
@@ -237,15 +237,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 75,
-        "end": 81
+        "start": 76,
+        "end": 82
       },
       "text": "config",
       "leading_trivia": [
         {
           "span": {
-            "start": 74,
-            "end": 75
+            "start": 75,
+            "end": 76
           },
           "text": " ",
           "kind": "whitespace"
@@ -255,15 +255,15 @@
     {
       "kind": "=",
       "span": {
-        "start": 82,
-        "end": 83
+        "start": 83,
+        "end": 84
       },
       "text": "=",
       "leading_trivia": [
         {
           "span": {
-            "start": 81,
-            "end": 82
+            "start": 82,
+            "end": 83
           },
           "text": " ",
           "kind": "whitespace"
@@ -273,15 +273,15 @@
     {
       "kind": "identifier",
       "span": {
-        "start": 84,
-        "end": 87
+        "start": 85,
+        "end": 88
       },
       "text": "int",
       "leading_trivia": [
         {
           "span": {
-            "start": 83,
-            "end": 84
+            "start": 84,
+            "end": 85
           },
           "text": " ",
           "kind": "whitespace"
@@ -291,8 +291,8 @@
     {
       "kind": ")",
       "span": {
-        "start": 87,
-        "end": 88
+        "start": 88,
+        "end": 89
       },
       "text": ")",
       "leading_trivia": []
@@ -300,15 +300,15 @@
     {
       "kind": "end of file",
       "span": {
-        "start": 89,
-        "end": 89
+        "start": 90,
+        "end": 90
       },
       "text": "",
       "leading_trivia": [
         {
           "span": {
-            "start": 88,
-            "end": 89
+            "start": 89,
+            "end": 90
           },
           "text": "\n",
           "kind": "whitespace"
@@ -319,7 +319,7 @@
   "tree": {
     "type": "node",
     "kind": "SOURCE_FILE",
-    "width": 88,
+    "width": 89,
     "children": [
       {
         "type": "node",
@@ -432,19 +432,19 @@
       {
         "type": "node",
         "kind": "TYPE_DECL",
-        "width": 53,
+        "width": 54,
         "children": [
           {
             "type": "token",
             "kind": "IDENT_EXPR",
             "text": "type",
             "width": 4,
-            "full_width": 5,
+            "full_width": 6,
             "leading_trivia": [
               {
                 "kind": "WHITESPACE",
-                "text": "\n",
-                "width": 1
+                "text": "\n\n",
+                "width": 2
               }
             ]
           },

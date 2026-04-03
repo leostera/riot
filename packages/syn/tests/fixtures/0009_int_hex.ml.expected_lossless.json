@@ -51,7 +51,7 @@
         "start": 8,
         "end": 12
       },
-      "text": "0xFF",
+      "text": "0xff",
       "leading_trivia": [
         {
           "span": {
@@ -143,7 +143,7 @@
               {
                 "type": "token",
                 "kind": "INT_LITERAL",
-                "text": "0xFF",
+                "text": "0xff",
                 "width": 4,
                 "full_width": 5,
                 "leading_trivia": [
