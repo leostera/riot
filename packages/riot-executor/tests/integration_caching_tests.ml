@@ -41,7 +41,7 @@ let make_simple_package tmpdir name =
       build_dependencies = [];
       foreign_dependencies = [];
       binaries = [];
-      library = Some { path = Path.v "src/lib.ml"; kind = Riot_model.Package.Runtime };
+      library = Some { path = Path.v "src/lib.ml" };
       sources = { src = []; native = []; tests = []; examples = [] };
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];

@@ -1197,10 +1197,10 @@ let parse_binaries: (string * Toml.value) list -> package_path:Path.t -> (binary
   | Some _ ->
       Error "[[bin]] must be an array of tables"
 
-let parse_library_kind = fun lib_items ->
+let validate_library_kind = fun lib_items ->
   match List.assoc_opt "kind" lib_items with
-  | None -> Ok Runtime
-  | Some (Toml.String "runtime") -> Ok Runtime
+  | None
+  | Some (Toml.String "runtime") -> Ok ()
   | Some (Toml.String "macro") -> Error "Library 'kind = \"macro\"' has been replaced by [riot.macro.provider]"
   | Some (Toml.String kind) -> Error ("Library 'kind' field must be \"runtime\", got \""
   ^ kind
@@ -1222,9 +1222,9 @@ let parse_library:
         | Error _ -> Ok None
       )
   | Some (Toml.Table lib_items) -> (
-      match parse_library_kind lib_items with
+      match validate_library_kind lib_items with
       | Error _ as err -> err
-      | Ok Runtime -> (
+      | Ok () -> (
           match List.assoc_opt "path" lib_items with
           | Some (Toml.String path_str) ->
               let lib_path = Path.(package_path / Path.v path_str) in
