@@ -29,6 +29,7 @@ members = [
   "packages/swisstable",
   "packages/syn",
   "packages/tty",
+  "packages/typ",
   "packages/riot-cli",
   "packages/riot-cmd",
   "packages/riot-eval",

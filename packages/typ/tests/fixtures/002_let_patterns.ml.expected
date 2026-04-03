@@ -1,0 +1,192 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/002_let_patterns.ml
+
+parse diagnostics:
+  none
+lowering diagnostics:
+  none
+semantic tree:
+origins:
+  origin#0 pattern identifier_pattern @ 3..8
+  origin#1 expr int_literal @ 12..13
+  origin#2 expr bool_literal @ 14..19
+  origin#3 expr tuple_expression @ 12..19
+  origin#4 item binding @ 0..20
+  origin#5 item item @ 0..20
+  origin#6 pattern identifier_pattern @ 27..31
+  origin#7 pattern identifier_pattern @ 32..38
+  origin#8 pattern tuple_pattern @ 27..38
+  origin#9 expr path_expression @ 41..46
+  origin#10 item binding @ 20..46
+  origin#11 item item @ 20..46
+  origin#12 pattern identifier_pattern @ 51..61
+  origin#13 pattern identifier_pattern @ 61..66
+  origin#14 expr path_expression @ 73..78
+  origin#15 expr path_expression @ 83..88
+  origin#16 expr int_literal @ 93..95
+  origin#17 expr if_expression @ 68..95
+  origin#18 expr fun_expression @ 46..95
+  origin#19 item binding @ 46..95
+  origin#20 item item @ 46..95
+
+patterns:
+  pat#0 origin#0 var pair
+  pat#1 origin#6 var left
+  pat#2 origin#7 var right
+  pat#3 origin#8 tuple [1, 2]
+  pat#4 origin#12 var keep_left
+  pat#5 origin#13 var flag
+
+expressions:
+  expr#0 origin#1 int 1
+  expr#1 origin#2 bool true
+  expr#2 origin#3 tuple [0, 1]
+  expr#3 origin#9 var pair
+  expr#4 origin#14 var flag
+  expr#5 origin#15 var left
+  expr#6 origin#16 int 0
+  expr#7 origin#17 if expr#4 then expr#5 else expr#6
+  expr#8 origin#18 fun [5] -> expr#7
+
+items:
+  item#0 value recursive=false
+    binding#0 pair pat#0 expr#2 recursive=false
+  item#1 value recursive=false
+    binding#1 _ pat#3 expr#3 recursive=false
+  item#2 value recursive=false
+    binding#2 keep_left pat#4 expr#8 recursive=false
+typing diagnostics:
+  none
+exports:
+  * : int -> int -> int
+  + : int -> int -> int
+  - : int -> int -> int
+  / : int -> int -> int
+  = : 'a. 'a -> 'a -> bool
+  keep_left : bool -> int
+  left : int
+  not : bool -> bool
+  pair : int * bool
+  right : bool
+item traces:
+  item#0 names=[pair]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    pair : int * bool
+  item#1 names=[left, right]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+  item#2 names=[keep_left]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    keep_left : bool -> int
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+expr traces:
+  expr#0 int_literal @ 12..13
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int
+  expr#1 bool_literal @ 14..19
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => bool
+  expr#2 tuple_expression @ 12..19
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int * bool
+  expr#3 path_expression @ 41..46
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    pair : int * bool
+    => int * bool
+  expr#4 path_expression @ 73..78
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    flag : bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+    => bool
+  expr#5 path_expression @ 83..88
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    flag : bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+    => int
+  expr#6 int_literal @ 93..95
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    flag : bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+    => int
+  expr#7 if_expression @ 68..95
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    flag : bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+    => int
+  expr#8 fun_expression @ 46..95
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    left : int
+    not : bool -> bool
+    pair : int * bool
+    right : bool
+    => bool -> int

@@ -1,0 +1,17 @@
+{
+  "lowering_diagnostics": [],
+  "parse_diagnostics": [],
+  "typing_diagnostics": [
+    {
+      "id": "TYP2001",
+      "message": "unbound name: mystery",
+      "name": "unbound-name",
+      "name_text": "mystery",
+      "reference_span": {
+        "end": 20,
+        "start": 12
+      },
+      "severity": "error"
+    }
+  ]
+}

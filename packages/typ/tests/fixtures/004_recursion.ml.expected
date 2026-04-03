@@ -1,0 +1,386 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/004_recursion.ml
+
+parse diagnostics:
+  none
+lowering diagnostics:
+  none
+semantic tree:
+origins:
+  origin#0 pattern identifier_pattern @ 7..12
+  origin#1 pattern identifier_pattern @ 12..14
+  origin#2 expr infix_operator @ 21..27
+  origin#3 expr path_expression @ 21..23
+  origin#4 expr int_literal @ 25..27
+  origin#5 expr infix_expression @ 21..27
+  origin#6 expr bool_literal @ 32..37
+  origin#7 expr infix_operator @ 48..53
+  origin#8 expr path_expression @ 48..49
+  origin#9 expr int_literal @ 51..53
+  origin#10 expr infix_expression @ 48..53
+  origin#11 expr path_expression @ 42..46
+  origin#12 expr apply_expression @ 42..54
+  origin#13 expr if_expression @ 16..54
+  origin#14 expr fun_expression @ 0..106
+  origin#15 item binding @ 0..106
+  origin#16 pattern identifier_pattern @ 58..62
+  origin#17 pattern identifier_pattern @ 62..64
+  origin#18 expr infix_operator @ 71..77
+  origin#19 expr path_expression @ 71..73
+  origin#20 expr int_literal @ 75..77
+  origin#21 expr infix_expression @ 71..77
+  origin#22 expr bool_literal @ 82..88
+  origin#23 expr infix_operator @ 100..105
+  origin#24 expr path_expression @ 100..101
+  origin#25 expr int_literal @ 103..105
+  origin#26 expr infix_expression @ 100..105
+  origin#27 expr path_expression @ 93..98
+  origin#28 expr apply_expression @ 93..106
+  origin#29 expr if_expression @ 66..106
+  origin#30 expr fun_expression @ 58..106
+  origin#31 item binding @ 58..106
+  origin#32 item item @ 0..106
+
+patterns:
+  pat#0 origin#0 var even
+  pat#1 origin#1 var n
+  pat#2 origin#16 var odd
+  pat#3 origin#17 var n
+
+expressions:
+  expr#0 origin#2 var =
+  expr#1 origin#3 var n
+  expr#2 origin#4 int 0
+  expr#3 origin#5 apply expr#0 [1, 2]
+  expr#4 origin#6 bool true
+  expr#5 origin#7 var -
+  expr#6 origin#8 var n
+  expr#7 origin#9 int 1
+  expr#8 origin#10 apply expr#5 [6, 7]
+  expr#9 origin#11 var odd
+  expr#10 origin#12 apply expr#9 [8]
+  expr#11 origin#13 if expr#3 then expr#4 else expr#10
+  expr#12 origin#14 fun [1] -> expr#11
+  expr#13 origin#18 var =
+  expr#14 origin#19 var n
+  expr#15 origin#20 int 0
+  expr#16 origin#21 apply expr#13 [14, 15]
+  expr#17 origin#22 bool false
+  expr#18 origin#23 var -
+  expr#19 origin#24 var n
+  expr#20 origin#25 int 1
+  expr#21 origin#26 apply expr#18 [19, 20]
+  expr#22 origin#27 var even
+  expr#23 origin#28 apply expr#22 [21]
+  expr#24 origin#29 if expr#16 then expr#17 else expr#23
+  expr#25 origin#30 fun [3] -> expr#24
+
+items:
+  item#0 value recursive=true
+    binding#0 even pat#0 expr#12 recursive=true
+    binding#1 odd pat#2 expr#25 recursive=true
+typing diagnostics:
+  none
+exports:
+  * : int -> int -> int
+  + : int -> int -> int
+  - : int -> int -> int
+  / : int -> int -> int
+  = : 'a. 'a -> 'a -> bool
+  even : int -> bool
+  not : bool -> bool
+  odd : int -> bool
+item traces:
+  item#0 names=[even, odd]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    not : bool -> bool
+    odd : int -> bool
+expr traces:
+  expr#0 infix_operator @ 21..27
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> int -> bool
+  expr#1 path_expression @ 21..23
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#2 int_literal @ 25..27
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#3 infix_expression @ 21..27
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#4 bool_literal @ 32..37
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#9 path_expression @ 42..46
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> bool
+  expr#5 infix_operator @ 48..53
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> int -> int
+  expr#6 path_expression @ 48..49
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#7 int_literal @ 51..53
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#8 infix_expression @ 48..53
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#10 apply_expression @ 42..54
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#11 if_expression @ 16..54
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#12 fun_expression @ 0..106
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    not : bool -> bool
+    odd : int -> bool
+    => int -> bool
+  expr#13 infix_operator @ 71..77
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> int -> bool
+  expr#14 path_expression @ 71..73
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#15 int_literal @ 75..77
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#16 infix_expression @ 71..77
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#17 bool_literal @ 82..88
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#22 path_expression @ 93..98
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> bool
+  expr#18 infix_operator @ 100..105
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int -> int -> int
+  expr#19 path_expression @ 100..101
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#20 int_literal @ 103..105
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#21 infix_expression @ 100..105
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => int
+  expr#23 apply_expression @ 93..106
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#24 if_expression @ 66..106
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    n : int
+    not : bool -> bool
+    odd : int -> bool
+    => bool
+  expr#25 fun_expression @ 58..106
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    even : int -> bool
+    not : bool -> bool
+    odd : int -> bool
+    => int -> bool

@@ -1,0 +1,30 @@
+{
+  "lowering_diagnostics": [
+    {
+      "context": "structure_item",
+      "id": "TYP1001",
+      "message": "unsupported structure item lowered using placeholder item: OPEN_STMT",
+      "name": "unsupported-syntax",
+      "reason": null,
+      "recovery": "placeholder_item",
+      "severity": "error",
+      "syntax_kind": "OPEN_STMT",
+      "syntax_span": {
+        "end": 8,
+        "start": 0
+      }
+    },
+    {
+      "ascription_span": {
+        "end": 56,
+        "start": 22
+      },
+      "id": "TYP1008",
+      "message": "type ascriptions are currently ignored during lowering",
+      "name": "ignored-type-ascription",
+      "severity": "error"
+    }
+  ],
+  "parse_diagnostics": [],
+  "typing_diagnostics": []
+}

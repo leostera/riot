@@ -1,0 +1,150 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/003_match_function.ml
+
+parse diagnostics:
+  none
+lowering diagnostics:
+  none
+semantic tree:
+origins:
+  origin#0 pattern identifier_pattern @ 3..16
+  origin#1 pattern synthetic_function_arg_pattern @ 18..49
+  origin#2 expr synthetic_function_argument @ 18..49
+  origin#3 pattern int_pattern @ 31..33
+  origin#4 expr int_literal @ 36..38
+  origin#5 pattern identifier_pattern @ 42..44
+  origin#6 expr path_expression @ 47..49
+  origin#7 expr function_match_body @ 18..49
+  origin#8 expr wrapped_fun @ 18..49
+  origin#9 item binding @ 0..49
+  origin#10 item item @ 0..49
+  origin#11 pattern identifier_pattern @ 54..61
+  origin#12 expr int_literal @ 76..79
+  origin#13 expr path_expression @ 63..76
+  origin#14 expr apply_expression @ 63..79
+  origin#15 item binding @ 49..79
+  origin#16 item item @ 49..79
+
+patterns:
+  pat#0 origin#0 var zero_or_self
+  pat#1 origin#1 var $function_arg0
+  pat#2 origin#3 int 0
+  pat#3 origin#5 var n
+  pat#4 origin#11 var answer
+
+expressions:
+  expr#0 origin#2 var $function_arg0
+  expr#1 origin#4 int 0
+  expr#2 origin#6 var n
+  expr#3 origin#7 match expr#0 with [(pat#2 -> expr#1), (pat#3 -> expr#2)]
+  expr#4 origin#8 fun [1] -> expr#3
+  expr#5 origin#12 int 41
+  expr#6 origin#13 var zero_or_self
+  expr#7 origin#14 apply expr#6 [5]
+
+items:
+  item#0 value recursive=false
+    binding#0 zero_or_self pat#0 expr#4 recursive=false
+  item#1 value recursive=false
+    binding#1 answer pat#4 expr#7 recursive=false
+typing diagnostics:
+  none
+exports:
+  * : int -> int -> int
+  + : int -> int -> int
+  - : int -> int -> int
+  / : int -> int -> int
+  = : 'a. 'a -> 'a -> bool
+  answer : int
+  not : bool -> bool
+  zero_or_self : int -> int
+item traces:
+  item#0 names=[zero_or_self]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    zero_or_self : int -> int
+  item#1 names=[answer]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    answer : int
+    not : bool -> bool
+    zero_or_self : int -> int
+expr traces:
+  expr#0 synthetic_function_argument @ 18..49
+    $function_arg0 : int
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int
+  expr#1 int_literal @ 36..38
+    $function_arg0 : int
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int
+  expr#2 path_expression @ 47..49
+    $function_arg0 : int
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    n : int
+    not : bool -> bool
+    => int
+  expr#3 function_match_body @ 18..49
+    $function_arg0 : int
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int
+  expr#4 wrapped_fun @ 18..49
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => int -> int
+  expr#6 path_expression @ 63..76
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    zero_or_self : int -> int
+    => int -> int
+  expr#5 int_literal @ 76..79
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    zero_or_self : int -> int
+    => int
+  expr#7 apply_expression @ 63..79
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    zero_or_self : int -> int
+    => int

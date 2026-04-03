@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "8302edbb15da1ffb"
+dependency_hash = "aabbf10ac5ed8925"
 
 [[packages]]
 name = "blink"
@@ -231,6 +231,14 @@ name = "tty"
 root = "packages/tty"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "std", package = { name = "std" } }]
+build_dependencies = []
+dev_dependencies = []
+
+[[packages]]
+name = "typ"
+root = "packages/typ"
+provenance = { kind = "workspace" }
+dependencies = [{ name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
 dev_dependencies = []
 

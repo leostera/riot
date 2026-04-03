@@ -1,0 +1,101 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/005_unsupported_surface.ml
+
+parse diagnostics:
+  none
+lowering diagnostics:
+  error TYP1001 @ 0..8: unsupported structure item lowered using placeholder item: OPEN_STMT
+  error TYP1008 @ 8..50: type ascriptions are currently ignored during lowering
+  error TYP1001 @ 64..71: unsupported expression lowered using type hole: APPLY_EXPR
+semantic tree:
+origins:
+  origin#0 item item @ 0..8
+  origin#1 pattern identifier_pattern @ 13..16
+  origin#2 pattern identifier_pattern @ 35..41
+  origin#3 expr path_expression @ 44..50
+  origin#4 expr fun_expression @ 31..50
+  origin#5 item binding @ 8..50
+  origin#6 item item @ 8..50
+  origin#7 pattern identifier_pattern @ 55..62
+  origin#8 expr unsupported_expression @ 64..71
+  origin#9 item binding @ 50..71
+  origin#10 item item @ 50..71
+
+patterns:
+  pat#0 origin#1 var id
+  pat#1 origin#2 var value
+  pat#2 origin#7 var packed
+
+expressions:
+  expr#0 origin#3 var value
+  expr#1 origin#4 fun [1] -> expr#0
+  expr#2 origin#8 hole(APPLY_EXPR)
+
+items:
+  item#0 unsupported OPEN_STMT
+  item#1 value recursive=false
+    binding#0 id pat#0 expr#1 recursive=false
+  item#2 value recursive=false
+    binding#1 packed pat#2 expr#2 recursive=false
+typing diagnostics:
+  none
+exports:
+  * : int -> int -> int
+  + : int -> int -> int
+  - : int -> int -> int
+  / : int -> int -> int
+  = : 'a. 'a -> 'a -> bool
+  id : 'a. 'a -> 'a
+  not : bool -> bool
+  packed : _?0
+item traces:
+  item#0 names=[]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+  item#1 names=[id]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+  item#2 names=[packed]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+    packed : _?0
+expr traces:
+  expr#0 path_expression @ 44..50
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    value : 'a
+    => 'a
+  expr#1 fun_expression @ 31..50
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => 'a -> 'a
+  expr#2 unsupported_expression @ 64..71
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+    => _?0

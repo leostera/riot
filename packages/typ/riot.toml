@@ -1,0 +1,13 @@
+[package]
+name = "typ"
+version = "0.0.1"
+description = "Prototype incremental type analysis engine for Riot"
+license = "Apache-2.0"
+public = true
+
+[lib]
+path = "src/typ.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+syn = { path = "../syn", version = "*" }

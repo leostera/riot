@@ -1,0 +1,112 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/001_identity.ml
+
+parse diagnostics:
+  none
+lowering diagnostics:
+  none
+semantic tree:
+origins:
+  origin#0 pattern identifier_pattern @ 3..6
+  origin#1 pattern identifier_pattern @ 6..8
+  origin#2 expr path_expression @ 10..12
+  origin#3 expr fun_expression @ 0..12
+  origin#4 item binding @ 0..12
+  origin#5 item item @ 0..12
+  origin#6 pattern identifier_pattern @ 17..24
+  origin#7 expr int_literal @ 29..32
+  origin#8 expr path_expression @ 26..29
+  origin#9 expr apply_expression @ 26..32
+  origin#10 item binding @ 12..32
+  origin#11 item item @ 12..32
+
+patterns:
+  pat#0 origin#0 var id
+  pat#1 origin#1 var x
+  pat#2 origin#6 var answer
+
+expressions:
+  expr#0 origin#2 var x
+  expr#1 origin#3 fun [1] -> expr#0
+  expr#2 origin#7 int 42
+  expr#3 origin#8 var id
+  expr#4 origin#9 apply expr#3 [2]
+
+items:
+  item#0 value recursive=false
+    binding#0 id pat#0 expr#1 recursive=false
+  item#1 value recursive=false
+    binding#1 answer pat#2 expr#4 recursive=false
+typing diagnostics:
+  none
+exports:
+  * : int -> int -> int
+  + : int -> int -> int
+  - : int -> int -> int
+  / : int -> int -> int
+  = : 'a. 'a -> 'a -> bool
+  answer : int
+  id : 'a. 'a -> 'a
+  not : bool -> bool
+item traces:
+  item#0 names=[id]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+  item#1 names=[answer]
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    answer : int
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+expr traces:
+  expr#0 path_expression @ 10..12
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    x : 'a
+    => 'a
+  expr#1 fun_expression @ 0..12
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    not : bool -> bool
+    => 'a -> 'a
+  expr#3 path_expression @ 26..29
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+    => int -> int
+  expr#2 int_literal @ 29..32
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+    => int
+  expr#4 apply_expression @ 26..32
+    * : int -> int -> int
+    + : int -> int -> int
+    - : int -> int -> int
+    / : int -> int -> int
+    = : 'a. 'a -> 'a -> bool
+    id : 'a. 'a -> 'a
+    not : bool -> bool
+    => int

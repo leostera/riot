@@ -1,0 +1,10 @@
+file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/006_parse_error.ml
+
+parse diagnostics:
+  Parse error "E0004" at 12..12: fix: add an expression after the =
+  
+  hint: Every let binding needs a value on the right side of the =.
+lowering diagnostics:
+  none
+semantic tree:
+  unavailable
