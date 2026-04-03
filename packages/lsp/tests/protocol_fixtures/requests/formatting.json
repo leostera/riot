@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "textDocument/formatting",
+  "params": {
+    "textDocument": {
+      "uri": "file:///tmp/riot-lsp/packages/app/src/main.ml"
+    },
+    "options": {
+      "tabSize": 2,
+      "insertSpaces": true,
+      "trimTrailingWhitespace": true,
+      "insertFinalNewline": true
+    }
+  }
+}

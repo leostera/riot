@@ -1,0 +1,27 @@
+{
+  "id": 1,
+  "params": {
+    "capabilities": {
+      "textDocument": {
+        "formatting": {
+          "dynamicRegistration": true
+        }
+      }
+    },
+    "processId": 4242,
+    "clientInfo": {
+      "name": "Neovim",
+      "version": "0.11"
+    },
+    "rootUri": "file:///tmp/riot-lsp",
+    "trace": "off",
+    "workspaceFolders": [
+      {
+        "uri": "file:///tmp/riot-lsp",
+        "name": "riot-lsp"
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "method": "initialize"
+}

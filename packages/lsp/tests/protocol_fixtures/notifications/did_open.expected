@@ -1,0 +1,12 @@
+{
+  "params": {
+    "textDocument": {
+      "uri": "file:///tmp/riot-lsp/packages/app/src/main.ml",
+      "languageId": "ocaml",
+      "version": 1,
+      "text": "let answer = 42\n"
+    }
+  },
+  "jsonrpc": "2.0",
+  "method": "textDocument/didOpen"
+}

@@ -1,0 +1,20 @@
+{
+  "jsonrpc": "2.0",
+  "method": "textDocument/publishDiagnostics",
+  "params": {
+    "uri": "file:///tmp/riot-lsp/packages/app/src/main.ml",
+    "version": 2,
+    "diagnostics": [
+      {
+        "range": {
+          "start": { "line": 0, "character": 4 },
+          "end": { "line": 0, "character": 10 }
+        },
+        "severity": 1,
+        "code": "E0004",
+        "source": "syn",
+        "message": "Expected an expression."
+      }
+    ]
+  }
+}

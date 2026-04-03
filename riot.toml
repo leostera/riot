@@ -10,6 +10,7 @@ members = [
   "packages/jsonrpc",
   "packages/kernel",
   "packages/krasny",
+  "packages/lsp",
   "packages/mcp",
   "packages/mime",
   "packages/actors",

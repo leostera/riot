@@ -1,0 +1,30 @@
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "textDocument/codeAction",
+  "params": {
+    "textDocument": {
+      "uri": "file:///tmp/riot-lsp/packages/app/src/main.ml"
+    },
+    "range": {
+      "start": { "line": 1, "character": 0 },
+      "end": { "line": 1, "character": 10 }
+    },
+    "context": {
+      "diagnostics": [
+        {
+          "range": {
+            "start": { "line": 1, "character": 0 },
+            "end": { "line": 1, "character": 3 }
+          },
+          "severity": 2,
+          "code": "avoid-single-letter-type-names",
+          "source": "riot-fix",
+          "message": "Avoid single-letter type names."
+        }
+      ],
+      "only": [ "quickfix" ],
+      "triggerKind": 1
+    }
+  }
+}

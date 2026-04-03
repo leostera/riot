@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "66ac8ea40847aa79"
+dependency_hash = "6912a06b64c9ed85"
 
 [[packages]]
 name = "blink"
@@ -79,6 +79,14 @@ name = "krasny"
 root = "packages/krasny"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
+build_dependencies = []
+dev_dependencies = []
+
+[[packages]]
+name = "lsp"
+root = "packages/lsp"
+provenance = { kind = "workspace" }
+dependencies = [{ name = "jsonrpc", package = { name = "jsonrpc" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 

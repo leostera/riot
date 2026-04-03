@@ -1,0 +1,26 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "capabilities": {
+      "positionEncoding": "utf-16",
+      "textDocumentSync": {
+        "openClose": true,
+        "change": 1,
+        "save": true
+      },
+      "documentFormattingProvider": true,
+      "codeActionProvider": {
+        "codeActionKinds": [
+          "quickfix",
+          "source.fixAll"
+        ],
+        "resolveProvider": false
+      }
+    },
+    "serverInfo": {
+      "name": "riot-lsp",
+      "version": "0.0.1"
+    }
+  }
+}

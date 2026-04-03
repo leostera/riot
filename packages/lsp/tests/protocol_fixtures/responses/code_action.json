@@ -1,0 +1,43 @@
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": [
+    {
+      "title": "Inline let binding",
+      "kind": "refactor.inline",
+      "isPreferred": true,
+      "diagnostics": [
+        {
+          "range": {
+            "start": { "line": 1, "character": 0 },
+            "end": { "line": 1, "character": 3 }
+          },
+          "severity": 2,
+          "code": "lint",
+          "source": "riot-fix",
+          "message": "Inline this binding."
+        }
+      ],
+      "edit": {
+        "changes": {
+          "file:///tmp/riot-lsp/packages/app/src/main.ml": [
+            {
+              "range": {
+                "start": { "line": 1, "character": 0 },
+                "end": { "line": 1, "character": 3 }
+              },
+              "newText": "answer"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Run external organizer",
+      "command": "riot.organizeImports",
+      "arguments": [
+        "file:///tmp/riot-lsp/packages/app/src/main.ml"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "error": {
+    "message": "Invalid params",
+    "code": -32602,
+    "data": {
+      "field": "textDocument"
+    }
+  }
+}

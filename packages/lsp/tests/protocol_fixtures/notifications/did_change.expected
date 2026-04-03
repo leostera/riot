@@ -1,0 +1,15 @@
+{
+  "params": {
+    "textDocument": {
+      "uri": "file:///tmp/riot-lsp/packages/app/src/main.ml",
+      "version": 2
+    },
+    "contentChanges": [
+      {
+        "text": "let answer = 42\nlet extra = true\n"
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "method": "textDocument/didChange"
+}
