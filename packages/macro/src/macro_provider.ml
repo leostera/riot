@@ -20,6 +20,10 @@ let module_path = fun provider -> provider.module_path
 
 let macros = fun provider -> provider.macros
 
+let macro_names = fun provider ->
+  provider.macros
+  |> List.map (fun macro_ -> macro_.name)
+
 let find_macro = fun provider name ->
   List.find_opt
     (fun macro_ ->

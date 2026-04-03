@@ -261,6 +261,171 @@ let test_build_expands_format_macro_in_binary_end_to_end = fun _ctx ->
   | Ok r -> r
   | Error _ -> Error "Tempdir creation failed"
 
+let test_build_rejects_macro_provider_export_drift = fun _ctx ->
+  match
+    Fs.with_tempdir ~prefix:"pkg_builder_macro_export_drift"
+      (fun tmpdir ->
+        let std_package = make_test_std_package ~tmpdir in
+        let package_dir = Path.(tmpdir / Path.v "pkg") in
+        let macro_dir = Path.(tmpdir / Path.v "macro") in
+        let src_dir = Path.(package_dir / Path.v "src") in
+        let macro_src_dir = Path.(macro_dir / Path.v "src") in
+        let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
+        let _ = Fs.create_dir_all macro_src_dir |> Result.expect ~msg:"create macro src dir failed" in
+        let _ = Fs.write
+          "let message = Macro.format! \"hello {}\" \"riot\"\n"
+          Path.(src_dir / Path.v "main.ml")
+        |> Result.expect ~msg:"write source failed" in
+        let _ = Fs.write
+          "let provider () = Macro.Provider.v ~module_path:[ \"Macro\" ] [ Macro.Provider.fn \"other\" Macro.Format.expand ]\n"
+          Path.(macro_src_dir / Path.v "macro.ml")
+        |> Result.expect ~msg:"write macro source failed" in
+        let macro_package =
+          Riot_model.Package.{
+            name = "macro";
+            path = macro_dir;
+            relative_path = Path.v "macro";
+            dependencies = [ stdlib_dependency ];
+            dev_dependencies = [];
+            build_dependencies = [];
+            foreign_dependencies = [];
+            binaries = [];
+            library = None;
+            sources =
+              {
+                src = [ Path.v "src/macro.ml" ];
+                native = [];
+                tests = [];
+                examples = [];
+                bench = [];
+              };
+            compiler = { profile_overrides = []; target_overrides = [] };
+            commands = [];
+            fix_providers = [];
+            macro_providers =
+              [
+                Riot_model.Macro_provider.make
+                  ~package_name:"macro"
+                  ~package_path:macro_dir
+                  ~source_path:(Path.(macro_dir / Path.v "src" / Path.v "macro.ml"))
+                  ~module_path:[ "Macro" ]
+                  ~macros:[ "format" ]
+                  ();
+              ];
+            publish = { version = None; description = None; license = None; is_public = None };
+          }
+        in
+        let package =
+          Riot_model.Package.{
+            name = "pkg";
+            path = package_dir;
+            relative_path = Path.v "pkg";
+            dependencies = [ workspace_dependency "std" ];
+            dev_dependencies = [];
+            build_dependencies = [ workspace_dependency "macro" ];
+            foreign_dependencies = [];
+            binaries = [ { name = "pkg"; path = Path.v "src/main.ml" } ];
+            library = None;
+            sources =
+              {
+                src = [];
+                native = [];
+                tests = [];
+                examples = [];
+                bench = [];
+              };
+            compiler = { profile_overrides = []; target_overrides = [] };
+            commands = [];
+            fix_providers = [];
+            macro_providers = [];
+            publish = { version = None; description = None; license = None; is_public = None };
+          }
+        in
+        let workspace =
+          Riot_model.Workspace.{
+            root = tmpdir;
+            target_dir_root = Path.(tmpdir / Path.v "target");
+            packages = [ std_package; macro_package; package ];
+            dependencies = [];
+            dev_dependencies = [];
+            build_dependencies = [];
+            profile_overrides = [];
+          }
+        in
+        let store = Riot_store.Store.create ~workspace in
+        let package_graph = Riot_planner.Package_graph.create
+          ~scope:Riot_planner.Package_graph.Runtime workspace
+        |> Result.unwrap in
+        let build_ctx =
+          let session_id = Riot_model.Session_id.make () in
+          Riot_model.Build_ctx.make ~session_id ~profile:Riot_model.Profile.debug ()
+        in
+        let package_key = Riot_planner.Package_graph.package_key
+          ~package_name:package.name
+          Riot_planner.Package_graph.Runtime in
+        let build_package = Riot_model.Package.for_scope Riot_model.Package.Build package in
+        let build_package_key = Riot_planner.Package_graph.package_key
+          ~package_name:package.name
+          Riot_planner.Package_graph.Build in
+        let std_package_key = Riot_planner.Package_graph.package_key
+          ~package_name:std_package.name
+          Riot_planner.Package_graph.Runtime in
+        let build_result = Riot_executor.Package_builder.build
+          ~workspace
+          ~toolchain:test_toolchain
+          ~store
+          ~package_graph
+          ~package_key:build_package_key
+          ~package:build_package
+          ~build_ctx in
+        let std_result = Riot_executor.Package_builder.build
+          ~workspace
+          ~toolchain:test_toolchain
+          ~store
+          ~package_graph
+          ~package_key:std_package_key
+          ~package:std_package
+          ~build_ctx in
+        let build_ok result =
+          match result.Riot_executor.Package_builder.status with
+          | Riot_executor.Package_builder.Built _
+          | Riot_executor.Package_builder.Cached _ -> Ok ()
+          | Riot_executor.Package_builder.Failed err -> Error (Riot_executor.Package_builder.package_error_to_string err)
+          | Riot_executor.Package_builder.Skipped { reason } -> Error reason
+        in
+        match build_ok build_result, build_ok std_result with
+        | Error message, _
+        | _, Error message -> Error ("setup build failed: " ^ message)
+        | Ok (), Ok () ->
+            let result = Riot_executor.Package_builder.build
+              ~workspace
+              ~toolchain:test_toolchain
+              ~store
+              ~package_graph
+              ~package_key
+              ~package
+              ~build_ctx in
+            (
+              match result.Riot_executor.Package_builder.status with
+              | Riot_executor.Package_builder.Failed err ->
+                  let message = Riot_executor.Package_builder.package_error_to_string err in
+                  if
+                    String.contains message "manifest declares: Macro.format!"
+                    && String.contains message "runner exports: Macro.other!"
+                  then
+                    Ok ()
+                  else
+                    Error ("unexpected export-drift message: " ^ message)
+              | Riot_executor.Package_builder.Built _
+              | Riot_executor.Package_builder.Cached _ ->
+                  Error "expected build to fail when provider runtime exports drift from the manifest"
+              | Riot_executor.Package_builder.Skipped { reason } ->
+                  Error ("expected build failure, got skipped: " ^ reason)
+            ))
+  with
+  | Ok r -> r
+  | Error _ -> Error "Tempdir creation failed"
+
 let tests =
   Test.[
     case "collect_source_files: filters by extension" test_collect_source_files;
@@ -268,6 +433,7 @@ let tests =
     case "package_error: variants" test_package_error_variants;
     case "build writes hash manifest with exports" test_build_writes_hash_manifest_with_exports;
     case "build expands format! in binary end-to-end" test_build_expands_format_macro_in_binary_end_to_end;
+    case "build rejects macro provider export drift" test_build_rejects_macro_provider_export_drift;
   ]
 
 let name = "Package Builder Tests"

@@ -8,6 +8,9 @@ type invocation = {
   body: Macro_token_stream.t;
 }
 
+(* The parser already gave us a dedicated [MACRO_EXPR]. Collection here is about
+   turning that parsed node back into an invocation record that preserves both
+   the qualified callee path and the original body tokens. *)
 let callee_path_of_node = fun node ->
   Syn.Ceibo.Red.SyntaxNode.tokens node |> List.filter_map
     (fun syntax_token ->

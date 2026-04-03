@@ -1,5 +1,12 @@
 open Std
 
+(** [macro_runner] generates a small throwaway Riot workspace that embeds the
+    reachable macro providers directly into one executable.
+
+    That executable serves two jobs:
+    - expand macro-bearing source files during execution
+    - prove that the provider implementation actually exports the module path
+      and macro names its manifest declared *)
 type generated_provider = {
   provider: Riot_model.Macro_provider.t;
   module_name: string;
@@ -15,6 +22,13 @@ type dependency = {
   name: string;
   path: Path.t;
   source: dependency_source;
+}
+
+(* Runtime export surface reported back by the generated runner. This is the
+   shape we compare against manifest metadata to catch declaration drift. *)
+type runtime_provider = {
+  module_path: string list;
+  macros: string list;
 }
 
 type plan = {
@@ -45,6 +59,31 @@ let trace_enabled = fun () ->
 let trace = fun message ->
   if trace_enabled () then
     eprintln ("[macro-runner] " ^ message)
+
+let sort_uniq_strings = fun values ->
+  List.sort_uniq String.compare values
+
+let provider_path_string = fun module_path ->
+  match module_path with
+  | [] -> "<root>"
+  | _ -> String.concat "." module_path
+
+let qualified_macro_name = fun module_path macro_name ->
+  let provider_path = provider_path_string module_path in
+  if String.equal provider_path "<root>" then
+    macro_name ^ "!"
+  else
+    provider_path ^ "." ^ macro_name ^ "!"
+
+let qualified_macro_names = fun module_path macros ->
+  macros
+  |> sort_uniq_strings
+  |> List.map (qualified_macro_name module_path)
+
+let with_list_suffix = fun label values ->
+  match values with
+  | [] -> ""
+  | _ -> "; " ^ label ^ ": " ^ String.concat ", " values
 
 let is_shell_safe_char = function
   | 'a' .. 'z'
@@ -142,6 +181,9 @@ let provider_fingerprint = fun (provider: Riot_model.Macro_provider.t) ->
 
 let validate_providers = Macro_provider_contract.validate_all
 
+let runtime_provider_of_manifest = fun (provider: Riot_model.Macro_provider.t) ->
+  { module_path = provider.module_path; macros = sort_uniq_strings provider.macros }
+
 let generated_provider = fun provider ->
   {
     provider;
@@ -210,6 +252,22 @@ let is_generated_artifact_entry = fun entry_name ->
   | "target" -> true
   | _ -> false
 
+let package_lookup_order = fun ~consumer_packages ~tool_packages (provider: Riot_model.Macro_provider.t) ->
+  [
+    find_package_by_path consumer_packages provider.package_path |> Option.map (fun pkg -> Consumer_workspace, pkg);
+    find_package_by_path tool_packages provider.package_path |> Option.map (fun pkg -> Tool_workspace, pkg);
+    find_package_by_name consumer_packages provider.package_name |> Option.map (fun pkg -> Consumer_workspace, pkg);
+    find_package_by_name tool_packages provider.package_name |> Option.map (fun pkg -> Tool_workspace, pkg);
+  ]
+
+let first_some = fun options ->
+  let rec loop = function
+    | [] -> None
+    | Some value :: _ -> Some value
+    | None :: rest -> loop rest
+  in
+  loop options
+
 let dependency_entries_for_workspace = fun workspace_root providers ->
   let consumer_packages = scan_workspace_packages workspace_root in
   let tool_workspace_root = tool_workspace_root workspace_root in
@@ -235,12 +293,36 @@ let dependency_entries_for_workspace = fun workspace_root providers ->
         |> Option.map (dependency_from_package ~source:Consumer_workspace))
     | External_path -> None
   in
+
   let package_for_dependency (dep: dependency) =
     match dep.source with
     | Consumer_workspace -> find_package_by_path consumer_packages dep.path
     | Tool_workspace -> find_package_by_path tool_packages dep.path
     | External_path -> None
   in
+
+  let dependency_source_for_lookup = function
+    | Consumer_workspace -> Consumer_workspace
+    | Tool_workspace -> Tool_workspace
+    | External_path -> External_path
+  in
+
+  let resolve_path_dependency ~source ~package_path dep_name path =
+    let abs_path = resolve_dependency_path ~package_path path in
+    let package_lookup =
+      match source with
+      | Consumer_workspace -> consumer_packages
+      | Tool_workspace -> tool_packages
+      | External_path -> []
+    in
+    find_package_by_path package_lookup abs_path
+    |> Option.map
+      (fun pkg ->
+        dependency_from_package ~source:(dependency_source_for_lookup source) pkg)
+    |> option_or_else_lazy
+      (fun () -> Some (dependency ~source:External_path dep_name abs_path))
+  in
+
   let resolve_dependency_entry ~source ~package_path (dep: Riot_model.Package.dependency) =
     match dep.source with
     | { workspace=true; _ } ->
@@ -248,47 +330,21 @@ let dependency_entries_for_workspace = fun workspace_root providers ->
     | { builtin=true; _ } ->
         None
     | { path=Some path; _ } ->
-        let abs_path = resolve_dependency_path ~package_path path in
-        find_package_by_path
-          (
-            match source with
-            | Consumer_workspace -> consumer_packages
-            | Tool_workspace -> tool_packages
-            | External_path -> []
-          )
-          abs_path |> Option.map
-          (fun pkg ->
-            dependency_from_package
-              ~source:((
-                match source with
-                | Consumer_workspace -> Consumer_workspace
-                | Tool_workspace -> Tool_workspace
-                | External_path -> External_path
-              ))
-              pkg) |> option_or_else_lazy
-          (fun () -> Some (dependency ~source:External_path dep.name abs_path))
+        resolve_path_dependency ~source ~package_path dep.name path
     | { path=None; _ } ->
         None
   in
+
+  let resolve_provider_package provider =
+    package_lookup_order ~consumer_packages ~tool_packages provider
+    |> first_some
+  in
+
   let provider_dependency_entries =
     providers
     |> List.concat_map
       (fun ({ provider; _ }: generated_provider) ->
-        let provider_package = find_package_by_path consumer_packages provider.package_path
-        |> Option.map (fun pkg -> Consumer_workspace, pkg)
-        |> option_or_else_lazy
-          (fun () ->
-            find_package_by_path tool_packages provider.package_path
-            |> Option.map (fun pkg -> Tool_workspace, pkg))
-        |> option_or_else_lazy
-          (fun () ->
-            find_package_by_name consumer_packages provider.package_name
-            |> Option.map (fun pkg -> Consumer_workspace, pkg))
-        |> option_or_else_lazy
-          (fun () ->
-            find_package_by_name tool_packages provider.package_name
-            |> Option.map (fun pkg -> Tool_workspace, pkg)) in
-        match provider_package with
+        match resolve_provider_package provider with
         | None -> []
         | Some (source, pkg) -> Riot_model.Package.all_dependencies pkg
         |> List.filter_map (resolve_dependency_entry ~source ~package_path:pkg.path))
@@ -440,6 +496,8 @@ let plan = fun ~workspace_root ~target_dir_root providers ->
 
 let workspace_root = fun plan -> plan.workspace_root
 
+(* Support modules live alongside the declared provider source and are embedded
+   directly into the generated runner so helper code travels with the provider. *)
 let embedded_provider_module_source = fun (provider: generated_provider) ->
   let source_path = provider_source_path provider.provider in
   let source = Fs.read source_path
@@ -506,6 +564,18 @@ let library_source = fun plan ->
       String.concat "\n" (List.map provider_line plan.providers);
       "  ]";
       "";
+      "let provider_metadata_json provider =";
+      "  Data.Json.Object [";
+      "    (\"module_path\", Data.Json.Array (List.map (fun segment -> Data.Json.String segment) (Macro.Provider.module_path provider)));";
+      "    (\"macros\", Data.Json.Array (List.map (fun macro_name -> Data.Json.String macro_name) (Macro.Provider.macro_names provider)));";
+      "  ]";
+      "";
+      "let describe_providers () =";
+      "  providers ()";
+      "  |> List.map provider_metadata_json";
+      "  |> fun providers -> Data.Json.Array providers";
+      "  |> Data.Json.to_string";
+      "";
       "let expand_file ~input_path ~output_path =";
       "  match Fs.read input_path with";
       "  | Error err -> Error (\"failed to read macro input: \" ^ IO.error_message err)";
@@ -519,11 +589,14 @@ let library_source = fun plan ->
       "";
       "let main ~args =";
       "  match args with";
+      "  | _program :: \"describe\" :: [] ->";
+      "      println (describe_providers ());";
+      "      Ok ()";
       "  | _program :: \"expand\" :: input_path :: output_path :: [] ->";
       "      (match expand_file ~input_path:(Path.v input_path) ~output_path:(Path.v output_path) with";
       "      | Ok () -> Ok ()";
       "      | Error err -> Error (Failure err))";
-      "  | _ -> Error (Failure \"usage: macro-runner expand <input> <output>\")";
+      "  | _ -> Error (Failure \"usage: macro-runner describe | macro-runner expand <input> <output>\")";
       "";
     ]
 
@@ -646,6 +719,143 @@ let ensure_built = fun plan ->
       | Error (Command.SystemError error) ->
           Error ("failed to build macro runner: " ^ error)
 
+let command_details = fun output ->
+  match String.trim output.Command.stderr with
+  | "" -> output.Command.stdout
+  | stderr -> stderr
+
+let run_runner_command = fun plan args ~failure_label ->
+  let command = Command.make
+    (Path.to_string plan.binary_path)
+    ~cwd:(Path.to_string plan.workspace_root)
+    ~args in
+  match Command.output command with
+  | Ok output when Int.equal output.Command.status 0 -> Ok output
+  | Ok output -> Error (failure_label ^ ": " ^ command_details output)
+  | Error (Command.SystemError error) -> Error (failure_label ^ ": " ^ error)
+
+let decode_json_string_list = fun label values ->
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc |> sort_uniq_strings)
+    | Data.Json.String value :: rest -> loop (value :: acc) rest
+    | _ -> Error ("invalid generated macro runner " ^ label ^ " payload")
+  in
+  loop [] values
+
+let runtime_provider_of_json = function
+  | Data.Json.Object fields -> (
+      match List.assoc_opt "module_path" fields, List.assoc_opt "macros" fields with
+      | Some (Data.Json.Array module_path), Some (Data.Json.Array macros) -> (
+          match decode_json_string_list "module_path" module_path, decode_json_string_list "macros" macros with
+          | Ok module_path, Ok macros -> Ok { module_path; macros }
+          | Error err, _
+          | _, Error err -> Error err
+        )
+      | _ -> Error "invalid generated macro runner provider payload"
+    )
+  | _ -> Error "generated macro runner provider payload must be an object"
+
+let runtime_providers_of_json = function
+  | Data.Json.Array providers ->
+      let rec loop acc = function
+        | [] -> Ok (List.rev acc)
+        | provider_json :: rest -> (
+            match runtime_provider_of_json provider_json with
+            | Ok provider -> loop (provider :: acc) rest
+            | Error _ as err -> err
+          )
+      in
+      loop [] providers
+  | _ -> Error "generated macro runner describe output must be a JSON array"
+
+(* The generated runner is the source of truth for runtime exports. We ask it to
+   describe the embedded providers and compare that back against manifest data
+   before running expansion. *)
+let read_runtime_provider_exports = fun plan ->
+  match run_runner_command plan [ "describe" ] ~failure_label:"macro runner describe failed" with
+  | Ok output -> (
+      match Data.Json.of_string output.Command.stdout with
+      | Ok json -> runtime_providers_of_json json
+      | Error err -> Error ("failed to parse generated macro runner describe output: " ^ Data.Json.error_to_string err)
+    )
+  | Error _ as err -> err
+
+let validate_runtime_provider_exports = fun expected actual ->
+  let expected =
+    expected
+    |> List.map runtime_provider_of_manifest
+    |> List.sort
+      (fun left right ->
+        String.compare
+          (provider_path_string left.module_path)
+          (provider_path_string right.module_path))
+  in
+  let actual =
+    actual
+    |> List.map (fun provider -> { provider with macros = sort_uniq_strings provider.macros })
+    |> List.sort
+      (fun left right ->
+        String.compare
+          (provider_path_string left.module_path)
+          (provider_path_string right.module_path))
+  in
+  let expected_paths = expected |> List.map (fun provider -> provider_path_string provider.module_path) |> sort_uniq_strings in
+  let actual_paths = actual |> List.map (fun provider -> provider_path_string provider.module_path) |> sort_uniq_strings in
+  if not (expected_paths = actual_paths) then
+    Error ("macro provider export mismatch"
+    ^ with_list_suffix "manifest declares providers" expected_paths
+    ^ with_list_suffix "runner reported providers" actual_paths)
+  else
+    let rec loop = function
+      | [] -> Ok ()
+      | provider :: rest ->
+          let provider_path = provider_path_string provider.module_path in
+          match List.find_opt
+            (fun actual_provider ->
+              actual_provider.module_path = provider.module_path)
+            actual with
+          | None ->
+              Error ("macro provider export mismatch: manifest declares provider " ^ provider_path ^ " but the runner did not export it")
+          | Some actual_provider ->
+              if provider.macros = actual_provider.macros then
+                loop rest
+              else
+                Error ("macro provider export mismatch for provider "
+                ^ provider_path
+                ^ with_list_suffix "manifest declares" (qualified_macro_names provider.module_path provider.macros)
+                ^ with_list_suffix "runner exports" (qualified_macro_names actual_provider.module_path actual_provider.macros))
+    in
+    loop expected
+
+let validate_built_provider_exports = fun providers plan ->
+  match read_runtime_provider_exports plan with
+  | Error _ as err -> err
+  | Ok actual_providers -> (
+      match validate_runtime_provider_exports providers actual_providers with
+      | Ok () -> Ok plan
+      | Error _ as err -> err
+    )
+
+let ensure_runner_ready = fun providers plan ->
+  match ensure_built plan with
+  | Error _ as err -> err
+  | Ok () -> validate_built_provider_exports providers plan
+
+(* Preparing a runner plan means proving both halves of the provider contract:
+   the provider source has a valid [let provider () = ...] entrypoint, and the
+   built runner reports the same exported surface the manifest declared. *)
+let prepare_plan = fun ~workspace_root ~target_dir_root providers ->
+  match validate_providers providers with
+  | Error err -> Error (Macro_error.message err)
+  | Ok () ->
+      materialize ~workspace_root ~target_dir_root providers
+      |> ensure_runner_ready providers
+
+let validate_provider_exports = fun ~workspace_root ~target_dir_root providers ->
+  match prepare_plan ~workspace_root ~target_dir_root providers with
+  | Ok _ -> Ok ()
+  | Error _ as err -> err
+
 let run_file = fun ~workspace_root ~target_dir_root providers ~input_path ~output_path ->
   trace
     ("expanding "
@@ -655,30 +865,16 @@ let run_file = fun ~workspace_root ~target_dir_root providers ~input_path ~outpu
       ", "
       (List.map (fun (provider: Riot_model.Macro_provider.t) -> provider.package_name) providers)
     ^ "]");
-  match validate_providers providers with
-  | Error err -> Error (Macro_error.message err)
-  | Ok () ->
-      let plan = materialize ~workspace_root ~target_dir_root providers in
-      (
-        match ensure_built plan with
+  match prepare_plan ~workspace_root ~target_dir_root providers with
   | Error _ as err -> err
-  | Ok () -> (
+  | Ok plan -> (
       trace ("running generated runner " ^ Path.to_string plan.binary_path);
-      let command = Command.make
-        (Path.to_string plan.binary_path)
-        ~cwd:(Path.to_string plan.workspace_root)
-        ~args:[ "expand"; Path.to_string input_path; Path.to_string output_path; ] in
-      match Command.output command with
-      | Ok output when Int.equal output.Command.status 0 ->
+      match run_runner_command
+        plan
+        [ "expand"; Path.to_string input_path; Path.to_string output_path; ]
+        ~failure_label:"macro expansion runner failed" with
+      | Ok _output ->
           trace ("macro expansion finished for " ^ Path.to_string input_path);
           Ok ()
-      | Ok output ->
-          let details =
-            match String.trim output.Command.stderr with
-            | "" -> output.Command.stdout
-            | stderr -> stderr
-          in
-          Error ("macro expansion runner failed: " ^ details)
-      | Error (Command.SystemError error) ->
-          Error ("failed to execute macro runner: " ^ error)
-    ))
+      | Error _ as err -> err
+    )

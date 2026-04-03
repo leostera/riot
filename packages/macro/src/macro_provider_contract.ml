@@ -1,5 +1,8 @@
 open Std
 
+(* This module intentionally does only the cheap parser-backed half of provider
+   validation. Runtime export drift is validated later through the generated
+   runner, once the provider has actually been built and executed. *)
 let provider_source_path = fun (provider: Riot_model.Macro_provider.t) ->
   if Path.is_absolute provider.source_path then
     provider.source_path

@@ -1,5 +1,8 @@
 open Std
 
+(* The format-literal parser is intentionally small and explicit. It is the
+   first place where [format!] keeps semantic structure instead of immediately
+   lowering everything to string concatenation. *)
 type hole =
   | Next_arg_to_string
   | Var_to_string of string

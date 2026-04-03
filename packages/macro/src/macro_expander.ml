@@ -1,5 +1,8 @@
 open Std
 
+(* Expansion happens in repeated passes so a rewritten macro body can reveal a
+   second macro invocation introduced by an earlier pass. The pass limit is
+   intentionally small to catch runaway recursive expansion quickly. *)
 type expansion = {
   source: string;
   changed: bool;

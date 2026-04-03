@@ -1,5 +1,9 @@
 open Std
 
+(* [format!] currently lowers into a [Std.IO.Buffer]-based builder expression.
+   The small format IR produced by [Macro_format_parser] leaves room for a later
+   typed pass to choose more specific formatting behavior without changing the
+   surface syntax. *)
 let render_literal_source = fun content -> "\"" ^ content ^ "\""
 
 let buffer_name = fun stream ->
