@@ -2,7 +2,7 @@
 
 - Feature Name: `snapshot_testing_for_riot`
 - Start Date: `2026-03-29`
-- Status: `presented`
+- Status: `implemented`
 - RFD PR: [leostera/riot#0000](https://github.com/leostera/riot/pull/0000)
 - Riot Issue: [leostera/riot#0000](https://github.com/leostera/riot/issues/0000)
 
@@ -30,8 +30,8 @@ derive snapshot paths and diagnostics.
 That prerequisite now exists in `Std.Test`. Snapshot testing is no longer a
 pure design exercise: the shared `ctx`, `Std.Test.Snapshot`,
 `Std.Test.FixtureRunner`, and `riot snapshots` command family are all real.
-The remaining work is primarily broader package migration, review ergonomics,
-and policy cleanup.
+The remaining work is primarily review ergonomics and additive assertion
+helpers, not core rollout.
 
 ## Motivation
 [motivation]: #motivation
@@ -586,17 +586,18 @@ Implemented:
 - `Std.Test.Snapshot.assert_json`
 - `Std.Test.Snapshot.assert_with`
 - `Std.Test.Snapshot.assert_inline_text`
+- `Std.Test.Snapshot.assert_inline_json`
 - `Std.Test.FixtureRunner.cases`
 - `riot snapshots review|approve|reject`
 - interactive `riot snapshots review` in TTY sessions
+- unified diff-style snapshot mismatch rendering
+- visible `.expected.new` review artifacts
 - native snapshot-backed suites in `syn`, `krasny`, `riot-fix`, and `riot-cli`
 
-Still open:
+Follow-ups:
 
-- richer snapshot diff rendering
-- repository policy for `.expected.new` files
-- possible inline JSON assertions
-- deleting or repurposing the remaining non-fixture legacy helper scripts
+- colored or syntax-aware diff rendering beyond the current text hunks
+- additional inline snapshot helpers if a new structured format proves common
 
 ### Slice 0: prerequisite `Std.Test` context
 

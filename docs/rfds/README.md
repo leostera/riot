@@ -18,7 +18,6 @@ These are the RFDs that are still only `presented` and therefore the most obviou
 - `RFD0018` - Syn Matchers, Traversal, and Visitor
 - `RFD0019` - Riot Fix Syntax-Directed Rewrites
 - `RFD0020` - Krasny Pretty Printer
-- `RFD0025` - Snapshot Testing for Riot
 - `RFD0026` - Riot Package Management
 - `RFD0028` - Local Artifact Publishing
 - `RFD0029` - Std Archive and Compression Support
@@ -51,6 +50,7 @@ There are currently no RFDs marked `rejected`.
 - `RFD0022` - Riot Package Registry
 - `RFD0023` - Riot Package Index
 - `RFD0024` - Riot Package Search
+- `RFD0025` - Snapshot Testing for Riot
 - `RFD0027` - Toolchain Manifest Contract
 
 ## Notes
