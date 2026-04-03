@@ -7,32 +7,9 @@ let fixtures_dir = Path.(tests_dir / Path.v "fixtures")
 
 let manifest_path = Path.(tests_dir / Path.v "format_expectations.txt")
 
-let native_fixture_prefixes = [ "010"; "020"; "050"; "071"; "080"; "081"; "082"; "097"; "098" ]
-
-let native_fixture_names = [
-  "0910_docstring_before_local_open_let.ml";
-  "0930_structure_attribute_before_let.ml";
-  "0933_comment_attribute_between_lets.ml";
-  "0935_unary_value_declaration.mli";
-  "0936_nested_signature_value.mli";
-  "0937_match_case_body_comment.ml";
-  "9101_real_krasny_doc.ml";
-  "9103_real_krasny_solver.ml";
-  "9104_real_krasny_source.ml";
-  "9105_real_krasny_entry.ml";
-  "9106_real_krasny_main.ml";
-  "9107_real_std_float.ml";
-  "9109_real_syn_keyword.ml";
-]
-
 let parse_file = fun path ->
   let source = Fs.read path |> Result.expect ~msg:"fixture file should exist" in
   Syn.parse ~filename:path source
-
-let should_track_fixture = fun relpath ->
-  let name = Path.basename relpath in
-  List.exists (fun prefix -> String.starts_with ~prefix name) native_fixture_prefixes
-  || List.exists (String.equal name) native_fixture_names
 
 let tracked_fixtures = fun () ->
   let manifest = Fs.read manifest_path |> Result.expect ~msg:"failed to read krasny fixture manifest" in
@@ -47,8 +24,7 @@ let tracked_fixtures = fun () ->
           let relpath = Path.of_string line |> Result.expect ~msg:"fixture manifest entry should be valid UTF-8" in
           let name = Path.basename relpath in
           let () =
-            if should_track_fixture relpath then
-              ignore (HashSet.insert tracked name)
+            ignore (HashSet.insert tracked name)
           in
           loop rest
   in
