@@ -1102,12 +1102,6 @@ module Float = Float
     **See also:** {!Path} for path manipulation, {!Fs.File} for streaming *)
 module Fs = Fs
 
-(** **When to use:** Parsing and compiling glob patterns
-
-    Use Glob when you want shell-style wildcard matching that is first parsed
-    into a syntax tree and then lowered through {!Regex}. *)
-module Glob = Glob
-
 (** **When to use:** Graph data structures and visualization
     
     Use Graph for dependency graphs, build systems, workflow diagrams.
@@ -1236,12 +1230,6 @@ module Ptr = Ptr
     - Load balancing
     - Sampling *)
 module Random = Random
-
-(** **When to use:** Building or compiling regular expressions
-
-    Use Regex when you want a tree-shaped regex DSL above {!Kernel.Regex}, or
-    when you already have a raw regex string and want to compile it directly. *)
-module Regex = Regex
 
 (** **When to use:** Unique, opaque, type-witnessing references
     
