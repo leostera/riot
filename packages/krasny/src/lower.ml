@@ -3968,26 +3968,33 @@ let make_lowerer =
             (render_case ~force_multiline_body:force_multiline_cases ~force_leading_bar:true)
             cases;
         ]
-  and flatten_fun_expression ({ parameters; body; _ }: Syn.Cst.fun_expression) =
+  and flatten_fun_expression ({ parameters; return_type; body; _ }: Syn.Cst.fun_expression) =
     let rec loop = fun acc ->
       function
+      | Syn.Cst.Expression (Syn.Cst.Expression.Fun ({ return_type=Some _; _ } as body)) ->
+          (List.rev acc, Syn.Cst.Expression (Syn.Cst.Expression.Fun body))
       | Syn.Cst.Cases _ as body -> (List.rev acc, body)
-      | Syn.Cst.Expression (Syn.Cst.Expression.Fun { parameters; body; _ }) -> loop
+      | Syn.Cst.Expression (Syn.Cst.Expression.Fun { parameters; body; return_type=None; _ }) -> loop
         (List.rev_append parameters acc)
         body
       | Syn.Cst.Expression expression -> (List.rev acc, Syn.Cst.Expression expression)
     in
-    loop (List.rev parameters) body
+    match return_type with
+    | Some _ -> (parameters, body)
+    | None -> loop (List.rev parameters) body
   and render_fun_expression ({
       keyword_token;
+      colon_token;
       arrow_token;
       parameters=_;
+      return_type;
       body=_;
       _
     } as fun_: Syn.Cst.fun_expression) =
     let parameters = fun_.parameters in
     let body = fun_.body in
     let parameters = parameters |> List.map render_parameter in
+    let return_type_doc = return_type |> Option.map render_core_type in
     let has_multiline_parameter = List.exists Doc.is_multiline parameters in
     let body = render_fun_body body in
     let body_syntax_node =
@@ -4007,29 +4014,63 @@ let make_lowerer =
           | Syn.Cst.Cases _ -> true
         )
     in
+    let head =
+      let parameters =
+        if parameters = [] then
+          Doc.empty
+        else
+          Doc.concat [ Doc.space; Doc.join Doc.space parameters ]
+      in
+      let head = Doc.concat [ doc_of_token keyword_token; parameters ] in
+      match return_type_doc with
+      | Some return_type_doc -> Doc.concat
+        [
+          head;
+          Doc.space;
+          (
+            match colon_token with
+            | Some colon_token -> doc_of_token colon_token
+            | None -> Doc.colon
+          );
+          Doc.space;
+          return_type_doc;
+        ]
+      | None -> head
+    in
     if has_multiline_parameter then
       Doc.concat
         [
           doc_of_token keyword_token;
           Doc.line;
-          Doc.indent
-            2
-            (Doc.concat [ Doc.join Doc.space parameters; Doc.space; doc_of_token arrow_token ]);
+          Doc.indent 2 (
+            let parameter_doc = Doc.join Doc.space parameters in
+            match return_type_doc with
+            | Some return_type_doc -> Doc.concat
+              [
+                parameter_doc;
+                Doc.space;
+                (
+                  match colon_token with
+                  | Some colon_token -> doc_of_token colon_token
+                  | None -> Doc.colon
+                );
+                Doc.space;
+                return_type_doc;
+                Doc.space;
+                doc_of_token arrow_token;
+              ]
+            | None -> Doc.concat [ parameter_doc; Doc.space; doc_of_token arrow_token ]
+          );
           Doc.line;
           Doc.indent 2 body;
         ]
     else if body_prefers_multiline || List.length parameters = 0 then
       Doc.concat
-        [ doc_of_token keyword_token; (
-            if List.length parameters = 0 then
-              Doc.empty
-            else
-              Doc.concat [ Doc.space; Doc.join Doc.space parameters ]
-          ); Doc.space; doc_of_token arrow_token; Doc.line; Doc.indent 2 body; ]
+        [ head; Doc.space; doc_of_token arrow_token; Doc.line; Doc.indent 2 body; ]
     else
       render_fun_arrow_body
-        ~keyword:(doc_of_token keyword_token)
-        ~parameters:(Doc.join Doc.space parameters)
+        ~keyword:head
+        ~parameters:Doc.empty
         ~arrow_token
         ~body
   and render_function_expression ({ keyword_token; cases; _ }: Syn.Cst.function_expression) =

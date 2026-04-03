@@ -853,7 +853,7 @@ and parse_class_type_params = fun parser ->
   | _ -> ([], [])
 
 (** Parse type expression dispatcher *)
-and parse_typexpr = fun parser ->
+and parse_typexpr = fun ?(stop_before_arrow = false) parser ->
   let base =
     (* Check for polymorphic type: 'a 'b. type *)
     match peek_kind parser with
@@ -890,9 +890,9 @@ and parse_typexpr = fun parser ->
         Token_cursor.set_position parser.cursor saved_pos;
         (* Now actually parse it if it's polymorphic *)
         if !might_be_poly && !type_var_count > 0 then
-          parse_poly_type parser
+          parse_poly_type ~stop_before_arrow parser
         else
-          parse_alias_type parser
+          parse_alias_type ~stop_before_arrow parser
     | Token.Keyword Keyword.Type ->
         (* Could be locally abstract type: type a b. type_expr *)
         let saved_pos = Token_cursor.position parser.cursor in
@@ -919,17 +919,17 @@ and parse_typexpr = fun parser ->
         Token_cursor.set_position parser.cursor saved_pos;
         (* Parse it if it matches the pattern *)
         if !might_be_locally_abstract && !type_var_count > 0 then
-          parse_locally_abstract_type parser
+          parse_locally_abstract_type ~stop_before_arrow parser
         else
-          parse_alias_type parser
+          parse_alias_type ~stop_before_arrow parser
     | _ ->
-        parse_alias_type parser
+        parse_alias_type ~stop_before_arrow parser
   in
   attach_postfix_attributes parser base
 
 (** Parse type alias: t as 'a *)
-and parse_alias_type = fun parser ->
-  let left = parse_arrow_type parser in
+and parse_alias_type = fun ?(stop_before_arrow = false) parser ->
+  let left = parse_arrow_type ~stop_before_arrow parser in
   let saved_pos = Token_cursor.position parser.cursor in
   let trivia_after_left = consume_trivia parser in
   match peek_kind parser with
@@ -960,7 +960,7 @@ and parse_alias_type = fun parser ->
       left
 
 (** Parse polymorphic type: 'a 'b. type *)
-and parse_poly_type = fun parser ->
+and parse_poly_type = fun ?(stop_before_arrow = false) parser ->
   let type_vars = ref [] in
   let type_vars_trivia = ref [] in
   (* Parse all type variables before the dot *)
@@ -1019,7 +1019,7 @@ and parse_poly_type = fun parser ->
       )
   in
   (* Parse the actual type *)
-  let inner_type = parse_arrow_type parser in
+  let inner_type = parse_arrow_type ~stop_before_arrow parser in
   (* Build the POLY_TYPE node *)
   let type_var_nodes =
     List.rev !type_vars
@@ -1043,7 +1043,7 @@ and parse_poly_type = fun parser ->
 
 (** Parse locally abstract type: type a b. type_expr 
     Used in let bindings like: let f : type a. a -> a = ... *)
-and parse_locally_abstract_type = fun parser ->
+and parse_locally_abstract_type = fun ?(stop_before_arrow = false) parser ->
   (* Consume 'type' keyword *)
   let type_kw = consume parser in
   let trivia_after_type = consume_trivia parser in
@@ -1078,7 +1078,7 @@ and parse_locally_abstract_type = fun parser ->
       ([], [])
   in
   (* Parse the actual type *)
-  let inner_type = parse_arrow_type parser in
+  let inner_type = parse_arrow_type ~stop_before_arrow parser in
   (* Build type variable nodes *)
   let var_nodes =
     List.rev !type_vars
@@ -1171,13 +1171,13 @@ and parse_labeled_arrow_domain = fun parser ~parse_domain ->
 
 (** Parse arrow type: t1 -> t2 -> t3 (right associative) 
     Also handles labeled params: label:t1 -> t2 and optional: ?label:t1 -> t2 *)
-and parse_arrow_type = fun parser ->
+and parse_arrow_type = fun ?(stop_before_arrow = false) parser ->
   let label_nodes, type_to_parse = parse_labeled_arrow_domain parser ~parse_domain:parse_tuple_type in
   let left = type_to_parse in
   (* Speculatively consume trivia to check for -> *)
   let saved_pos = Token_cursor.position parser.cursor in
   let trivia_after_left = consume_trivia parser in
-  if peek_kind parser = Token.Arrow then
+  if peek_kind parser = Token.Arrow && not stop_before_arrow then
     let arrow = consume parser in
     let trivia_after_arrow = consume_trivia parser in
     let right = parse_arrow_type parser in
@@ -4017,8 +4017,8 @@ and parse_argument = fun parser ->
       (* Regular expression argument - use postfix to avoid infinite recursion *)
       parse_postfix_expr parser
 
-(** Parse function expression: fun p1 p2 ... pn -> expr 
-    Grammar: fun { parameter }+ "->" expr *)
+(** Parse function expression: fun p1 p2 ... pn [: type] -> expr 
+    Grammar: fun { parameter }+ [":" typexpr] "->" expr *)
 and parse_fun_expr = fun parser ->
   match peek_kind parser with
   | Token.Keyword Keyword.Fun ->
@@ -4043,6 +4043,9 @@ and parse_fun_expr = fun parser ->
           | Token.Arrow ->
               (* Done collecting params *)
               List.rev (tokens_to_green parser trivia @ acc)
+          | Token.Colon ->
+              (* Return-type annotation starts here. *)
+              List.rev (tokens_to_green parser trivia @ acc)
           | Token.EOF ->
               (* Reached EOF without finding -> *)
               List.rev (tokens_to_green parser trivia @ acc)
@@ -4060,6 +4063,19 @@ and parse_fun_expr = fun parser ->
                   (depth + 1)
       in
       let params = collect_params [] 0 in
+      let type_annotation_nodes =
+        if peek_kind parser = Token.Colon then
+          let colon = consume parser in
+          let trivia_after_colon = consume_trivia parser in
+          let type_expr = parse_typexpr ~stop_before_arrow:true parser in
+          let trivia_after_type = consume_trivia parser in
+          [ make_token parser colon ]
+          @ tokens_to_green parser trivia_after_colon
+          @ [ Ceibo.Green.Node type_expr ]
+          @ tokens_to_green parser trivia_after_type
+        else
+          []
+      in
       (* Expect -> *)
       let arrow =
         expect
@@ -4082,6 +4098,7 @@ and parse_fun_expr = fun parser ->
         @ tokens_to_green parser trivia_after_ext
         @ attr_nodes
         @ params
+        @ type_annotation_nodes
         @ [ make_token parser arrow ]
         @ tokens_to_green parser trivia_after_arrow
         @ [ Ceibo.Green.Node body ])

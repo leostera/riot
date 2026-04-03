@@ -4041,6 +4041,31 @@ and second x = x
           Test.assert_equal ~expected:(Some "value") ~actual:(Syn.Cst.Ident.name path);
           Ok ()
       | _ -> Error "expected first item to be a let binding with a fun expression");
+  Test.case "cst fun expressions preserve return type annotations"
+    (fun _ctx ->
+      let source = "let render = fun ~syntax_node syntax_tokens : Cst.extension -> syntax_node\n" in
+      let result = parse_ml source in
+      let cst = expect_some result.cst ~msg:"expected CST for diagnostics-free parse"
+      |> Result.expect ~msg:"expected CST for diagnostics-free parse" in
+      match structure_items cst with
+      | Syn.Cst.StructureItem.LetBinding {
+        value=Syn.Cst.Expression.Fun {
+          parameters=[ labeled; positional ];
+          colon_token=Some _;
+          return_type=Some (Syn.Cst.CoreType.Constr { constructor_path; _ });
+          body=Syn.Cst.Expression (Syn.Cst.Expression.Path { path; _ });
+          _;
+
+        };
+        _;
+
+      } :: _ ->
+          Test.assert_equal ~expected:(Some "syntax_node") ~actual:(Syn.Cst.Parameter.name labeled);
+          Test.assert_equal ~expected:(Some "syntax_tokens") ~actual:(Syn.Cst.Parameter.name positional);
+          Test.assert_equal ~expected:(Some "extension") ~actual:(Syn.Cst.Ident.name constructor_path);
+          Test.assert_equal ~expected:(Some "syntax_node") ~actual:(Syn.Cst.Ident.name path);
+          Ok ()
+      | _ -> Error "expected first item to be a let binding with a typed fun expression");
   Test.case "cst let bindings expose function expressions structurally"
     (fun _ctx ->
       let source = "let render = function | 0 -> \"zero\" | _ -> \"other\"\n" in

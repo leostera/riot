@@ -1296,19 +1296,32 @@ and expression_to_json = fun expression ->
   | Cst.Expression.Fun {
     syntax_node;
     keyword_token;
+    colon_token;
     arrow_token;
     parameters;
+    return_type;
     body;
     _
-  } -> Json.Object ([
-    ("tag", Json.String "fun");
-    ("syntax_node", syntax_node_to_json syntax_node);
-    ("keyword_token", token_to_json keyword_token);
-    ("arrow_token", token_to_json arrow_token);
-    ("parameters", Json.Array (List.map parameter_to_json parameters));
-    ("body", fun_body_to_json body)
-  ]
-  @ expression_attribute_fields expression)
+  } ->
+      let fields = [
+        ("tag", Json.String "fun");
+        ("syntax_node", syntax_node_to_json syntax_node);
+        ("keyword_token", token_to_json keyword_token);
+        ("arrow_token", token_to_json arrow_token);
+        ("parameters", Json.Array (List.map parameter_to_json parameters));
+        ("body", fun_body_to_json body)
+      ] in
+      let fields =
+        match colon_token with
+        | Some colon_token -> fields @ [ ("colon_token", token_to_json colon_token) ]
+        | None -> fields
+      in
+      let fields =
+        match return_type with
+        | Some return_type -> fields @ [ ("return_type", core_type_to_json return_type) ]
+        | None -> fields
+      in
+      Json.Object (fields @ expression_attribute_fields expression)
   | Cst.Expression.Function { syntax_node; keyword_token; cases; _ } -> Json.Object ([
     ("tag", Json.String "function");
     ("syntax_node", syntax_node_to_json syntax_node);

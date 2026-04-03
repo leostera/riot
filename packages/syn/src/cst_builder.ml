@@ -341,7 +341,7 @@ let record_field_items_from_leading_trivia = fun leading_trivia ->
             saw_newline || String.contains (Ceibo.Red.SyntaxToken.text syntax_token) "\n" in
           loop saw_newline acc rest
         else
-          let item : record_field_item option =
+          let item: record_field_item option =
             if saw_newline then
               standalone_trivia_item_from_token
                 ~comment_item_of_comment:(fun comment -> (Comment comment: record_field_item))
@@ -735,12 +735,12 @@ let record_field_item_owned_trivia_spans = function
   | TrailingComment _
   | TrailingDocstring _ -> []
 
-let record_field_item_of_comment : Cst.Comment.t -> record_field_item = fun comment -> Comment comment
+let record_field_item_of_comment: Cst.Comment.t -> record_field_item = fun comment -> Comment comment
 
-let trailing_record_field_item_of_comment : Cst.Comment.t -> record_field_item = fun comment ->
+let trailing_record_field_item_of_comment: Cst.Comment.t -> record_field_item = fun comment ->
   TrailingComment comment
 
-let trailing_record_field_item_of_docstring : Cst.Docstring.t -> record_field_item = fun docstring ->
+let trailing_record_field_item_of_docstring: Cst.Docstring.t -> record_field_item = fun docstring ->
   TrailingDocstring docstring
 
 let syntax_node_of_object_member_item = function
@@ -760,12 +760,12 @@ let object_member_item_owned_trivia_spans = function
   | Comment _
   | Docstring _ -> []
 
-let object_member_item_of_comment : Cst.Comment.t -> object_member_item = fun comment -> Comment comment
+let object_member_item_of_comment: Cst.Comment.t -> object_member_item = fun comment -> Comment comment
 
-let record_field_item_of_docstring : Cst.Docstring.t -> record_field_item = fun docstring ->
+let record_field_item_of_docstring: Cst.Docstring.t -> record_field_item = fun docstring ->
   Docstring docstring
 
-let object_member_item_of_docstring : Cst.Docstring.t -> object_member_item = fun docstring ->
+let object_member_item_of_docstring: Cst.Docstring.t -> object_member_item = fun docstring ->
   Docstring docstring
 
 let syntax_node_of_class_field_item = function
@@ -787,10 +787,9 @@ let class_field_item_owned_trivia_spans = function
   | Comment _
   | Docstring _ -> []
 
-let class_field_item_of_comment : Cst.Comment.t -> class_field_item = fun comment -> Comment comment
+let class_field_item_of_comment: Cst.Comment.t -> class_field_item = fun comment -> Comment comment
 
-let class_field_item_of_docstring : Cst.Docstring.t -> class_field_item = fun docstring ->
-  Docstring docstring
+let class_field_item_of_docstring: Cst.Docstring.t -> class_field_item = fun docstring -> Docstring docstring
 
 let syntax_node_of_class_type_field_item = function
   | ClassTypeField field -> Cst.ClassTypeField.syntax_node field
@@ -810,10 +809,10 @@ let class_type_field_item_owned_trivia_spans = function
   | Comment _
   | Docstring _ -> []
 
-let class_type_field_item_of_comment : Cst.Comment.t -> class_type_field_item = fun comment ->
+let class_type_field_item_of_comment: Cst.Comment.t -> class_type_field_item = fun comment ->
   Comment comment
 
-let class_type_field_item_of_docstring : Cst.Docstring.t -> class_type_field_item = fun docstring ->
+let class_type_field_item_of_docstring: Cst.Docstring.t -> class_type_field_item = fun docstring ->
   Docstring docstring
 
 let rec variant_constructor_owned_trivia_spans = fun constructor ->
@@ -2140,17 +2139,17 @@ let payload_text_from_tokens = fun all_tokens ~start_offset ~end_offset ->
       span.start >= start_offset && span.end_ <= end_offset) |> List.map Ceibo.Red.SyntaxToken.text |> String.concat
     ""
 
-let attribute_payload_from_shell_impl : (Cst.syntax_node -> Cst.payload option) Cell.t =
+let attribute_payload_from_shell_impl: (Cst.syntax_node -> Cst.payload option) Cell.t =
   Cell.create (fun _ -> None)
 
 let attribute_payload_from_shell = fun shell_node -> (Cell.get attribute_payload_from_shell_impl) shell_node
 
-let extension_payload_from_shell_impl : (Cst.syntax_node -> Cst.payload option) Cell.t =
+let extension_payload_from_shell_impl: (Cst.syntax_node -> Cst.payload option) Cell.t =
   Cell.create (fun _ -> None)
 
 let extension_payload_from_shell = fun shell_node -> (Cell.get extension_payload_from_shell_impl) shell_node
 
-let attribute_from_node node : Cst.attribute =
+let attribute_from_node node: Cst.attribute =
   let shell_node, _payload_syntax_node = annotation_shell_and_payload
     ~annotation_kind:Syntax_kind.ATTRIBUTE_EXPR
     ~sigils:[ at_text; double_at_text; triple_at_text ]
@@ -2175,7 +2174,7 @@ let attribute_from_node node : Cst.attribute =
     ~syntax_node:node
     ~context:[ "attribute" ]
 
-let extension_from_node node : Cst.extension =
+let extension_from_node node: Cst.extension =
   let shell_node, _payload_syntax_node = annotation_shell_and_payload
     ~annotation_kind:Syntax_kind.EXTENSION_EXPR
     ~sigils:[ percent_text; double_percent_text; triple_percent_text ]
@@ -2882,7 +2881,7 @@ let bare_type_binders_from_node = fun ~context node ->
   else
     binders
 
-let locally_abstract_type_parameter_from_node node : Cst.locally_abstract_type_parameter =
+let locally_abstract_type_parameter_from_node node: Cst.locally_abstract_type_parameter =
   let binders = bare_type_binders_from_node ~context:[ "parameter.locally_abstract" ] node in
   let direct_tokens = direct_non_trivia_tokens node in
   let opening_token, closing_token =
@@ -2913,7 +2912,7 @@ let locally_abstract_type_parameter_from_node node : Cst.locally_abstract_type_p
     closing_token;
   }
 
-let constructor_pattern_existentials_from_node node : Cst.constructor_pattern_existentials =
+let constructor_pattern_existentials_from_node node: Cst.constructor_pattern_existentials =
   let binders = bare_type_binders_from_node ~context:[ "pattern.constructor.existentials" ] node in
   let direct_tokens = direct_non_trivia_tokens node in
   let opening_token, closing_token =
@@ -3274,7 +3273,7 @@ and module_type_from_node = fun node ->
 and module_type_from_first_class_module_type_node = fun node ->
   match direct_non_trivia_nodes node with
   | base_node :: constraint_nodes ->
-      let { module_type_path; constraints=base_constraints; attribute; _ } : Cst.package_type = package_type_from_module_type_node
+      let { module_type_path; constraints=base_constraints; attribute; _ }: Cst.package_type = package_type_from_module_type_node
         base_node in
       let constraints = constraint_nodes
       |> List.filter (fun child -> Ceibo.Red.SyntaxNode.kind child = Syntax_kind.TYPE_CONSTRAINT)
@@ -3297,7 +3296,7 @@ and package_type_from_module_type_node = fun node ->
   | Cst.ModuleType.With { syntax_node; base=Cst.ModuleType.Path module_type_path; constraints } ->
       { Cst.syntax_node = syntax_node; module_type_path; constraints; attribute = None }
   | Cst.ModuleType.Attribute { syntax_node; module_type; attribute } ->
-      let { module_type_path; constraints; _ } : Cst.package_type = package_type_from_module_type_node
+      let { module_type_path; constraints; _ }: Cst.package_type = package_type_from_module_type_node
         (Cst.ModuleType.syntax_node module_type) in
       { Cst.syntax_node = syntax_node; module_type_path; constraints; attribute = Some attribute }
   | Cst.ModuleType.With {
@@ -4900,6 +4899,9 @@ and binding_parameter_nodes = fun prefix_nodes ->
 
 and binding_parameters_from_prefix = fun prefix_nodes -> binding_parameter_nodes prefix_nodes |> parameters_from_nodes
 
+and fun_return_type_from_prefix = fun prefix_nodes ->
+  binding_type_annotation_node prefix_nodes |> Option.map core_type_from_node
+
 and binding_value_from_prefix = fun ~binding_syntax_node ~prefix_nodes ~value_node ->
   let value = expression_from_node value_node in
   match binding_type_annotation_node prefix_nodes with
@@ -6496,11 +6498,19 @@ and fun_expression_from_node = fun node ->
       let prefix_nodes = List.rev rev_prefix_nodes in
       let arrow_token = direct_required_token_with_text ~context:[ "fun_expression" ] node "->" in
       let body = fun_body_from_node body_node in
+      let return_type = fun_return_type_from_prefix prefix_nodes in
       Some {
         syntax_node = node;
         keyword_token = direct_required_token_with_text ~context:[ "fun_expression" ] node "fun";
+        colon_token =
+          (
+            match return_type with
+            | Some _ -> direct_token_with_text node ":"
+            | None -> None
+          );
         arrow_token;
         parameters = parameters_from_nodes prefix_nodes;
+        return_type;
         body;
         attributes = [];
       }
@@ -6553,7 +6563,7 @@ and let_operator_expression_from_node = fun node ->
           | [], [] ->
               List.rev acc
           | (keyword_token, operator_token, equals_token) :: rest_pairs, binding_pattern_node :: bound_value_node :: rest_nodes ->
-              let binding : Cst.binding_operator_binding = {
+              let binding: Cst.binding_operator_binding = {
                 keyword_token = keyword_token;
                 operator_token = operator_token;
                 equals_token = equals_token;
@@ -6739,7 +6749,7 @@ and class_method_from_node = fun node ->
               (direct_non_trivia_tokens node)
           in
           let colon_token = direct_token_with_text node ":" in
-          let definition : Cst.method_definition =
+          let definition: Cst.method_definition =
             if is_virtual then
               match type_ with
               | Some type_ -> (
@@ -6785,7 +6795,7 @@ and class_method_from_node = fun node ->
                 ~syntax_node:node
                 ~context:[ "class_field"; "method"; "concrete" ]
           in
-          let field : Cst.class_method = {
+          let field: Cst.class_method = {
             Cst.syntax_node = node;
             name_token;
             concrete_equals_token = direct_token_with_text node "=";
@@ -6835,7 +6845,7 @@ and class_value_from_node = fun node ->
               (direct_non_trivia_tokens node)
           in
           let colon_token = direct_token_with_text node ":" in
-          let definition : Cst.value_definition =
+          let definition: Cst.value_definition =
             if is_virtual then
               match type_ with
               | Some type_ -> (
@@ -6881,7 +6891,7 @@ and class_value_from_node = fun node ->
                 ~syntax_node:node
                 ~context:[ "class_field"; "value"; "concrete" ]
           in
-          let field : Cst.class_value = {
+          let field: Cst.class_value = {
             Cst.syntax_node = node;
             name_token;
             concrete_equals_token = direct_token_with_text node "=";
@@ -8576,19 +8586,15 @@ let class_declaration_from_node = fun node ->
       | Some class_name, class_body_node :: rev_prefix ->
           let class_declaration_extension, class_declaration_attributes =
             let declaration_extension, declaration_attributes = declaration_modifiers_from_nodes prefix in
-              let boundary_start =
-                match prefix with
-                | first_prefix_node :: _ -> (Ceibo.Red.SyntaxNode.span first_prefix_node).start
-                | [] -> (Cst.Token.span class_name).start
+            let boundary_start =
+              match prefix with
+              | first_prefix_node :: _ -> (Ceibo.Red.SyntaxNode.span first_prefix_node).start
+              | [] -> (Cst.Token.span class_name).start
             in
             let declaration_extension =
               match declaration_extension with
               | Some _ -> declaration_extension
-              | None ->
-                  declaration_extension_from_gap_tokens
-                    ~node
-                    ~keywords:[ "class" ]
-                    ~boundary_start
+              | None -> declaration_extension_from_gap_tokens ~node ~keywords:[ "class" ] ~boundary_start
             in
             (declaration_extension, declaration_attributes)
           in
@@ -8703,11 +8709,10 @@ let class_type_declaration_from_node = fun node ->
               let declaration_extension =
                 match declaration_extension with
                 | Some _ -> declaration_extension
-                | None ->
-                    declaration_extension_from_gap_tokens
-                      ~node
-                      ~keywords:[ "class"; "type" ]
-                      ~boundary_start
+                | None -> declaration_extension_from_gap_tokens
+                  ~node
+                  ~keywords:[ "class"; "type" ]
+                  ~boundary_start
               in
               (declaration_extension, declaration_attributes)
             in
@@ -9461,7 +9466,7 @@ let record_field_items_of_fields = fun fields ->
       Cell.set cell (index + 1);
       index
   in
-  let item_entries : (int * Ceibo.Span.t * record_field_item) list =
+  let item_entries: (int * Ceibo.Span.t * record_field_item) list =
     fields
     |> List.map
       (fun field ->
@@ -9485,7 +9490,7 @@ let record_field_items_of_fields = fun fields ->
       )
     | [] -> []
   in
-  let trivia_entries : (int * Ceibo.Span.t * record_field_item) list =
+  let trivia_entries: (int * Ceibo.Span.t * record_field_item) list =
     (
       (
         item_entries |> List.concat_map
@@ -9555,7 +9560,8 @@ let object_member_items_of_members = fun ?source_node members ->
         | Some source_node -> (
             match List.rev (direct_non_trivia_tokens source_node) with
             | closing_token :: _ when String.equal (Ceibo.Red.SyntaxToken.text closing_token) "end" -> Ceibo.Red.SyntaxToken.leading_trivia
-              closing_token |> List.map syntax_token_from_trivia
+              closing_token
+            |> List.map syntax_token_from_trivia
             | [] -> []
             | _ -> []
           )
@@ -9589,7 +9595,7 @@ let object_member_items_of_members = fun ?source_node members ->
           syntax_token
         |> Option.map
           (fun item ->
-            let item : object_member_item = item in
+            let item: object_member_item = item in
             let syntax_node = syntax_node_of_object_member_item item in
             (next_index (), Ceibo.Red.SyntaxNode.span syntax_node, item)))
   in
@@ -9675,7 +9681,7 @@ let class_field_items_of_fields = fun ?source_node fields ->
           syntax_token
         |> Option.map
           (fun item ->
-            let item : class_field_item = item in
+            let item: class_field_item = item in
             let syntax_node = syntax_node_of_class_field_item item in
             (next_index (), Ceibo.Red.SyntaxNode.span syntax_node, item)))
   in
@@ -9761,7 +9767,7 @@ let class_type_field_items_of_fields = fun ?source_node fields ->
           syntax_token
         |> Option.map
           (fun item ->
-            let item : class_type_field_item = item in
+            let item: class_type_field_item = item in
             let syntax_node = syntax_node_of_class_type_field_item item in
             (next_index (), Ceibo.Red.SyntaxNode.span syntax_node, item)))
   in
@@ -10309,13 +10315,16 @@ and validate_expression = fun ~context ->
   | Cst.Expression.LocalOpen (Cst.LetOpen { body; _ })
   | Cst.Expression.LocalOpen (Cst.Delimited { body; _ }) ->
       validate_expression ~context:(("expression.local_open.body" :: context)) body
-  | Cst.Expression.Fun { parameters; body; _ } ->
+  | Cst.Expression.Fun { parameters; return_type; body; _ } ->
       List.iteri
         (fun index parameter ->
           validate_parameter
             ~context:((("expression.fun.parameter[" ^ Int.to_string index ^ "]") :: context))
             parameter)
         parameters;
+      Option.iter
+        (fun return_type -> validate_core_type ~context:(("expression.fun.return_type" :: context)) return_type)
+        return_type;
       validate_fun_body ~context:(("expression.fun.body" :: context)) body
   | Cst.Expression.Function { cases; _ } ->
       List.iteri

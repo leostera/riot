@@ -1433,8 +1433,10 @@ and fun_body =
 and fun_expression = {
   syntax_node: syntax_node;
   keyword_token: Token.t;
+  colon_token: Token.t option;
   arrow_token: Token.t;
   parameters: parameter list;
+  return_type: core_type option;
   body: fun_body;
   attributes: attribute list;
 }
