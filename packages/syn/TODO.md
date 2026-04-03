@@ -51,8 +51,8 @@ That is real progress, but it is still far too slow.
 
 5. Validate correctness after each coherent slice:
    - `timeout 240 riot build syn`
-   - `timeout 900 python3 packages/syn/tests/test_runner.py fixtures`
-   - `timeout 900 python3 packages/syn/tests/test_runner.py cst`
+   - `timeout 180 riot test syn:fixture_tests`
+   - `timeout 600 riot test syn:cst_fixture_tests`
 
 ### Current Findings
 
@@ -113,9 +113,9 @@ These changes build cleanly and produced the current `43.346s` timing.
 
 2. Re-measure `0988`
 
-3. Run `packages/syn/tests/test_runner.py fixtures`
+3. Run `riot test syn:fixture_tests`
 
-4. Run `packages/syn/tests/test_runner.py cst`
+4. Run `riot test syn:cst_fixture_tests`
 
 5. If still too slow, inspect:
    - `ident_path_from_node`

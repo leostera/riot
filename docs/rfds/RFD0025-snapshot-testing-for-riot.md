@@ -39,11 +39,11 @@ and policy cleanup.
 Riot already uses expectation-style testing in several places, but the
 behavior is package-specific instead of part of the shared test system.
 
-Today:
+Before this work:
 
-- `syn` maintains custom fixture runners and adjacent expected outputs
-- `krasny` uses a Python fixture harness over `.expected` files
-- `riot-fix` aggregates JSON output into stored fixture expectations
+- `syn` maintained custom fixture runners and adjacent expected outputs
+- `krasny` used a Python fixture harness over `.expected` files
+- `riot-fix` aggregated JSON output into stored fixture expectations
 - many ordinary tests still rely on hand-written assertions even when they are
   checking large rendered values, trees, or diagnostics
 
@@ -589,14 +589,14 @@ Implemented:
 - `Std.Test.FixtureRunner.cases`
 - `riot snapshots review|approve|reject`
 - interactive `riot snapshots review` in TTY sessions
-- native snapshot-backed suites in `syn`, `krasny`, and `riot-cli`
+- native snapshot-backed suites in `syn`, `krasny`, `riot-fix`, and `riot-cli`
 
 Still open:
 
-- broader package migrations away from Python and package-local harnesses
 - richer snapshot diff rendering
 - repository policy for `.expected.new` files
 - possible inline JSON assertions
+- deleting or repurposing the remaining non-fixture legacy helper scripts
 
 ### Slice 0: prerequisite `Std.Test` context
 
@@ -823,25 +823,23 @@ Implementation notes:
 
 ### Slice 8: pilot migrations
 
-After the framework exists, migrate one non-fixture suite and one
-fixture-driven suite before attempting broader rollout.
+This slice is done.
 
-Recommended pilots:
+The initial pilot set proved out both non-fixture and fixture-backed usage, and
+the migration then widened into package-owned suites:
 
-- a small `packages/std/tests/` suite for non-fixture snapshots
+- `packages/std/tests/` for direct snapshot assertions
 - `packages/krasny/tests/` for fixture-backed formatter snapshots
+- `packages/syn/tests/` for lossless, diagnostic, and CST fixture snapshots
+- `packages/riot-fix/tests/` for aggregated JSON fixture snapshots
 
-The goal of the pilot is to force the following design questions into the open:
+What the pilot answered:
 
-- are the derived paths readable enough?
-- are the diffs good enough?
-- is `FixtureRunner` too opinionated or too weak?
-- is `riot snapshots review` sufficient without a richer UI?
+- derived snapshot paths are readable enough to keep
+- `FixtureRunner` is strong enough for adjacent-snapshot package suites
+- interactive `riot snapshots review` is sufficient as a first review loop
 
-Validation:
-
-- ensure the migrated suite no longer needs its custom runner
-- compare contributor ergonomics against the old harness
+Remaining follow-up is now about polish and cleanup, not viability.
 
 ### Slice 9: foundational `std` fix for context-aware test callbacks
 
