@@ -1,7 +1,7 @@
 # RFD0030 - Macro V1 Amendment to RFD0008
 
 - Feature Name: `macro_v1_amendment`
-- Start Date: `2026-04-02`
+- Start Date: `2026-04-03`
 - Status: `presented`
 - Amends: `RFD0008 - Macro`
 - RFD PR: [leostera/riot#0000](https://github.com/leostera/riot/pull/0000)
@@ -10,142 +10,142 @@
 ## Summary
 [summary]: #summary
 
-This RFD amends `RFD0008 - Macro` by narrowing Riot's first macro release to a
-smaller, more explicit v1:
+This RFD amends `RFD0008 - Macro` by locking Riot's first macro release to a
+smaller, build-integrated v1:
 
 - v1 supports **procedural function-like macros only**
-- v1 requires **separate macro packages**
-- macro packages are declared as `[lib] kind = "macro"`
+- macros are discovered from explicit package metadata under
+  **`[riot.macro.provider]`**
+- **any package may also provide macros**, just like any package may also
+  provide fix rules
 - macro invocation syntax is a **path-qualified function-like call** such as
-  `Sqlx_macro.query! "select * from users"`
+  `Sqlx.query! "select * from users"`
 - macro execution remains **token-stream based**
-- macro expansion becomes a **first-class compilation pipeline stage** in
-  `riot`, not an ad hoc preprocessor hook
+- macro expansion becomes a **first-class compilation-pipeline stage** in
+  `riot`
 
-This amendment does not replace `RFD0008`. It makes concrete choices for the
-first implementation where `RFD0008` intentionally left the surface syntax,
-package model, and build integration strategy open.
+This amendment does not replace `RFD0008`. It narrows the v1 surface and makes
+concrete decisions where `RFD0008` intentionally left the package model,
+surface syntax, and planner integration open.
+
+This amendment also supersedes earlier drafts of `RFD0030` that required
+separate `*-macro` packages or `[lib] kind = "macro"`. V1 should not need a
+special library kind just to advertise macro capability.
 
 ## Motivation
 [motivation]: #motivation
 
-`RFD0008` got the architectural center right:
+`RFD0008` already got the architectural center right:
 
-- macro input and output should be token-stream based
-- macro authors should be able to opt into `syn`
-- diagnostics should be first-class
-- macro execution should be build-integrated
+- macros consume tokens and produce tokens
+- macro implementations may opt into `syn`
+- diagnostics are first-class
+- macro expansion is build-integrated, not editor-only sugar
 
-What it left deliberately open is now the main source of ambiguity:
+What remained open was the package model. The first prototype proved that
+parser and planner plumbing can work, but it also showed the wrong direction:
+a centralized expander or a special "macro package" kind forces macro support
+into an awkward side channel.
 
-- what exact macro forms should v1 support?
-- how are macro packages declared?
-- how are macro providers loaded?
-- how should macro expansion fit into `riot` planning?
+Riot already has a better precedent: fix-rule providers. Any package may expose
+them through explicit manifest metadata, and planning can discover them without
+guessing from naming conventions. Macro providers should work the same way.
 
-That ambiguity is useful at ideation time, but it is not useful for the first
-real implementation. The first prototype already showed the failure mode: a
-centralized expander inside `packages/macro` is enough to prove parser and
-planner plumbing, but it is the wrong ownership model for a real macro system.
+This keeps the first release explicit without being needlessly restrictive:
 
-The v1 design should force explicit ownership and explicit dependency edges.
-`sqlx` should not "casually" grow macros inside its ordinary runtime package.
-If `sqlx` wants macros, it should ship `sqlx-macro`. The package graph should
-say so plainly, and `riot` should plan those artifacts plainly.
+- packages can expose runtime APIs and macro APIs together
+- planning can discover macro providers statically from manifests
+- planning can reject unknown `Pkg.macro!` uses before runner execution
+- the compiler pipeline stays honest about macro expansion as a real stage
 
-The other motivation is build-system clarity. Macro expansion is not generic
-preprocessing. It is a syntax-aware compilation stage with parser inputs,
-diagnostics, generated artifacts, and cache invalidation rules. Treating it as
-a first-class pipeline stage will make the current macro work easier to reason
-about and will also help future stages such as earlier linting, later linting,
-or macro-aware typechecking.
+At the same time, v1 stays deliberately narrow. Declarative macros, attribute
+macros, derive macros, and typed macro passes are all valuable, but they should
+layer on top of one clean procedural runtime and one clean planner model.
 
-Finally, this amendment narrows scope on purpose. Declarative macros,
-attribute-style macros, and derive-style macros are valuable, but they should
-not complicate the first runtime contract. Riot should ship one clean macro ABI
-and one clean build model first.
-
-## Guide-level explanation
+## Guide-Level Explanation
 [guide-level-explanation]: #guide-level-explanation
 
-Contributors should think about macro v1 as:
+### What Macro Authors Write
 
-- one explicit macro package kind
-- one explicit macro invocation form
-- one explicit token-stream ABI
-- one explicit macro expansion stage in the compilation pipeline
-
-### What macro authors write
-
-A package that wants to provide macros should be a dedicated macro package:
+A package that wants to expose macros keeps an ordinary library declaration and
+adds explicit macro-provider metadata:
 
 ```toml
 [package]
-name = "sqlx-macro"
+name = "sqlx"
+version = "0.1.0"
 
 [lib]
-kind = "macro"
+path = "src/sqlx.ml"
+
+[riot.macro.provider]
 path = "src/sqlx_macro.ml"
+module_path = "Sqlx"
+macros = ["query", "query_as"]
 
 [dependencies]
 macro = { workspace = true }
 syn = { workspace = true }
 ```
 
-That package should export a macro provider module. The exact API names may
-change, but the shape should be close to:
+The provider source must expose a top-level thunk:
 
 ```ocaml
-let query (input : Macro.TokenStream.t) : Macro.Result.t =
+let query (input : Macro.Token_stream.t) : Macro.Result.t =
   match Macro.Parse.expr input with
   | Ok expr -> Sqlx_query.expand expr
   | Error diagnostic ->
-      Macro.Result.error diagnostic
+      { Macro.Result.output = input; diagnostics = [ diagnostic ] }
 
-let provider =
-  Macro.Provider.v [
-    Macro.Provider.fn "query" query;
-  ]
+let query_as (input : Macro.Token_stream.t) : Macro.Result.t =
+  Sqlx_query_as.expand input
+
+let provider () =
+  Macro.Provider.v
+    ~module_path:[ "Sqlx" ]
+    [
+      Macro.Provider.fn "query" query;
+      Macro.Provider.fn "query_as" query_as;
+    ]
 ```
 
 The important part is the contract:
 
 - macro input is a token stream
-- the macro may choose to parse with `syn`
+- the macro may choose to parse those tokens with `syn`
 - the macro returns generated tokens plus diagnostics
-- the package owns the macro implementation
+- the manifest declares the qualified module path and exported macro names
 
-### What macro users write
+### What Macro Users Write
 
-If another package wants to use that macro, it depends on the macro package:
+If another package depends on `sqlx`, it can invoke declared macros through the
+provider's qualified module path:
 
 ```toml
 [dependencies]
-sqlx-macro = { workspace = true }
+sqlx = { workspace = true }
 ```
-
-Then it invokes the macro through a normal path-qualified name:
 
 ```ocaml
 let users =
-  Sqlx_macro.query! "select * from users"
+  Sqlx.query! "select * from users"
 ```
 
-Macro calls should read like ordinary path-qualified function calls, except for
-the `!`.
+Macro invocations should read like ordinary qualified function calls with a
+bang.
 
-### What syntax v1 supports
+### What Syntax V1 Supports
 
 V1 supports function-like macros in expression position only.
 
-The parser should recognize a path-qualified macro callee followed by `!` and
-then one expression body:
+The parser recognizes a path-qualified macro callee followed by `!` and one
+expression body:
 
 - `Format.format! "hello {}" name`
-- `Sqlx_macro.query! "select * from users"`
+- `Sqlx.query! "select * from users"`
 - `My_pkg.Tools.expand! x + y`
 
-The body boundary should match `parse_expr`. So:
+The body boundary follows `parse_expr`. So:
 
 ```ocaml
 let value = My_pkg.Tools.expand! x + y in
@@ -154,20 +154,16 @@ let value = My_pkg.Tools.expand! x + y in
 
 means the macro body is `x + y`, not just `x`.
 
-The macro runtime should receive the token stream corresponding to that body.
-Macros may then parse the body as an OCaml expression if they want, but that is
-an author choice, not the ABI.
+The macro runtime receives the token stream corresponding to that parsed body.
+Macros may choose to parse those tokens as OCaml, but that is an author choice,
+not something imposed by the ABI.
 
-This means v1 is still constrained by expression syntax. That is acceptable for
-the first release. Truly raw token-capture forms can be designed later if Riot
-needs them.
-
-### What `riot` does
+### What `riot` Does
 
 For one compilation unit, the mental model should be:
 
 ```ocaml
-Build_pipeline.(
+Compilation_pipeline.(
   from_source source
   |> and_then Stage.syn_parse
   |> and_then Stage.macro_expand
@@ -182,21 +178,23 @@ At a high level:
 
 1. `syn` parses the source file.
 2. `riot` finds macro invocations.
-3. `riot` resolves reachable macro packages from the package dependency graph.
-4. `riot` builds or loads the macro runner artifact for those macro providers.
-5. `riot` invokes macros with token streams.
-6. `riot` reparses the expanded output with `syn`.
-7. `riot` continues the normal compilation flow.
+3. `riot` resolves reachable macro providers from package metadata.
+4. `riot` validates the invocation against declared `module_path` and `macros`
+   before runner execution.
+5. `riot` builds or reuses the macro runner artifact for those providers.
+6. `riot` invokes macros with token streams.
+7. `riot` reparses the expanded output with `syn`.
+8. `riot` continues the normal compilation flow.
 
 That is not string preprocessing. It is planned, validated expansion.
 
-## Reference-level explanation
+## Reference-Level Explanation
 [reference-level-explanation]: #reference-level-explanation
 
 ## 1. Relationship to `RFD0008`
 
-`RFD0008` remains the base macro RFD. This amendment narrows and concretizes
-the first deliverable.
+`RFD0008` remains the base macro RFD. This amendment narrows the first
+deliverable.
 
 The following parts of `RFD0008` remain unchanged:
 
@@ -206,285 +204,182 @@ The following parts of `RFD0008` remain unchanged:
 - first-class macro diagnostics
 - explicit build integration
 
-This amendment changes the first implementation plan in four main ways:
+This amendment makes four concrete choices for v1:
 
-1. v1 supports only procedural function-like macros
-2. v1 requires separate macro packages
-3. v1 picks a concrete invocation syntax
-4. v1 requires a first-class compilation pipeline stage for macro expansion
+1. only procedural function-like macros ship in v1
+2. macro providers are declared in package metadata, not via a special library
+   kind
+3. invocation syntax is path-qualified and function-like
+4. macro expansion is a first-class compilation-pipeline stage
 
-## 2. Scope of macro v1
+## 2. Package Model
 
-Macro v1 should support exactly this:
-
-- procedural macros
-- function-like invocation
-- expression-position payloads
-- token-stream input and output
-- diagnostics emitted by macro implementations
-
-Macro v1 should explicitly not support:
-
-- declarative `macro foo! = ...` syntax
-- derive-style macros
-- attribute-style macros
-- raw non-expression token capture forms
-- any claim of full hygiene
-
-Future macro forms should reuse the same runtime and provider model where
-possible, rather than creating a second macro system.
-
-## 3. Package model
-
-Macro providers should live in separate packages.
-
-The manifest shape should be:
+Macro capability is package metadata:
 
 ```toml
-[lib]
-kind = "macro"
-path = "src/sqlx_macro.ml"
+[riot.macro.provider]
+path = "src/provider.ml"
+module_path = "Sqlx"
+macros = ["query"]
 ```
 
-This amendment intentionally rejects mixed runtime-and-macro packages for v1.
-If a package wants to provide runtime APIs and macros, it should publish two
-packages, for example:
+This means:
 
-- `sqlx`
-- `sqlx-macro`
+- any package may provide macros
+- packages may expose runtime APIs and macro APIs together
+- separate `sqlx-macro` style packages remain allowed as an organizational
+  choice, but Riot does not require them
+- `[lib] kind = "macro"` is not part of v1 and should be rejected
 
-The benefits are:
+The provider metadata must at least declare:
 
-- explicit dependency edges
-- simpler planning
-- clearer ownership
-- simpler invalidation and caching
-- less ambiguity around whether a package's normal library build is also a
-  macro provider
+- `path`: the provider implementation source file
+- `module_path`: the qualified module path used at call sites
+- `macros`: the exported function-like macro names
 
-Macro packages should be treated as a distinct dependency class in `riot` and
-should build before packages that invoke them.
+Planning should treat that metadata as the source of truth for discovery.
 
-## 4. Provider registration model
+## 3. Provider Contract
 
-Each macro package should compile to a provider artifact with a clear
-entrypoint. The entrypoint should register the macros exported by that package.
-
-A plausible shape is:
+The runtime provider ABI remains procedural and token-stream based:
 
 ```ocaml
-type macro_fn = Macro.TokenStream.t -> Macro.Result.t
-
-type exported_macro = {
-  name : string;
-  expand : macro_fn;
-}
-
-type provider = {
-  package_name : string;
-  macros : exported_macro list;
-}
+Macro.Token_stream.t -> Macro.Result.t
 ```
 
-The exact names can change, but the semantics should be:
-
-- one macro package provides one provider entrypoint
-- that provider entrypoint declares the macros exported by the package
-- `riot` discovers providers from reachable macro dependencies
-- `riot` builds a macro-runner artifact from those providers
-
-This should follow the same broad ownership model as package-provided fix
-rules, even if the runtime mechanics differ.
-
-## 5. Invocation syntax and parser model
-
-The function-like macro syntax for v1 should be:
-
-- `Pkg.macro_name! expr`
-- `Pkg.Subpkg.macro_name! expr`
-
-The parser should treat the callee path plus `!` as a dedicated macro
-invocation form in expression position. This should produce a dedicated CST
-node, not a generic apply expression and not a late CST rewrite.
-
-The invocation body should be bounded by `parse_expr`.
-
-That means:
-
-- `Macro_pkg.foo! x + y` captures `x + y`
-- `Macro_pkg.foo! (x, y)` captures `(x, y)`
-- `Macro_pkg.foo! let x = 1 in x + 1` captures that full expression
-
-The runtime input should still be the token stream corresponding to that body,
-not the parsed body AST as the public ABI.
-
-## 6. Macro ABI
-
-The macro ABI should stay token-stream based:
+The provider source file must expose:
 
 ```ocaml
-type result = {
-  output : Macro.TokenStream.t;
-  diagnostics : Macro.Diagnostic.t list;
-}
-
-val expand : Macro.TokenStream.t -> result
+let provider () = Macro.Provider.v ...
 ```
 
-The token stream is the only universal boundary that works across:
+Provider validation should happen before runner materialization so that invalid
+providers fail as planner diagnostics, not as nested-build surprises.
 
-- macros that want to use `syn`
-- macros that want to parse their own DSL
-- macros that only do structural token rewrites
+## 4. Invocation Resolution
 
-`macro` should provide ergonomic adapters such as:
+Macro invocations must be qualified in v1.
 
-- `Macro.Parse.expr`
-- `Macro.Parse.item`
-- `Macro.Parse.type_expr`
-- `Macro.Parse.pattern`
+Given:
 
-Those helpers are convenience layers, not the ABI.
+```toml
+[riot.macro.provider]
+module_path = "Sqlx"
+macros = ["query"]
+```
 
-## 7. Build pipeline integration
+valid use sites look like:
 
-Macro expansion should become a first-class stage in a compilation-unit
-pipeline. `riot-planner` should stop treating it as a planner-local helper
-hidden inside one compile path.
+```ocaml
+Sqlx.query! "select * from users"
+```
 
-A likely starting point is a small `Compilation_pipeline.t` or
-`Build_pipeline.t` with explicit stages and artifacts. The first concrete use
-can stay narrow:
+and not:
 
-- `syn_parse`
-- `macro_expand`
-- `compile`
+```ocaml
+query! "select * from users"
+```
 
-Later stages can be introduced without reworking the planner model from
-scratch.
+Planning should reject:
 
-The macro expansion stage should explicitly depend on:
+- unqualified invocations
+- unknown provider paths
+- unknown macro names for a known provider path
+- ambiguous provider-path declarations
 
-- input source hash
-- resolved macro dependency set
-- macro package artifact hashes
-- macro configuration, if any
+Those errors should list reachable provider paths or exported qualified macro
+names when possible.
 
-Its output should be:
+## 5. Pipeline Integration
 
-- expanded source or token artifact
-- diagnostics
-- a validated reparsed syntax tree or equivalent validated artifact
+Macro expansion is planner-owned compilation work. At minimum, the pipeline for
+a concrete source file must be able to:
 
-The action graph should then be derived from this compilation pipeline.
+1. parse with `syn`
+2. discover invocations
+3. resolve reachable providers from package metadata
+4. validate declared exports against use sites
+5. invoke expansion through a runner artifact
+6. reparse expanded output
+7. lower to normal compile actions
 
-## 8. Execution model
+The action graph should make the source rewrite explicit, for example through a
+`WriteFile` or `RunMacroExpansion` action before compile.
 
-The v1 execution model should be explicit and artifact-based.
+## 6. Scope of V1
 
-`riot` should not special-case macros as a compiler side table. Macro packages
-should build into real artifacts with real entrypoints. `riot` may execute them
-in-process or out-of-process as an implementation detail, but the planner model
-should treat them as ordinary build artifacts with deterministic inputs.
+V1 should support exactly this:
 
-The important properties are:
+- procedural macros
+- function-like macro invocation
+- expression-position macro bodies
+- package metadata discovery
+- runner-based expansion
+- diagnostics from macro execution
 
-- deterministic expansion
-- no hidden network or filesystem behavior
-- debuggable execution
-- explicit dependency tracking
+V1 explicitly does not include:
 
-## 9. Diagnostics
+- declarative macros
+- attribute macros
+- derive macros
+- typed macro passes
+- raw non-expression token capture forms
 
-Macro diagnostics should be structured and phase-aware.
+Those can come later once the procedural runtime and planner contract are
+stable.
 
-Users should be able to tell whether a failure came from:
+## Rationale And Alternatives
+[rationale-and-alternatives]: #rationale-and-alternatives
 
-- parsing the original source
-- resolving or loading the macro provider
-- macro expansion itself
-- reparsing generated output
+## Why Not Separate Macro Packages Only?
 
-The macro ABI should therefore allow diagnostics to carry:
+That is stricter than necessary and does not fit Riot's existing provider
+patterns. Fix rules are not forced into separate packages, and macros do not
+need to be either.
 
-- a primary span
-- a message
-- optional notes or suggestions
-- a phase tag or equivalent origin marker
+Separate packages are still a perfectly valid organizational choice when they
+help keep dependencies clean. They just should not be mandated by the platform.
+
+## Why Not Keep `[lib] kind = "macro"`?
+
+Because macro capability is not a different kind of library artifact. It is a
+provider capability declared by package metadata.
+
+Using a special library kind creates the wrong mental model:
+
+- it suggests packages must choose between runtime code and macro code
+- it forces discovery through library classification instead of explicit
+  provider metadata
+- it drifts away from how Riot already discovers fix providers
 
 ## Drawbacks
 [drawbacks]: #drawbacks
 
-- Requiring separate macro packages introduces more package count and more
-  dependency edges.
-- Restricting v1 to expression-position function-like macros leaves some DSL
-  shapes out of scope initially.
-- A compilation pipeline abstraction adds planner structure before every future
-  stage is fully designed.
+- Package manifests become slightly more verbose because macro exports are
+  declared explicitly.
+- Planning has to validate provider metadata and invocation resolution before
+  runner execution.
+- Provider metadata can drift from implementation unless Riot validates both
+  sides consistently.
 
-## Rationale and alternatives
-[rationale-and-alternatives]: #rationale-and-alternatives
+These are acceptable tradeoffs for a first macro release because they keep
+discovery deterministic and planner diagnostics clear.
 
-This design is the best amendment to `RFD0008` because it narrows the first
-macro release without discarding the original architecture.
-
-Alternatives considered:
-
-- **Allow mixed runtime and macro packages**
-  Simpler in the short term, but it makes dependency ownership and planner
-  behavior less explicit.
-
-- **Keep the syntax fully open for longer**
-  That preserves optionality, but it blocks real implementation decisions in
-  `syn`, `riot-model`, and `riot-planner`.
-
-- **Support declarative macros in v1**
-  Valuable, but it adds a second authoring surface before the core runtime is
-  settled. Declarative macros can be layered on top of the same provider ABI
-  later.
-
-- **Keep macro expansion as a planner-local rewrite hook**
-  Good enough for a prototype, but the wrong shape for dependency tracking,
-  caching, and future build stages.
-
-## Prior art
-[prior-art]: #prior-art
-
-The strongest prior art remains Rust:
-
-- token-stream procedural macros
-- package-managed macro crates
-- derive, attribute, and function-like macro families
-
-This amendment intentionally narrows Riot's first step to just one of those
-families while preserving the same core procedural boundary.
-
-There is also direct Riot prior art in `riot-fix` package-provided rule
-discovery and generated runner construction. The macro provider model should
-take strong cues from that work, even though macro execution happens in the
-normal build pipeline rather than the fix pipeline.
-
-## Unresolved questions
-[unresolved-questions]: #unresolved-questions
-
-- What exact manifest fields should accompany `[lib] kind = "macro"`?
-- Should `riot` generate one macro-runner per workspace, per package graph, or
-  per compilation context?
-- Should v1 store expanded artifacts as rewritten source files, token artifacts,
-  or both?
-- What minimum hygiene helpers should `macro` expose in v1?
-- How should path-qualified macro names map to package names and module names in
-  a way that feels unsurprising?
-
-## Future possibilities
+## Future Possibilities
 [future-possibilities]: #future-possibilities
 
-Once this narrower v1 exists, Riot can add richer macro forms without changing
-the core ownership or execution model:
+- declarative macros that compile down to the same procedural provider ABI
+- attribute and derive macro forms on top of the same runner model
+- typed follow-up passes for macros like `format!` that want post-typecheck
+  dispatch
+- richer token-capture forms for non-OCaml syntaxes
 
-- declarative macros that compile down to the same provider ABI
-- derive-style macros
-- attribute-style macros
-- raw token-capture forms outside expression position
-- editor tooling for expansion inspection and macro diagnostics
-- stronger hygiene helpers and generated-name support
+## Unresolved Questions
+[unresolved-questions]: #unresolved-questions
+
+- Should one package eventually be allowed to declare multiple macro providers,
+  or is one provider per package enough for v1?
+- How strict should Riot be about validating that declared `macros = [...]`
+  exactly match the provider's runtime export list?
+- What is the best long-term cache and materialization strategy for generated
+  macro runners?
