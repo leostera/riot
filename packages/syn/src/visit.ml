@@ -701,7 +701,13 @@ and descend_expression = fun walk ctx (expression: Cst.Expression.t) ->
   | Cst.Expression.LocalOpen (Cst.Delimited { body; attributes; _ }) ->
       let ctx = List.fold_left walk.attribute ctx attributes in
       walk.expression ctx body
-  | Cst.Expression.Fun { parameters; return_type; body; attributes; _ } ->
+  | Cst.Expression.Fun {
+    parameters;
+    return_type;
+    body;
+    attributes;
+    _
+  } ->
       let ctx = List.fold_left walk.attribute ctx attributes in
       let ctx = List.fold_left walk.parameter ctx parameters in
       let ctx =

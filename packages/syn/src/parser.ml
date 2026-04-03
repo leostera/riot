@@ -3756,20 +3756,21 @@ and parse_labeled_param = fun parser ->
       if peek_kind parser = Token.Colon && trivia_after_label = [] then
         let colon = consume parser in
         let trivia_after_colon = consume_trivia parser in
-        if not (List.is_empty trivia_after_colon) then (
-          let found = peek parser in
-          let diagnostic = Diagnostic.invalid_pattern
-            ~found
-            ~text:(token_text parser found)
-            ~span:(current_span parser) in
-          report_diagnostic parser diagnostic
-        );
-        let pattern = parse_pattern parser in
-        [ make_token parser colon ]
-        @ tokens_to_green parser trivia_after_colon
-        @ [ Ceibo.Green.Node pattern ]
-      else
-        []
+        if not (List.is_empty trivia_after_colon) then
+          (
+            let found = peek parser in
+            let diagnostic = Diagnostic.invalid_pattern
+              ~found
+              ~text:(token_text parser found)
+              ~span:(current_span parser) in
+            report_diagnostic parser diagnostic
+          );
+          let pattern = parse_pattern parser in
+          [ make_token parser colon ]
+          @ tokens_to_green parser trivia_after_colon
+          @ [ Ceibo.Green.Node pattern ]
+        else
+          []
     in
     ([ make_token parser label ] @ tokens_to_green parser trivia_after_label @ colon_pattern_parts)
   in
@@ -3909,28 +3910,29 @@ and parse_optional_param = fun parser ->
           if peek_kind parser = Token.Colon && trivia_after_label = [] then
             let colon = consume parser in
             let trivia_after_colon = consume_trivia parser in
-            if not (List.is_empty trivia_after_colon) then (
-              let found = peek parser in
-              let diagnostic = Diagnostic.invalid_pattern
-                ~found
-                ~text:(token_text parser found)
-                ~span:(current_span parser) in
-              report_diagnostic parser diagnostic
-            );
-            if peek_kind parser = Token.OpenDelim Token.Paren then
-              let open_p, content, close_p = parse_parens parser parse_default_param_content in
-              [ make_token parser colon ]
-              @ tokens_to_green parser trivia_after_colon
-              @ [ make_token parser open_p ]
-              @ content
-              @ [ make_token parser close_p ]
+            if not (List.is_empty trivia_after_colon) then
+              (
+                let found = peek parser in
+                let diagnostic = Diagnostic.invalid_pattern
+                  ~found
+                  ~text:(token_text parser found)
+                  ~span:(current_span parser) in
+                report_diagnostic parser diagnostic
+              );
+              if peek_kind parser = Token.OpenDelim Token.Paren then
+                let open_p, content, close_p = parse_parens parser parse_default_param_content in
+                [ make_token parser colon ]
+                @ tokens_to_green parser trivia_after_colon
+                @ [ make_token parser open_p ]
+                @ content
+                @ [ make_token parser close_p ]
+              else
+                let pattern = parse_pattern parser in
+                [ make_token parser colon ]
+                @ tokens_to_green parser trivia_after_colon
+                @ [ Ceibo.Green.Node pattern ]
             else
-              let pattern = parse_pattern parser in
-              [ make_token parser colon ]
-              @ tokens_to_green parser trivia_after_colon
-              @ [ Ceibo.Green.Node pattern ]
-          else
-            []
+              []
         in
         ([ make_token parser label ] @ tokens_to_green parser trivia_after_label @ colon_pattern_parts)
       in

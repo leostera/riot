@@ -274,8 +274,7 @@ let make ~start ~finish ~steps : color array =
   steps
 |}
       in
-      let actual = parse_ml source |> Krasny.format |> Result.expect
-        ~msg:"binding return-type annotations after named parameters should stay loose" in
+      let actual = parse_ml source |> Krasny.format |> Result.expect ~msg:"binding return-type annotations after named parameters should stay loose" in
       Test.assert_equal
         ~expected:{|type color
 

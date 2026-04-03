@@ -129,49 +129,29 @@ let rec drop = fun count xs ->
 
 let rec common_prefix_len = fun left right ->
   match (left, right) with
-  | (left_head :: left_tail, right_head :: right_tail) when String.equal left_head right_head ->
-      1 + common_prefix_len left_tail right_tail
+  | (left_head :: left_tail, right_head :: right_tail) when String.equal left_head right_head -> 1
+  + common_prefix_len left_tail right_tail
   | _ -> 0
 
 let reverse = fun items -> List.rev items
 
-let common_suffix_len = fun left right ->
-  common_prefix_len (reverse left) (reverse right)
+let common_suffix_len = fun left right -> common_prefix_len (reverse left) (reverse right)
 
 let make_diff_hunk = fun ~expected ~actual ->
   let expected_lines = split_lines expected in
   let actual_lines = split_lines actual in
   let prefix_len = common_prefix_len expected_lines actual_lines in
-  let max_suffix = Int.min (List.length expected_lines - prefix_len) (List.length actual_lines - prefix_len) in
-  let raw_suffix_len =
-    common_suffix_len
-      (drop prefix_len expected_lines)
-      (drop prefix_len actual_lines) in
+  let max_suffix = Int.min
+    (List.length expected_lines - prefix_len)
+    (List.length actual_lines - prefix_len) in
+  let raw_suffix_len = common_suffix_len
+    (drop prefix_len expected_lines)
+    (drop prefix_len actual_lines) in
   let suffix_len = Int.min max_suffix raw_suffix_len in
-  let expected_changed =
-    expected_lines
-    |> drop prefix_len
-    |> reverse
-    |> drop suffix_len
-    |> reverse in
-  let actual_changed =
-    actual_lines
-    |> drop prefix_len
-    |> reverse
-    |> drop suffix_len
-    |> reverse in
-  let context_before =
-    expected_lines
-    |> take prefix_len
-    |> reverse
-    |> take 2
-    |> reverse in
-  let context_after =
-    expected_lines
-    |> reverse
-    |> take suffix_len
-    |> reverse
-    |> take 2 in
+  let expected_changed = expected_lines |> drop prefix_len |> reverse |> drop suffix_len |> reverse in
+  let actual_changed = actual_lines |> drop prefix_len |> reverse |> drop suffix_len |> reverse in
+  let context_before = expected_lines |> take prefix_len |> reverse |> take 2 |> reverse in
+  let context_after = expected_lines |> reverse |> take suffix_len |> reverse |> take 2 in
   {
     start_line = prefix_len + 1;
     expected_count = List.length expected_changed;
@@ -186,17 +166,23 @@ let format_line = fun prefix line -> prefix ^ line
 
 let format_diff = fun ~expected_label ~actual_label ~expected ~actual ->
   let hunk = make_diff_hunk ~expected ~actual in
-  let lines =
-    [
-      "--- " ^ expected_label;
-      "+++ " ^ actual_label;
-      "@@ -" ^ Int.to_string hunk.start_line ^ "," ^ Int.to_string hunk.expected_count
-      ^ " +" ^ Int.to_string hunk.start_line ^ "," ^ Int.to_string hunk.actual_count ^ " @@";
-    ]
-    @ List.map (format_line " ") hunk.context_before
-    @ List.map (format_line "-") hunk.expected_lines
-    @ List.map (format_line "+") hunk.actual_lines
-    @ List.map (format_line " ") hunk.context_after in
+  let lines = [
+    "--- " ^ expected_label;
+    "+++ " ^ actual_label;
+    "@@ -"
+    ^ Int.to_string hunk.start_line
+    ^ ","
+    ^ Int.to_string hunk.expected_count
+    ^ " +"
+    ^ Int.to_string hunk.start_line
+    ^ ","
+    ^ Int.to_string hunk.actual_count
+    ^ " @@";
+  ]
+  @ List.map (format_line " ") hunk.context_before
+  @ List.map (format_line "-") hunk.expected_lines
+  @ List.map (format_line "+") hunk.actual_lines
+  @ List.map (format_line " ") hunk.context_after in
   String.concat "\n" lines
 
 let resolve_paths = fun ~(ctx:Test_context.t) ->

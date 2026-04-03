@@ -954,13 +954,12 @@ and render_tight_doc_rhs = fun head separator rhs ->
 
 and render_loose_token_rhs = fun head token rhs ->
   Doc.group
-    (
-      Doc.concat
-        [ head; Doc.space; doc_of_token token; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ]
-    )
+    (Doc.concat
+      [ head; Doc.space; doc_of_token token; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ])
 
 and render_loose_doc_rhs = fun head separator rhs ->
-  Doc.group (Doc.concat [ head; Doc.space; separator; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ])
+  Doc.group
+    (Doc.concat [ head; Doc.space; separator; Doc.indent 2 (Doc.concat [ Doc.break (); rhs ]) ])
 
 and render_tight_colon_rhs = fun head colon_token rhs -> render_tight_token_rhs head colon_token rhs
 
@@ -3981,8 +3980,10 @@ let make_lowerer =
   and flatten_fun_expression ({ parameters; return_type; body; _ }: Syn.Cst.fun_expression) =
     let rec loop = fun acc ->
       function
-      | Syn.Cst.Expression (Syn.Cst.Expression.Fun ({ return_type=Some _; _ } as body)) ->
-          (List.rev acc, Syn.Cst.Expression (Syn.Cst.Expression.Fun body))
+      | Syn.Cst.Expression (Syn.Cst.Expression.Fun ({ return_type=Some _; _ } as body)) -> (
+        List.rev acc,
+        Syn.Cst.Expression (Syn.Cst.Expression.Fun body)
+      )
       | Syn.Cst.Cases _ as body -> (List.rev acc, body)
       | Syn.Cst.Expression (Syn.Cst.Expression.Fun { parameters; body; return_type=None; _ }) -> loop
         (List.rev_append parameters acc)
@@ -4033,56 +4034,34 @@ let make_lowerer =
       in
       let head = Doc.concat [ doc_of_token keyword_token; parameters ] in
       match return_type_doc with
-      | Some return_type_doc -> Doc.concat
-        [
-          head;
-          Doc.space;
-          (
-            match colon_token with
-            | Some colon_token -> doc_of_token colon_token
-            | None -> Doc.colon
-          );
-          Doc.space;
-          return_type_doc;
-        ]
+      | Some return_type_doc ->
+          Doc.concat
+            [ head; Doc.space; (
+                match colon_token with
+                | Some colon_token -> doc_of_token colon_token
+                | None -> Doc.colon
+              ); Doc.space; return_type_doc; ]
       | None -> head
     in
     if has_multiline_parameter then
       Doc.concat
-        [
-          doc_of_token keyword_token;
-          Doc.line;
-          Doc.indent 2 (
-            let parameter_doc = Doc.join Doc.space parameters in
-            match return_type_doc with
-            | Some return_type_doc -> Doc.concat
-              [
-                parameter_doc;
-                Doc.space;
-                (
-                  match colon_token with
-                  | Some colon_token -> doc_of_token colon_token
-                  | None -> Doc.colon
-                );
-                Doc.space;
-                return_type_doc;
-                Doc.space;
-                doc_of_token arrow_token;
-              ]
-            | None -> Doc.concat [ parameter_doc; Doc.space; doc_of_token arrow_token ]
-          );
-          Doc.line;
-          Doc.indent 2 body;
-        ]
+        [ doc_of_token keyword_token; Doc.line; Doc.indent 2
+            (
+              let parameter_doc = Doc.join Doc.space parameters in
+              match return_type_doc with
+              | Some return_type_doc ->
+                  Doc.concat
+                    [ parameter_doc; Doc.space; (
+                        match colon_token with
+                        | Some colon_token -> doc_of_token colon_token
+                        | None -> Doc.colon
+                      ); Doc.space; return_type_doc; Doc.space; doc_of_token arrow_token; ]
+              | None -> Doc.concat [ parameter_doc; Doc.space; doc_of_token arrow_token ]
+            ); Doc.line; Doc.indent 2 body; ]
     else if body_prefers_multiline || List.length parameters = 0 then
-      Doc.concat
-        [ head; Doc.space; doc_of_token arrow_token; Doc.line; Doc.indent 2 body; ]
+      Doc.concat [ head; Doc.space; doc_of_token arrow_token; Doc.line; Doc.indent 2 body; ]
     else
-      render_fun_arrow_body
-        ~keyword:head
-        ~parameters:Doc.empty
-        ~arrow_token
-        ~body
+      render_fun_arrow_body ~keyword:head ~parameters:Doc.empty ~arrow_token ~body
   and render_function_expression ({ keyword_token; cases; _ }: Syn.Cst.function_expression) =
     let force_multiline_cases = List.length cases > 2 && List.exists case_body_prefers_multiline cases in
     Doc.concat
@@ -4924,7 +4903,7 @@ let make_lowerer =
     | _ -> stays_after_equals
   and local_binding_keeps_parameters_in_header ~parameters ~rendered_type_annotation ~synthesized_type_annotation =
     not (parameters = []) && not synthesized_type_annotation
-  and local_binding_type_annotation_requires_loose_colon = fun ~parameters ->
+  and local_binding_type_annotation_requires_loose_colon ~parameters =
     match List.rev parameters with
     | Syn.Cst.Parameter.Labeled _ :: _
     | Syn.Cst.Parameter.Optional _ :: _ -> true
@@ -4998,12 +4977,9 @@ let make_lowerer =
     in
     let header =
       match rendered_type_annotation with
-      | None ->
-          header
+      | None -> header
       | Some (colon_token, type_doc) -> (
-          let loose_colon =
-            local_binding_type_annotation_requires_loose_colon ~parameters
-          in
+          let loose_colon = local_binding_type_annotation_requires_loose_colon ~parameters in
           match colon_token, loose_colon with
           | Some colon_token, true -> render_loose_token_rhs header colon_token type_doc
           | None, true -> render_loose_doc_rhs header Doc.colon type_doc

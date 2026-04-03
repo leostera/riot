@@ -99,7 +99,10 @@ let test_snapshot_mismatch_writes_pending =
                       let pending_content = Fs.read pending |> Result.expect ~msg:"read pending snapshot" in
                       if not (String.equal pending_content "new text\n") then
                         Error ("expected pending snapshot to contain new text, got " ^ pending_content)
-                      else if not (String.contains msg "Review the pending candidate with `riot snapshots review`.") then
+                      else if
+                        not
+                          (String.contains msg "Review the pending candidate with `riot snapshots review`.")
+                      then
                         Error ("expected mismatch message to point at snapshot review, got " ^ msg)
                       else if not (String.contains msg "Diff:") then
                         Error ("expected mismatch message to include a diff, got " ^ msg)
@@ -124,8 +127,7 @@ let test_inline_snapshot_mismatch_reports_error =
           else if not (String.contains msg "+beta") then
             Error ("expected inline mismatch to include added line, got " ^ msg)
           else
-            Ok ()
-          )
+            Ok ())
 
 let test_json_snapshot_canonicalizes_object_keys =
   Test.case "json snapshot canonicalizes object keys"
@@ -150,7 +152,8 @@ let test_json_snapshot_canonicalizes_object_keys =
             )))
 
 let test_inline_json_snapshot_canonicalizes_object_keys =
-  Test.case "inline json snapshot canonicalizes object keys"
+  Test.case
+    "inline json snapshot canonicalizes object keys"
     (fun ctx ->
       Test.Snapshot.assert_inline_json
         ~ctx
