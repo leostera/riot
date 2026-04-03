@@ -1,0 +1,18 @@
+{
+  "outbound": [
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+        "message": "server not initialized",
+        "code": -32002
+      }
+    }
+  ],
+  "exitCode": null,
+  "state": {
+    "initialized": false,
+    "shutdownRequested": false,
+    "documents": []
+  }
+}

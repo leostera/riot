@@ -1,0 +1,18 @@
+{
+  "outbound": [
+    {
+      "jsonrpc": "2.0",
+      "id": null,
+      "error": {
+        "message": "Unexpected end of input while parsing value",
+        "code": -32700
+      }
+    }
+  ],
+  "exitCode": null,
+  "state": {
+    "initialized": false,
+    "shutdownRequested": false,
+    "documents": []
+  }
+}

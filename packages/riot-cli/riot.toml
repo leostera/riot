@@ -21,6 +21,7 @@ riot-planner = { path = "../riot-planner", version = "*" }
 riot-build = { path = "../riot-build", version = "*" }
 riot-store = { path = "../riot-store", version = "*" }
 riot-toolchain = { path = "../riot-toolchain", version = "*" }
+riot-lsp = { path = "../riot-lsp", version = "*" }
 riot-fix = { path = "../riot-fix", version = "*" }
 riot-fmt = { path = "../riot-fmt", version = "*" }
 riot-deps = { path = "../riot-deps", version = "*" }

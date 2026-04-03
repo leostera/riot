@@ -41,6 +41,7 @@ members = [
   "packages/riot-planner",
   "packages/riot-repl",
   "packages/riot-build",
+  "packages/riot-lsp",
   "packages/riot-store",
   "packages/riot-toolchain",
   "services/registry",

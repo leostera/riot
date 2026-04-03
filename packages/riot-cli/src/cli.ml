@@ -187,6 +187,17 @@ format = "full"
   let _ = Std.Telemetry.start () in
   ()
 
+let is_lsp_invocation = fun args ->
+  let rec loop = function
+    | [] -> false
+    | arg :: rest when String.length arg > 0 && arg.[0] = '-' -> loop rest
+    | "lsp" :: _ -> true
+    | _ :: _ -> false
+  in
+  match args with
+  | _program :: rest -> loop rest
+  | [] -> false
+
 let run = fun ~args ->
   let workspace_scan_cache = ref None in
   let get_workspace_scan () =
@@ -390,6 +401,8 @@ let run = fun ~args ->
               Toolchain_cmd.run toolchain_matches
           | Some ("upgrade", upgrade_matches) ->
               Upgrade.run upgrade_matches
+          | Some ("lsp", _) ->
+              Riot_lsp.run ()
           | Some ("version", _) ->
               println (Version_info.version_string ());
               Ok ()
@@ -412,5 +425,6 @@ let run = fun ~args ->
         )
 
 let main = fun ~args ->
-  initialize_runtime ();
+  if not (is_lsp_invocation args) then
+    initialize_runtime ();
   run ~args

@@ -1,0 +1,23 @@
+[package]
+name = "riot-lsp"
+version = "0.0.1"
+description = "Riot Language Server Protocol server"
+license = "Apache-2.0"
+public = true
+
+[lib]
+path = "src/riot_lsp.ml"
+
+[[bin]]
+name = "framing_tests"
+path = "tests/framing_tests.ml"
+
+[[bin]]
+name = "session_fixture_tests"
+path = "tests/session_fixture_tests.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+jsonrpc = { path = "../jsonrpc", version = "*" }
+lsp = { path = "../lsp", version = "*" }
+syn = { path = "../syn", version = "*" }

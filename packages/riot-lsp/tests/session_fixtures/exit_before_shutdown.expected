@@ -1,0 +1,9 @@
+{
+  "outbound": [],
+  "exitCode": 1,
+  "state": {
+    "initialized": false,
+    "shutdownRequested": false,
+    "documents": []
+  }
+}

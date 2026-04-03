@@ -1,0 +1,33 @@
+{
+  "outbound": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "capabilities": {
+          "positionEncoding": "utf-16",
+          "textDocumentSync": {
+            "openClose": true,
+            "change": 1
+          },
+          "documentFormattingProvider": false,
+          "codeActionProvider": false
+        },
+        "serverInfo": {
+          "name": "riot-lsp"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": null
+    }
+  ],
+  "exitCode": 0,
+  "state": {
+    "initialized": true,
+    "shutdownRequested": true,
+    "documents": []
+  }
+}
