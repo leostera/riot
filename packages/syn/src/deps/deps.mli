@@ -7,11 +7,9 @@ module Env: sig
 end
 
 type t
-
 type parse_error =
   | Parse_diagnostics of Diagnostic.t list
   | Cst_builder_error of Cst_builder.error
-
 val modules: t -> string list
 
 val env: t -> Env.t

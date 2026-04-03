@@ -7,8 +7,7 @@ let fixture_root = Path.v "packages/syn/tests/deps_fixtures"
 let has_expected = fun path ->
   match Path.extension path with
   | Some ".ml"
-  | Some ".mli" ->
-      `keep
+  | Some ".mli" -> `keep
   | _ -> `skip
 
 let render_actual = fun ~fixture_path ->
@@ -16,14 +15,14 @@ let render_actual = fun ~fixture_path ->
   let parse_result = Syn.parse ~filename:fixture_path source in
   match Syn.Deps.of_parse_result parse_result with
   | Ok deps -> Json.to_string_pretty (Syn.Deps.to_json deps) ^ "\n"
-  | Error (Syn.Deps.Parse_diagnostics diagnostics) ->
-      "parse diagnostics:\n" ^ String.concat "\n" (List.map Diagnostic.to_string diagnostics) ^ "\n"
-  | Error (Syn.Deps.Cst_builder_error err) ->
-      "cst builder error: "
-      ^ err.Syn.CstBuilder.message
-      ^ " @ "
-      ^ Syn.SyntaxKind.to_string err.Syn.CstBuilder.syntax_kind
-      ^ "\n"
+  | Error (Syn.Deps.Parse_diagnostics diagnostics) -> "parse diagnostics:\n"
+  ^ String.concat "\n" (List.map Diagnostic.to_string diagnostics)
+  ^ "\n"
+  | Error (Syn.Deps.Cst_builder_error err) -> "cst builder error: "
+  ^ err.Syn.CstBuilder.message
+  ^ " @ "
+  ^ Syn.SyntaxKind.to_string err.Syn.CstBuilder.syntax_kind
+  ^ "\n"
 
 let test_fixture = fun ~(ctx:Test.FixtureRunner.ctx) ->
   Test.Snapshot.assert_with

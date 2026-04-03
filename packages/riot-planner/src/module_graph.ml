@@ -431,13 +431,12 @@ let wire_dependencies = fun t ->
         ^ Path.to_string path
         ^ " for dependency analysis: "
         ^ String.concat "; " messages
-    | Syn.Deps.Cst_builder_error err ->
-        "failed to build CST for "
-        ^ Path.to_string path
-        ^ " during dependency analysis: "
-        ^ err.message
+    | Syn.Deps.Cst_builder_error err -> "failed to build CST for "
+    ^ Path.to_string path
+    ^ " during dependency analysis: "
+    ^ err.message
   in
-  let file_namespace = fun path ->
+  let file_namespace path =
     let file_str = Path.to_string path in
     let rel_path =
       if String.starts_with ~prefix:source_dir_prefix file_str then
@@ -459,7 +458,7 @@ let wire_dependencies = fun t ->
     in
     List.fold_left Namespace.append namespace subdir_parts
   in
-  let analyze_file = fun path ->
+  let analyze_file path =
     let absolute_path =
       if Path.is_absolute path then
         path
@@ -467,27 +466,23 @@ let wire_dependencies = fun t ->
         Path.(t.config.root / path)
     in
     match Fs.read absolute_path with
-    | Error err ->
-        Error (Planning_error.DependencyAnalysisFailed {
-          reason =
-            "failed to read "
-            ^ Path.to_string absolute_path
-            ^ " for dependency analysis: "
-            ^ IO.error_message err
-        })
+    | Error err -> Error (Planning_error.DependencyAnalysisFailed {
+      reason = "failed to read "
+      ^ Path.to_string absolute_path
+      ^ " for dependency analysis: "
+      ^ IO.error_message err
+    })
     | Ok source -> (
         let parse_result = Syn.parse ~filename:path source in
         match Syn.Deps.of_parse_result parse_result with
         | Ok deps ->
-            let names =
-              Syn.Deps.modules deps
-              |> List.map (fun modname -> Module_name.of_string ~namespace:(file_namespace path) modname)
-            in
+            let names = Syn.Deps.modules deps
+            |> List.map
+              (fun modname -> Module_name.of_string ~namespace:(file_namespace path) modname) in
             Ok names
-        | Error err ->
-            Error (Planning_error.DependencyAnalysisFailed {
-              reason = stringify_dependency_error path err
-            })
+        | Error err -> Error (Planning_error.DependencyAnalysisFailed {
+          reason = stringify_dependency_error path err
+        })
       )
   in
   (* Sort files deterministically to ensure consistent hashing *)
