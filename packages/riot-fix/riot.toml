@@ -28,3 +28,7 @@ path = "tests/fix_tests.ml"
 [[bin]]
 name = "runner_tests"
 path = "tests/runner_tests.ml"
+
+[[bin]]
+name = "fixture_tests"
+path = "tests/fixture_tests.ml"
