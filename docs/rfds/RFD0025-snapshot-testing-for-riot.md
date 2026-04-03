@@ -25,8 +25,13 @@ The design has four core ideas:
 
 This RFD assumes a context-aware `Std.Test` runner. A per-test `ctx` object is
 available inside each test callback and provides enough stable identity to
-derive snapshot paths and diagnostics. The introduction of that `ctx` object is
-not the primary subject of this RFD.
+derive snapshot paths and diagnostics.
+
+That prerequisite now exists in `Std.Test`. Snapshot testing is no longer a
+pure design exercise: the shared `ctx`, `Std.Test.Snapshot`,
+`Std.Test.FixtureRunner`, and `riot snapshots` command family are all real.
+The remaining work is primarily broader package migration, review ergonomics,
+and policy cleanup.
 
 ## Motivation
 [motivation]: #motivation
@@ -203,7 +208,8 @@ let run_fixture ctx =
 
 let tests =
   Test.FixtureRunner.cases
-    ~dir:"./fixtures"
+    ()
+    ~dir:(Path.v "./fixtures")
     ~run:run_fixture
 
 let () =
@@ -227,7 +233,7 @@ The workflow is:
 1. run `riot test`
 2. failing snapshot assertions write pending candidates
 3. inspect the diff with `riot snapshots review`
-4. approve or reject the candidate
+4. approve, reject, ignore, or quit review
 5. rerun tests
 
 The first run of a new snapshot test therefore fails by design.
@@ -271,24 +277,36 @@ build, and execution.
 
 ## 2. Assumed per-test context
 
-This RFD assumes every test callback receives a `ctx` object with stable
-identity for the currently running test.
+Every test callback receives a `ctx` object with stable identity for the
+currently running test.
 
-The exact shape of `ctx` is not fixed by this RFD, but snapshot assertions must
-be able to derive at least:
+The current `Std.Test.ctx` shape is:
 
-- workspace root
-- package name, when available
-- suite name
-- test name
+```ocaml
+type ctx = {
+  suite_name: string;
+  test_name: string;
+  test_index: int;
+  source_file: Path.t option;
+  binary_path: Path.t option;
+  workspace_root: Path.t option;
+  package_name: string option;
+  fixture: Test_context.fixture option;
+}
+```
 
-Fixture contexts must additionally expose:
+Fixture-backed tests additionally use:
 
-- fixture path
-- fixture path relative to the fixture root
-- a stable fixture name or relative-id form
+```ocaml
+type Test.Context.fixture = {
+  path: Path.t;
+  relpath: Path.t;
+  name: string;
+  snapshot_path: Path.t option;
+}
+```
 
-Snapshot identity is derived from that context rather than from hidden global
+Snapshot identity is derived from this context rather than from hidden global
 state or best-effort source inspection.
 
 ## 3. Snapshot assertion API
@@ -325,8 +343,8 @@ end
 Notes:
 
 - `assert_text` uses external snapshot storage.
-- `assert_json` also uses external snapshot storage, but may canonicalize JSON
-  object field order before comparison.
+- `assert_json` uses external snapshot storage and pretty-prints canonical JSON
+  before comparison.
 - `assert_with` allows custom serializers without turning every package into
   its own snapshot harness.
 - `assert_inline_text` compares against source-embedded expected text and does
@@ -457,6 +475,15 @@ The initial command set should be:
 `review` should discover pending files, show a diff between approved and
 pending state, and let the contributor inspect each change.
 
+The current implementation supports:
+
+- optional substring filtering via `riot snapshots review <query>`
+- line-oriented interactive review in TTY sessions:
+  - `a` / approve
+  - `r` / reject
+  - `i` / ignore
+  - `q` / quit
+
 `approve` should promote pending files to approved files.
 
 `reject` should delete pending files without changing approved state.
@@ -469,19 +496,22 @@ Inline expectations are not reviewable artifacts.
 `Std.Test` should provide a shared helper for turning fixture directories into
 ordinary test cases.
 
-A first-pass surface could look like:
+The current surface is:
 
 ```ocaml
 module Std.Test.FixtureRunner : sig
   type ctx = {
     test : Std.Test.ctx;
     fixture_path : Std.Path.t;
-    fixture_relpath : string;
+    fixture_relpath : Std.Path.t;
     fixture_name : string;
   }
 
   val cases :
-    dir:string ->
+    ?filter:(Std.Path.t -> [ `keep | `skip ]) ->
+    ?snapshot_path:(Std.Path.t -> Std.Path.t option) ->
+    unit ->
+    dir:Std.Path.t ->
     run:(ctx -> (unit, string) result) ->
     Std.Test.test_case list
 end
@@ -547,10 +577,30 @@ The recommended order is:
 The design does not require all current package-local expectation harnesses to
 be rewritten in one change.
 
+### Current implementation status
+
+Implemented:
+
+- context-aware `Std.Test` callbacks
+- `Std.Test.Snapshot.assert_text`
+- `Std.Test.Snapshot.assert_json`
+- `Std.Test.Snapshot.assert_with`
+- `Std.Test.Snapshot.assert_inline_text`
+- `Std.Test.FixtureRunner.cases`
+- `riot snapshots review|approve|reject`
+- interactive `riot snapshots review` in TTY sessions
+- native snapshot-backed suites in `syn`, `krasny`, and `riot-cli`
+
+Still open:
+
+- broader package migrations away from Python and package-local harnesses
+- richer snapshot diff rendering
+- repository policy for `.expected.new` files
+- possible inline JSON assertions
+
 ### Slice 0: prerequisite `Std.Test` context
 
-This RFD assumes a per-test `ctx` exists.
-If that context is not already available, it is the first prerequisite slice.
+This prerequisite is done and merged into `Std.Test`.
 
 Likely touch points:
 
@@ -735,7 +785,7 @@ Likely touched files:
 - `packages/riot-cli/AGENTS.md` if command behavior/contracts change
 
 The first implementation does not need a TUI.
-A line-oriented review flow is sufficient.
+A line-oriented review flow is sufficient, and is what Riot currently ships.
 
 Implementation notes:
 
