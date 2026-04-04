@@ -1,5 +1,4 @@
 open Std
-open Std.Data
 open Typ
 
 let diagnostics_dir = Path.v "packages/typ/tests/diagnostics"
@@ -22,36 +21,17 @@ let filter_diagnostic_fixture = fun path ->
   | _ ->
       `skip
 
-let canonicalize_json =
-  let rec loop = function
-    | Json.Object fields ->
-        Json.Object (
-          fields
-          |> List.map (fun (key, value) -> (key, loop value))
-          |> List.sort (fun (left, _) (right, _) -> String.compare left right)
-        )
-    | Json.Array items ->
-        Json.Array (List.map loop items)
-    | other ->
-        other
-  in
-  loop
-
 let diagnostics_to_json = fun (report: Check_result.t) ->
-  Json.Object [
-    ("parse_diagnostics", Json.Array (List.map Syn.Diagnostic.to_json report.parse_diagnostics));
-    ("lowering_diagnostics", Json.Array (List.map Diagnostic.to_json report.lowering_diagnostics));
-    ("typing_diagnostics", Json.Array (List.map Diagnostic.to_json report.typing_diagnostics));
+  Std.Data.Json.Object [
+    ("parse_diagnostics", Std.Data.Json.Array (List.map Syn.Diagnostic.to_json report.parse_diagnostics));
+    ("lowering_diagnostics", Std.Data.Json.Array (List.map Diagnostic.to_json report.lowering_diagnostics));
+    ("typing_diagnostics", Std.Data.Json.Array (List.map Diagnostic.to_json report.typing_diagnostics));
   ]
-  |> canonicalize_json
 
 let test_fixture = fun ~(ctx:Test.FixtureRunner.ctx) ->
   let source = Fs.read ctx.fixture_path |> Result.expect ~msg:"fixture should exist" in
   let report = Check.check_source ~filename:ctx.fixture_path source in
-  Test.Snapshot.assert_with
-    ~ctx:ctx.test
-    ~render:(fun json -> Json.to_string_pretty json ^ "\n")
-    ~actual:(diagnostics_to_json report)
+  Test.Snapshot.assert_json ~ctx:ctx.test ~actual:(diagnostics_to_json report)
 
 let () =
   Actors.run

@@ -1,10 +1,39 @@
-file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/006_parse_error.ml
-
-parse diagnostics:
-  Parse error "E0004" at 12..12: fix: add an expression after the =
-  
-  hint: Every let binding needs a value on the right side of the =.
-lowering diagnostics:
-  none
-semantic tree:
-  unavailable
+{
+  "body_arena": null,
+  "exports": [],
+  "expr_traces": null,
+  "file_summary": {
+    "export_result": {
+      "exports": [],
+      "tag": "no_export"
+    },
+    "source_id": 0
+  },
+  "filename": "/Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/006_parse_error.ml",
+  "item_traces": [],
+  "item_tree": null,
+  "lowering_diagnostics": [],
+  "origin_map": null,
+  "parse_diagnostics": [
+    {
+      "kind": {
+        "expected": "expression",
+        "fix": "add an expression after the =",
+        "found": {
+          "kind": "end of file",
+          "text": ""
+        },
+        "hint": "Every let binding needs a value on the right side of the =.",
+        "id": "E0004",
+        "name": "missing-let-binding-expr"
+      },
+      "span": {
+        "end": 12,
+        "start": 12
+      }
+    }
+  ],
+  "source_id": 0,
+  "type_index": [],
+  "typing_diagnostics": []
+}

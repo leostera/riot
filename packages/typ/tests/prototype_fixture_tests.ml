@@ -22,7 +22,7 @@ let fixture_filter = fun path ->
 let test_fixture = fun ~(ctx:Test.FixtureRunner.ctx) ->
   let source = Fs.read ctx.fixture_path |> Result.expect ~msg:"fixture should exist" in
   let report = Check.check_source ~filename:ctx.fixture_path source in
-  Test.Snapshot.assert_text ~ctx:ctx.test ~actual:(Report.render_report report)
+  Test.Snapshot.assert_json ~ctx:ctx.test ~actual:(Report.to_json report)
 
 let () =
   Actors.run

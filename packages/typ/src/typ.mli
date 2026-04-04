@@ -3,88 +3,110 @@ open Std
 (** Typ - Experimental library-first type analysis for Riot
 
     `typ` is the current prototype package for Riot's future OCaml typechecker.
-    It is intentionally split into explicit stages instead of one monolithic
-    pass:
+    Its public shape now follows the architecture proposed in the RFD more
+    closely:
 
-    - `Check` orchestrates parse, lower, and infer for one source input.
-    - `Lower` turns successful `Syn.Cst` files into a `SemanticTree` with
-      recovery nodes and structured lowering diagnostics.
-    - `Infer` runs the current prototype inference engine over the semantic tree and
-      produces export snapshots plus detailed expression/item traces.
-    - `Report` renders those results into snapshot-friendly text so prototype
-      behavior is easy to review in fixtures.
+    - `Session` owns logical sources and stable `SourceId`s
+    - `Snapshot` is an immutable analysis revision
+    - `Query` exposes query-first semantic access over one snapshot
+    - `Batch` and `Check` are convenience wrappers for one-shot callers
+    - `Lower` and `Infer` still implement a basic functional-subset pipeline
+      underneath that architecture
 
-    The package is still experimental. The API is intentionally explicit and
-    library-shaped, but it does not yet represent the final long-lived surface
-    of Riot's future typechecker.
+    The current checker remains intentionally limited, but the plumbing is now
+    arranged so future work can focus on richer type rules, better diagnostics,
+    and more fixtures instead of repeated structural churn.
 
-    # Current Shape
+    # Current Semantic Layers
 
-    The prototype currently supports a narrow functional core:
+    The prototype lowers clean `Syn.Cst` files into explicit semantic storage:
 
-    - value bindings and simple `let rec ... and ...`
-    - variables, literals, tuples, `if`, `match`, `fun`, `function`
-    - positional application and infix lowering through ordinary application
+    - `ItemTree`
+      top-level item skeletons that are stable over many body edits
+    - `BodyArena`
+      normalized expressions, patterns, and bindings
+    - `OriginMap`
+      source-backed origins for semantic IDs in one source revision
+    - `FileSummary`
+      export-facing result with an explicit trust state
+    - `TypeIndex`
+      a query-oriented expression-type index used by `Query.type_at`
 
-    Unsupported syntax is not silently dropped. It is lowered into explicit
-    recovery items or hole expressions with span-backed diagnostics so callers
-    can still inspect partial results.
+    A convenience `SemanticTree` wrapper keeps those pieces together for the
+    current prototype inferencer and report snapshots.
 
     # Suggested Entry Points
 
-    Most callers should start with:
+    New callers should prefer:
 
-    - `Typ.Check.check_source` to analyze one source string
-    - `Typ.Report.render_report` to render the result for tests or debugging
+    - `Typ.Session.empty`
+    - `Typ.Session.create_source`
+    - `Typ.Session.snapshot`
+    - `Typ.Query.diagnostics`
+    - `Typ.Query.type_at`
+    - `Typ.Query.export_of`
 
-    The lower-level modules are also exported so the prototype can be exercised
-    stage-by-stage while the architecture is still being explored.
+    Existing tests and batch-oriented tools can still use:
+
+    - `Typ.Batch.check_source`
+    - `Typ.Check.check_source`
+    - `Typ.Report.render_report`
 *)
 
-(** Structured diagnostics produced by the prototype lowering and inference
-    stages. These are separate from `Syn.Diagnostic`, which still owns parse
-    diagnostics. *)
+module SourceId : module type of SourceId
+
+module ItemId : module type of ItemId
+
+module BindingId : module type of BindingId
+
+module ExprId : module type of ExprId
+
+module PatId : module type of PatId
+
+module OriginId : module type of OriginId
+
+module Position : module type of Position
+
+module Source : module type of Source
+
 module Diagnostic : module type of Diagnostic
 
-(** Semantic tree used by the prototype checker.
+module OriginMap : module type of OriginMap
 
-    This is the current "middle layer" between `Syn.Cst` and inferred types:
-    items, expressions, patterns, and stable-ish origin records live here. *)
+module ItemTree : module type of ItemTree
+
+module BodyArena : module type of BodyArena
+
 module SemanticTree : module type of SemanticTree
 
-(** Prototype type graph representation used during inference. *)
 module TypeRepr : module type of TypeRepr
 
-(** Quantified schemes exported from the prototype inferencer. *)
 module TypeScheme : module type of TypeScheme
 
-(** Pretty-printers for prototype types and schemes. *)
 module TypePrinter : module type of TypePrinter
 
-(** Shared output types for one `Check` run, including exports, diagnostics,
-    and per-item / per-expression traces. *)
+module TypeIndex : module type of TypeIndex
+
+module FileSummary : module type of FileSummary
+
+module Config : module type of TypConfig
+
 module Check_result : module type of Check_result
 
-(** CST-to-semantic-tree pass.
-
-    This stage only runs on clean `Syn.Cst` inputs. Unsupported syntax is
-    preserved through recovery nodes plus lowering diagnostics. *)
 module Lower : module type of Lower
 
-(** Semantic-tree type inference pass.
-
-    The current implementation is a small prototype engine with query-local
-    mutable state and snapshot-oriented traces. *)
 module Infer : module type of Infer
 
-(** One-shot orchestration entrypoint for the prototype typechecker.
+module SourceAnalysis : module type of SourceAnalysis
 
-    `Check.check_source` is currently the main API for package tests and
-    exploratory tooling. *)
+module Snapshot : module type of Snapshot
+
+module Session : module type of Session
+
+module Query : module type of Query
+
+module Batch : module type of Batch
+
 module Check : module type of Check
 
-(** Snapshot-oriented rendering helpers for `Check_result.t`.
-
-    This keeps human-readable output separate from the semantic pipeline so the
-    checker can stay library-first. *)
 module Report : module type of Report

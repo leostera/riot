@@ -1,112 +1,631 @@
-file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/001_identity.ml
-
-parse diagnostics:
-  none
-lowering diagnostics:
-  none
-semantic tree:
-origins:
-  origin#0 pattern identifier_pattern @ 3..6
-  origin#1 pattern identifier_pattern @ 6..8
-  origin#2 expr path_expression @ 10..12
-  origin#3 expr fun_expression @ 0..12
-  origin#4 item binding @ 0..12
-  origin#5 item item @ 0..12
-  origin#6 pattern identifier_pattern @ 17..24
-  origin#7 expr int_literal @ 29..32
-  origin#8 expr path_expression @ 26..29
-  origin#9 expr apply_expression @ 26..32
-  origin#10 item binding @ 12..32
-  origin#11 item item @ 12..32
-
-patterns:
-  pat#0 origin#0 var id
-  pat#1 origin#1 var x
-  pat#2 origin#6 var answer
-
-expressions:
-  expr#0 origin#2 var x
-  expr#1 origin#3 fun [1] -> expr#0
-  expr#2 origin#7 int 42
-  expr#3 origin#8 var id
-  expr#4 origin#9 apply expr#3 [2]
-
-items:
-  item#0 value recursive=false
-    binding#0 id pat#0 expr#1 recursive=false
-  item#1 value recursive=false
-    binding#1 answer pat#2 expr#4 recursive=false
-typing diagnostics:
-  none
-exports:
-  * : int -> int -> int
-  + : int -> int -> int
-  - : int -> int -> int
-  / : int -> int -> int
-  = : 'a. 'a -> 'a -> bool
-  answer : int
-  id : 'a. 'a -> 'a
-  not : bool -> bool
-item traces:
-  item#0 names=[id]
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-  item#1 names=[answer]
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    answer : int
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-expr traces:
-  expr#0 path_expression @ 10..12
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    not : bool -> bool
-    x : 'a
-    => 'a
-  expr#1 fun_expression @ 0..12
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    not : bool -> bool
-    => 'a -> 'a
-  expr#3 path_expression @ 26..29
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-    => int -> int
-  expr#2 int_literal @ 29..32
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-    => int
-  expr#4 apply_expression @ 26..32
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-    => int
+{
+  "body_arena": {
+    "bindings": [
+      {
+        "binding_id": 0,
+        "name": "id",
+        "origin_id": 4,
+        "pattern_id": 0,
+        "recursive": false,
+        "value_id": 1
+      },
+      {
+        "binding_id": 1,
+        "name": "answer",
+        "origin_id": 10,
+        "pattern_id": 2,
+        "recursive": false,
+        "value_id": 4
+      }
+    ],
+    "expressions": [
+      {
+        "desc": {
+          "name": "x",
+          "tag": "var"
+        },
+        "expr_id": 0,
+        "origin_id": 2
+      },
+      {
+        "desc": {
+          "body_id": 0,
+          "parameters": [
+            1
+          ],
+          "tag": "fun"
+        },
+        "expr_id": 1,
+        "origin_id": 3
+      },
+      {
+        "desc": {
+          "digits": "42",
+          "tag": "int"
+        },
+        "expr_id": 2,
+        "origin_id": 7
+      },
+      {
+        "desc": {
+          "name": "id",
+          "tag": "var"
+        },
+        "expr_id": 3,
+        "origin_id": 8
+      },
+      {
+        "desc": {
+          "arguments": [
+            2
+          ],
+          "callee_id": 3,
+          "tag": "apply"
+        },
+        "expr_id": 4,
+        "origin_id": 9
+      }
+    ],
+    "patterns": [
+      {
+        "desc": {
+          "name": "id",
+          "tag": "var"
+        },
+        "origin_id": 0,
+        "pat_id": 0
+      },
+      {
+        "desc": {
+          "name": "x",
+          "tag": "var"
+        },
+        "origin_id": 1,
+        "pat_id": 1
+      },
+      {
+        "desc": {
+          "name": "answer",
+          "tag": "var"
+        },
+        "origin_id": 6,
+        "pat_id": 2
+      }
+    ]
+  },
+  "exports": [
+    {
+      "name": "answer",
+      "scheme": "int"
+    },
+    {
+      "name": "id",
+      "scheme": "'a. 'a -> 'a"
+    }
+  ],
+  "expr_traces": [
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        },
+        {
+          "name": "x",
+          "scheme": "'a"
+        }
+      ],
+      "expr_id": 0,
+      "inferred_type": "'a",
+      "origin": {
+        "label": "path_expression",
+        "span": {
+          "end": 12,
+          "start": 10
+        },
+        "syntax_kind": "IDENT_EXPR"
+      },
+      "origin_id": 2
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 1,
+      "inferred_type": "'a -> 'a",
+      "origin": {
+        "label": "fun_expression",
+        "span": {
+          "end": 12,
+          "start": 0
+        },
+        "syntax_kind": "LET_BINDING"
+      },
+      "origin_id": 3
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 3,
+      "inferred_type": "int -> int",
+      "origin": {
+        "label": "path_expression",
+        "span": {
+          "end": 29,
+          "start": 26
+        },
+        "syntax_kind": "IDENT_EXPR"
+      },
+      "origin_id": 8
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 2,
+      "inferred_type": "int",
+      "origin": {
+        "label": "int_literal",
+        "span": {
+          "end": 32,
+          "start": 29
+        },
+        "syntax_kind": "INT_LITERAL"
+      },
+      "origin_id": 7
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 4,
+      "inferred_type": "int",
+      "origin": {
+        "label": "apply_expression",
+        "span": {
+          "end": 32,
+          "start": 26
+        },
+        "syntax_kind": "APPLY_EXPR"
+      },
+      "origin_id": 9
+    }
+  ],
+  "file_summary": {
+    "export_result": {
+      "exports": [
+        {
+          "name": "answer",
+          "scheme": "int"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        }
+      ],
+      "tag": "trusted_export"
+    },
+    "source_id": 0
+  },
+  "filename": "/Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/001_identity.ml",
+  "item_traces": [
+    {
+      "binding_names": [
+        "id"
+      ],
+      "exports_after": [
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        }
+      ],
+      "item_id": 0
+    },
+    {
+      "binding_names": [
+        "answer"
+      ],
+      "exports_after": [
+        {
+          "name": "answer",
+          "scheme": "int"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        }
+      ],
+      "item_id": 1
+    }
+  ],
+  "item_tree": [
+    {
+      "binding_ids": [
+        0
+      ],
+      "item_id": 0,
+      "origin_id": 5,
+      "recursive": false,
+      "tag": "value"
+    },
+    {
+      "binding_ids": [
+        1
+      ],
+      "item_id": 1,
+      "origin_id": 11,
+      "recursive": false,
+      "tag": "value"
+    }
+  ],
+  "lowering_diagnostics": [],
+  "origin_map": [
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 0,
+      "semantic_id": {
+        "id": 0,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 6,
+        "start": 3
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 1,
+      "semantic_id": {
+        "id": 1,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 8,
+        "start": 6
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "expr",
+      "label": "path_expression",
+      "origin_id": 2,
+      "semantic_id": {
+        "id": 0,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 12,
+        "start": 10
+      },
+      "syntax_kind": "IDENT_EXPR"
+    },
+    {
+      "kind": "expr",
+      "label": "fun_expression",
+      "origin_id": 3,
+      "semantic_id": {
+        "id": 1,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 12,
+        "start": 0
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "binding",
+      "label": "binding",
+      "origin_id": 4,
+      "semantic_id": {
+        "id": 0,
+        "tag": "binding"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 12,
+        "start": 0
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "item",
+      "label": "item",
+      "origin_id": 5,
+      "semantic_id": {
+        "id": 0,
+        "tag": "item"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 12,
+        "start": 0
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 6,
+      "semantic_id": {
+        "id": 2,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 24,
+        "start": 17
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "expr",
+      "label": "int_literal",
+      "origin_id": 7,
+      "semantic_id": {
+        "id": 2,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 32,
+        "start": 29
+      },
+      "syntax_kind": "INT_LITERAL"
+    },
+    {
+      "kind": "expr",
+      "label": "path_expression",
+      "origin_id": 8,
+      "semantic_id": {
+        "id": 3,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 29,
+        "start": 26
+      },
+      "syntax_kind": "IDENT_EXPR"
+    },
+    {
+      "kind": "expr",
+      "label": "apply_expression",
+      "origin_id": 9,
+      "semantic_id": {
+        "id": 4,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 32,
+        "start": 26
+      },
+      "syntax_kind": "APPLY_EXPR"
+    },
+    {
+      "kind": "binding",
+      "label": "binding",
+      "origin_id": 10,
+      "semantic_id": {
+        "id": 1,
+        "tag": "binding"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 32,
+        "start": 12
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "item",
+      "label": "item",
+      "origin_id": 11,
+      "semantic_id": {
+        "id": 1,
+        "tag": "item"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 32,
+        "start": 12
+      },
+      "syntax_kind": "LET_BINDING"
+    }
+  ],
+  "parse_diagnostics": [],
+  "source_id": 0,
+  "type_index": [
+    {
+      "expr_id": 0,
+      "inferred_type": "'a",
+      "origin_id": 2,
+      "span": {
+        "end": 12,
+        "start": 10
+      }
+    },
+    {
+      "expr_id": 3,
+      "inferred_type": "int -> int",
+      "origin_id": 8,
+      "span": {
+        "end": 29,
+        "start": 26
+      }
+    },
+    {
+      "expr_id": 2,
+      "inferred_type": "int",
+      "origin_id": 7,
+      "span": {
+        "end": 32,
+        "start": 29
+      }
+    },
+    {
+      "expr_id": 4,
+      "inferred_type": "int",
+      "origin_id": 9,
+      "span": {
+        "end": 32,
+        "start": 26
+      }
+    },
+    {
+      "expr_id": 1,
+      "inferred_type": "'a -> 'a",
+      "origin_id": 3,
+      "span": {
+        "end": 12,
+        "start": 0
+      }
+    }
+  ],
+  "typing_diagnostics": []
+}

@@ -3,15 +3,18 @@ module Typ_diagnostic = Diagnostic
 open Syn
 
 type state = {
+  source: Source.t;
   mutable next_origin_id: int;
   mutable next_pattern_id: int;
   mutable next_expr_id: int;
   mutable next_binding_id: int;
   mutable next_item_id: int;
   mutable next_synthetic_name: int;
-  mutable origins: SemanticTree.origin list;
-  mutable patterns: SemanticTree.pattern_node list;
-  mutable expressions: SemanticTree.expr_node list;
+  mutable origins: OriginMap.origin list;
+  mutable patterns: BodyArena.pattern_node list;
+  mutable expressions: BodyArena.expr_node list;
+  mutable bindings: BodyArena.binding list;
+  mutable items: ItemTree.item list;
   mutable diagnostics: Typ_diagnostic.t list;
 }
 
@@ -30,8 +33,9 @@ let binding_name_of_pattern =
   in
   loop
 
-let make_state = fun () ->
+let make_state = fun source ->
   {
+    source;
     next_origin_id = 0;
     next_pattern_id = 0;
     next_expr_id = 0;
@@ -41,55 +45,66 @@ let make_state = fun () ->
     origins = [];
     patterns = [];
     expressions = [];
+    bindings = [];
+    items = [];
     diagnostics = [];
   }
 
 let add_diagnostic = fun (state: state) diagnostic ->
   state.diagnostics <- diagnostic :: state.diagnostics
 
-let add_origin = fun (state: state) ~kind ~label syntax_node ->
-  let origin_id = state.next_origin_id in
+let add_origin = fun (state: state) ~semantic_id ~label syntax_node ->
+  let origin_id = OriginId.of_int state.next_origin_id in
   let () = state.next_origin_id <- state.next_origin_id + 1 in
   let origin = {
-    SemanticTree.origin_id;
-    kind;
-    span = Ceibo.Red.SyntaxNode.span syntax_node;
+    OriginMap.origin_id;
+    source_id = state.source.source_id;
+    source_revision = state.source.revision;
+    semantic_id;
     label;
+    syntax_kind = Cst.syntax_kind syntax_node;
+    span = Ceibo.Red.SyntaxNode.span syntax_node;
   } in
   let () = state.origins <- origin :: state.origins in
   origin_id
 
 let add_pattern = fun (state: state) ~syntax_node ~label desc ->
-  let origin_id = add_origin state ~kind:SemanticTree.Pattern ~label syntax_node in
-  let pat_id = state.next_pattern_id in
+  let pat_id = PatId.of_int state.next_pattern_id in
   let () = state.next_pattern_id <- state.next_pattern_id + 1 in
-  let node = { SemanticTree.pat_id; origin_id; desc } in
+  let origin_id = add_origin state ~semantic_id:(OriginMap.Pattern pat_id) ~label syntax_node in
+  let node = { BodyArena.pat_id; origin_id; desc } in
   let () = state.patterns <- node :: state.patterns in
   pat_id
 
 let add_expr = fun (state: state) ~syntax_node ~label desc ->
-  let origin_id = add_origin state ~kind:SemanticTree.Expr ~label syntax_node in
-  let expr_id = state.next_expr_id in
+  let expr_id = ExprId.of_int state.next_expr_id in
   let () = state.next_expr_id <- state.next_expr_id + 1 in
-  let node = { SemanticTree.expr_id; origin_id; desc } in
+  let origin_id = add_origin state ~semantic_id:(OriginMap.Expr expr_id) ~label syntax_node in
+  let node = { BodyArena.expr_id; origin_id; desc } in
   let () = state.expressions <- node :: state.expressions in
   expr_id
 
 let add_binding = fun (state: state) ~syntax_node ~name ~pattern_id ~value_id ~recursive ->
-  let origin_id = add_origin state ~kind:SemanticTree.Item ~label:"binding" syntax_node in
-  let binding_id = state.next_binding_id in
+  let binding_id = BindingId.of_int state.next_binding_id in
   let () = state.next_binding_id <- state.next_binding_id + 1 in
-  { SemanticTree.binding_id; origin_id; name; pattern_id; value_id; recursive }
+  let origin_id = add_origin state ~semantic_id:(OriginMap.Binding binding_id) ~label:"binding" syntax_node in
+  let binding = { BodyArena.binding_id; origin_id; name; pattern_id; value_id; recursive } in
+  let () = state.bindings <- binding :: state.bindings in
+  binding_id
 
 let add_item = fun (state: state) ~syntax_node item ->
-  let origin_id = add_origin state ~kind:SemanticTree.Item ~label:"item" syntax_node in
-  let item_id = state.next_item_id in
+  let item_id = ItemId.of_int state.next_item_id in
   let () = state.next_item_id <- state.next_item_id + 1 in
-  match item with
-  | `Value (bindings, recursive) ->
-      SemanticTree.Value { item_id; origin_id; bindings; recursive }
-  | `Unsupported summary ->
-      SemanticTree.Unsupported { item_id; origin_id; summary }
+  let origin_id = add_origin state ~semantic_id:(OriginMap.Item item_id) ~label:"item" syntax_node in
+  let item =
+    match item with
+    | `Value (binding_ids, recursive) ->
+        ItemTree.Value { item_id; origin_id; binding_ids; recursive }
+    | `Unsupported summary ->
+        ItemTree.Unsupported { item_id; origin_id; summary }
+  in
+  let () = state.items <- item :: state.items in
+  item
 
 let fresh_synthetic_name = fun (state: state) prefix ->
   let name = "$" ^ prefix ^ Int.to_string state.next_synthetic_name in
@@ -131,7 +146,7 @@ let lower_unsupported_pattern = fun (state: state) ?reason pattern syntax_kind -
     state
     ~syntax_node
     ~label:"unsupported_pattern"
-    (SemanticTree.PUnsupported (SyntaxKind.to_string syntax_kind))
+    (BodyArena.PUnsupported (SyntaxKind.to_string syntax_kind))
 
 let lower_unsupported_expr = fun (state: state) ?reason expr syntax_kind ->
   let syntax_node = Cst.Expression.syntax_node expr in
@@ -150,24 +165,24 @@ let lower_unsupported_expr = fun (state: state) ?reason expr syntax_kind ->
     state
     ~syntax_node
     ~label:"unsupported_expression"
-    (SemanticTree.EHole (SyntaxKind.to_string syntax_kind))
+    (BodyArena.EHole (SyntaxKind.to_string syntax_kind))
 
 let rec lower_pattern = fun (state: state) pattern ->
   match pattern with
   | Cst.Pattern.Identifier { syntax_node; name_token; _ } ->
-      add_pattern state ~syntax_node ~label:"identifier_pattern" (SemanticTree.PVar (Cst.Token.text name_token))
+      add_pattern state ~syntax_node ~label:"identifier_pattern" (BodyArena.PVar (Cst.Token.text name_token))
   | Cst.Pattern.Wildcard { syntax_node; _ } ->
-      add_pattern state ~syntax_node ~label:"wildcard_pattern" SemanticTree.PWildcard
+      add_pattern state ~syntax_node ~label:"wildcard_pattern" BodyArena.PWildcard
   | Cst.Pattern.Literal { syntax_node; literal; _ } -> (
       match literal with
       | Cst.PatternLiteral.Int integer ->
-          add_pattern state ~syntax_node ~label:"int_pattern" (SemanticTree.PInt (int_text integer))
+          add_pattern state ~syntax_node ~label:"int_pattern" (BodyArena.PInt (int_text integer))
       | Cst.PatternLiteral.Bool { value; _ } ->
-          add_pattern state ~syntax_node ~label:"bool_pattern" (SemanticTree.PBool value)
+          add_pattern state ~syntax_node ~label:"bool_pattern" (BodyArena.PBool value)
       | Cst.PatternLiteral.String string_ ->
-          add_pattern state ~syntax_node ~label:"string_pattern" (SemanticTree.PString string_.contents)
+          add_pattern state ~syntax_node ~label:"string_pattern" (BodyArena.PString string_.contents)
       | Cst.PatternLiteral.Unit _ ->
-          add_pattern state ~syntax_node ~label:"unit_pattern" SemanticTree.PUnit
+          add_pattern state ~syntax_node ~label:"unit_pattern" BodyArena.PUnit
       | _ ->
           lower_unsupported_pattern
             state
@@ -179,7 +194,7 @@ let rec lower_pattern = fun (state: state) pattern ->
         elements
         |> List.map (fun (element: Cst.tuple_pattern_element) -> lower_pattern state element.pattern)
       in
-      add_pattern state ~syntax_node ~label:"tuple_pattern" (SemanticTree.PTuple element_ids)
+      add_pattern state ~syntax_node ~label:"tuple_pattern" (BodyArena.PTuple element_ids)
   | Cst.Pattern.Parenthesized { inner; _ } ->
       lower_pattern state inner
   | Cst.Pattern.Typed { syntax_node; pattern; _ } ->
@@ -212,9 +227,9 @@ let rec lower_parameter = fun (state: state) parameter ->
       | None -> (
           match Cst.Parameter.name parameter with
           | Some name ->
-              add_pattern state ~syntax_node ~label:"recovered_parameter" (SemanticTree.PVar name)
+              add_pattern state ~syntax_node ~label:"recovered_parameter" (BodyArena.PVar name)
           | None ->
-              add_pattern state ~syntax_node ~label:"unsupported_parameter" SemanticTree.PWildcard)
+              add_pattern state ~syntax_node ~label:"unsupported_parameter" BodyArena.PWildcard)
 
 let synthetic_var_pattern = fun (state: state) syntax_node ~label ->
   let name = fresh_synthetic_name state label in
@@ -223,7 +238,7 @@ let synthetic_var_pattern = fun (state: state) syntax_node ~label ->
       state
       ~syntax_node
       ~label:("synthetic_" ^ label ^ "_pattern")
-      (SemanticTree.PVar name)
+      (BodyArena.PVar name)
   in
   (name, pat_id)
 
@@ -244,7 +259,7 @@ let rec lower_match_cases = fun (state: state) cases ->
             in
             lower_expr state case.body
       in
-      { SemanticTree.pattern_id; body_id })
+      { BodyArena.pattern_id; body_id })
     cases
 
 and lower_function_like = fun (state: state) ~syntax_node ~parameters ~body ->
@@ -258,21 +273,21 @@ and lower_function_like = fun (state: state) ~syntax_node ~parameters ~body ->
           synthetic_var_pattern state syntax_node ~label:"function_arg"
         in
         let argument_expr_id =
-          add_expr state ~syntax_node ~label:"synthetic_function_argument" (SemanticTree.EVar synthetic_name)
+          add_expr state ~syntax_node ~label:"synthetic_function_argument" (BodyArena.EVar synthetic_name)
         in
         let match_id =
           add_expr
             state
             ~syntax_node
             ~label:"function_match_body"
-            (SemanticTree.EMatch (argument_expr_id, lower_match_cases state cases))
+            (BodyArena.EMatch (argument_expr_id, lower_match_cases state cases))
         in
         let parameter_ids = parameter_ids @ [ synthetic_pattern_id ] in
-        add_expr state ~syntax_node ~label:"wrapped_fun" (SemanticTree.EFun (parameter_ids, match_id))
+        add_expr state ~syntax_node ~label:"wrapped_fun" (BodyArena.EFun (parameter_ids, match_id))
   in
   match body with
   | `Expr _ ->
-      add_expr state ~syntax_node ~label:"fun_expression" (SemanticTree.EFun (parameter_ids, body_id))
+      add_expr state ~syntax_node ~label:"fun_expression" (BodyArena.EFun (parameter_ids, body_id))
   | `Cases _ ->
       body_id
 
@@ -288,7 +303,7 @@ and lower_binding_source = fun (state: state) ~syntax_node ~binding_pattern ~par
 
 and lower_let_binding_group = fun (state: state) let_binding ->
   let recursive = Cst.LetBinding.is_recursive let_binding in
-  let bindings =
+  let binding_ids =
     let_binding
     :: Cst.LetBinding.and_bindings let_binding
     |> List.map (fun (binding: Cst.let_binding) ->
@@ -300,7 +315,7 @@ and lower_let_binding_group = fun (state: state) let_binding ->
         ~value:(Cst.LetBinding.value binding)
         ~recursive)
   in
-  add_item state ~syntax_node:(Cst.LetBinding.syntax_node let_binding) (`Value (bindings, recursive))
+  add_item state ~syntax_node:(Cst.LetBinding.syntax_node let_binding) (`Value (binding_ids, recursive))
 
 and lower_let_expression_bindings = fun (state: state) (let_expression: Cst.let_expression) ->
   let recursive = Option.is_some let_expression.rec_token in
@@ -351,27 +366,27 @@ and lower_apply = fun (state: state) expression ->
   in
   let syntax_node = Cst.Expression.syntax_node expression in
   let (callee_id, arguments) = collect [] expression in
-  add_expr state ~syntax_node ~label:"apply_expression" (SemanticTree.EApply (callee_id, arguments))
+  add_expr state ~syntax_node ~label:"apply_expression" (BodyArena.EApply (callee_id, arguments))
 
 and lower_infix = fun (state: state) (infix: Cst.infix_expression) ->
   let syntax_node = infix.syntax_node in
   let operator_name = Cst.InfixExpression.operator infix in
-  let operator_id = add_expr state ~syntax_node ~label:"infix_operator" (SemanticTree.EVar operator_name) in
+  let operator_id = add_expr state ~syntax_node ~label:"infix_operator" (BodyArena.EVar operator_name) in
   let left_id = lower_expr state infix.left in
   let right_id = lower_expr state infix.right in
-  add_expr state ~syntax_node ~label:"infix_expression" (SemanticTree.EApply (operator_id, [ left_id; right_id ]))
+  add_expr state ~syntax_node ~label:"infix_expression" (BodyArena.EApply (operator_id, [ left_id; right_id ]))
 
 and lower_expr = fun (state: state) expression ->
   match expression with
   | Cst.Expression.Path { syntax_node; path; _ } ->
-      add_expr state ~syntax_node ~label:"path_expression" (SemanticTree.EVar (path_text path))
+      add_expr state ~syntax_node ~label:"path_expression" (BodyArena.EVar (path_text path))
   | Cst.Expression.Operator { syntax_node; operator_tokens; _ } ->
       let operator =
         operator_tokens
         |> List.map Cst.Token.text
         |> String.concat ""
       in
-      add_expr state ~syntax_node ~label:"operator_expression" (SemanticTree.EVar operator)
+      add_expr state ~syntax_node ~label:"operator_expression" (BodyArena.EVar operator)
   | Cst.Expression.Literal literal -> (
       match literal with
       | Cst.Literal.Int integer ->
@@ -379,13 +394,13 @@ and lower_expr = fun (state: state) expression ->
             state
             ~syntax_node:integer.syntax_node
             ~label:"int_literal"
-            (SemanticTree.EInt (int_text integer))
+            (BodyArena.EInt (int_text integer))
       | Cst.Literal.Bool { syntax_node; value; _ } ->
-          add_expr state ~syntax_node ~label:"bool_literal" (SemanticTree.EBool value)
+          add_expr state ~syntax_node ~label:"bool_literal" (BodyArena.EBool value)
       | Cst.Literal.String string_ ->
-          add_expr state ~syntax_node:string_.syntax_node ~label:"string_literal" (SemanticTree.EString string_.contents)
+          add_expr state ~syntax_node:string_.syntax_node ~label:"string_literal" (BodyArena.EString string_.contents)
       | Cst.Literal.Unit { syntax_node; _ } ->
-          add_expr state ~syntax_node ~label:"unit_literal" SemanticTree.EUnit
+          add_expr state ~syntax_node ~label:"unit_literal" BodyArena.EUnit
       | _ ->
           lower_unsupported_expr
             state
@@ -394,7 +409,7 @@ and lower_expr = fun (state: state) expression ->
             (unsupported_syntax_kind (Cst.Expression.syntax_node expression)))
   | Cst.Expression.Tuple { syntax_node; elements; _ } ->
       let element_ids = List.map (lower_expr state) elements in
-      add_expr state ~syntax_node ~label:"tuple_expression" (SemanticTree.ETuple element_ids)
+      add_expr state ~syntax_node ~label:"tuple_expression" (BodyArena.ETuple element_ids)
   | Cst.Expression.Parenthesized { inner; _ } ->
       lower_expr state inner
   | Cst.Expression.TypeAscription { syntax_node; expression; _ } ->
@@ -420,7 +435,7 @@ and lower_expr = fun (state: state) expression ->
       | Cst.Expression body ->
           lower_function_like state ~syntax_node ~parameters ~body:(`Expr body)
       | Cst.Cases body ->
-          lower_function_like state ~syntax_node ~parameters ~body:(`Cases body.cases))
+          lower_function_like state ~syntax_node ~parameters:[] ~body:(`Cases body.cases))
   | Cst.Expression.Function { syntax_node; cases; _ } ->
       lower_function_like state ~syntax_node ~parameters:[] ~body:(`Cases cases)
   | Cst.Expression.Apply _ ->
@@ -433,32 +448,32 @@ and lower_expr = fun (state: state) expression ->
       let else_id =
         match else_branch with
         | Some else_branch -> lower_expr state else_branch
-        | None -> add_expr state ~syntax_node ~label:"implicit_else_unit" SemanticTree.EUnit
+        | None -> add_expr state ~syntax_node ~label:"implicit_else_unit" BodyArena.EUnit
       in
-      add_expr state ~syntax_node ~label:"if_expression" (SemanticTree.EIf (condition_id, then_id, else_id))
+      add_expr state ~syntax_node ~label:"if_expression" (BodyArena.EIf (condition_id, then_id, else_id))
   | Cst.Expression.Let let_expression ->
-      let bindings = lower_let_expression_bindings state let_expression in
+      let binding_ids = lower_let_expression_bindings state let_expression in
       let body_id = lower_expr state let_expression.body in
-      add_expr state ~syntax_node:let_expression.syntax_node ~label:"let_expression" (SemanticTree.ELet (bindings, body_id))
+      add_expr state ~syntax_node:let_expression.syntax_node ~label:"let_expression" (BodyArena.ELet (binding_ids, body_id))
   | Cst.Expression.Match { syntax_node; scrutinee; cases; _ } ->
       let scrutinee_id = lower_expr state scrutinee in
       let cases = lower_match_cases state cases in
-      add_expr state ~syntax_node ~label:"match_expression" (SemanticTree.EMatch (scrutinee_id, cases))
+      add_expr state ~syntax_node ~label:"match_expression" (BodyArena.EMatch (scrutinee_id, cases))
   | Cst.Expression.Prefix { syntax_node; operator_token; operand; _ } ->
       let operator_id =
-        add_expr state ~syntax_node ~label:"prefix_operator" (SemanticTree.EVar (Cst.Token.text operator_token))
+        add_expr state ~syntax_node ~label:"prefix_operator" (BodyArena.EVar (Cst.Token.text operator_token))
       in
       let operand_id = lower_expr state operand in
-      add_expr state ~syntax_node ~label:"prefix_expression" (SemanticTree.EApply (operator_id, [ operand_id ]))
+      add_expr state ~syntax_node ~label:"prefix_expression" (BodyArena.EApply (operator_id, [ operand_id ]))
   | _ ->
       lower_unsupported_expr state expression (unsupported_syntax_kind (Cst.Expression.syntax_node expression))
 
 let lower_top_level_expression = fun (state: state) expression ->
   let syntax_node = Cst.Expression.syntax_node expression in
-  let pattern_id = add_pattern state ~syntax_node ~label:"top_level_expression_pattern" SemanticTree.PWildcard in
+  let pattern_id = add_pattern state ~syntax_node ~label:"top_level_expression_pattern" BodyArena.PWildcard in
   let value_id = lower_expr state expression in
-  let binding = add_binding state ~syntax_node ~name:None ~pattern_id ~value_id ~recursive:false in
-  add_item state ~syntax_node (`Value ([ binding ], false))
+  let binding_id = add_binding state ~syntax_node ~name:None ~pattern_id ~value_id ~recursive:false in
+  add_item state ~syntax_node (`Value ([ binding_id ], false))
 
 let lower_structure_item = fun (state: state) item ->
   match item with
@@ -483,27 +498,30 @@ let lower_structure_item = fun (state: state) item ->
       in
       add_item state ~syntax_node (`Unsupported summary)
 
-let lower_source_file = fun source_file ->
-  let state = make_state () in
-  let items =
+let lower_source_file = fun ~source source_file ->
+  let state = make_state source in
+  let () =
     match source_file with
     | Cst.Implementation implementation ->
-        implementation.items
-        |> List.map (lower_structure_item state)
-    | Cst.Interface interface ->
-        let () =
-          add_diagnostic
-            state
-            (Typ_diagnostic.UnsupportedInterfaceFile {
-              interface_span = Ceibo.Red.SyntaxNode.span interface.syntax_node;
-            })
+        let _items =
+          implementation.items
+          |> List.map (lower_structure_item state)
         in
-        []
+        ()
+    | Cst.Interface interface ->
+        add_diagnostic
+          state
+          (Typ_diagnostic.UnsupportedInterfaceFile {
+            interface_span = Ceibo.Red.SyntaxNode.span interface.syntax_node;
+          })
   in
   {
-    SemanticTree.items;
-    patterns = List.rev state.patterns;
-    expressions = List.rev state.expressions;
-    origins = List.rev state.origins;
+    SemanticTree.item_tree = ItemTree.of_list (List.rev state.items);
+    body_arena =
+      BodyArena.of_lists
+        ~patterns:(List.rev state.patterns)
+        ~expressions:(List.rev state.expressions)
+        ~bindings:(List.rev state.bindings);
+    origin_map = OriginMap.of_list (List.rev state.origins);
     diagnostics = List.rev state.diagnostics;
   }

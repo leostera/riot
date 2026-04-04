@@ -1,101 +1,542 @@
-file: /Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/005_unsupported_surface.ml
-
-parse diagnostics:
-  none
-lowering diagnostics:
-  error TYP1001 @ 0..8: unsupported structure item lowered using placeholder item: OPEN_STMT
-  error TYP1008 @ 8..50: type ascriptions are currently ignored during lowering
-  error TYP1001 @ 64..71: unsupported expression lowered using type hole: APPLY_EXPR
-semantic tree:
-origins:
-  origin#0 item item @ 0..8
-  origin#1 pattern identifier_pattern @ 13..16
-  origin#2 pattern identifier_pattern @ 35..41
-  origin#3 expr path_expression @ 44..50
-  origin#4 expr fun_expression @ 31..50
-  origin#5 item binding @ 8..50
-  origin#6 item item @ 8..50
-  origin#7 pattern identifier_pattern @ 55..62
-  origin#8 expr unsupported_expression @ 64..71
-  origin#9 item binding @ 50..71
-  origin#10 item item @ 50..71
-
-patterns:
-  pat#0 origin#1 var id
-  pat#1 origin#2 var value
-  pat#2 origin#7 var packed
-
-expressions:
-  expr#0 origin#3 var value
-  expr#1 origin#4 fun [1] -> expr#0
-  expr#2 origin#8 hole(APPLY_EXPR)
-
-items:
-  item#0 unsupported OPEN_STMT
-  item#1 value recursive=false
-    binding#0 id pat#0 expr#1 recursive=false
-  item#2 value recursive=false
-    binding#1 packed pat#2 expr#2 recursive=false
-typing diagnostics:
-  none
-exports:
-  * : int -> int -> int
-  + : int -> int -> int
-  - : int -> int -> int
-  / : int -> int -> int
-  = : 'a. 'a -> 'a -> bool
-  id : 'a. 'a -> 'a
-  not : bool -> bool
-  packed : _?0
-item traces:
-  item#0 names=[]
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    not : bool -> bool
-  item#1 names=[id]
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-  item#2 names=[packed]
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-    packed : _?0
-expr traces:
-  expr#0 path_expression @ 44..50
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    not : bool -> bool
-    value : 'a
-    => 'a
-  expr#1 fun_expression @ 31..50
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    not : bool -> bool
-    => 'a -> 'a
-  expr#2 unsupported_expression @ 64..71
-    * : int -> int -> int
-    + : int -> int -> int
-    - : int -> int -> int
-    / : int -> int -> int
-    = : 'a. 'a -> 'a -> bool
-    id : 'a. 'a -> 'a
-    not : bool -> bool
-    => _?0
+{
+  "body_arena": {
+    "bindings": [
+      {
+        "binding_id": 0,
+        "name": "id",
+        "origin_id": 5,
+        "pattern_id": 0,
+        "recursive": false,
+        "value_id": 1
+      },
+      {
+        "binding_id": 1,
+        "name": "packed",
+        "origin_id": 9,
+        "pattern_id": 2,
+        "recursive": false,
+        "value_id": 2
+      }
+    ],
+    "expressions": [
+      {
+        "desc": {
+          "name": "value",
+          "tag": "var"
+        },
+        "expr_id": 0,
+        "origin_id": 3
+      },
+      {
+        "desc": {
+          "body_id": 0,
+          "parameters": [
+            1
+          ],
+          "tag": "fun"
+        },
+        "expr_id": 1,
+        "origin_id": 4
+      },
+      {
+        "desc": {
+          "summary": "APPLY_EXPR",
+          "tag": "hole"
+        },
+        "expr_id": 2,
+        "origin_id": 8
+      }
+    ],
+    "patterns": [
+      {
+        "desc": {
+          "name": "id",
+          "tag": "var"
+        },
+        "origin_id": 1,
+        "pat_id": 0
+      },
+      {
+        "desc": {
+          "name": "value",
+          "tag": "var"
+        },
+        "origin_id": 2,
+        "pat_id": 1
+      },
+      {
+        "desc": {
+          "name": "packed",
+          "tag": "var"
+        },
+        "origin_id": 7,
+        "pat_id": 2
+      }
+    ]
+  },
+  "exports": [
+    {
+      "name": "id",
+      "scheme": "'a. 'a -> 'a"
+    },
+    {
+      "name": "packed",
+      "scheme": "_?0"
+    }
+  ],
+  "expr_traces": [
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        },
+        {
+          "name": "value",
+          "scheme": "'a"
+        }
+      ],
+      "expr_id": 0,
+      "inferred_type": "'a",
+      "origin": {
+        "label": "path_expression",
+        "span": {
+          "end": 50,
+          "start": 44
+        },
+        "syntax_kind": "IDENT_EXPR"
+      },
+      "origin_id": 3
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 1,
+      "inferred_type": "'a -> 'a",
+      "origin": {
+        "label": "fun_expression",
+        "span": {
+          "end": 50,
+          "start": 31
+        },
+        "syntax_kind": "FUN_EXPR"
+      },
+      "origin_id": 4
+    },
+    {
+      "env_before": [
+        {
+          "name": "*",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "+",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "-",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "/",
+          "scheme": "int -> int -> int"
+        },
+        {
+          "name": "=",
+          "scheme": "'a. 'a -> 'a -> bool"
+        },
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "not",
+          "scheme": "bool -> bool"
+        }
+      ],
+      "expr_id": 2,
+      "inferred_type": "_?0",
+      "origin": {
+        "label": "unsupported_expression",
+        "span": {
+          "end": 71,
+          "start": 64
+        },
+        "syntax_kind": "APPLY_EXPR"
+      },
+      "origin_id": 8
+    }
+  ],
+  "file_summary": {
+    "export_result": {
+      "exports": [
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "packed",
+          "scheme": "_?0"
+        }
+      ],
+      "tag": "errored_export"
+    },
+    "source_id": 0
+  },
+  "filename": "/Users/leostera/Developer/github.com/leostera/riot/.worktrees/rfd0030-typ/packages/typ/tests/fixtures/005_unsupported_surface.ml",
+  "item_traces": [
+    {
+      "binding_names": [],
+      "exports_after": [],
+      "item_id": 0
+    },
+    {
+      "binding_names": [
+        "id"
+      ],
+      "exports_after": [
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        }
+      ],
+      "item_id": 1
+    },
+    {
+      "binding_names": [
+        "packed"
+      ],
+      "exports_after": [
+        {
+          "name": "id",
+          "scheme": "'a. 'a -> 'a"
+        },
+        {
+          "name": "packed",
+          "scheme": "_?0"
+        }
+      ],
+      "item_id": 2
+    }
+  ],
+  "item_tree": [
+    {
+      "item_id": 0,
+      "origin_id": 0,
+      "summary": "OPEN_STMT",
+      "tag": "unsupported"
+    },
+    {
+      "binding_ids": [
+        0
+      ],
+      "item_id": 1,
+      "origin_id": 6,
+      "recursive": false,
+      "tag": "value"
+    },
+    {
+      "binding_ids": [
+        1
+      ],
+      "item_id": 2,
+      "origin_id": 10,
+      "recursive": false,
+      "tag": "value"
+    }
+  ],
+  "lowering_diagnostics": [
+    {
+      "context": "structure_item",
+      "id": "TYP1001",
+      "message": "unsupported structure item lowered using placeholder item: OPEN_STMT",
+      "name": "unsupported-syntax",
+      "reason": null,
+      "recovery": "placeholder_item",
+      "severity": "error",
+      "syntax_kind": "OPEN_STMT",
+      "syntax_span": {
+        "end": 8,
+        "start": 0
+      }
+    },
+    {
+      "ascription_span": {
+        "end": 50,
+        "start": 8
+      },
+      "id": "TYP1008",
+      "message": "type ascriptions are currently ignored during lowering",
+      "name": "ignored-type-ascription",
+      "severity": "error"
+    },
+    {
+      "context": "expression",
+      "id": "TYP1001",
+      "message": "unsupported expression lowered using type hole: APPLY_EXPR",
+      "name": "unsupported-syntax",
+      "reason": null,
+      "recovery": "hole_expression",
+      "severity": "error",
+      "syntax_kind": "APPLY_EXPR",
+      "syntax_span": {
+        "end": 71,
+        "start": 64
+      }
+    }
+  ],
+  "origin_map": [
+    {
+      "kind": "item",
+      "label": "item",
+      "origin_id": 0,
+      "semantic_id": {
+        "id": 0,
+        "tag": "item"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 8,
+        "start": 0
+      },
+      "syntax_kind": "OPEN_STMT"
+    },
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 1,
+      "semantic_id": {
+        "id": 0,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 16,
+        "start": 13
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 2,
+      "semantic_id": {
+        "id": 1,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 41,
+        "start": 35
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "expr",
+      "label": "path_expression",
+      "origin_id": 3,
+      "semantic_id": {
+        "id": 0,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 50,
+        "start": 44
+      },
+      "syntax_kind": "IDENT_EXPR"
+    },
+    {
+      "kind": "expr",
+      "label": "fun_expression",
+      "origin_id": 4,
+      "semantic_id": {
+        "id": 1,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 50,
+        "start": 31
+      },
+      "syntax_kind": "FUN_EXPR"
+    },
+    {
+      "kind": "binding",
+      "label": "binding",
+      "origin_id": 5,
+      "semantic_id": {
+        "id": 0,
+        "tag": "binding"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 50,
+        "start": 8
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "item",
+      "label": "item",
+      "origin_id": 6,
+      "semantic_id": {
+        "id": 1,
+        "tag": "item"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 50,
+        "start": 8
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "pattern",
+      "label": "identifier_pattern",
+      "origin_id": 7,
+      "semantic_id": {
+        "id": 2,
+        "tag": "pattern"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 62,
+        "start": 55
+      },
+      "syntax_kind": "IDENT_PATTERN"
+    },
+    {
+      "kind": "expr",
+      "label": "unsupported_expression",
+      "origin_id": 8,
+      "semantic_id": {
+        "id": 2,
+        "tag": "expr"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 71,
+        "start": 64
+      },
+      "syntax_kind": "APPLY_EXPR"
+    },
+    {
+      "kind": "binding",
+      "label": "binding",
+      "origin_id": 9,
+      "semantic_id": {
+        "id": 1,
+        "tag": "binding"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 71,
+        "start": 50
+      },
+      "syntax_kind": "LET_BINDING"
+    },
+    {
+      "kind": "item",
+      "label": "item",
+      "origin_id": 10,
+      "semantic_id": {
+        "id": 2,
+        "tag": "item"
+      },
+      "source_id": 0,
+      "source_revision": 0,
+      "span": {
+        "end": 71,
+        "start": 50
+      },
+      "syntax_kind": "LET_BINDING"
+    }
+  ],
+  "parse_diagnostics": [],
+  "source_id": 0,
+  "type_index": [
+    {
+      "expr_id": 0,
+      "inferred_type": "'a",
+      "origin_id": 3,
+      "span": {
+        "end": 50,
+        "start": 44
+      }
+    },
+    {
+      "expr_id": 2,
+      "inferred_type": "_?0",
+      "origin_id": 8,
+      "span": {
+        "end": 71,
+        "start": 64
+      }
+    },
+    {
+      "expr_id": 1,
+      "inferred_type": "'a -> 'a",
+      "origin_id": 4,
+      "span": {
+        "end": 50,
+        "start": 31
+      }
+    }
+  ],
+  "typing_diagnostics": []
+}
