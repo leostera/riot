@@ -1046,7 +1046,12 @@ let lower_source_file = fun ~source source_file ->
     | Cst.Implementation implementation ->
         let _items = implementation.items |> List.map (lower_structure_item state) in
         ()
-    | Cst.Interface _ -> ()
+    | Cst.Interface _ ->
+        add_diagnostic
+          state
+          (Typ_diagnostic.UnsupportedInterfaceFile {
+            interface_span = Cst.SourceFile.syntax_node source_file |> Ceibo.Red.SyntaxNode.span;
+          })
   in
   {
     SemanticTree.item_tree = ItemTree.of_list (List.rev state.items);

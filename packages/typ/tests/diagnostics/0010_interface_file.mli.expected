@@ -1,0 +1,16 @@
+{
+  "lowering_diagnostics": [
+    {
+      "id": "TYP1010",
+      "interface_span": {
+        "end": 12,
+        "start": 0
+      },
+      "message": "interface files are not lowered by the prototype yet",
+      "name": "unsupported-interface-file",
+      "severity": "warning"
+    }
+  ],
+  "parse_diagnostics": [],
+  "typing_diagnostics": []
+}
