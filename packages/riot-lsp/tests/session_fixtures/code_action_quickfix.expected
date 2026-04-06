@@ -71,6 +71,36 @@
                 ]
               }
             }
+          },
+          {
+            "message": "unsupported structure item lowered using placeholder item: TYPE_DECL",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 22
+              }
+            },
+            "severity": 1,
+            "code": "TYP1001",
+            "source": "typ",
+            "data": {
+              "id": "TYP1001",
+              "name": "unsupported-syntax",
+              "message": "unsupported structure item lowered using placeholder item: TYPE_DECL",
+              "severity": "error",
+              "syntax_span": {
+                "start": 0,
+                "end": 22
+              },
+              "syntax_kind": "TYPE_DECL",
+              "context": "structure_item",
+              "recovery": "placeholder_item",
+              "reason": null
+            }
           }
         ],
         "uri": "file:///workspace/app.ml",

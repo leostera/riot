@@ -18,6 +18,31 @@ let export_to_json = fun (name, scheme) ->
     ("scheme", Data.Json.String (TypePrinter.scheme_to_string scheme));
   ]
 
+let type_item_summary_to_json = function
+  | ItemTree.Type type_item ->
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String type_item.declaration.type_name);
+        ("param_count", Data.Json.Int (List.length type_item.declaration.param_ids));
+        ("constructor_count", Data.Json.Int (List.length type_item.declaration.constructors));
+        ("label_count", Data.Json.Int (List.length type_item.declaration.labels));
+      ]
+  | ItemTree.Unsupported unsupported_item ->
+      Data.Json.Object [
+        ("tag", Data.Json.String "unsupported");
+        ("summary", Data.Json.String unsupported_item.summary);
+      ]
+  | ItemTree.Value _ ->
+      Data.Json.Object [ ("tag", Data.Json.String "value") ]
+  | ItemTree.Exception _ ->
+      Data.Json.Object [ ("tag", Data.Json.String "exception") ]
+  | ItemTree.Open _ ->
+      Data.Json.Object [ ("tag", Data.Json.String "open") ]
+  | ItemTree.Include _ ->
+      Data.Json.Object [ ("tag", Data.Json.String "include") ]
+  | ItemTree.ModuleAlias _ ->
+      Data.Json.Object [ ("tag", Data.Json.String "module_alias") ]
+
 let actual_lowering_json = fun (report: Check_result.t) ->
   let body_arena = report.body_arena |> Option.expect ~msg:"expected lowered body arena in lowering test" in
   let choose_binding = BodyArena.bindings body_arena
@@ -82,6 +107,81 @@ let expected_lowering_json = Data.Json.Object [
   );
 ]
 
+let actual_type_item_lowering_json = fun (report: Check_result.t) ->
+  let item_tree = report.item_tree |> Option.expect ~msg:"expected lowered item tree in lowering test" in
+  Data.Json.Object [
+    (
+      "items",
+      Data.Json.Array (ItemTree.items item_tree |> List.map type_item_summary_to_json)
+    );
+    (
+      "lowering_diagnostics",
+      Data.Json.Array (List.map Diagnostic.to_json report.lowering_diagnostics)
+    );
+  ]
+
+let expected_abstract_type_lowering_json = Data.Json.Object [
+  (
+    "items",
+    Data.Json.Array [
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "t");
+        ("param_count", Data.Json.Int 0);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+      ];
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "pair");
+        ("param_count", Data.Json.Int 2);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+      ];
+      Data.Json.Object [ ("tag", Data.Json.String "value") ];
+    ]
+  );
+  ("lowering_diagnostics", Data.Json.Array []);
+]
+
+let expected_type_alias_recovery_json = Data.Json.Object [
+  (
+    "items",
+    Data.Json.Array [
+      Data.Json.Object [
+        ("tag", Data.Json.String "unsupported");
+        ("summary", Data.Json.String "TYPE_DECL");
+      ];
+      Data.Json.Object [ ("tag", Data.Json.String "value") ];
+    ]
+  );
+  (
+    "lowering_diagnostics",
+    Data.Json.Array [
+      Data.Json.Object [
+        ("id", Data.Json.String "TYP1001");
+        ("name", Data.Json.String "unsupported-syntax");
+        ("severity", Data.Json.String "error");
+        (
+          "message",
+          Data.Json.String "unsupported structure item lowered using placeholder item: TYPE_DECL"
+        );
+        (
+          "syntax_span",
+          Data.Json.Object [
+            ("start", Data.Json.Int 0);
+            ("end", Data.Json.Int 18);
+          ]
+        );
+        ("syntax_kind", Data.Json.String "TYPE_DECL");
+        ("context", Data.Json.String "structure_item");
+        ("recovery", Data.Json.String "placeholder_item");
+        ("reason", Data.Json.Null);
+      ];
+    ]
+  );
+]
+
 let test_fun_cases_preserve_preceding_parameters = fun ctx ->
   let source = String.concat
     "\n"
@@ -97,11 +197,33 @@ let test_fun_cases_preserve_preceding_parameters = fun ctx ->
   let report = Check.check_source ~filename:(Path.v "packages/typ/tests/fun_cases_with_params.ml") source in
   Test.Snapshot.assert_inline_json ~ctx ~actual:(actual_lowering_json report) ~expected:expected_lowering_json
 
+let test_abstract_type_declarations_lower_to_type_items = fun ctx ->
+  let source = String.concat "\n" [ "type t"; "type ('a, 'b) pair"; "let value = ()"; "" ] in
+  let report = Check.check_source ~filename:(Path.v "packages/typ/tests/abstract_types.ml") source in
+  Test.Snapshot.assert_inline_json
+    ~ctx
+    ~actual:(actual_type_item_lowering_json report)
+    ~expected:expected_abstract_type_lowering_json
+
+let test_unsupported_type_aliases_lower_to_placeholder_items = fun ctx ->
+  let source = String.concat "\n" [ "type name = string"; "let value = \"riot\""; "" ] in
+  let report = Check.check_source ~filename:(Path.v "packages/typ/tests/type_alias_recovery.ml") source in
+  Test.Snapshot.assert_inline_json
+    ~ctx
+    ~actual:(actual_type_item_lowering_json report)
+    ~expected:expected_type_alias_recovery_json
+
 let () =
   Actors.run
     ~main:(fun ~args ->
       let tests = [
         Test.case "fun cases preserve preceding parameters during lowering" test_fun_cases_preserve_preceding_parameters;
+        Test.case
+          "abstract type declarations lower to type items"
+          test_abstract_type_declarations_lower_to_type_items;
+        Test.case
+          "unsupported type aliases lower to placeholder items"
+          test_unsupported_type_aliases_lower_to_placeholder_items;
       ] in
       Test.Cli.main ~name:"typ:lowering" ~tests ~args)
     ~args:Env.args

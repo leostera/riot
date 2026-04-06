@@ -310,7 +310,25 @@ let lower_record_label = fun scope_path type_params (field: Cst.RecordField.t) -
     mutable_ = Option.is_some (Cst.RecordField.mutable_token field)
   }
 
+let add_unsupported_structure_item = fun (state: state) syntax_node ->
+  let syntax_kind = Cst.syntax_kind syntax_node in
+  let summary = SyntaxKind.to_string syntax_kind in
+  let () = add_diagnostic state
+    (
+      Typ_diagnostic.UnsupportedSyntax {
+        syntax_kind;
+        syntax_span = Ceibo.Red.SyntaxNode.span syntax_node;
+        context = Typ_diagnostic.StructureItem;
+        recovery = Typ_diagnostic.PlaceholderItem;
+        reason = None;
+      }
+    )
+  in
+  let _ = add_item state ~syntax_node (`Unsupported summary) in
+  ()
+
 let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaration.t) ->
+  let syntax_node = Cst.TypeDeclaration.syntax_node declaration in
   let type_name = Cst.TypeDeclaration.name_token declaration |> Cst.Token.text in
   let params = type_param_bindings declaration in
   let result_type = TypeRepr.Named {
@@ -319,6 +337,12 @@ let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaratio
   } in
   let lowered_declaration =
     match Cst.TypeDeclaration.type_definition declaration with
+    | Cst.TypeDefinition.Abstract -> Some {
+      TypeDecl.type_name = type_name;
+      param_ids = List.map snd params;
+      constructors = [];
+      labels = [];
+    }
     | Cst.TypeDefinition.Variant { constructors; _ } ->
         Some {
           TypeDecl.type_name = type_name;
@@ -343,12 +367,9 @@ let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaratio
   in
   match lowered_declaration with
   | Some lowered_declaration ->
-      let _ = add_item
-        state
-        ~syntax_node:(Cst.TypeDeclaration.syntax_node declaration)
-        (`Type lowered_declaration) in
+      let _ = add_item state ~syntax_node (`Type lowered_declaration) in
       ()
-  | None -> ()
+  | None -> add_unsupported_structure_item state syntax_node
 
 let lower_exception_declaration = fun (state: state) (declaration: Cst.exception_declaration) ->
   let exception_name = Cst.Token.text declaration.name_token in
@@ -1092,22 +1113,7 @@ let rec lower_structure_item = fun (state: state) item ->
   | Cst.StructureItem.ModuleDeclaration declaration ->
       lower_module_declaration state declaration
   | item ->
-      let syntax_node = Cst.StructureItem.syntax_node item in
-      let syntax_kind = Cst.syntax_kind syntax_node in
-      let summary = SyntaxKind.to_string syntax_kind in
-      let () = add_diagnostic state
-        (
-          Typ_diagnostic.UnsupportedSyntax {
-            syntax_kind;
-            syntax_span = Ceibo.Red.SyntaxNode.span syntax_node;
-            context = Typ_diagnostic.StructureItem;
-            recovery = Typ_diagnostic.PlaceholderItem;
-            reason = None;
-          }
-        )
-      in
-      let _ = add_item state ~syntax_node (`Unsupported summary) in
-      ()
+      add_unsupported_structure_item state (Cst.StructureItem.syntax_node item)
 
 and lower_include_statement = fun (state: state) (include_statement: Cst.include_statement) ->
   let syntax_node = include_statement.syntax_node in
@@ -1119,22 +1125,7 @@ and lower_include_statement = fun (state: state) (include_statement: Cst.include
       | Some segments ->
           let _ = add_item state ~syntax_node (`Include (String.concat "." segments)) in
           ()
-      | None ->
-          let syntax_kind = Cst.syntax_kind syntax_node in
-          let summary = SyntaxKind.to_string syntax_kind in
-          let () = add_diagnostic state
-            (
-              Typ_diagnostic.UnsupportedSyntax {
-                syntax_kind;
-                syntax_span = Ceibo.Red.SyntaxNode.span syntax_node;
-                context = Typ_diagnostic.StructureItem;
-                recovery = Typ_diagnostic.PlaceholderItem;
-                reason = None;
-              }
-            )
-          in
-          let _ = add_item state ~syntax_node (`Unsupported summary) in
-          ()
+      | None -> add_unsupported_structure_item state syntax_node
     )
   | Cst.ModuleType _ -> ()
 
@@ -1144,21 +1135,7 @@ and lower_module_declaration = fun (state: state) (declaration: Cst.ModuleStruct
     Cst.ModuleStructure.is_recursive declaration
     || Option.is_some (Cst.ModuleStructure.next_and_declaration declaration)
   then
-    let syntax_kind = Cst.syntax_kind syntax_node in
-    let summary = SyntaxKind.to_string syntax_kind in
-    let () = add_diagnostic state
-      (
-        Typ_diagnostic.UnsupportedSyntax {
-          syntax_kind;
-          syntax_span = Ceibo.Red.SyntaxNode.span syntax_node;
-          context = Typ_diagnostic.StructureItem;
-          recovery = Typ_diagnostic.PlaceholderItem;
-          reason = None;
-        }
-      )
-    in
-    let _ = add_item state ~syntax_node (`Unsupported summary) in
-    ()
+    add_unsupported_structure_item state syntax_node
   else
     let module_name = Cst.ModuleStructure.name declaration in
     let module_expression = Cst.ModuleStructure.module_expression declaration in
