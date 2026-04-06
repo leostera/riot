@@ -2,6 +2,7 @@ open Std
 open Std.Collections
 open Markdown_syntax_kind
 open Markdown_diagnostic
+module Syntax_kind = Markdown_syntax_kind
 
 type inline_node =
   | Text of string
@@ -9,8 +10,10 @@ type inline_node =
   | Strong of inline_node list
   | Strikethrough of inline_node list
   | Code_span of string
+  | Hard_break
   | Raw_html of string
-  | Link of { label: inline_node list; destination: string }
+  | Link of { label: inline_node list; destination: string; title: string option }
+  | Image of { alt: inline_node list; destination: string; title: string option }
 
 type table_alignment =
   | Default
@@ -42,7 +45,8 @@ type block_node =
 
 type parsed = {
   source: string;
-  blocks: block_node list;
+  tokens: Markdown_token.t list;
+  tree: (Markdown_syntax_kind.t, string) Ceibo.Green.node;
   diagnostics: Markdown_diagnostic.t list;
 }
 
@@ -64,31 +68,12 @@ type list_marker = {
   ordered: bool;
 }
 
+let token = fun kind text -> Ceibo.Builder.make_token ~kind ~text ~width:(String.length text)
+let node = fun kind children -> Ceibo.Builder.make_node ~kind children
+
 let is_space = fun char -> char = ' ' || char = '\t'
-
-let has_tab_prefix = fun text ->
-  if String.length text = 0 then
-    false
-  else
-    text.[0] = '\t'
-
-let next_tab_stop = fun column -> column + (4 - (column mod 4))
-
-let has_char = fun subject char ->
-  let rec loop index =
-    if index >= String.length subject then
-      false
-    else if subject.[index] = char then
-      true
-    else
-      loop (index + 1)
-  in
-  loop 0
-
 let char_not = fun left right -> not (Char.equal left right)
-
 let is_gfm = fun flavor -> flavor = Gfm
-
 let is_some = Option.is_some
 
 let string_all_equal = fun char text ->
@@ -102,40 +87,7 @@ let string_all_equal = fun char text ->
   in
   loop 0
 
-let normalize_newlines = fun source ->
-  if not (has_char source '\r') then
-    source
-  else
-    let buffer = IO.Buffer.create (String.length source) in
-    String.iter
-      (fun char ->
-        if not (Char.equal char '\r') then
-          IO.Buffer.add_char buffer char)
-      source;
-    IO.Buffer.contents buffer
-
-let split_lines = fun source ->
-  let length = String.length source in
-  let rec loop index line_start acc =
-    if index >= length then
-      if length > 0 && source.[length - 1] = '\n' then
-        List.rev acc |> Array.of_list
-      else
-        { text = String.sub source line_start (length - line_start); start = line_start } :: acc
-        |> List.rev
-        |> Array.of_list
-    else if source.[index] = '\n' then
-      loop
-        (index + 1)
-        (index + 1)
-        ({ text = String.sub source line_start (index - line_start); start = line_start } :: acc)
-    else
-      loop (index + 1) line_start acc
-  in
-  loop 0 0 []
-
 let line_end = fun line -> line.start + String.length line.text
-
 let make_span = fun ~start ~len -> Ceibo.Span.make ~start ~end_:(start + len)
 
 let line_is_blank = fun line ->
@@ -149,6 +101,8 @@ let line_is_blank = fun line ->
       false
   in
   loop 0
+
+let next_tab_stop = fun column -> column + (4 - (column mod 4))
 
 let count_indent = fun text max_indent ->
   let len = String.length text in
@@ -186,25 +140,44 @@ let columns_of_prefix = fun text offset ->
   in
   loop 0 0
 
-let consume_indent_columns = fun text target ->
+let strip_columns_from = fun text offset start_column drop_columns ->
   let len = String.length text in
-  let rec loop index column =
+  let remainder = fun value_offset ->
+    if value_offset >= len then
+      ""
+    else
+      String.sub text value_offset (len - value_offset)
+  in
+  let target = start_column + drop_columns in
+  let rec preserve index column =
+    if index >= len then
+      Some (index, String.make (column - target) ' ')
+    else
+      match text.[index] with
+      | ' ' -> preserve (index + 1) (column + 1)
+      | '\t' -> preserve (index + 1) (next_tab_stop column)
+      | _ -> Some (index, String.make (column - target) ' ' ^ remainder index)
+  in
+  let rec consume index column =
     if column >= target then
-      Some index
+      preserve index column
     else if index >= len then
       None
     else
       match text.[index] with
-      | ' ' -> loop (index + 1) (column + 1)
-      | '\t' ->
-          let next = next_tab_stop column in
-          if next > target then
-            None
-          else
-            loop (index + 1) next
+      | ' ' -> consume (index + 1) (column + 1)
+      | '\t' -> consume (index + 1) (next_tab_stop column)
       | _ -> None
   in
-  loop 0 0
+  consume offset start_column
+
+let drop_indent_columns = fun text target -> strip_columns_from text 0 0 target
+
+let consume_one_following_space = fun text offset column ->
+  match strip_columns_from text offset column 1 with
+  | Some result -> result
+  | None ->
+      (offset, "")
 
 let trim_left = fun text ->
   let len = String.length text in
@@ -237,14 +210,6 @@ let trim_right = fun text ->
 
 let trim = fun text -> trim_right (trim_left text)
 
-let starts_with = fun ~prefix text index ->
-  let len = String.length text in
-  let prefix_len = String.length prefix in
-  if index < 0 || index + prefix_len > len then
-    false
-  else
-    String.sub text index prefix_len = prefix
-
 let find_substring = fun text start pattern ->
   let pattern_len = String.length pattern in
   let len = String.length text in
@@ -261,6 +226,17 @@ let find_substring = fun text start pattern ->
         loop (index + 1)
     in
     loop start
+
+let has_char = fun subject char ->
+  let rec loop index =
+    if index >= String.length subject then
+      false
+    else if subject.[index] = char then
+      true
+    else
+      loop (index + 1)
+  in
+  loop 0
 
 let remove_prefix = fun text count ->
   if count >= String.length text then
@@ -282,17 +258,6 @@ let take = fun count items ->
       | head :: tail -> loop (n - 1) (head :: acc) tail
   in
   loop count [] items
-
-let drop = fun count items ->
-  let rec loop n remaining =
-    if n <= 0 then
-      remaining
-    else
-      match remaining with
-      | [] -> []
-      | _ :: tail -> loop (n - 1) tail
-  in
-  loop count items
 
 let repeat = fun value count ->
   let rec loop n acc =
@@ -403,9 +368,19 @@ let parse_setext_underline = fun text ->
     else
       None
 
+let heading_kind = function
+  | 1 -> Syntax_kind.Heading_1
+  | 2 -> Syntax_kind.Heading_2
+  | 3 -> Syntax_kind.Heading_3
+  | 4 -> Syntax_kind.Heading_4
+  | 5 -> Syntax_kind.Heading_5
+  | _ -> Syntax_kind.Heading_6
+
 let parse_fence_open = fun text ->
   let indent = count_indent text 3 in
-  if indent >= String.length text then
+  let indent_columns = columns_of_prefix text indent in
+  let len = String.length text in
+  if indent >= len then
     None
   else
     let marker = text.[indent] in
@@ -413,7 +388,9 @@ let parse_fence_open = fun text ->
       None
     else
       let rec count index =
-        if index < String.length text && text.[index] = marker then
+        if index >= len then
+          index
+        else if text.[index] = marker then
           count (index + 1)
         else
           index
@@ -423,8 +400,24 @@ let parse_fence_open = fun text ->
       if marker_len < 3 then
         None
       else
-        let info = trim (remove_prefix text after) in
-        Some (marker, marker_len, info)
+        let info =
+          trim (remove_prefix text after)
+          |> fun value ->
+          let rec scan index =
+            if index >= String.length value then
+              index
+            else if value.[index] = ' ' || value.[index] = '\t' then
+              index
+            else
+              scan (index + 1)
+          in
+          let word_len = scan 0 in
+          if word_len <= 0 then "" else String.sub value 0 word_len
+        in
+        if marker = '`' && has_char (trim (remove_prefix text after)) '`' then
+          None
+        else
+          Some (marker, marker_len, indent_columns, info)
 
 let parse_fence_close = fun marker_len marker line ->
   let indent = count_indent line.text 3 in
@@ -432,8 +425,16 @@ let parse_fence_close = fun marker_len marker line ->
   if String.length remaining < marker_len then
     false
   else
-    let marker_text = String.sub remaining 0 marker_len in
-    string_all_equal marker marker_text && trim_left (remove_prefix remaining marker_len) = ""
+    let rec count index =
+      if index >= String.length remaining then
+        index
+      else if remaining.[index] = marker then
+        count (index + 1)
+      else
+        index
+    in
+    let actual_len = count 0 in
+    actual_len >= marker_len && trim_left (remove_prefix remaining actual_len) = ""
 
 let parse_fenced_code_block = fun lines start ->
   if start >= Array.length lines then
@@ -442,22 +443,23 @@ let parse_fenced_code_block = fun lines start ->
     let first = lines.(start) in
     match parse_fence_open first.text with
     | None -> None
-    | Some (marker, marker_len, info) ->
+    | Some (marker, marker_len, opener_indent, info) ->
         let marker_text = string_of_char marker marker_len in
-        let rec scan index =
+        let strip_content_indent = fun text ->
+          let offset = count_indent text opener_indent in
+          remove_prefix text offset
+        in
+        let rec collect_code_lines index acc =
           if index >= Array.length lines then
-            None
+            (None, List.rev acc)
           else if parse_fence_close marker_len marker lines.(index) then
-            Some index
+            (Some index, List.rev acc)
           else
-            scan (index + 1)
+            collect_code_lines (index + 1) (strip_content_indent lines.(index).text :: acc)
         in
         (
-          match scan (start + 1) with
-          | None ->
-              let code_lines =
-                Array.to_list lines |> drop (start + 1) |> List.map (fun line -> line.text)
-              in
+          match collect_code_lines (start + 1) [] with
+          | None, code_lines ->
               let content =
                 if code_lines = [] then
                   ""
@@ -467,27 +469,23 @@ let parse_fenced_code_block = fun lines start ->
               let span = make_span ~start:first.start ~len:(line_end first - first.start) in
               let found = { kind = "fence"; text = marker_text } in
               let diag = unclosed_fenced_code_block ~found ~opener:marker_text ~span in
-              Some (
-                Code_block { info; code = content; span; fenced = true },
-                Array.length lines,
-                [ diag ]
-              )
-          | Some close_index ->
-              let code_lines =
-                Array.to_list lines
-                |> drop (start + 1)
-                |> take (close_index - start - 1)
-                |> List.map (fun line -> line.text)
+              let children =
+                (if info = "" then [] else [ token Syntax_kind.Info_string info ])
+                @ [ token Syntax_kind.Text content ]
               in
+              Some (node Syntax_kind.Fenced_code_block children, Array.length lines, [ diag ])
+          | Some close_index, code_lines ->
               let content =
                 if code_lines = [] then
                   ""
                 else
                   String.concat "\n" code_lines ^ "\n"
               in
-              let span_end = line_end lines.(close_index) in
-              let span = make_span ~start:first.start ~len:(span_end - first.start) in
-              Some (Code_block { info; code = content; span; fenced = true }, close_index + 1, [])
+              let children =
+                (if info = "" then [] else [ token Syntax_kind.Info_string info ])
+                @ [ token Syntax_kind.Text content ]
+              in
+              Some (node Syntax_kind.Fenced_code_block children, close_index + 1, [])
         )
 
 let parse_indented_code_block = fun lines start ->
@@ -495,27 +493,21 @@ let parse_indented_code_block = fun lines start ->
     None
   else
     let first = lines.(start) in
-    let first_indented =
-      starts_with ~prefix:"    " first.text 0
-      || has_tab_prefix first.text
-    in
+    let first_indented = Option.is_some (drop_indent_columns first.text 4) in
     if not first_indented then
       None
     else
       let strip_line = fun text ->
-        if starts_with ~prefix:"    " text 0 then
-          remove_prefix text 4
-        else if has_tab_prefix text then
-          remove_prefix text 1
-        else
-          ""
+        match drop_indent_columns text 4 with
+        | Some (_, stripped) -> stripped
+        | None -> ""
       in
       let rec collect index acc =
         if index >= Array.length lines then
           (index, List.rev acc)
         else
           let line = lines.(index).text in
-          if starts_with ~prefix:"    " line 0 || has_tab_prefix line then
+          if Option.is_some (drop_indent_columns line 4) then
             collect (index + 1) (strip_line line :: acc)
           else if line_is_blank line then
             collect (index + 1) ("" :: acc)
@@ -529,23 +521,22 @@ let parse_indented_code_block = fun lines start ->
         else
           String.concat "\n" code_lines ^ "\n"
       in
-      let end_line = lines.(next - 1) in
-      let span = make_span ~start:first.start ~len:(line_end end_line - first.start) in
-      Some (Code_block { info = ""; code = content; span; fenced = false }, next, [])
+      Some
+        (node Syntax_kind.Indented_code_block [ token Syntax_kind.Text content ], next, [])
 
 let parse_block_quote_prefix = fun text ->
-  let indent = count_indent text 3 in
-  if indent >= String.length text || char_not text.[indent] '>' then
+  let indent_offset = count_indent text 3 in
+  let indent = columns_of_prefix text indent_offset in
+  if indent_offset >= String.length text || char_not text.[indent_offset] '>' then
     None
   else
-    let after = indent + 1 in
-    let content_start =
-      if after < String.length text && is_space text.[after] then
-        after + 1
-      else
-        after
-    in
-    Some content_start
+    let after = indent_offset + 1 in
+    let after_column = indent + 1 in
+    if after < String.length text && is_space text.[after] then
+      let content_start, content = consume_one_following_space text after after_column in
+      Some (content_start, content)
+    else
+      Some (after, remove_prefix text after)
 
 let parse_list_marker = fun text ->
   let len = String.length text in
@@ -591,7 +582,7 @@ let parse_list_marker = fun text ->
             else
               None
           else
-          scan (index + 1)
+            scan (index + 1)
         in
         scan (indent_offset + 1)
 
@@ -662,6 +653,68 @@ let parse_table_alignment = fun text ->
       else
         Some Default
 
+let cell_kind_of_alignment = function
+  | Default -> Syntax_kind.Table_cell_default
+  | Left -> Syntax_kind.Table_cell_left
+  | Center -> Syntax_kind.Table_cell_center
+  | Right -> Syntax_kind.Table_cell_right
+
+let html_block_tags = [
+  "address"; "article"; "aside"; "base"; "basefont"; "blockquote"; "body"; "caption";
+  "center"; "col"; "colgroup"; "dd"; "details"; "dialog"; "dir"; "div"; "dl"; "dt";
+  "fieldset"; "figcaption"; "figure"; "footer"; "form"; "frame"; "frameset"; "h1";
+  "h2"; "h3"; "h4"; "h5"; "h6"; "head"; "header"; "hr"; "html"; "iframe"; "legend";
+  "li"; "link"; "main"; "menu"; "menuitem"; "nav"; "noframes"; "ol"; "optgroup";
+  "option"; "p"; "param"; "search"; "section"; "summary"; "table"; "tbody"; "td";
+  "tfoot"; "th"; "thead"; "title"; "tr"; "track"; "ul"; "pre"; "script"; "style";
+  "textarea"
+]
+
+let starts_html_block = fun line ->
+  let trimmed = trim_left line in
+  let len = String.length trimmed in
+  if len = 0 || not (Char.equal trimmed.[0] '<') then
+    false
+  else if len >= 4 && String.sub trimmed 0 4 = "<!--" then
+    true
+  else if len >= 2 && String.sub trimmed 0 2 = "<?" then
+    true
+  else if len >= 9 && String.sub trimmed 0 9 = "<![CDATA[" then
+    true
+  else if len >= 2 && String.sub trimmed 0 2 = "<!" then
+    true
+  else
+    let start =
+      if len >= 2 && trimmed.[1] = '/' then
+        2
+      else
+        1
+    in
+    if start >= len then
+      false
+    else
+      let rec scan index =
+        if index >= len then
+          index
+        else
+          let char = trimmed.[index] in
+          if
+            (char >= 'a' && char <= 'z')
+            || (char >= 'A' && char <= 'Z')
+            || (char >= '0' && char <= '9')
+            || char = '-'
+          then
+            scan (index + 1)
+          else
+            index
+      in
+      let finish = scan start in
+      if finish <= start then
+        false
+      else
+        let tag = String.sub trimmed start (finish - start) |> String.lowercase_ascii in
+        List.mem tag html_block_tags
+
 let rec parse_block_quote = fun flavor lines start ->
   if start >= Array.length lines then
     None
@@ -669,40 +722,44 @@ let rec parse_block_quote = fun flavor lines start ->
     let first = lines.(start) in
     match parse_block_quote_prefix first.text with
     | None -> None
-    | Some content_start ->
+    | Some (content_start, content) ->
         let rec collect index acc =
           if index >= Array.length lines then
             (List.rev acc, index)
           else
             let text = lines.(index).text in
             if line_is_blank text then
-              collect (index + 1) ({ text = ""; start = lines.(index).start } :: acc)
+              let rec next_nonblank next =
+                if next >= Array.length lines then
+                  next
+                else if line_is_blank lines.(next).text then
+                  next_nonblank (next + 1)
+                else
+                  next
+              in
+              let next = next_nonblank (index + 1) in
+              if next < Array.length lines && is_some (parse_block_quote_prefix lines.(next).text) then
+                collect (index + 1) ({ text = ""; start = lines.(index).start } :: acc)
+              else
+                (List.rev acc, index)
             else
               match parse_block_quote_prefix text with
               | None -> (List.rev acc, index)
-              | Some nested_start ->
-                  let nested = remove_prefix text nested_start in
+              | Some (nested_start, nested) ->
                   let nested_offset = lines.(index).start + nested_start in
                   collect (index + 1) ({ text = nested; start = nested_offset } :: acc)
         in
         let quote_lines, next =
           collect
             (start + 1)
-            [ { text = remove_prefix first.text content_start; start = first.start + content_start } ]
+            [ { text = content; start = first.start + content_start } ]
         in
         let nested_lines = Array.of_list quote_lines in
         let blocks, diagnostics = parse_blocks ~flavor nested_lines 0 in
-        let span_end =
-          if next <= start then
-            line_end first
-          else
-            line_end lines.(next - 1)
-        in
-        let span = make_span ~start:first.start ~len:(span_end - first.start) in
-        Some (Block_quote { blocks; span }, next, diagnostics)
+        Some (node Syntax_kind.Block_quote blocks, next, diagnostics)
 
 and parse_table_row = fun flavor text ->
-  if not (is_gfm flavor) || Option.is_none (find_substring text 0 "|") then
+  if not (is_gfm flavor) || not (has_char text '|') then
     None
   else
     match split_table_cells text with
@@ -730,10 +787,11 @@ and parse_table = fun flavor lines start ->
               let cells = take width row in
               let missing = width - List.length cells in
               let cells = cells @ repeat "" missing in
-              {
-                cells = List.map (fun value -> parse_inline ~flavor value) cells;
-                alignments;
-              }
+              List.map2
+                (fun alignment value ->
+                  node (cell_kind_of_alignment alignment) [ token Syntax_kind.Text value ])
+                alignments
+                cells
             in
             let rec collect_rows index acc =
               if index >= Array.length lines then
@@ -743,12 +801,17 @@ and parse_table = fun flavor lines start ->
               else
                 match parse_table_row flavor lines.(index).text with
                 | None -> (List.rev acc, index)
-                | Some row -> collect_rows (index + 1) (normalize_row row :: acc)
+                | Some row ->
+                    collect_rows
+                      (index + 1)
+                      (node Syntax_kind.Table_row (normalize_row row) :: acc)
             in
             let rows, next = collect_rows (start + 2) [] in
-            let span_end = line_end lines.(next - 1) in
-            let span = make_span ~start:lines.(start).start ~len:(span_end - lines.(start).start) in
-            Some (Table { header = normalize_row header_cells; rows; span }, next, [])
+            Some
+              ( node Syntax_kind.Table (node Syntax_kind.Table_header (normalize_row header_cells) :: rows),
+                next,
+                []
+              )
 
 and parse_list = fun flavor lines start ->
   if start >= Array.length lines then
@@ -774,13 +837,13 @@ and parse_list = fun flavor lines start ->
                   (index, List.rev acc, had_blank)
               | _ ->
                   (
-                    match consume_indent_columns text continuation_min with
+                    match drop_indent_columns text continuation_min with
                     | None -> (index, List.rev acc, had_blank)
-                    | Some content_offset ->
+                    | Some (content_offset, content) ->
                         collect_item_body
                           (index + 1)
                           ({
-                            text = remove_prefix text content_offset;
+                            text = content;
                             start = lines.(index).start + content_offset;
                           }
                           :: acc)
@@ -794,8 +857,12 @@ and parse_list = fun flavor lines start ->
             match parse_list_marker lines.(index).text with
             | Some marker when marker.indent = first.indent && marker.ordered = first.ordered ->
                 (
-                  let head_text = remove_prefix lines.(index).text marker.marker_after in
-                  let head_start = lines.(index).start + marker.marker_after in
+                  let marker_end = marker.indent_offset + marker.marker_len in
+                  let marker_column = marker.indent + marker.marker_len in
+                  let head_offset, head_text =
+                    consume_one_following_space lines.(index).text marker_end marker_column
+                  in
+                  let head_start = lines.(index).start + head_offset in
                   let task, body_text =
                     match parse_task_list_marker flavor head_text with
                     | Some (checked, content) -> Some checked, content
@@ -807,18 +874,13 @@ and parse_list = fun flavor lines start ->
                   in
                   let body_lines = Array.of_list body_lines in
                   let body_blocks, body_diagnostics = parse_blocks ~flavor body_lines 0 in
-                  let span_end =
-                    if Array.length body_lines = 0 then
-                      line_end lines.(index)
-                    else
-                      line_end body_lines.(Array.length body_lines - 1)
-                  in
-                  let span = make_span ~start:head_start ~len:(span_end - head_start) in
-                  let item =
+                  let item_kind =
                     match task with
-                    | Some checked -> [ Task_list_item { checked; blocks = body_blocks; span } ]
-                    | None -> [ List_item { blocks = body_blocks; span } ]
+                    | Some true -> Syntax_kind.Task_list_item_checked
+                    | Some false -> Syntax_kind.Task_list_item_unchecked
+                    | None -> Syntax_kind.List_item
                   in
+                  let item = node item_kind body_blocks in
                   collect_items
                     next_index
                     (item :: acc)
@@ -831,29 +893,32 @@ and parse_list = fun flavor lines start ->
         if items = [] then
           None
         else
-          let span_end =
-            if next = start then
-              line_end lines.(start)
-            else
-              line_end lines.(next - 1)
+          let kind =
+            match (first.ordered, loose) with
+            | true, true -> Syntax_kind.Ordered_list_loose
+            | true, false -> Syntax_kind.Ordered_list_tight
+            | false, true -> Syntax_kind.Unordered_list_loose
+            | false, false -> Syntax_kind.Unordered_list_tight
           in
-          let span = make_span ~start:lines.(start).start ~len:(span_end - lines.(start).start) in
-          Some (List { ordered = first.ordered; tight = not loose; items; span }, next, diagnostics)
+          Some (node kind items, next, diagnostics)
 
 and parse_raw_html_line = fun lines start ->
   if start >= Array.length lines then
     None
   else
     let line = lines.(start).text in
-    if String.length line = 0 || char_not line.[0] '<' then
+    if String.length line = 0 || not (starts_html_block line) then
       None
     else
       match find_substring line 1 ">" with
       | None -> None
       | Some close ->
           let html = String.sub line 0 (close + 1) in
-          let span = make_span ~start:lines.(start).start ~len:(String.length html) in
-          Some (Raw_html { html; span }, start + 1, [])
+          Some
+            ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html html ],
+              start + 1,
+              []
+            )
 
 and parse_paragraph = fun flavor lines start ->
   if start >= Array.length lines then
@@ -896,141 +961,17 @@ and parse_paragraph = fun flavor lines start ->
         remove_prefix line indent |> trim_right)
       |> String.concat "\n"
     in
-    let end_line =
-      match setext with
-      | Some (_, underline) -> underline
-      | None ->
-          if next <= start then
-            lines.(start)
-          else
-            lines.(next - 1)
-    in
-    let span = make_span ~start:lines.(start).start ~len:(line_end end_line - lines.(start).start) in
     match parse_heading lines.(start).text with
     | Some (level, content) ->
-        Some (Heading { level; inlines = parse_inline ~flavor content; span }, next, [])
+        Some (node (heading_kind level) [ token Syntax_kind.Text content ], next, [])
     | None ->
         (
           match setext with
           | Some (level, _) ->
-              Some (Heading { level; inlines = parse_inline ~flavor setext_text; span }, next, [])
+              Some (node (heading_kind level) [ token Syntax_kind.Text setext_text ], next, [])
           | None ->
-              Some (Paragraph { inlines = parse_inline ~flavor text; span }, next, [])
+              Some (node Syntax_kind.Paragraph [ token Syntax_kind.Text text ], next, [])
         )
-
-and parse_inline = fun ~flavor text ->
-  let len = String.length text in
-  let rec loop index acc =
-    if index >= len then
-      List.rev acc
-    else if text.[index] = '\\' then
-      if index + 1 < len then
-        loop (index + 2) (Text (String.make 1 text.[index + 1]) :: acc)
-      else
-        loop (index + 1) (Text "\\" :: acc)
-    else if starts_with ~prefix:"**" text index then
-      (
-        match find_substring text (index + 2) "**" with
-        | None -> loop (index + 2) (Text "**" :: acc)
-        | Some close ->
-            let body = String.sub text (index + 2) (close - index - 2) in
-            loop (close + 2) (Strong (parse_inline ~flavor body) :: acc)
-      )
-    else if starts_with ~prefix:"~~" text index then
-      (
-        match find_substring text (index + 2) "~~" with
-        | None -> loop (index + 2) (Text "~~" :: acc)
-        | Some close ->
-            let body = String.sub text (index + 2) (close - index - 2) in
-            if is_gfm flavor then
-              loop (close + 2) (Strikethrough (parse_inline ~flavor body) :: acc)
-            else
-              loop (close + 2) (Text (String.sub text index (close - index + 2)) :: acc)
-      )
-    else if text.[index] = '*' then
-      (
-        match find_substring text (index + 1) "*" with
-        | None -> loop (index + 1) (Text "*" :: acc)
-        | Some close ->
-            if close > index + 1 then
-              let body = String.sub text (index + 1) (close - index - 1) in
-              loop (close + 1) (Emphasis (parse_inline ~flavor body) :: acc)
-            else
-              loop (index + 1) (Text "*" :: acc)
-      )
-    else if text.[index] = '`' then
-      let rec count_backticks current =
-        if current < len && text.[current] = '`' then
-          count_backticks (current + 1)
-        else
-          current
-      in
-      let close_start = count_backticks (index + 1) in
-      let marker_len = close_start - index in
-      let marker = string_of_char '`' marker_len in
-      (
-        match find_substring text close_start marker with
-        | None -> loop (index + marker_len) (Text (String.sub text index marker_len) :: acc)
-        | Some close ->
-            let body =
-              if close <= close_start then
-                ""
-              else
-                String.sub text close_start (close - close_start)
-            in
-            loop (close + marker_len) (Code_span body :: acc)
-      )
-    else if text.[index] = '[' then
-      (
-        match find_substring text (index + 1) "]" with
-        | None -> loop (index + 1) (Text "[" :: acc)
-        | Some close_text ->
-            if close_text + 1 >= len then
-              loop (close_text + 1) (Text (String.sub text index (close_text - index + 1)) :: acc)
-            else if text.[close_text + 1] = '(' then
-              (
-                match find_substring text (close_text + 2) ")" with
-                | None ->
-                    loop
-                      (close_text + 1)
-                      (Text (String.sub text index (close_text - index + 1)) :: acc)
-                | Some close_link ->
-                    let label_text = String.sub text (index + 1) (close_text - index - 1) in
-                    let destination =
-                      String.sub text (close_text + 2) (close_link - close_text - 2) |> trim
-                    in
-                    loop
-                      (close_link + 1)
-                      (Link { label = parse_inline ~flavor label_text; destination } :: acc)
-              )
-            else
-              loop (close_text + 1) (Text (String.sub text index (close_text - index + 1)) :: acc)
-      )
-    else if text.[index] = '<' then
-      (
-        match find_substring text (index + 1) ">" with
-        | None -> loop (index + 1) (Text "<" :: acc)
-        | Some close ->
-            let inside = String.sub text (index + 1) (close - index - 1) in
-            if has_char inside ' ' then
-              loop (close + 1) (Text (String.sub text index (close - index + 1)) :: acc)
-            else
-              loop (close + 1) (Raw_html (String.sub text index (close - index + 1)) :: acc)
-      )
-    else
-      let rec scan current =
-        if current >= len then
-          current
-        else
-          match text.[current] with
-          | '\\' | '*' | '~' | '`' | '[' | '<' -> current
-          | _ -> scan (current + 1)
-      in
-      let next = scan (index + 1) in
-      loop next (Text (String.sub text index (next - index)) :: acc)
-  in
-  let parsed = loop 0 [] in
-  if parsed = [] then [ Text text ] else parsed
 
 and parse_blocks = fun ~flavor lines start ->
   if start >= Array.length lines then
@@ -1055,194 +996,61 @@ and parse_blocks = fun ~flavor lines start ->
                         | Some result -> Some result
                         | None ->
                             (
-                              match parse_list flavor lines start with
-                              | Some result -> Some result
-                              | None ->
-                                  if is_some (parse_thematic_break lines.(start).text) then
-                                    Some (
-                                      Horizontal_rule
-                                        (make_span
-                                           ~start:lines.(start).start
-                                           ~len:(String.length lines.(start).text)),
-                                      start + 1,
-                                      []
-                                    )
-                                  else
-                                    (
-                                      match parse_raw_html_line lines start with
-                                      | Some result -> Some result
-                                      | None -> parse_paragraph flavor lines start
-                                    )
+                              if is_some (parse_thematic_break lines.(start).text) then
+                                Some (node Syntax_kind.Horizontal_rule [], start + 1, [])
+                              else
+                                (
+                                  match parse_list flavor lines start with
+                                  | Some result -> Some result
+                                  | None ->
+                                      (
+                                        match parse_raw_html_line lines start with
+                                        | Some result -> Some result
+                                        | None -> parse_paragraph flavor lines start
+                                      )
+                                )
                             )
                       )
                 )
           )
     in
     match block with
-    | Some (node, next, diagnostics) ->
+    | Some (node_, next, diagnostics) ->
         let parsed_next, nested = parse_blocks ~flavor lines next in
-        (node :: parsed_next, diagnostics @ nested)
+        (node_ :: parsed_next, diagnostics @ nested)
     | None ->
         parse_blocks ~flavor lines (start + 1)
 
-let rec to_green = fun ~source blocks ->
-  ignore source;
-  let token kind text = Ceibo.Builder.make_token ~kind ~text ~width:(String.length text) in
-  let html_escape = fun text ->
-    let buffer = IO.Buffer.create (String.length text) in
-    String.iter
-      (fun char ->
-        match char with
-        | '&' -> IO.Buffer.add_string buffer "&amp;"
-        | '<' -> IO.Buffer.add_string buffer "&lt;"
-        | '>' -> IO.Buffer.add_string buffer "&gt;"
-        | '"' -> IO.Buffer.add_string buffer "&quot;"
-        | _ -> IO.Buffer.add_char buffer char)
-      text;
-    IO.Buffer.contents buffer
-  in
-  let rec inline_to_children = fun inline ->
-    match inline with
-    | Text text ->
-        [ token Markdown_syntax_kind.Text (html_escape text) ]
-    | Emphasis inlines ->
-        [ token Markdown_syntax_kind.Text "<em>" ]
-        @ List.concat_map inline_to_children inlines
-        @ [ token Markdown_syntax_kind.Text "</em>" ]
-    | Strong inlines ->
-        [ token Markdown_syntax_kind.Text "<strong>" ]
-        @ List.concat_map inline_to_children inlines
-        @ [ token Markdown_syntax_kind.Text "</strong>" ]
-    | Strikethrough inlines ->
-        [ token Markdown_syntax_kind.Text "<del>" ]
-        @ List.concat_map inline_to_children inlines
-        @ [ token Markdown_syntax_kind.Text "</del>" ]
-    | Code_span text ->
-        [
-          token Markdown_syntax_kind.Text "<code>";
-          token Markdown_syntax_kind.Text (html_escape text);
-          token Markdown_syntax_kind.Text "</code>";
-        ]
-    | Raw_html html ->
-        [ token Markdown_syntax_kind.Raw_html html ]
-    | Link { label; destination } ->
-        let label_children = List.concat_map inline_to_children label in
-        [ token Markdown_syntax_kind.Text "<a href=\"" ]
-        @ [ token Markdown_syntax_kind.Text (html_escape destination) ]
-        @ [ token Markdown_syntax_kind.Text "\">" ]
-        @ label_children
-        @ [ token Markdown_syntax_kind.Text "</a>" ]
-  in
-  let rec block_to_node = fun block ->
-    match block with
-    | Heading { inlines; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Heading
-          (List.concat_map inline_to_children inlines)
-    | Paragraph { inlines; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Paragraph
-          (List.concat_map inline_to_children inlines)
-    | Block_quote { blocks; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Block_quote
-          (List.map block_to_node blocks)
-    | List { items; _ } ->
-        let item_nodes =
-          List.map
-            (fun item ->
-              match item with
-              | [ List_item _ as node ] -> block_to_node node
-              | [ Task_list_item _ as node ] -> block_to_node node
-              | nodes ->
-                  Ceibo.Builder.make_node
-                    ~kind:Markdown_syntax_kind.List_item
-                    (List.map block_to_node nodes))
-            items
-        in
-        Ceibo.Builder.make_node ~kind:Markdown_syntax_kind.List item_nodes
-    | Task_list_item { checked; blocks; _ } ->
-        let checkbox =
-          if checked then
-            "<input type=\"checkbox\" checked disabled />"
-          else
-            "<input type=\"checkbox\" disabled />"
-        in
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Task_list_item
-          (token Markdown_syntax_kind.Raw_html checkbox :: List.map block_to_node blocks)
-    | List_item { blocks; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.List_item
-          (List.map block_to_node blocks)
-    | Code_block { info; code; _ } ->
-        if info = "" then
-          Ceibo.Builder.make_node
-            ~kind:Markdown_syntax_kind.Code_block
-            [ token Markdown_syntax_kind.Text code ]
-        else
-          Ceibo.Builder.make_node
-            ~kind:Markdown_syntax_kind.Code_block
-            [
-              token Markdown_syntax_kind.Text info;
-              token Markdown_syntax_kind.Text "\n";
-              token Markdown_syntax_kind.Text code;
-            ]
-    | Horizontal_rule _ ->
-        Ceibo.Builder.make_node ~kind:Markdown_syntax_kind.Horizontal_rule []
-    | Raw_html { html; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Raw_html
-          [ token Markdown_syntax_kind.Raw_html html ]
-    | Table { header; rows; _ } ->
-        let row_to_node = fun row ->
-          let cells =
-            List.map
-              (fun cell ->
-                Ceibo.Builder.make_node
-                  ~kind:Markdown_syntax_kind.Table_cell
-                  (List.concat_map inline_to_children cell))
-              row.cells
-          in
-          Ceibo.Builder.make_node ~kind:Markdown_syntax_kind.Table_row cells
-        in
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Table
-          (row_to_node header :: List.map row_to_node rows)
-    | Error_block { message; _ } ->
-        Ceibo.Builder.make_node
-          ~kind:Markdown_syntax_kind.Error
-          [ token Markdown_syntax_kind.Text message ]
-  in
-  Ceibo.Green.make_node
-    ~kind:Markdown_syntax_kind.Document
-    ~children:(List.map block_to_node blocks)
+let lines_of_tokens = fun tokens ->
+  tokens
+  |> List.filter_map (fun token ->
+    match token.Markdown_token.kind with
+    | Markdown_token.Line_text -> Some { text = token.text; start = token.span.start }
+    | _ -> None)
+  |> Array.of_list
 
 let parse = fun ?(flavor = Markdown) source ->
-  let source = normalize_newlines source in
-  let lines = split_lines source in
-  let fallback_span = make_span ~start:0 ~len:(String.length source) in
-  let result =
-    try Some (parse_blocks ~flavor lines 0) with
-    | exn ->
-        let message = Exception.to_string exn in
-        let diagnostic =
-          parser_internal
-            ~found:{ kind = "parser"; text = "internal" }
-            ~message
-            ~span:fallback_span
-        in
-        Some (
-          [ Error_block { message = "Parser error. See diagnostics."; span = fallback_span } ],
-          [ diagnostic ]
-        )
-  in
-  let blocks, diagnostics =
-    match result with
-    | Some value -> value
-    | None -> ([], [])
-  in
-  let diagnostics = List.rev_append (make_control_diagnostics source) diagnostics in
-  { source; blocks; diagnostics }
-
-let blocks = fun parsed -> parsed.blocks
+  let source = Markdown_lexer.normalize_newlines source in
+  let tokens = Markdown_lexer.tokenize source in
+  let lines = lines_of_tokens tokens in
+  let control_diagnostics = make_control_diagnostics source in
+  try
+    let blocks, diagnostics = parse_blocks ~flavor lines 0 in
+    let diagnostics = List.rev_append control_diagnostics diagnostics in
+    let tree = Ceibo.Green.make_node ~kind:Syntax_kind.Document ~children:blocks in
+    { source; tokens; tree; diagnostics }
+  with
+  | exn ->
+      let message = Exception.to_string exn in
+      let found = { kind = "exception"; text = message } in
+      let span = make_span ~start:0 ~len:(String.length source) in
+      let diagnostic = parser_internal ~found ~message ~span in
+      {
+        source;
+        tokens;
+        tree =
+          Ceibo.Green.make_node
+            ~kind:Syntax_kind.Document
+            ~children:[ node Syntax_kind.Error [ token Syntax_kind.Text message ] ];
+        diagnostics = List.rev_append control_diagnostics [ diagnostic ];
+      }

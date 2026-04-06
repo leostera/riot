@@ -8,8 +8,10 @@ type inline_node =
   | Strong of inline_node list
   | Strikethrough of inline_node list
   | Code_span of string
+  | Hard_break
   | Raw_html of string
-  | Link of { label: inline_node list; destination: string }
+  | Link of { label: inline_node list; destination: string; title: string option }
+  | Image of { alt: inline_node list; destination: string; title: string option }
 
 type table_row = {
   cells: inline_node list list;
@@ -40,13 +42,12 @@ type block_node =
   | Error_block of { message: string; span: Ceibo.Span.t }
 
 type flavor = Markdown | Gfm
+
 type parsed = {
   source: string;
-  blocks: block_node list;
+  tokens: Markdown_token.t list;
+  tree: (Markdown_syntax_kind.t, string) Ceibo.Green.node;
   diagnostics: Markdown_diagnostic.t list;
 }
+
 val parse: ?flavor:flavor -> string -> parsed
-
-val blocks: parsed -> block_node list
-
-val to_green: source:string -> block_node list -> (Markdown_syntax_kind.t, string) Ceibo.Green.node

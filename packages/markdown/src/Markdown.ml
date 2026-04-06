@@ -29,9 +29,9 @@ type parse_result = {
 
 let parse = fun source ->
   let parsed = Markdown_parser.parse source in
-  let blocks = Markdown_parser.blocks parsed in
+  let blocks = Markdown_lower.lower ~flavor:Markdown_parser.Markdown parsed.tree in
   {
-    root = Markdown_parser.to_green ~source:parsed.source blocks;
+    root = parsed.tree;
     source = parsed.source;
     diagnostics = parsed.diagnostics;
     blocks
@@ -39,9 +39,9 @@ let parse = fun source ->
 
 let parse_gfm = fun source ->
   let parsed = Markdown_parser.parse ~flavor:Markdown_parser.Gfm source in
-  let blocks = Markdown_parser.blocks parsed in
+  let blocks = Markdown_lower.lower ~flavor:Markdown_parser.Gfm parsed.tree in
   {
-    root = Markdown_parser.to_green ~source:parsed.source blocks;
+    root = parsed.tree;
     source = parsed.source;
     diagnostics = parsed.diagnostics;
     blocks
