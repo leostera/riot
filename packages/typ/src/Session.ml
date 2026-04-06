@@ -83,21 +83,6 @@ let deps_env_for_loaded_modules = fun loaded_modules ->
 
 let collect_missing_module_summaries = fun session roots ->
   let deps_env = deps_env_for_loaded_modules session.config.loaded_modules in
-  let exported_module_prefixes = session.config.loaded_modules
-    |> List.map ModuleSummary.exports
-    |> List.concat
-    |> List.map fst
-    |> List.filter_map
-      (
-        fun export_name ->
-          let segments = String.split_on_char '.' export_name in
-        match segments with
-        | head :: [] -> None
-        | head :: _ when String.length head > 0 && is_uppercase_ascii head.[0] -> Some head
-        | _ -> None
-      )
-    |> List.sort_uniq String.compare
-  in
   let declared_modules = fun (source: Source.t) ->
     let filename =
       match source.origin with
@@ -143,9 +128,10 @@ let collect_missing_module_summaries = fun session roots ->
     | Ok deps -> Syn.Deps.modules deps
     | Error _ -> []
   in
-  let loaded_module_names = fun () ->
+  let loaded_module_names =
     session.config.loaded_modules
     |> List.map ModuleSummary.module_name
+    |> List.sort_uniq String.compare
   in
   let local_source_of_module = fun module_name ->
     session.sources
@@ -156,15 +142,35 @@ let collect_missing_module_summaries = fun session roots ->
       )
     |> Option.map (fun (source: Source.t) -> source.source_id)
   in
-  let declared_modules_by_source =
-    session.sources
-    |> List.map (fun (source: Source.t) -> (source.source_id, declared_modules source))
+  let local_nested_module_prefixes = fun source_id ->
+    match List.find_opt
+      (fun (source: Source.t) -> SourceId.equal source.source_id source_id)
+      session.sources
+    with
+    | None -> []
+    | Some source ->
+        declared_modules source
   in
-  let declared_modules_all =
-    declared_modules_by_source
-    |> List.map (fun (_, names) -> names)
-    |> List.concat
-    |> List.sort_uniq String.compare
+  let loaded_nested_module_prefixes = fun module_name ->
+    match session.config.loaded_modules
+      |> List.find_opt
+        (fun summary ->
+          String.equal module_name (ModuleSummary.module_name summary))
+    with
+    | None -> []
+    | Some summary ->
+        ModuleSummary.exports summary
+        |> List.map fst
+        |> List.filter_map
+          (
+            fun export_name ->
+              let segments = String.split_on_char '.' export_name in
+              match segments with
+              | head :: _ :: _ when String.length head > 0 && is_uppercase_ascii head.[0] ->
+                  Some head
+              | _ -> None
+          )
+        |> List.sort_uniq String.compare
   in
   let rec add_missing = fun missing module_name requested_by ->
     let rec loop = function
@@ -195,31 +201,42 @@ let collect_missing_module_summaries = fun session roots ->
           with
           | None -> discover rest seen missing
           | Some source ->
-              let loaded_names = loaded_module_names () in
               let source_modules = parse_module_dependencies source in
+              let dependency_nested_modules =
+                source_modules
+                |> List.concat_map
+                  (fun module_name ->
+                    let local_nested_modules =
+                      match local_source_of_module module_name with
+                      | Some dependency_source_id ->
+                          local_nested_module_prefixes dependency_source_id
+                      | None -> []
+                    in
+                    let loaded_nested_modules =
+                      if List.mem module_name loaded_module_names then
+                        loaded_nested_module_prefixes module_name
+                      else
+                        []
+                    in
+                    local_nested_modules @ loaded_nested_modules)
+                |> List.sort_uniq String.compare
+              in
               let (missing', additional) =
                 source_modules
                 |> List.fold_left
                   (
                     fun (missing, additional) module_name ->
-                      if List.mem module_name loaded_names
-                        || List.mem module_name declared_modules_all
-                        || List.exists
-                          (fun (name, _) -> String.equal name module_name)
-                          (session.sources
-                           |> List.map (fun (source: Source.t) -> (Source.module_name source, source.source_id)))
-                      then (
-                        let additional' =
-                          match local_source_of_module module_name with
-                          | None -> additional
-                          | Some dependency_source_id -> dependency_source_id :: additional
-                        in
-                        (missing, additional')
-                      )
-                      else if List.mem module_name exported_module_prefixes then
+                      if List.mem module_name loaded_module_names then
                         (missing, additional)
                       else
-                        (add_missing missing module_name source_id, additional)
+                        match local_source_of_module module_name with
+                        | Some dependency_source_id ->
+                            (missing, dependency_source_id :: additional)
+                        | None ->
+                            if List.mem module_name dependency_nested_modules then
+                              (missing, additional)
+                            else
+                              (add_missing missing module_name source_id, additional)
                   ) 
                   (missing, [])
               in

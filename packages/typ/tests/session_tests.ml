@@ -226,6 +226,98 @@ let test_snapshot_module_summaries_are_canonical_per_module = fun _ctx ->
   let () = Test.assert_equal ~expected:[ "Colors" ] ~actual:module_names in
   Ok ()
 
+let test_query_module_summary_of_uses_canonical_root_summary = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = 42\n" in
+  let (session, intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let canonical_json =
+    match Snapshot.module_summaries snapshot with
+    | [ summary ] -> ModuleSummary.Json.to_json summary |> Data.Json.to_string
+    | summaries ->
+        panic ("expected one canonical module summary but got "
+        ^ string_of_int (List.length summaries))
+  in
+  let summary_json = fun source_id ->
+    match Query.module_summary_of snapshot source_id with
+    | Some summary -> ModuleSummary.Json.to_json summary |> Data.Json.to_string
+    | None ->
+        panic ("expected module summary for " ^ SourceId.to_string source_id)
+  in
+  let impl_json = summary_json impl_source_id in
+  let intf_json = summary_json intf_source_id in
+  let () = Test.assert_equal ~expected:canonical_json ~actual:impl_json in
+  let () = Test.assert_equal ~expected:canonical_json ~actual:intf_json in
+  Ok ()
+
+let test_snapshot_persisted_summaries_are_canonical_per_module = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, _impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = 42\n" in
+  let (session, _intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let canonical_json =
+    match Snapshot.module_summaries snapshot with
+    | [ summary ] -> ModuleSummary.summary summary |> PersistedSummary.Json.to_json |> Data.Json.to_string
+    | summaries ->
+        panic ("expected one canonical module summary but got "
+        ^ string_of_int (List.length summaries))
+  in
+  let persisted_jsons =
+    Snapshot.persisted_summaries snapshot
+    |> List.map PersistedSummary.Json.to_json
+    |> List.map Data.Json.to_string
+  in
+  let () = Test.assert_equal ~expected:[ canonical_json ] ~actual:persisted_jsons in
+  Ok ()
+
+let test_query_persisted_summary_of_uses_canonical_root_summary = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = 42\n" in
+  let (session, intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let canonical_json =
+    match Snapshot.module_summaries snapshot with
+    | [ summary ] -> ModuleSummary.summary summary |> PersistedSummary.Json.to_json |> Data.Json.to_string
+    | summaries ->
+        panic ("expected one canonical module summary but got "
+        ^ string_of_int (List.length summaries))
+  in
+  let summary_json = fun source_id ->
+    match Query.persisted_summary_of snapshot source_id with
+    | Some summary -> PersistedSummary.Json.to_json summary |> Data.Json.to_string
+    | None ->
+        panic ("expected persisted summary for " ^ SourceId.to_string source_id)
+  in
+  let impl_json = summary_json impl_source_id in
+  let intf_json = summary_json intf_source_id in
+  let () = Test.assert_equal ~expected:canonical_json ~actual:impl_json in
+  let () = Test.assert_equal ~expected:canonical_json ~actual:intf_json in
+  Ok ()
+
 let test_source_input_hash_ignores_source_id_and_revision = fun _ctx ->
   let source_a = Source.make
     ~source_id:(SourceId.of_int 0)
@@ -792,6 +884,151 @@ let test_prepare_snapshot_collects_missing_module_for_qualified_reference = fun 
       else
         Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
 
+let test_prepare_snapshot_keeps_nested_sibling_modules_out_of_top_level_requirements = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, _provider_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "provider.ml")
+    ~text:"module Missing_module = struct let value = 42 end\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:"open Missing_module\nlet answer = value\n" in
+  match Session.prepare_snapshot session ~roots:[ source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to keep sibling nested modules out of top-level module requirements"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int source_id) ]);
+        ]
+      ]
+      |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_prepare_snapshot_keeps_loaded_nested_module_exports_out_of_top_level_requirements = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, colors_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"module RGB = struct let blend x y = x end\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_colors =
+    match Query.module_summary_of seed_snapshot colors_source_id with
+    | Some summary -> summary
+    | None -> panic "expected colors module summary"
+  in
+  let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
+  let session = Session.empty ~config in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:"let midpoint = RGB.blend 1 2\n" in
+  match Session.prepare_snapshot session ~roots:[ source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to keep loaded nested module exports out of top-level module requirements"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "RGB");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int source_id) ]);
+        ]
+      ]
+      |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_prepare_snapshot_canonicalizes_missing_requirements = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, first_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "first.ml")
+    ~text:"open Missing_module\nlet first = 1\n" in
+  let (session, second_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "second.ml")
+    ~text:"open Missing_module\nlet second = 2\n" in
+  let missing_root_a = SourceId.of_int 99 in
+  let missing_root_b = SourceId.of_int 42 in
+  match Session.prepare_snapshot
+    session
+    ~roots:[ second_source_id; missing_root_a; first_source_id; second_source_id; missing_root_b ]
+  with
+  | Ok _ -> Error "expected rooted snapshot preparation to report canonical missing requirements"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_root_source");
+          ("source_id", Data.Json.Int 42);
+        ];
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_root_source");
+          ("source_id", Data.Json.Int 99);
+        ];
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [
+            Data.Json.Int (SourceId.to_int first_source_id);
+            Data.Json.Int (SourceId.to_int second_source_id);
+          ]);
+        ];
+      ]
+      |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_prepare_snapshot_sorts_missing_modules_by_name = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, zed_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "zed_consumer.ml")
+    ~text:"open Zed\nlet z = 1\n" in
+  let (session, alpha_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "alpha_consumer.ml")
+    ~text:"open Alpha\nlet a = 2\n" in
+  match Session.prepare_snapshot session ~roots:[ zed_source_id; alpha_source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to report sorted missing module summaries"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Alpha");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int alpha_source_id) ]);
+        ];
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Zed");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int zed_source_id) ]);
+        ];
+      ]
+      |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
 let test_check_source_recovers_when_snapshot_preparation_reports_missing_module_summaries = fun _ctx ->
   let report = Check.check_source ~filename:(Path.v "uses_missing_module.ml") "open Missing_module\nlet answer = Missing_module.value 1\n" in
   let diagnostics = List.length report.parse_diagnostics
@@ -1053,6 +1290,15 @@ let () =
         Test.case
           "snapshot module summaries are canonical per module"
           test_snapshot_module_summaries_are_canonical_per_module;
+        Test.case
+          "query module_summary_of uses the canonical root summary"
+          test_query_module_summary_of_uses_canonical_root_summary;
+        Test.case
+          "snapshot persisted summaries are canonical per module"
+          test_snapshot_persisted_summaries_are_canonical_per_module;
+        Test.case
+          "query persisted_summary_of uses the canonical root summary"
+          test_query_persisted_summary_of_uses_canonical_root_summary;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
         Test.case "snapshot uses sibling source record types" test_snapshot_uses_sibling_source_record_types;
@@ -1069,6 +1315,14 @@ let () =
         Test.case "prepare_snapshot reports missing module summaries" test_prepare_snapshot_reports_missing_module_summary;
         Test.case "prepare_snapshot collects transitive missing modules" test_prepare_snapshot_collects_transitive_missing_modules;
         Test.case "prepare_snapshot collects missing modules from qualified references" test_prepare_snapshot_collects_missing_module_for_qualified_reference;
+        Test.case
+          "prepare_snapshot keeps nested sibling modules out of top-level requirements"
+          test_prepare_snapshot_keeps_nested_sibling_modules_out_of_top_level_requirements;
+        Test.case
+          "prepare_snapshot keeps loaded nested module exports out of top-level requirements"
+          test_prepare_snapshot_keeps_loaded_nested_module_exports_out_of_top_level_requirements;
+        Test.case "prepare_snapshot canonicalizes missing requirements" test_prepare_snapshot_canonicalizes_missing_requirements;
+        Test.case "prepare_snapshot sorts missing modules by name" test_prepare_snapshot_sorts_missing_modules_by_name;
         Test.case "check_source recovers when rooted preparation reports missing module summaries" test_check_source_recovers_when_snapshot_preparation_reports_missing_module_summaries;
         Test.case "match guards typecheck in pattern scope" test_match_guards_typecheck_in_pattern_scope;
         Test.case "optional arguments can be omitted and reordered" test_optional_arguments_can_be_omitted_and_reordered;

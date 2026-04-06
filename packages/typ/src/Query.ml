@@ -19,16 +19,10 @@ let file_summary_of = fun snapshot source_id ->
   | Some analysis -> Some analysis.file_summary
   | None -> None
 
-let persisted_summary_of = fun snapshot source_id ->
-  file_summary_of snapshot source_id |> Option.map PersistedSummary.of_file_summary
+let module_summary_of = Snapshot.find_module_summary
 
-let module_summary_of = fun snapshot source_id ->
-  match analysis_of_source snapshot source_id with
-  | None -> None
-  | Some analysis -> Some (ModuleSummary.make
-    ~module_name:(Source.module_name analysis.source)
-    ~source_hash:(Source.input_hash analysis.source)
-    ~summary:(PersistedSummary.of_file_summary analysis.file_summary))
+let persisted_summary_of = fun snapshot source_id ->
+  module_summary_of snapshot source_id |> Option.map ModuleSummary.summary
 
 let export_of = fun snapshot source_id ->
   file_summary_of snapshot source_id |> Option.map (fun summary -> summary.FileSummary.export_result)

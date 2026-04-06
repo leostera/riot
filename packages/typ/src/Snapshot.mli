@@ -28,17 +28,28 @@ val analyses: t -> SourceAnalysis.t list
     Calling this forces every lazy per-root analysis. *)
 val file_summaries: t -> FileSummary.t list
 
-(** Enumerate the host-facing persisted summaries for every source in this
-    snapshot.
+(** Enumerate the host-facing persisted summaries for every rooted module in
+    this snapshot.
+
+    This follows the same canonical per-module boundary as [module_summaries],
+    so paired [.ml]/[.mli] roots contribute one persisted summary.
 
     Calling this forces every lazy per-root analysis. *)
 val persisted_summaries: t -> PersistedSummary.t list
 
-(** Enumerate the host-facing module summaries for every source in this
+(** Enumerate the host-facing module summaries for every rooted module in this
     snapshot.
 
     Calling this forces every lazy per-root analysis. *)
 val module_summaries: t -> ModuleSummary.t list
+
+(** Find the canonical host-facing module summary for one rooted source's
+    module, when present.
+
+    This preserves the rooted query boundary while ensuring callers see the
+    same canonical [ModuleSummary] that [module_summaries] enumerates for that
+    module. *)
+val find_module_summary: t -> SourceId.t -> ModuleSummary.t option
 
 (** Find the analysis for one logical source within this snapshot.
 

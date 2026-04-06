@@ -166,27 +166,48 @@ let roots = fun snapshot -> snapshot.roots
 
 let is_root = fun snapshot source_id -> snapshot.roots |> List.exists (SourceId.equal source_id)
 
-let analyses = fun snapshot ->
+let rooted_slots = fun snapshot ->
   snapshot.analyses
   |> List.filter (fun (slot: analysis_slot) -> is_root snapshot slot.source_id)
-  |> List.map (force_analysis snapshot)
+
+let rooted_canonical_summary_slots = fun snapshot ->
+  rooted_slots snapshot |> canonical_summary_slots
+
+let module_summary_of_slot = fun snapshot (slot: analysis_slot) ->
+  let analysis = force_analysis snapshot slot in
+  ModuleSummary.make
+    ~module_name:(Source.module_name slot.source)
+    ~source_hash:(Source.input_hash slot.source)
+    ~summary:(PersistedSummary.of_file_summary analysis.file_summary)
+
+let analyses = fun snapshot ->
+  rooted_slots snapshot |> List.map (force_analysis snapshot)
 
 let file_summaries = fun snapshot ->
   analyses snapshot |> List.map (fun (analysis: SourceAnalysis.t) -> analysis.file_summary)
 
-let persisted_summaries = fun snapshot -> file_summaries snapshot |> List.map PersistedSummary.of_file_summary
-
 let module_summaries = fun snapshot ->
-  snapshot.analyses
-  |> List.filter (fun (slot: analysis_slot) -> is_root snapshot slot.source_id)
-  |> canonical_summary_slots
-  |> List.map
-    (fun (slot: analysis_slot) ->
-      let analysis = force_analysis snapshot slot in
-      ModuleSummary.make
-        ~module_name:(Source.module_name slot.source)
-        ~source_hash:(Source.input_hash slot.source)
-        ~summary:(PersistedSummary.of_file_summary analysis.file_summary))
+  rooted_canonical_summary_slots snapshot |> List.map (module_summary_of_slot snapshot)
+
+let persisted_summaries = fun snapshot ->
+  module_summaries snapshot |> List.map ModuleSummary.summary
+
+let find_module_summary = fun snapshot source_id ->
+  if not (is_root snapshot source_id) then
+    None
+  else
+    match List.find_opt
+      (fun (slot: analysis_slot) ->
+        SourceId.equal slot.source_id source_id)
+      snapshot.analyses
+    with
+    | None -> None
+    | Some slot ->
+        let module_name = Source.module_name slot.source in
+        rooted_canonical_summary_slots snapshot
+        |> List.find_opt (fun (candidate: analysis_slot) ->
+          String.equal module_name (Source.module_name candidate.source))
+        |> Option.map (module_summary_of_slot snapshot)
 
 let find_analysis = fun snapshot source_id ->
   if not (is_root snapshot source_id) then

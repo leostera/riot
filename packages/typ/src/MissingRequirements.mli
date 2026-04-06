@@ -11,7 +11,11 @@ type t
 (** Build one missing-requirements payload from prepared requirements. *)
 val of_list: requirement list -> t
 
-(** Enumerate requirements in deterministic order. *)
+(** Enumerate requirements in canonical deterministic order.
+
+    Missing root sources are sorted by [SourceId], and missing module-summary
+    requirements are sorted by module name with deduplicated, sorted
+    [requested_by] source ids. *)
 val requirements: t -> requirement list
 
 (** Whether no requirements are missing. *)
