@@ -205,6 +205,29 @@ let expected_manifest_alias_lowering_json = Data.Json.Object [
   ("lowering_diagnostics", Data.Json.Array []);
 ]
 
+let expected_arrow_manifest_alias_lowering_json = Data.Json.Object [
+  (
+    "items",
+    Data.Json.Array [
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "transform");
+        ("param_count", Data.Json.Int 2);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+        (
+          "manifest",
+          Data.Json.Object [
+            ("tag", Data.Json.String "alias");
+            ("type", Data.Json.String "'b -> ~step:('b -> 'a) -> ?fallback:'a -> 'a");
+          ]
+        );
+      ];
+    ]
+  );
+  ("lowering_diagnostics", Data.Json.Array []);
+]
+
 let expected_poly_variant_type_lowering_json = Data.Json.Object [
   (
     "items",
@@ -303,6 +326,20 @@ let test_manifest_type_aliases_lower_to_type_items = fun ctx ->
   let report = Check.check_source ~filename:(Path.v "packages/typ/tests/type_alias_recovery.ml") source in
   Test.Snapshot.assert_inline_json ~ctx ~actual:(actual_type_item_lowering_json report) ~expected:expected_manifest_alias_lowering_json
 
+let test_arrow_type_aliases_preserve_labels_during_lowering = fun ctx ->
+  let source = String.concat
+    "\n"
+    [
+      "type ('input, 'output) transform =";
+      "  'input -> step:('input -> 'output) -> ?fallback:'output -> 'output";
+      "";
+    ] in
+  let report = Check.check_source ~filename:(Path.v "packages/typ/tests/arrow_type_alias.ml") source in
+  Test.Snapshot.assert_inline_json
+    ~ctx
+    ~actual:(actual_type_item_lowering_json report)
+    ~expected:expected_arrow_manifest_alias_lowering_json
+
 let test_poly_variant_type_declarations_lower_to_type_items = fun ctx ->
   let source = String.concat
     "\n"
@@ -322,6 +359,9 @@ let () =
         Test.case "fun cases preserve preceding parameters during lowering" test_fun_cases_preserve_preceding_parameters;
         Test.case "abstract type declarations lower to type items" test_abstract_type_declarations_lower_to_type_items;
         Test.case "manifest type aliases lower to type items" test_manifest_type_aliases_lower_to_type_items;
+        Test.case
+          "arrow type aliases preserve labels during lowering"
+          test_arrow_type_aliases_preserve_labels_during_lowering;
         Test.case "polymorphic-variant type declarations lower to type items" test_poly_variant_type_declarations_lower_to_type_items;
       ] in
       Test.Cli.main ~name:"typ:lowering" ~tests ~args)

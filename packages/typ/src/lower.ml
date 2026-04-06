@@ -96,6 +96,12 @@ let builtin_type_of_name = fun name arguments ->
   | ("Std.Seq.t", [ argument ]) -> Some (TypeRepr.Seq argument)
   | _ -> None
 
+let lower_arrow_label = fun (label: Cst.arrow_label option) ->
+  match label with
+  | None -> TypeRepr.Nolabel
+  | Some (Cst.Named { label_token; _ }) -> TypeRepr.Labelled (Cst.Token.text label_token)
+  | Some (Cst.OptionalNamed { label_token; _ }) -> TypeRepr.Optional (Cst.Token.text label_token)
+
 let rec lower_core_type = fun scope_path type_params core_type ->
   match core_type with
   | Cst.CoreType.Parenthesized { inner; _ }
@@ -122,6 +128,12 @@ let rec lower_core_type = fun scope_path type_params core_type ->
             in
             TypeRepr.Named { name; arguments }
       end
+  | Cst.CoreType.Arrow { label; parameter_type; result_type; _ } ->
+      TypeRepr.Arrow {
+        label = lower_arrow_label label;
+        lhs = lower_core_type scope_path type_params parameter_type;
+        rhs = lower_core_type scope_path type_params result_type;
+      }
   | Cst.CoreType.Tuple { elements; _ } ->
       TypeRepr.Tuple (List.map (lower_core_type scope_path type_params) elements)
   | _ ->
