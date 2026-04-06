@@ -285,7 +285,7 @@ let lower_record_label = fun scope_path type_params (field: Cst.RecordField.t) -
   {
     TypeDecl.name = Cst.RecordField.name field;
     field_type = lower_core_type scope_path type_params (Cst.RecordField.field_type field);
-    mutable_ = Option.is_some (Cst.RecordField.mutable_token field);
+    mutable_ = Option.is_some (Cst.RecordField.mutable_token field)
   }
 
 let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaration.t) ->
@@ -311,13 +311,12 @@ let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaratio
                 });
           labels = [];
         }
-    | Cst.TypeDefinition.Record { fields; _ } ->
-        Some {
-          TypeDecl.type_name = type_name;
-          param_ids = List.map snd params;
-          constructors = [];
-          labels = List.map (lower_record_label state.scope_path params) fields;
-        }
+    | Cst.TypeDefinition.Record { fields; _ } -> Some {
+      TypeDecl.type_name = type_name;
+      param_ids = List.map snd params;
+      constructors = [];
+      labels = List.map (lower_record_label state.scope_path params) fields
+    }
     | _ -> None
   in
   match lowered_declaration with
@@ -489,32 +488,37 @@ let rec lower_pattern = fun (state: state) pattern ->
           arguments = argument_ids
         })
   | Cst.Pattern.Record { syntax_node; fields; closedness; _ } ->
-      let fields = fields |> List.map
-        (fun (field: Cst.record_pattern_field) ->
-          let pattern_id =
-            match field.pattern with
-            | Some pattern -> lower_pattern state pattern
-            | None ->
-                let field_name = last_path_segment_text field.field_path in
-                add_pattern
-                  state
-                  ~syntax_node:field.syntax_node
-                  ~label:"record_punned_field_pattern"
-                  (BodyArena.PVar field_name)
-          in
-          ({ BodyArena.label = path_text field.field_path; pattern_id }: BodyArena.record_pattern_field)) in
-      add_pattern
-        state
-        ~syntax_node
-        ~label:"record_pattern"
-        (BodyArena.PRecord {
-          fields;
-          open_ = (
-            match closedness with
-            | Cst.Open _ -> true
-            | Cst.Closed -> false
-          );
-        })
+      let fields =
+        fields
+        |> List.map
+          (fun (field: Cst.record_pattern_field) ->
+            let pattern_id =
+              match field.pattern with
+              | Some pattern -> lower_pattern state pattern
+              | None ->
+                  let field_name = last_path_segment_text field.field_path in
+                  add_pattern
+                    state
+                    ~syntax_node:field.syntax_node
+                    ~label:"record_punned_field_pattern"
+                    (BodyArena.PVar field_name)
+            in
+            (
+              { BodyArena.label = path_text field.field_path; pattern_id }: BodyArena.record_pattern_field
+            ))
+      in
+      add_pattern state ~syntax_node ~label:"record_pattern"
+        (
+          BodyArena.PRecord {
+            fields;
+            open_ =
+              (
+                match closedness with
+                | Cst.Open _ -> true
+                | Cst.Closed -> false
+              );
+          }
+        )
   | Cst.Pattern.List { syntax_node; elements; _ } ->
       let element_ids = List.map (lower_pattern state) elements in
       add_pattern state ~syntax_node ~label:"list_pattern" (BodyArena.PList element_ids)
@@ -606,18 +610,9 @@ let rec lower_match_cases = fun (state: state) cases ->
   List.map
     (fun (case: Cst.match_case) ->
       let pattern_id = lower_pattern state case.pattern in
-      let body_id =
-        match case.guard with
-        | None -> lower_expr state case.body
-        | Some _ ->
-            let () = add_diagnostic
-              state
-              (Typ_diagnostic.IgnoredMatchGuard {
-                guard_span = Ceibo.Red.SyntaxNode.span case.syntax_node
-              }) in
-            lower_expr state case.body
-      in
-      { BodyArena.pattern_id; body_id })
+      let guard_id = case.guard |> Option.map (lower_expr state) in
+      let body_id = lower_expr state case.body in
+      { BodyArena.pattern_id; guard_id; body_id })
     cases
 
 and lower_function_like = fun (state: state) ~syntax_node ~parameters ~body ->
@@ -836,18 +831,16 @@ and lower_expr = fun (state: state) expression ->
             state
             ~syntax_node
             ~label:"field_access_expression"
-            (BodyArena.EFieldAccess {
-              receiver_id;
-              label = Cst.Token.text field_name;
-            })
+            (BodyArena.EFieldAccess { receiver_id; label = Cst.Token.text field_name })
     )
   | Cst.Expression.Record (Cst.RecordExpression.Literal { syntax_node; fields; _ }) ->
-      let fields = fields |> List.map
+      let fields = fields
+      |> List.map
         (fun (field: Cst.record_expression_field) ->
-          ({
-            BodyArena.label = path_text field.field_path;
-            value_id = lower_expr state field.value;
-          }: BodyArena.record_expr_field)) in
+          (
+            { BodyArena.label = path_text field.field_path; value_id = lower_expr state field.value }:
+              BodyArena.record_expr_field
+          )) in
       add_expr
         state
         ~syntax_node
@@ -855,12 +848,13 @@ and lower_expr = fun (state: state) expression ->
         (BodyArena.ERecord { base_id = None; fields })
   | Cst.Expression.Record (Cst.RecordExpression.Update { syntax_node; base; fields; _ }) ->
       let base_id = lower_expr state base in
-      let fields = fields |> List.map
+      let fields = fields
+      |> List.map
         (fun (field: Cst.record_expression_field) ->
-          ({
-            BodyArena.label = path_text field.field_path;
-            value_id = lower_expr state field.value;
-          }: BodyArena.record_expr_field)) in
+          (
+            { BodyArena.label = path_text field.field_path; value_id = lower_expr state field.value }:
+              BodyArena.record_expr_field
+          )) in
       add_expr
         state
         ~syntax_node
@@ -930,7 +924,7 @@ and lower_expr = fun (state: state) expression ->
       | Cst.Cases body -> lower_function_like
         state
         ~syntax_node
-        ~parameters:[]
+        ~parameters
         ~body:(`Cases body.cases)
     )
   | Cst.Expression.Function { syntax_node; cases; _ } ->
@@ -1132,12 +1126,11 @@ let lower_source_file = fun ~source source_file ->
     | Cst.Implementation implementation ->
         let _items = implementation.items |> List.map (lower_structure_item state) in
         ()
-    | Cst.Interface _ ->
-        add_diagnostic
-          state
-          (Typ_diagnostic.UnsupportedInterfaceFile {
-            interface_span = Cst.SourceFile.syntax_node source_file |> Ceibo.Red.SyntaxNode.span;
-          })
+    | Cst.Interface _ -> add_diagnostic
+      state
+      (Typ_diagnostic.UnsupportedInterfaceFile {
+        interface_span = Cst.SourceFile.syntax_node source_file |> Ceibo.Red.SyntaxNode.span
+      })
   in
   {
     SemanticTree.item_tree = ItemTree.of_list (List.rev state.items);

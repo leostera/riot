@@ -56,7 +56,6 @@ type t =
     }
   | IgnoredPatternTypeConstraint of { constraint_span: Syn.Ceibo.Span.t }
   | ParameterLoweredAsPositional of { parameter_span: Syn.Ceibo.Span.t }
-  | IgnoredMatchGuard of { guard_span: Syn.Ceibo.Span.t }
   | ApplicationArgumentLoweredAsPositional of { application_span: Syn.Ceibo.Span.t }
   | IgnoredTypeAscription of { ascription_span: Syn.Ceibo.Span.t }
   | IgnoredPolymorphicAnnotation of { annotation_span: Syn.Ceibo.Span.t }

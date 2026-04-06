@@ -52,6 +52,8 @@ type pattern_node = {
 type match_case = {
   (** Pattern tested by this case. *)
   pattern_id: PatId.t;
+  (** Optional guard expression evaluated after the pattern binds. *)
+  guard_id: ExprId.t option;
   (** Body expression evaluated when the pattern matches. *)
   body_id: ExprId.t;
 }

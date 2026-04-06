@@ -58,7 +58,6 @@ type t =
     }
   | IgnoredPatternTypeConstraint of { constraint_span: Syn.Ceibo.Span.t }
   | ParameterLoweredAsPositional of { parameter_span: Syn.Ceibo.Span.t }
-  | IgnoredMatchGuard of { guard_span: Syn.Ceibo.Span.t }
   | ApplicationArgumentLoweredAsPositional of { application_span: Syn.Ceibo.Span.t }
   | IgnoredTypeAscription of { ascription_span: Syn.Ceibo.Span.t }
   | IgnoredPolymorphicAnnotation of { annotation_span: Syn.Ceibo.Span.t }
@@ -88,7 +87,6 @@ let code = function
   | UnsupportedSyntax _ -> "TYP1001"
   | IgnoredPatternTypeConstraint _ -> "TYP1004"
   | ParameterLoweredAsPositional _ -> "TYP1005"
-  | IgnoredMatchGuard _ -> "TYP1006"
   | ApplicationArgumentLoweredAsPositional _ -> "TYP1007"
   | IgnoredTypeAscription _ -> "TYP1008"
   | IgnoredPolymorphicAnnotation _ -> "TYP1009"
@@ -106,7 +104,6 @@ let name = function
   | UnsupportedSyntax _ -> "unsupported-syntax"
   | IgnoredPatternTypeConstraint _ -> "ignored-pattern-type-constraint"
   | ParameterLoweredAsPositional _ -> "parameter-lowered-as-positional"
-  | IgnoredMatchGuard _ -> "ignored-match-guard"
   | ApplicationArgumentLoweredAsPositional _ -> "application-argument-lowered-as-positional"
   | IgnoredTypeAscription _ -> "ignored-type-ascription"
   | IgnoredPolymorphicAnnotation _ -> "ignored-polymorphic-annotation"
@@ -123,7 +120,6 @@ let severity = function
   | CstBuilderError _
   | UnsupportedSyntax _
   | IgnoredPatternTypeConstraint _
-  | IgnoredMatchGuard _
   | IgnoredPolymorphicAnnotation _
   | UnboundName _
   | TypeMismatch _
@@ -146,7 +142,6 @@ let primary_span = function
   | UnsupportedSyntax { syntax_span; _ } -> syntax_span
   | IgnoredPatternTypeConstraint { constraint_span } -> constraint_span
   | ParameterLoweredAsPositional { parameter_span } -> parameter_span
-  | IgnoredMatchGuard { guard_span } -> guard_span
   | ApplicationArgumentLoweredAsPositional { application_span } -> application_span
   | IgnoredTypeAscription { ascription_span } -> ascription_span
   | IgnoredPolymorphicAnnotation { annotation_span } -> annotation_span
@@ -203,7 +198,8 @@ let record_context_to_string = function
   | RecordPattern -> "record pattern"
   | RecordFieldAccess -> "record field access"
 
-let render_record_labels = fun labels -> String.concat ", " labels
+let render_record_labels = fun labels ->
+  String.concat ", " labels
 
 let render_binding_names = fun names ->
   match names with
@@ -211,75 +207,88 @@ let render_binding_names = fun names ->
   | _ -> render_record_labels names
 
 let message = function
-  | CstBuilderError { builder_error } -> "Syn.build_cst failed before lowering: " ^ builder_error.message
+  | CstBuilderError { builder_error } ->
+      "Syn.build_cst failed before lowering: " ^ builder_error.message
   | UnsupportedSyntax {
     syntax_kind;
     context;
     recovery;
     reason=None;
     _
-  } -> "unsupported "
-  ^ unsupported_context_to_string context
-  ^ " lowered using "
-  ^ unsupported_recovery_to_string recovery
-  ^ ": "
-  ^ Syn.SyntaxKind.to_string syntax_kind
+  } ->
+      "unsupported "
+      ^ unsupported_context_to_string context
+      ^ " lowered using "
+      ^ unsupported_recovery_to_string recovery
+      ^ ": "
+      ^ Syn.SyntaxKind.to_string syntax_kind
   | UnsupportedSyntax {
     syntax_kind;
     context;
     recovery;
     reason=Some reason;
     _
-  } -> "unsupported "
-  ^ unsupported_context_to_string context
-  ^ " lowered using "
-  ^ unsupported_recovery_to_string recovery
-  ^ ": "
-  ^ Syn.SyntaxKind.to_string syntax_kind
-  ^ " ("
-  ^ unsupported_reason_to_string reason
-  ^ ")"
-  | IgnoredPatternTypeConstraint _ -> "type-constrained pattern lowered without its annotation"
-  | ParameterLoweredAsPositional _ -> "labeled, optional, or locally abstract parameters are currently lowered as ordinary positional binders"
-  | IgnoredMatchGuard _ -> "match guards are currently ignored during lowering"
-  | ApplicationArgumentLoweredAsPositional _ -> "labeled or optional application arguments are currently lowered as ordinary positional arguments"
-  | IgnoredTypeAscription _ -> "type ascriptions are currently ignored during lowering"
-  | IgnoredPolymorphicAnnotation _ -> "explicit polymorphic annotations are currently ignored during lowering"
-  | UnsupportedInterfaceFile _ -> "interface files are not lowered by the prototype yet"
-  | UnboundName { name; _ } -> "unbound name: " ^ name
-  | TypeMismatch { mismatch=ExpectedActual { expected; actual }; _ } -> "type mismatch: expected "
-  ^ expected
-  ^ " but got "
-  ^ actual
-  | TypeMismatch { mismatch=TupleArityMismatch { left; right; left_arity; right_arity }; _ } -> "type mismatch: tuple arity mismatch ("
-  ^ Int.to_string left_arity
-  ^ " vs "
-  ^ Int.to_string right_arity
-  ^ ") between "
-  ^ left
-  ^ " and "
-  ^ right
-  | TypeMismatch { mismatch=OccursCheckFailed { variable_id; in_type }; _ } -> "type mismatch: occurs check failed for type variable "
-  ^ Int.to_string variable_id
-  ^ " in "
-  ^ in_type
-  | ApplicationLabelMismatch { expected_label; actual_labels=[]; _ } -> "application is missing an argument for "
-  ^ application_label_to_string expected_label
-  | ApplicationLabelMismatch { expected_label; actual_labels; _ } -> "application label mismatch: expected "
-  ^ application_label_to_string expected_label
-  ^ " but remaining arguments were "
-  ^ String.concat ", " (List.map application_label_to_string actual_labels)
+  } ->
+      "unsupported "
+      ^ unsupported_context_to_string context
+      ^ " lowered using "
+      ^ unsupported_recovery_to_string recovery
+      ^ ": "
+      ^ Syn.SyntaxKind.to_string syntax_kind
+      ^ " ("
+      ^ unsupported_reason_to_string reason
+      ^ ")"
+  | IgnoredPatternTypeConstraint _ ->
+      "type-constrained pattern lowered without its annotation"
+  | ParameterLoweredAsPositional _ ->
+      "labeled, optional, or locally abstract parameters are currently lowered as ordinary positional binders"
+  | ApplicationArgumentLoweredAsPositional _ ->
+      "labeled or optional application arguments are currently lowered as ordinary positional arguments"
+  | IgnoredTypeAscription _ ->
+      "type ascriptions are currently ignored during lowering"
+  | IgnoredPolymorphicAnnotation _ ->
+      "explicit polymorphic annotations are currently ignored during lowering"
+  | UnsupportedInterfaceFile _ ->
+      "interface files are not lowered by the prototype yet"
+  | UnboundName { name; _ } ->
+      "unbound name: " ^ name
+  | TypeMismatch { mismatch=ExpectedActual { expected; actual }; _ } ->
+      "type mismatch: expected " ^ expected ^ " but got " ^ actual
+  | TypeMismatch { mismatch=TupleArityMismatch { left; right; left_arity; right_arity }; _ } ->
+      "type mismatch: tuple arity mismatch ("
+      ^ Int.to_string left_arity
+      ^ " vs "
+      ^ Int.to_string right_arity
+      ^ ") between "
+      ^ left
+      ^ " and "
+      ^ right
+  | TypeMismatch { mismatch=OccursCheckFailed { variable_id; in_type }; _ } ->
+      "type mismatch: occurs check failed for type variable "
+      ^ Int.to_string variable_id
+      ^ " in "
+      ^ in_type
+  | ApplicationLabelMismatch { expected_label; actual_labels=[]; _ } ->
+      "application is missing an argument for " ^ application_label_to_string expected_label
+  | ApplicationLabelMismatch { expected_label; actual_labels; _ } ->
+      "application label mismatch: expected "
+      ^ application_label_to_string expected_label
+      ^ " but remaining arguments were "
+      ^ String.concat ", " (List.map application_label_to_string actual_labels)
   | RecordResolutionError { context; reason; _ } -> (
       match reason with
-      | UnknownRecordLabels labels ->
-          record_context_to_string context ^ " uses unknown record labels: " ^ render_record_labels labels
-      | AmbiguousRecordLabels labels ->
-          record_context_to_string context ^ " is ambiguous for record labels: " ^ render_record_labels labels
-      | MissingRecordFields labels ->
-          record_context_to_string context ^ " is missing record fields: " ^ render_record_labels labels
-      | IncompatibleRecordLabels labels ->
-          record_context_to_string context ^ " labels do not belong to a single record type: "
-          ^ render_record_labels labels
+      | UnknownRecordLabels labels -> record_context_to_string context
+      ^ " uses unknown record labels: "
+      ^ render_record_labels labels
+      | AmbiguousRecordLabels labels -> record_context_to_string context
+      ^ " is ambiguous for record labels: "
+      ^ render_record_labels labels
+      | MissingRecordFields labels -> record_context_to_string context
+      ^ " is missing record fields: "
+      ^ render_record_labels labels
+      | IncompatibleRecordLabels labels -> record_context_to_string context
+      ^ " labels do not belong to a single record type: "
+      ^ render_record_labels labels
     )
   | OrPatternBindingsMismatch { expected_names; actual_names; _ } ->
       "or-pattern alternatives must bind the same names (expected: "
@@ -287,9 +296,10 @@ let message = function
       ^ "; actual: "
       ^ render_binding_names actual_names
       ^ ")"
-  | UnsupportedSemanticExpression { summary; _ } -> "unsupported semantic expression reached inference: "
-  ^ summary
-  | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive groups currently require simple function bindings"
+  | UnsupportedSemanticExpression { summary; _ } ->
+      "unsupported semantic expression reached inference: " ^ summary
+  | RecursiveGroupRequiresSimpleVariableBinders _ ->
+      "recursive groups currently require simple function bindings"
 
 let span_to_json = fun (span: Syn.Ceibo.Span.t) ->
   Data.Json.Object [ ("start", Data.Json.Int span.start); ("end", Data.Json.Int span.end_); ]
@@ -350,8 +360,7 @@ let record_resolution_reason_to_json = function
     ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
   ]
 
-let names_to_json = fun names ->
-  Data.Json.Array (List.map (fun name -> Data.Json.String name) names)
+let names_to_json = fun names -> Data.Json.Array (List.map (fun name -> Data.Json.String name) names)
 
 let unsupported_reason_to_json = function
   | LiteralOutsideSupportedSubset { supported_literals } -> Data.Json.Object [
@@ -393,8 +402,6 @@ let fields_to_json = function
       [ ("constraint_span", span_to_json constraint_span); ]
   | ParameterLoweredAsPositional { parameter_span } ->
       [ ("parameter_span", span_to_json parameter_span); ]
-  | IgnoredMatchGuard { guard_span } ->
-      [ ("guard_span", span_to_json guard_span); ]
   | ApplicationArgumentLoweredAsPositional { application_span } ->
       [ ("application_span", span_to_json application_span); ]
   | IgnoredTypeAscription { ascription_span } ->

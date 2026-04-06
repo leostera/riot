@@ -192,6 +192,7 @@ Examples of distinctions that should survive:
 
 - `let` versus `match`
 - pattern shape
+- match-case guards
 - or-pattern alternatives
 - explicit type ascriptions
 - recursive versus non-recursive bindings

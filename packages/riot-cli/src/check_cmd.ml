@@ -601,8 +601,7 @@ let report_of_analysis = fun path (analysis: Typ.SourceAnalysis.t) ->
 let workspace_package_by_name = fun (workspace: Workspace.t) package_name ->
   workspace.packages
   |> List.find_opt
-    (fun (pkg: Package.t) ->
-      Package.is_workspace_member pkg && String.equal pkg.name package_name)
+    (fun (pkg: Package.t) -> Package.is_workspace_member pkg && String.equal pkg.name package_name)
 
 let package_typ_source_files = fun ?(include_dev = false) (pkg: Package.t) ->
   let scoped_sources =
@@ -632,63 +631,53 @@ let summary_with_exports = fun template exports ->
   let source_id = Typ.PersistedSummary.source_id template in
   let template = Typ.PersistedSummary.to_file_summary template in
   match template.Typ.FileSummary.export_result, exports with
-  | Typ.FileSummary.TrustedExport _, _ ->
-      Typ.FileSummary.trusted ~source_id exports
-  | Typ.FileSummary.ErroredExport _, _ ->
-      Typ.FileSummary.errored ~source_id exports
-  | Typ.FileSummary.NoExport, [] ->
-      Typ.FileSummary.missing ~source_id
-  | Typ.FileSummary.NoExport, _ ->
-      Typ.FileSummary.errored ~source_id exports
+  | Typ.FileSummary.TrustedExport _, _ -> Typ.FileSummary.trusted ~source_id exports
+  | Typ.FileSummary.ErroredExport _, _ -> Typ.FileSummary.errored ~source_id exports
+  | Typ.FileSummary.NoExport, [] -> Typ.FileSummary.missing ~source_id
+  | Typ.FileSummary.NoExport, _ -> Typ.FileSummary.errored ~source_id exports
 
 let merge_module_summary = fun preferred fallback ->
   let module_name = Typ.ModuleSummary.module_name preferred in
-  let exports =
-    merge_module_exports
-      (Typ.ModuleSummary.exports preferred)
-      (Typ.ModuleSummary.exports fallback)
-  in
+  let exports = merge_module_exports
+    (Typ.ModuleSummary.exports preferred)
+    (Typ.ModuleSummary.exports fallback) in
   let preferred_summary = Typ.ModuleSummary.summary preferred in
   let fallback_summary = Typ.ModuleSummary.summary fallback in
   let summary =
     let preferred_file = Typ.PersistedSummary.to_file_summary preferred_summary in
     match preferred_file.Typ.FileSummary.export_result, exports with
-    | Typ.FileSummary.NoExport, _ :: _ ->
-        summary_with_exports fallback_summary exports
-    | _ ->
-        summary_with_exports preferred_summary exports
+    | Typ.FileSummary.NoExport, _ :: _ -> summary_with_exports fallback_summary exports
+    | _ -> summary_with_exports preferred_summary exports
   in
   let persisted_summary = Typ.PersistedSummary.of_file_summary summary in
-  let source_hash =
-    Typ.PersistedSummary.Json.to_json persisted_summary
-    |> Data.Json.to_string
-    |> fun json -> Crypto.hash_string ("typ-loaded-module\x1f" ^ module_name ^ "\x1f" ^ json)
-  in
+  let source_hash = Typ.PersistedSummary.Json.to_json persisted_summary
+  |> Data.Json.to_string
+  |> fun json -> Crypto.hash_string ("typ-loaded-module\x1f" ^ module_name ^ "\x1f" ^ json) in
   Typ.ModuleSummary.make ~module_name ~source_hash ~summary:persisted_summary
 
 let merge_loaded_module_summaries = fun preferred fallback ->
   let rec loop order merged remaining =
     match remaining with
     | [] ->
-        order
-        |> List.rev
-        |> List.filter_map (fun module_name -> List.assoc_opt module_name merged)
+        order |> List.rev |> List.filter_map
+          (fun module_name ->
+            List.assoc_opt module_name merged)
     | summary :: tail ->
         let module_name = Typ.ModuleSummary.module_name summary in
         let (order, merged) =
           match List.assoc_opt module_name merged with
-          | None ->
-              (module_name :: order, (module_name, summary) :: merged)
-          | Some existing ->
-              (order, (module_name, merge_module_summary existing summary) :: List.remove_assoc module_name merged)
+          | None -> (module_name :: order, (module_name, summary) :: merged)
+          | Some existing -> (
+            order,
+            (module_name, merge_module_summary existing summary) :: List.remove_assoc module_name merged
+          )
         in
         loop order merged tail
   in
   loop [] [] (preferred @ fallback)
 
 let typ_session_with_paths = fun ~config paths ->
-  paths
-  |> List.fold_left
+  paths |> List.fold_left
     (fun (session, source_ids, sources) path ->
       match Fs.read path with
       | Error _ -> (session, source_ids, sources)
@@ -698,14 +687,12 @@ let typ_session_with_paths = fun ~config paths ->
             ~kind:Typ.Source.File
             ~origin:(Typ.Source.Path path)
             ~text in
-          let source =
-            Typ.Source.make
-              ~source_id
-              ~kind:Typ.Source.File
-              ~origin:(Typ.Source.Path path)
-              ~revision:0
-              ~text
-          in
+          let source = Typ.Source.make
+            ~source_id
+            ~kind:Typ.Source.File
+            ~origin:(Typ.Source.Path path)
+            ~revision:0
+            ~text in
           (session, source_ids @ [ source_id ], sources @ [ source ]))
     (Typ.Session.empty ~config, [], [])
 
@@ -717,26 +704,28 @@ let workspace_dependency_packages = fun ~include_dev (workspace: Workspace.t) (p
       pkg.dependencies
   in
   dependencies
-  |> List.filter_map (fun (dependency: Package.dependency) -> workspace_package_by_name workspace dependency.name)
-  |> List.sort_uniq (fun (left: Package.t) (right: Package.t) -> String.compare left.name right.name)
+  |> List.filter_map
+    (fun (dependency: Package.dependency) -> workspace_package_by_name workspace dependency.name)
+  |> List.sort_uniq
+    (fun (left: Package.t) (right: Package.t) ->
+      String.compare left.name right.name)
 
 let workspace_module_summaries_for_package =
   let rec load cache (workspace: Workspace.t) ?(visiting = []) (pkg: Package.t) =
     match List.assoc_opt pkg.name !cache with
-    | Some summaries -> summaries
-    | None when List.mem pkg.name visiting -> []
+    | Some summaries ->
+        summaries
+    | None when List.mem pkg.name visiting ->
+        []
     | None ->
-        let dependency_summaries =
-          workspace_dependency_packages ~include_dev:false workspace pkg
-          |> List.concat_map
-            (fun dependency_pkg ->
-              load cache workspace ~visiting:(pkg.name :: visiting) dependency_pkg)
-        in
-        let loaded_modules =
-          merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
-        in
+        let dependency_summaries = workspace_dependency_packages ~include_dev:false workspace pkg
+        |> List.concat_map
+          (fun dependency_pkg -> load cache workspace ~visiting:((pkg.name :: visiting)) dependency_pkg) in
+        let loaded_modules = merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules in
         let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
-        let (session, roots, _sources) = typ_session_with_paths ~config (package_typ_source_files pkg) in
+        let (session, roots, _sources) = typ_session_with_paths
+          ~config
+          (package_typ_source_files pkg) in
         let summaries =
           match roots with
           | [] -> []
@@ -759,21 +748,36 @@ let typ_config_for_source_group = fun ?workspace ~summary_cache paths ->
       match Workspace.find_package_for_path workspace ~path with
       | None -> Typ.Config.default
       | Some pkg ->
-          let dependency_summaries =
-            workspace_dependency_packages ~include_dev:true workspace pkg
-            |> List.concat_map
-              (fun dependency_pkg ->
-                workspace_module_summaries_for_package summary_cache workspace dependency_pkg)
-          in
-          let loaded_modules =
-            merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
-          in
+          let dependency_summaries = workspace_dependency_packages ~include_dev:true workspace pkg
+          |> List.concat_map
+            (fun dependency_pkg -> workspace_module_summaries_for_package summary_cache workspace dependency_pkg) in
+          let loaded_modules = merge_loaded_module_summaries
+            dependency_summaries
+            Typ.Config.default.loaded_modules in
           Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules
     )
   | _ -> Typ.Config.default
 
-let check_source_group = fun ?workspace ~summary_cache paths ->
-  let config = typ_config_for_source_group ?workspace ~summary_cache paths in
+let path_key = fun path -> Path.normalize path |> Path.to_string
+
+let checked_file_path = function
+  | Typed { path; _ }
+  | Unreadable { path; _ } -> path
+
+let checked_file_of_analysis = fun path (analysis: Typ.SourceAnalysis.t) ->
+  let report = report_of_analysis path analysis in
+  let diagnostics = diagnostics_of_report report in
+  Typed { path; report; diagnostics }
+
+let check_source_group = fun ?workspace ~summary_cache ?roots paths ->
+  let root_paths =
+    match roots with
+    | Some roots -> roots
+    | None -> paths
+  in
+  let root_keys = root_paths |> List.map path_key in
+  let is_root_path path = List.mem (path_key path) root_keys in
+  let config = typ_config_for_source_group ?workspace ~summary_cache root_paths in
   let session = Typ.Session.empty ~config in
   let (session, prepared_sources) =
     paths
@@ -793,46 +797,62 @@ let check_source_group = fun ?workspace ~summary_cache paths ->
             (session, prepared_sources @ [ Readable_source { path; source; source_id } ]))
       (session, [])
   in
+  let prepared_source_path = function
+    | Readable_source { path; _ }
+    | Unreadable_source { path; _ } -> path
+  in
+  let prepared_by_path = prepared_sources
+  |> List.fold_left
+    (fun prepared_by_path prepared -> (path_key (prepared_source_path prepared), prepared) :: prepared_by_path)
+    [] in
+  let target_prepared_sources =
+    root_paths
+    |> List.filter_map
+      (fun path ->
+        List.assoc_opt (path_key path) prepared_by_path)
+  in
   let roots =
     prepared_sources
     |> List.filter_map
-      (function
-      | Readable_source { source_id; _ } -> Some source_id
-      | Unreadable_source _ -> None)
+      (
+        function
+        | Readable_source { path; source_id; _ } when is_root_path path -> Some source_id
+        | Readable_source _ -> None
+        | Unreadable_source _ -> None
+      )
   in
   let fallback_snapshot =
     let sources =
       prepared_sources
       |> List.filter_map
-        (function
-        | Unreadable_source _ -> None
-        | Readable_source { path; source; source_id } ->
-            Some (Typ.Source.make
-              ~source_id
-              ~kind:Typ.Source.File
-              ~origin:(Typ.Source.Path path)
-              ~revision:0
-              ~text:source))
+        (
+          function
+          | Unreadable_source _ -> None
+          | Readable_source { path; source; source_id } -> Some (Typ.Source.make
+            ~source_id
+            ~kind:Typ.Source.File
+            ~origin:(Typ.Source.Path path)
+            ~revision:0
+            ~text:source)
+        )
     in
     match roots with
     | [] -> None
     | _ -> Some (Typ.Snapshot.make ~revision:0 ~roots ~config ~sources)
   in
   let fallback_results =
-    prepared_sources
+    target_prepared_sources
     |> List.map
       (
         function
         | Unreadable_source { path; reason } -> Unreadable { path; reason }
         | Readable_source { path; source; source_id } ->
-            let source =
-              Typ.Source.make
-                ~source_id
-                ~kind:Typ.Source.File
-                ~origin:(Typ.Source.Path path)
-                ~revision:0
-                ~text:source
-            in
+            let source = Typ.Source.make
+              ~source_id
+              ~kind:Typ.Source.File
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text:source in
             let analysis =
               match fallback_snapshot with
               | Some snapshot -> (
@@ -842,36 +862,29 @@ let check_source_group = fun ?workspace ~summary_cache paths ->
                 )
               | None -> Typ.SourceAnalysis.analyze ~config source
             in
-            let report = report_of_analysis path analysis in
-            let diagnostics = diagnostics_of_report report in
-            Typed { path; report; diagnostics }
+            checked_file_of_analysis path analysis
       )
   in
   match Typ.Session.prepare_snapshot session ~roots with
   | Error _ -> fallback_results
   | Ok snapshot ->
-      prepared_sources |> List.map
+      target_prepared_sources |> List.map
         (
           function
           | Unreadable_source { path; reason } -> Unreadable { path; reason }
           | Readable_source { path; source; source_id } -> (
               match Typ.Query.analysis_of_source snapshot source_id with
-              | Some analysis ->
-                  let report = report_of_analysis path analysis in
-                  let diagnostics = diagnostics_of_report report in
-                  Typed { path; report; diagnostics }
+              | Some analysis -> checked_file_of_analysis path analysis
               | None ->
                   let analysis = Typ.SourceAnalysis.analyze
                     ~config
                     (Typ.Source.make
-                       ~source_id
-                       ~kind:Typ.Source.File
-                       ~origin:(Typ.Source.Path path)
-                       ~revision:0
-                       ~text:source) in
-                  let report = report_of_analysis path analysis in
-                  let diagnostics = diagnostics_of_report report in
-                  Typed { path; report; diagnostics }
+                      ~source_id
+                      ~kind:Typ.Source.File
+                      ~origin:(Typ.Source.Path path)
+                      ~revision:0
+                      ~text:source) in
+                  checked_file_of_analysis path analysis
             )
         )
 
@@ -907,23 +920,35 @@ let grouped_targets_for_session = fun ?workspace target_files ->
       (key, existing @ [ path ]) :: List.remove_assoc key groups)
     [] |> List.rev
 
-let checked_file_path = function
-  | Typed { path; _ }
-  | Unreadable { path; _ } -> path
-
-let path_key = fun path -> Path.normalize path |> Path.to_string
+let session_source_paths_for_group = fun ?workspace ~scan_mode group_targets ->
+  match (scan_mode, workspace, group_targets) with
+  | (false, Some workspace, path :: _) -> (
+      match Workspace.find_package_for_path workspace ~path with
+      | Some pkg -> (
+          match package_typ_source_files ~include_dev:true pkg with
+          | [] -> group_targets
+          | session_paths -> dedupe_paths (group_targets @ session_paths)
+        )
+      | None -> group_targets
+    )
+  | _ -> group_targets
 
 let check_target_files = fun ?workspace ~scan_mode target_files ->
-  if not scan_mode then
+  if not scan_mode && Option.is_none workspace then
     target_files |> List.map check_source_file
   else
     let summary_cache = ref [] in
-    let checked_by_path = grouped_targets_for_session ?workspace target_files
-    |> List.concat_map (fun (_, paths) -> check_source_group ?workspace ~summary_cache paths)
-    |> List.fold_left
-      (fun checked_by_path checked_file ->
-        (path_key (checked_file_path checked_file), checked_file) :: checked_by_path)
-      [] in
+    let checked_by_path =
+      grouped_targets_for_session ?workspace target_files
+      |> List.concat_map
+        (fun (_, group_targets) ->
+          let session_paths = session_source_paths_for_group ?workspace ~scan_mode group_targets in
+          check_source_group ?workspace ~summary_cache ~roots:group_targets session_paths)
+      |> List.fold_left
+        (fun checked_by_path checked_file ->
+          (path_key (checked_file_path checked_file), checked_file) :: checked_by_path)
+        []
+    in
     target_files
     |> List.map
       (fun path ->

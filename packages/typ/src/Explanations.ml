@@ -36,14 +36,6 @@ let all_entries = [
       "The function body may still be analyzed, but parameter semantics are only approximated.";
     ];
   entry
-    ~diagnostic_id:"TYP1006"
-    ~name:"ignored-match-guard"
-    ~summary:"A match guard was parsed, but the prototype does not typecheck the guard expression yet."
-    ~details:[
-      "Lowering preserves the branch structure, but the guard itself is ignored for now.";
-      "This keeps partial typing working while making the missing behavior explicit.";
-    ];
-  entry
     ~diagnostic_id:"TYP1007"
     ~name:"application-argument-lowered-as-positional"
     ~summary:"A labeled or optional application argument was lowered as an ordinary positional argument."

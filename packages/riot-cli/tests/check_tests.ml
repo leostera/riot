@@ -33,14 +33,15 @@ let parse_check = fun args ->
 let make_dependency = fun name ->
   Riot_model.Package.{
     name;
-    source = {
-      workspace = true;
-      builtin = false;
-      path = None;
-      source_locator = None;
-      ref_ = None;
-      version = Some Std.Version.any;
-    };
+    source =
+      {
+        workspace = true;
+        builtin = false;
+        path = None;
+        source_locator = None;
+        ref_ = None;
+        version = Some Std.Version.any;
+      };
   }
 
 let empty_sources: Riot_model.Package.sources = {
@@ -267,7 +268,9 @@ let test_check_package_filter_uses_package_session_for_cross_file_exports = fun 
       let demo_source = Path.(colors_root / Path.v "examples/blend_demo.ml") in
       let workspace = make_workspace
         workspace_root
-        [ make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") () ] in
+        [
+          make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") ()
+        ] in
       match write_file helper_source "let twice x = x + x\n" with
       | Error err -> Error err
       | Ok () ->
@@ -334,18 +337,14 @@ let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
             ~name:"std"
             ~path:std_root
             ~relative_path:(Path.v "packages/std")
-            ~sources:{
-              empty_sources with src = [ Path.v "src/std.ml" ];
-            }
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml" ] }
             ();
           make_package
             ~name:"tty"
             ~path:tty_root
             ~relative_path:(Path.v "packages/tty")
             ~dependencies:[ make_dependency "std" ]
-            ~sources:{
-              empty_sources with src = [ Path.v "src/tty.ml" ];
-            }
+            ~sources:{ empty_sources with src = [ Path.v "src/tty.ml" ] }
             ();
         ] in
       match write_file std_source "let twice x = x + x\n" with
@@ -354,12 +353,65 @@ let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
           match write_file tty_source "let answer = Std.twice 21\n" with
           | Error err -> Error err
           | Ok () ->
-              let matches = parse_check [ "check"; "--json"; "-p"; "tty" ]
+              let matches = parse_check [ "check"; "--json"; "-p"; "tty" ] |> Result.expect ~msg:"parse check args" in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches |> Result.expect ~msg:"package check should load workspace dependency summaries";
+              let events = parse_jsonl (stdout_contents ()) in
+              let file_paths =
+                events
+                |> List.filter_map
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_file") -> (
+                        match Data.Json.get_field "result" json with
+                        | Some result_json -> Data.Json.get_field "path" result_json
+                        | None -> None
+                      )
+                    | _ -> None)
+              in
+              let diagnostic_count =
+                events
+                |> List.filter
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_diagnostic") -> true
+                    | _ -> false)
+                |> List.length
+              in
+              Test.assert_equal ~expected:[ Data.Json.String "packages/tty/src/tty.ml" ] ~actual:file_paths;
+              Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+              Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+              Ok ())
+
+let test_check_explicit_workspace_file_uses_sibling_source_exports = fun _ctx ->
+  with_tempdir_result "riot_check_explicit_file_package_session"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let colors_root = Path.(workspace_root / Path.v "packages/colors") in
+      let helper_source = Path.(colors_root / Path.v "src/helper.ml") in
+      let colors_source = Path.(colors_root / Path.v "src/colors.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"colors"
+            ~path:colors_root
+            ~relative_path:(Path.v "packages/colors")
+            ~sources:{ empty_sources with src = [ Path.v "src/helper.ml"; Path.v "src/colors.ml" ] }
+            ();
+        ] in
+      match write_file helper_source "let twice x = x + x\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file colors_source "let answer = Helper.twice 21\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches = parse_check [ "check"; "--json"; Path.to_string colors_source ]
               |> Result.expect ~msg:"parse check args" in
               let stdout, stdout_contents = make_capture_writer () in
               let stderr, stderr_contents = make_capture_writer () in
-              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
-              |> Result.expect ~msg:"package check should load workspace dependency summaries";
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches |> Result.expect ~msg:"explicit workspace file check should use sibling source exports";
               let events = parse_jsonl (stdout_contents ()) in
               let file_paths =
                 events
@@ -383,11 +435,76 @@ let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
                 |> List.length
               in
               Test.assert_equal
-                ~expected:[ Data.Json.String "packages/tty/src/tty.ml" ]
+                ~expected:[ Data.Json.String "packages/colors/src/colors.ml" ]
                 ~actual:file_paths;
               Test.assert_equal ~expected:0 ~actual:diagnostic_count;
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
-              Ok ())
+              Ok ()
+        ))
+
+let test_check_explicit_workspace_file_loads_dependency_summaries = fun _ctx ->
+  with_tempdir_result "riot_check_explicit_file_dependencies"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let tty_root = Path.(workspace_root / Path.v "packages/tty") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let tty_source = Path.(tty_root / Path.v "src/tty.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml" ] }
+            ();
+          make_package
+            ~name:"tty"
+            ~path:tty_root
+            ~relative_path:(Path.v "packages/tty")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/tty.ml" ] }
+            ();
+        ] in
+      match write_file std_source "let twice x = x + x\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file tty_source "let answer = Std.twice 21\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches = parse_check [ "check"; "--json"; Path.to_string tty_source ]
+              |> Result.expect ~msg:"parse check args" in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches |> Result.expect ~msg:"explicit workspace file check should load dependency summaries";
+              let events = parse_jsonl (stdout_contents ()) in
+              let file_paths =
+                events
+                |> List.filter_map
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_file") -> (
+                        match Data.Json.get_field "result" json with
+                        | Some result_json -> Data.Json.get_field "path" result_json
+                        | None -> None
+                      )
+                    | _ -> None)
+              in
+              let diagnostic_count =
+                events
+                |> List.filter
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_diagnostic") -> true
+                    | _ -> false)
+                |> List.length
+              in
+              Test.assert_equal ~expected:[ Data.Json.String "packages/tty/src/tty.ml" ] ~actual:file_paths;
+              Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+              Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+              Ok ()
+        ))
 
 let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = fun _ctx ->
   with_tempdir_result "riot_check_bootstrap_shadow"
@@ -404,18 +521,14 @@ let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = f
             ~name:"shadow"
             ~path:shadow_root
             ~relative_path:(Path.v "packages/shadow")
-            ~sources:{
-              empty_sources with src = [ Path.v "src/int.ml" ];
-            }
+            ~sources:{ empty_sources with src = [ Path.v "src/int.ml" ] }
             ();
           make_package
             ~name:"app"
             ~path:app_root
             ~relative_path:(Path.v "packages/app")
             ~dependencies:[ make_dependency "shadow" ]
-            ~sources:{
-              empty_sources with src = [ Path.v "src/app.ml" ];
-            }
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml" ] }
             ();
         ] in
       match write_file shadow_source "let sentinel = 21\n" with
@@ -424,12 +537,10 @@ let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = f
           match write_file app_source "let rendered = Int.to_string Int.sentinel\n" with
           | Error err -> Error err
           | Ok () ->
-              let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
-              |> Result.expect ~msg:"parse check args" in
+              let matches = parse_check [ "check"; "--json"; "-p"; "app" ] |> Result.expect ~msg:"parse check args" in
               let stdout, stdout_contents = make_capture_writer () in
               let stderr, stderr_contents = make_capture_writer () in
-              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
-              |> Result.expect ~msg:"package check should merge dependency and bootstrap module exports";
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches |> Result.expect ~msg:"package check should merge dependency and bootstrap module exports";
               let events = parse_jsonl (stdout_contents ()) in
               let file_paths =
                 events
@@ -452,9 +563,7 @@ let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = f
                     | _ -> false)
                 |> List.length
               in
-              Test.assert_equal
-                ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
-                ~actual:file_paths;
+              Test.assert_equal ~expected:[ Data.Json.String "packages/app/src/app.ml" ] ~actual:file_paths;
               Test.assert_equal ~expected:0 ~actual:diagnostic_count;
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
               Ok ())
@@ -491,6 +600,8 @@ let tests =
     case "check: package filter limits workspace scan" test_check_package_filter_limits_workspace_scan;
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
+    case "check: explicit workspace file uses sibling source exports" test_check_explicit_workspace_file_uses_sibling_source_exports;
+    case "check: explicit workspace file loads dependency summaries" test_check_explicit_workspace_file_loads_dependency_summaries;
     case "check: package filter merges bootstrap and dependency module exports" test_check_package_filter_merges_bootstrap_and_dependency_module_exports;
     case "check: package filter requires workspace" test_check_rejects_package_filter_without_workspace;
   ]

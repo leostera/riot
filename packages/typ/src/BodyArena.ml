@@ -31,6 +31,7 @@ type pattern_node = {
 
 type match_case = {
   pattern_id: PatId.t;
+  guard_id: ExprId.t option;
   body_id: ExprId.t;
 }
 
@@ -175,7 +176,10 @@ let render_pattern_desc = function
       "record { "
       ^ (fields |> List.map render_record_pattern_field |> String.concat ", ")
       ^ " }"
-      ^ if open_ then " open" else ""
+      ^ if open_ then
+        " open"
+      else
+        ""
   | PList elements ->
       "list [" ^ render_ids PatId.to_string elements ^ "]"
   | PAlias { pattern_id; alias } ->
@@ -226,7 +230,11 @@ let render_expr_desc = function
         | Some expr_id -> "base=" ^ ExprId.to_string expr_id ^ " "
         | None -> ""
       in
-      "record " ^ base ^ "{ " ^ (fields |> List.map render_record_expr_field |> String.concat ", ") ^ " }"
+      "record "
+      ^ base
+      ^ "{ "
+      ^ (fields |> List.map render_record_expr_field |> String.concat ", ")
+      ^ " }"
   | EFieldAccess { receiver_id; label } ->
       "field " ^ ExprId.to_string receiver_id ^ "." ^ label
   | EIndex (collection_id, index_id) ->
@@ -241,18 +249,42 @@ let render_expr_desc = function
       ^ " else "
       ^ ExprId.to_string else_id
   | EMatch (scrutinee_id, cases) ->
-      let cases_text = cases
-      |> List.map
-        (fun (case: match_case) ->
-          "(" ^ PatId.to_string case.pattern_id ^ " -> " ^ ExprId.to_string case.body_id ^ ")")
-      |> String.concat ", " in
+      let cases_text =
+        cases
+        |> List.map
+          (fun (case: match_case) ->
+            let guard_text =
+              match case.guard_id with
+              | Some guard_id -> " when " ^ ExprId.to_string guard_id
+              | None -> ""
+            in
+            "("
+            ^ PatId.to_string case.pattern_id
+            ^ guard_text
+            ^ " -> "
+            ^ ExprId.to_string case.body_id
+            ^ ")")
+        |> String.concat ", "
+      in
       "match " ^ ExprId.to_string scrutinee_id ^ " with [" ^ cases_text ^ "]"
   | ETry (body_id, cases) ->
-      let cases_text = cases
-      |> List.map
-        (fun (case: match_case) ->
-          "(" ^ PatId.to_string case.pattern_id ^ " -> " ^ ExprId.to_string case.body_id ^ ")")
-      |> String.concat ", " in
+      let cases_text =
+        cases
+        |> List.map
+          (fun (case: match_case) ->
+            let guard_text =
+              match case.guard_id with
+              | Some guard_id -> " when " ^ ExprId.to_string guard_id
+              | None -> ""
+            in
+            "("
+            ^ PatId.to_string case.pattern_id
+            ^ guard_text
+            ^ " -> "
+            ^ ExprId.to_string case.body_id
+            ^ ")")
+        |> String.concat ", "
+      in
       "try " ^ ExprId.to_string body_id ^ " with [" ^ cases_text ^ "]"
   | EPolyVariant { tag; payload } -> (
       match payload with
@@ -383,10 +415,16 @@ let pattern_desc_to_json = function
   ]
 
 let match_case_to_json = fun (case: match_case) ->
-  Data.Json.Object [
+  let guard_fields =
+    match case.guard_id with
+    | Some guard_id -> [ ("guard_id", Data.Json.Int (ExprId.to_int guard_id)); ]
+    | None -> []
+  in
+  Data.Json.Object ([
     ("pattern_id", Data.Json.Int (PatId.to_int case.pattern_id));
     ("body_id", Data.Json.Int (ExprId.to_int case.body_id));
   ]
+  @ guard_fields)
 
 let label_to_json = function
   | Positional -> Data.Json.Object [ ("tag", Data.Json.String "positional") ]
@@ -469,16 +507,12 @@ let expr_desc_to_json = function
     ("arguments", Data.Json.Array (List.map apply_argument_to_json arguments));
   ]
   | ERecord { base_id; fields } ->
-      Data.Json.Object [
-        ("tag", Data.Json.String "record");
-        (
+      Data.Json.Object [ ("tag", Data.Json.String "record"); (
           "base_id",
           match base_id with
           | Some expr_id -> Data.Json.Int (ExprId.to_int expr_id)
           | None -> Data.Json.Null
-        );
-        ("fields", Data.Json.Array (List.map record_expr_field_to_json fields));
-      ]
+        ); ("fields", Data.Json.Array (List.map record_expr_field_to_json fields)); ]
   | EFieldAccess { receiver_id; label } -> Data.Json.Object [
     ("tag", Data.Json.String "field_access");
     ("receiver_id", Data.Json.Int (ExprId.to_int receiver_id));
