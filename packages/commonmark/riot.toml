@@ -1,0 +1,14 @@
+[package]
+name = "commonmark"
+version = "0.1.0"
+
+[lib]
+path = "src/Commonmark.ml"
+
+[dependencies]
+std = "*"
+ceibo = { path = "../ceibo", version = "*" }
+
+[[bin]]
+name = "spec_fixtures_tests"
+path = "tests/spec_fixtures_test.ml"

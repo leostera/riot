@@ -1,12 +1,20 @@
 format_version = 1
 
-dependency_hash = "a21f2302bea27254"
+dependency_hash = "95d4bfa631e69bf8"
 
 [[packages]]
 name = "blink"
 root = "packages/blink"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "actors", package = { name = "actors" } }, { name = "http", package = { name = "http" } }, { name = "std", package = { name = "std" } }]
+build_dependencies = []
+dev_dependencies = []
+
+[[packages]]
+name = "commonmark"
+root = "packages/commonmark"
+provenance = { kind = "workspace" }
+dependencies = [{ name = "ceibo", package = { name = "ceibo" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -358,7 +366,7 @@ dev_dependencies = []
 name = "riot-lsp"
 root = "packages/riot-lsp"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "jsonrpc", package = { name = "jsonrpc" } }, { name = "krasny", package = { name = "krasny" } }, { name = "lsp", package = { name = "lsp" } }, { name = "riot-fix", package = { name = "riot-fix" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }, { name = "typ", package = { name = "typ" } }]
+dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "jsonrpc", package = { name = "jsonrpc" } }, { name = "krasny", package = { name = "krasny" } }, { name = "lsp", package = { name = "lsp" } }, { name = "pkgs-ml", package = { name = "pkgs-ml" } }, { name = "riot-deps", package = { name = "riot-deps" } }, { name = "riot-fix", package = { name = "riot-fix" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }, { name = "typ", package = { name = "typ" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -383,14 +391,6 @@ name = "riot-doc"
 root = "packages/riot-doc"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "riot-deps", package = { name = "riot-deps" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
-build_dependencies = []
-dev_dependencies = []
-
-[[packages]]
-name = "commonmark"
-root = "packages/commonmark"
-provenance = { kind = "workspace" }
-dependencies = [{ name = "ceibo", package = { name = "ceibo" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 
