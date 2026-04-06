@@ -68,6 +68,15 @@ type list_marker = {
   ordered: bool;
 }
 
+type html_block_kind =
+  | Html_block_1 of string
+  | Html_block_2
+  | Html_block_3
+  | Html_block_4
+  | Html_block_5
+  | Html_block_6
+  | Html_block_7
+
 let token = fun kind text -> Ceibo.Builder.make_token ~kind ~text ~width:(String.length text)
 let node = fun kind children -> Ceibo.Builder.make_node ~kind children
 
@@ -936,23 +945,92 @@ let html_block_tags = [
   "h2"; "h3"; "h4"; "h5"; "h6"; "head"; "header"; "hr"; "html"; "iframe"; "legend";
   "li"; "link"; "main"; "menu"; "menuitem"; "nav"; "noframes"; "ol"; "optgroup";
   "option"; "p"; "param"; "search"; "section"; "summary"; "table"; "tbody"; "td";
-  "tfoot"; "th"; "thead"; "title"; "tr"; "track"; "ul"; "pre"; "script"; "style";
-  "textarea"
+  "tfoot"; "th"; "thead"; "title"; "tr"; "track"; "ul"
 ]
 
-let starts_html_block = fun line ->
-  let trimmed = trim_left line in
-  let len = String.length trimmed in
-  if len = 0 || not (Char.equal trimmed.[0] '<') then
+let starts_with_ascii = fun ~prefix text ->
+  let prefix_len = String.length prefix in
+  if String.length text < prefix_len then
     false
-  else if len >= 4 && String.sub trimmed 0 4 = "<!--" then
+  else
+    String.sub text 0 prefix_len = prefix
+
+let contains_ascii_ci = fun ~needle text ->
+  Option.is_some (find_substring (String.lowercase_ascii text) 0 needle)
+
+let is_ascii_letter = function
+  | 'a' .. 'z' | 'A' .. 'Z' ->
+      true
+  | _ ->
+      false
+
+let is_html_tag_name_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' ->
+      true
+  | _ ->
+      false
+
+let html_tag_boundary = fun text index ->
+  let len = String.length text in
+  if index >= len then
     true
-  else if len >= 2 && String.sub trimmed 0 2 = "<?" then
-    true
-  else if len >= 9 && String.sub trimmed 0 9 = "<![CDATA[" then
-    true
-  else if len >= 2 && String.sub trimmed 0 2 = "<!" then
-    true
+  else
+    match text.[index] with
+    | ' ' | '\t' | '>' ->
+        true
+    | '/' ->
+        index + 1 < len && text.[index + 1] = '>'
+    | _ ->
+        false
+
+let scan_html_tag_name = fun text start ->
+  let len = String.length text in
+  if start >= len then
+    None
+  else
+    let rec loop index =
+      if index >= len then
+        index
+      else if is_html_tag_name_char text.[index] then
+        loop (index + 1)
+      else
+        index
+    in
+    let finish = loop start in
+    if finish <= start then
+      None
+    else
+      Some (String.sub text start (finish - start) |> String.lowercase_ascii, finish)
+
+let type_1_html_block = fun trimmed lowered ->
+  let type_1_prefix = fun prefix terminator ->
+    if starts_with_ascii ~prefix lowered then
+      let prefix_len = String.length prefix in
+      if html_tag_boundary lowered prefix_len then
+        Some (Html_block_1 terminator)
+      else
+        None
+    else
+      None
+  in
+  match type_1_prefix "<pre" "</pre>" with
+  | Some kind -> Some kind
+  | None ->
+      (
+        match type_1_prefix "<script" "</script>" with
+        | Some kind -> Some kind
+        | None ->
+            (
+              match type_1_prefix "<style" "</style>" with
+              | Some kind -> Some kind
+              | None -> type_1_prefix "<textarea" "</textarea>"
+            )
+      )
+
+let type_6_html_block = fun trimmed ->
+  let len = String.length trimmed in
+  if len = 0 || char_not trimmed.[0] '<' then
+    None
   else
     let start =
       if len >= 2 && trimmed.[1] = '/' then
@@ -960,37 +1038,87 @@ let starts_html_block = fun line ->
       else
         1
     in
-    if start >= len then
-      false
-    else
-      let rec scan index =
-        if index >= len then
-          index
-        else
-          let char = trimmed.[index] in
-          if
-            (char >= 'a' && char <= 'z')
-            || (char >= 'A' && char <= 'Z')
-            || (char >= '0' && char <= '9')
-            || char = '-'
-          then
-            scan (index + 1)
+    match scan_html_tag_name trimmed start with
+    | Some (tag, finish) when List.mem tag html_block_tags && html_tag_boundary trimmed finish ->
+        Some Html_block_6
+    | _ ->
+        None
+
+let type_7_html_block = fun trimmed ->
+  let len = String.length trimmed in
+  if len = 0 || char_not trimmed.[0] '<' then
+    None
+  else if len >= 2 && (trimmed.[1] = '!' || trimmed.[1] = '?') then
+    None
+  else
+    let closing = len >= 2 && trimmed.[1] = '/' in
+    let start = if closing then 2 else 1 in
+    match scan_html_tag_name trimmed start with
+    | None ->
+        None
+    | Some (tag, index) ->
+        if (not closing) && (tag = "pre" || tag = "script" || tag = "style" || tag = "textarea") then
+          None
+        else if closing then
+          let after_name = skip_spaces_tabs trimmed index in
+          if after_name < len && trimmed.[after_name] = '>' then
+            let rest = skip_spaces_tabs trimmed (after_name + 1) in
+            if rest = len then Some Html_block_7 else None
           else
-            index
-      in
-      let finish = scan start in
-      if finish <= start then
-        false
-      else
-        let tag = String.sub trimmed start (finish - start) |> String.lowercase_ascii in
-        List.mem tag html_block_tags
+            None
+        else
+          let rec find_close current quote =
+            if current >= len then
+              None
+            else
+              match quote with
+              | Some quote ->
+                  if trimmed.[current] = quote then
+                    find_close (current + 1) None
+                  else
+                    find_close (current + 1) (Some quote)
+              | None ->
+                  match trimmed.[current] with
+                  | '"' | '\'' ->
+                      find_close (current + 1) (Some trimmed.[current])
+                  | '>' ->
+                      Some (current + 1)
+                  | _ ->
+                      find_close (current + 1) None
+          in
+          (
+            match find_close index None with
+            | Some after_close ->
+                let rest = skip_spaces_tabs trimmed after_close in
+                if rest = len then Some Html_block_7 else None
+            | None ->
+                None
+          )
 
-let starts_with_ascii = fun ~prefix text ->
-  let prefix_len = String.length prefix in
-  String.length text >= prefix_len && String.sub text 0 prefix_len = prefix
-
-let contains_ascii_ci = fun ~needle text ->
-  Option.is_some (find_substring (String.lowercase_ascii text) 0 needle)
+let classify_html_block_start = fun line ->
+  let trimmed = trim_left line in
+  let len = String.length trimmed in
+  let lowered = String.lowercase_ascii trimmed in
+  if len = 0 then
+    None
+  else
+    match type_1_html_block trimmed lowered with
+    | Some kind -> Some kind
+    | None ->
+        if starts_with_ascii ~prefix:"<!--" trimmed then
+          Some Html_block_2
+        else if starts_with_ascii ~prefix:"<?" trimmed then
+          Some Html_block_3
+        else if starts_with_ascii ~prefix:"<![CDATA[" trimmed then
+          Some Html_block_5
+        else if starts_with_ascii ~prefix:"<!" trimmed && len >= 3 && is_ascii_letter trimmed.[2] then
+          Some Html_block_4
+        else
+          (
+            match type_6_html_block trimmed with
+            | Some kind -> Some kind
+            | None -> type_7_html_block trimmed
+          )
 
 let rec parse_block_quote = fun flavor lines start ->
   if start >= Array.length lines then
@@ -1183,9 +1311,6 @@ and parse_raw_html_line = fun lines start ->
   if start >= Array.length lines then
     None
   else
-    let line = lines.(start).text in
-    let trimmed = trim_left line in
-    let lowered = String.lowercase_ascii trimmed in
     let collect_until_terminator = fun terminator ->
       let rec loop index acc =
         if index >= Array.length lines then
@@ -1225,73 +1350,27 @@ and parse_raw_html_line = fun lines start ->
       in
       loop start []
     in
-    if String.length line = 0 || String.length trimmed = 0 then
-      None
-    else if starts_with_ascii ~prefix:"<!--" trimmed then
-      let html_lines, next = collect_until_terminator "-->" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<?" trimmed then
-      let html_lines, next = collect_until_terminator "?>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<![CDATA[" trimmed then
-      let html_lines, next = collect_until_terminator "]]>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<!" trimmed then
-      let html_lines, next = collect_until_terminator ">" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<script" lowered then
-      let html_lines, next = collect_until_terminator_ci "</script>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<pre" lowered then
-      let html_lines, next = collect_until_terminator_ci "</pre>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<style" lowered then
-      let html_lines, next = collect_until_terminator_ci "</style>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_with_ascii ~prefix:"<textarea" lowered then
-      let html_lines, next = collect_until_terminator_ci "</textarea>" in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else if starts_html_block line || starts_with_ascii ~prefix:"<" trimmed then
-      let html_lines, next = collect_until_blank () in
-      Some
-        ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
-          next,
-          []
-        )
-    else
-      None
+    let line = lines.(start).text in
+    match classify_html_block_start line with
+    | None ->
+        None
+    | Some kind ->
+        let html_lines, next =
+          match kind with
+          | Html_block_1 terminator -> collect_until_terminator_ci terminator
+          | Html_block_2 -> collect_until_terminator "-->"
+          | Html_block_3 -> collect_until_terminator "?>"
+          | Html_block_4 -> collect_until_terminator ">"
+          | Html_block_5 -> collect_until_terminator "]]>"
+          | Html_block_6
+          | Html_block_7 ->
+              collect_until_blank ()
+        in
+        Some
+          ( node Syntax_kind.Raw_html_block [ token Syntax_kind.Raw_html (String.concat "\n" html_lines ^ "\n") ],
+            next,
+            []
+          )
 
 and parse_paragraph = fun flavor lines start ->
   if start >= Array.length lines then
@@ -1303,12 +1382,20 @@ and parse_paragraph = fun flavor lines start ->
     | None ->
         let len = Array.length lines in
         let is_block_start = fun index text ->
+          let html_block_interrupts = fun text ->
+            match classify_html_block_start text with
+            | Some Html_block_7
+            | None ->
+                false
+            | Some _ ->
+                true
+          in
           is_some (parse_heading text)
           || is_some (parse_fence_open text)
           || is_some (parse_list_marker text)
           || is_some (parse_block_quote_prefix text)
           || is_some (parse_thematic_break text)
-          || is_some (parse_raw_html_line lines index)
+          || html_block_interrupts text
           || is_some (parse_table flavor lines index)
         in
         let rec collect index acc =

@@ -215,7 +215,7 @@ and render_block = fun block ->
   | Horizontal_rule _ ->
       "<hr />\n"
   | Raw_html { html; _ } ->
-      html ^ "\n"
+      html
   | Table { header; rows; _ } ->
       let thead = "<thead>\n" ^ render_table_row "th" header ^ "</thead>\n" in
       let tbody =
