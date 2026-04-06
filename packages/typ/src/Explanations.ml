@@ -100,6 +100,22 @@ let all_entries = [
       "The checker reports the mismatch and keeps going when it can so later diagnostics and partial types are still available.";
     ];
   entry
+    ~diagnostic_id:"TYP2005"
+    ~name:"application-label-mismatch"
+    ~summary:"A function application could not match the remaining source arguments against the expected labeled parameter."
+    ~details:[
+      "This diagnostic is specific to call-site label matching, including omitted optional parameters and labeled-argument reordering.";
+      "The structured payload records the expected parameter label together with the labels that were still present at the call site.";
+    ];
+  entry
+    ~diagnostic_id:"TYP2006"
+    ~name:"record-resolution-error"
+    ~summary:"A record operation could not resolve one nominal record owner for the labels used at the source site."
+    ~details:[
+      "This diagnostic covers record construction, updates, field access, and record patterns.";
+      "The structured payload records both the operation kind and whether the failure came from unknown labels, ambiguity, missing fields, or incompatible owners.";
+    ];
+  entry
     ~diagnostic_id:"TYP2004"
     ~name:"recursive-group-requires-simple-variable-binders"
     ~summary:"The prototype only supports let-rec groups whose binders are simple variables."

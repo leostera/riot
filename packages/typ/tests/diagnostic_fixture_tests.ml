@@ -36,9 +36,12 @@ let diagnostics_to_json = fun (report: Check_result.t) ->
     );
   ]
 
+let stable_fixture_filename = fun (ctx: Test.FixtureRunner.ctx) ->
+  Path.join diagnostics_dir ctx.fixture_relpath
+
 let test_fixture = fun ~(ctx:Test.FixtureRunner.ctx) ->
   let source = Fs.read ctx.fixture_path |> Result.expect ~msg:"fixture should exist" in
-  let report = Check.check_source ~filename:ctx.fixture_path source in
+  let report = Check.check_source ~filename:(stable_fixture_filename ctx) source in
   Test.Snapshot.assert_json ~ctx:ctx.test ~actual:(diagnostics_to_json report)
 
 let () =

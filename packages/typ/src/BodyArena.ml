@@ -11,10 +11,16 @@ type pattern_desc =
   | PUnit
   | PTuple of PatId.t list
   | PConstructor of { constructor: string; arguments: PatId.t list }
+  | PRecord of { fields: record_pattern_field list; open_: bool }
   | PList of PatId.t list
   | PAlias of { pattern_id: PatId.t; alias: string }
   | PPolyVariant of { tag: string; payload: PatId.t option }
   | PUnsupported of string
+
+and record_pattern_field = {
+  label: string;
+  pattern_id: PatId.t;
+}
 
 type pattern_node = {
   pat_id: PatId.t;
@@ -55,6 +61,8 @@ type expr_desc =
   | ESequence of ExprId.t list
   | EFun of function_parameter list * ExprId.t
   | EApply of ExprId.t * apply_argument list
+  | ERecord of { base_id: ExprId.t option; fields: record_expr_field list }
+  | EFieldAccess of { receiver_id: ExprId.t; label: string }
   | EIndex of ExprId.t * ExprId.t
   | ELet of BindingId.t list * ExprId.t
   | EIf of ExprId.t * ExprId.t * ExprId.t
@@ -64,6 +72,11 @@ type expr_desc =
   | ELocalOpen of { module_path: string; body_id: ExprId.t }
   | EUnsupported of string
   | EHole of string
+
+and record_expr_field = {
+  label: string;
+  value_id: ExprId.t;
+}
 
 and expr_node = {
   expr_id: ExprId.t;
@@ -128,6 +141,12 @@ let render_function_parameter = fun (parameter: function_parameter) ->
 let render_apply_argument = fun (argument: apply_argument) ->
   render_label argument.label ^ ":" ^ ExprId.to_string argument.value_id
 
+let render_record_pattern_field = fun (field: record_pattern_field) ->
+  field.label ^ "=" ^ PatId.to_string field.pattern_id
+
+let render_record_expr_field = fun (field: record_expr_field) ->
+  field.label ^ "=" ^ ExprId.to_string field.value_id
+
 let render_pattern_desc = function
   | PVar name ->
       "var " ^ name
@@ -149,6 +168,11 @@ let render_pattern_desc = function
       "tuple [" ^ render_ids PatId.to_string elements ^ "]"
   | PConstructor { constructor; arguments } ->
       "constructor " ^ constructor ^ " [" ^ render_ids PatId.to_string arguments ^ "]"
+  | PRecord { fields; open_ } ->
+      "record { "
+      ^ (fields |> List.map render_record_pattern_field |> String.concat ", ")
+      ^ " }"
+      ^ if open_ then " open" else ""
   | PList elements ->
       "list [" ^ render_ids PatId.to_string elements ^ "]"
   | PAlias { pattern_id; alias } ->
@@ -193,6 +217,15 @@ let render_expr_desc = function
       ^ " ["
       ^ (arguments |> List.map render_apply_argument |> String.concat ", ")
       ^ "]"
+  | ERecord { base_id; fields } ->
+      let base =
+        match base_id with
+        | Some expr_id -> "base=" ^ ExprId.to_string expr_id ^ " "
+        | None -> ""
+      in
+      "record " ^ base ^ "{ " ^ (fields |> List.map render_record_expr_field |> String.concat ", ") ^ " }"
+  | EFieldAccess { receiver_id; label } ->
+      "field " ^ ExprId.to_string receiver_id ^ "." ^ label
   | EIndex (collection_id, index_id) ->
       "index " ^ ExprId.to_string collection_id ^ " [" ^ ExprId.to_string index_id ^ "]"
   | ELet (binding_ids, body_id) ->
@@ -252,6 +285,18 @@ let render_binding = fun (binding: binding) ->
   ^ " recursive="
   ^ Bool.to_string binding.recursive
 
+let record_pattern_field_to_json = fun (field: record_pattern_field) ->
+  Data.Json.Object [
+    ("label", Data.Json.String field.label);
+    ("pattern_id", Data.Json.Int (PatId.to_int field.pattern_id));
+  ]
+
+let record_expr_field_to_json = fun (field: record_expr_field) ->
+  Data.Json.Object [
+    ("label", Data.Json.String field.label);
+    ("value_id", Data.Json.Int (ExprId.to_int field.value_id));
+  ]
+
 let pattern_desc_to_json = function
   | PVar name -> Data.Json.Object [
     ("tag", Data.Json.String "var");
@@ -273,6 +318,11 @@ let pattern_desc_to_json = function
       "arguments",
       Data.Json.Array (List.map (fun pat_id -> Data.Json.Int (PatId.to_int pat_id)) arguments)
     );
+  ]
+  | PRecord { fields; open_ } -> Data.Json.Object [
+    ("tag", Data.Json.String "record");
+    ("fields", Data.Json.Array (List.map record_pattern_field_to_json fields));
+    ("open", Data.Json.Bool open_);
   ]
   | PList elements -> Data.Json.Object [
     ("tag", Data.Json.String "list");
@@ -407,6 +457,22 @@ let expr_desc_to_json = function
     ("tag", Data.Json.String "apply");
     ("callee_id", Data.Json.Int (ExprId.to_int callee_id));
     ("arguments", Data.Json.Array (List.map apply_argument_to_json arguments));
+  ]
+  | ERecord { base_id; fields } ->
+      Data.Json.Object [
+        ("tag", Data.Json.String "record");
+        (
+          "base_id",
+          match base_id with
+          | Some expr_id -> Data.Json.Int (ExprId.to_int expr_id)
+          | None -> Data.Json.Null
+        );
+        ("fields", Data.Json.Array (List.map record_expr_field_to_json fields));
+      ]
+  | EFieldAccess { receiver_id; label } -> Data.Json.Object [
+    ("tag", Data.Json.String "field_access");
+    ("receiver_id", Data.Json.Int (ExprId.to_int receiver_id));
+    ("label", Data.Json.String label);
   ]
   | EIndex (collection_id, index_id) -> Data.Json.Object [
     ("tag", Data.Json.String "index");

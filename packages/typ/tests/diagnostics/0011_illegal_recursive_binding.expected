@@ -1,0 +1,26 @@
+{
+  "lowering_diagnostics": [],
+  "parse_diagnostics": [],
+  "typing_diagnostics": [
+    {
+      "binding_span": {
+        "end": 13,
+        "start": 0
+      },
+      "id": "TYP2004",
+      "message": "recursive groups currently require simple function bindings",
+      "name": "recursive-group-requires-simple-variable-binders",
+      "severity": "error"
+    },
+    {
+      "binding_span": {
+        "end": 40,
+        "start": 13
+      },
+      "id": "TYP2004",
+      "message": "recursive groups currently require simple function bindings",
+      "name": "recursive-group-requires-simple-variable-binders",
+      "severity": "error"
+    }
+  ]
+}

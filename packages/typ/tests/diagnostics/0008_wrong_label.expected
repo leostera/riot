@@ -1,0 +1,26 @@
+{
+  "lowering_diagnostics": [],
+  "parse_diagnostics": [],
+  "typing_diagnostics": [
+    {
+      "actual_labels": [
+        {
+          "label": "other",
+          "tag": "labeled"
+        }
+      ],
+      "application_span": {
+        "end": 75,
+        "start": 57
+      },
+      "expected_label": {
+        "label": "right",
+        "tag": "labeled"
+      },
+      "id": "TYP2005",
+      "message": "application label mismatch: expected ~right but remaining arguments were ~other",
+      "name": "application-label-mismatch",
+      "severity": "error"
+    }
+  ]
+}

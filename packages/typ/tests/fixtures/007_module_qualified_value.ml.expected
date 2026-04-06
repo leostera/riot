@@ -1068,7 +1068,7 @@
     },
     "source_id": 0
   },
-  "filename": "/Users/leostera/Developer/github.com/leostera/riot/packages/typ/tests/fixtures/007_module_qualified_value.ml",
+  "filename": "packages/typ/tests/fixtures/007_module_qualified_value.ml",
   "item_traces": [
     {
       "binding_names": [

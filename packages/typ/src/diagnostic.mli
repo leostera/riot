@@ -31,6 +31,20 @@ type mismatch =
   | ExpectedActual of { expected: string; actual: string }
   | TupleArityMismatch of { left: string; right: string; left_arity: int; right_arity: int }
   | OccursCheckFailed of { variable_id: int; in_type: string }
+type application_label =
+  | PositionalArgument
+  | LabeledArgument of string
+  | OptionalArgument of string
+type record_context =
+  | RecordConstruction
+  | RecordUpdate
+  | RecordPattern
+  | RecordFieldAccess
+type record_resolution_reason =
+  | UnknownRecordLabels of string list
+  | AmbiguousRecordLabels of string list
+  | MissingRecordFields of string list
+  | IncompatibleRecordLabels of string list
 type t =
   | CstBuilderError of { builder_error: Syn.CstBuilder.error }
   | UnsupportedSyntax of {
@@ -49,6 +63,16 @@ type t =
   | UnsupportedInterfaceFile of { interface_span: Syn.Ceibo.Span.t }
   | UnboundName of { reference_span: Syn.Ceibo.Span.t; name: string }
   | TypeMismatch of { mismatch_span: Syn.Ceibo.Span.t; mismatch: mismatch }
+  | ApplicationLabelMismatch of {
+      application_span: Syn.Ceibo.Span.t;
+      expected_label: application_label;
+      actual_labels: application_label list
+    }
+  | RecordResolutionError of {
+      operation_span: Syn.Ceibo.Span.t;
+      context: record_context;
+      reason: record_resolution_reason
+    }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }
 val code: t -> string

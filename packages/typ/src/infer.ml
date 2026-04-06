@@ -8,6 +8,12 @@ type t = {
   diagnostics: Typ_diagnostic.t list;
 }
 
+type record_type_decl = {
+  owner_name: string;
+  param_ids: int list;
+  labels: TypeDecl.label list;
+}
+
 type state = {
   file: SemanticTree.file;
   config: TypConfig.t;
@@ -16,6 +22,7 @@ type state = {
   mutable diagnostics: Typ_diagnostic.t list;
   mutable expr_traces: Check_result.expr_trace list;
   mutable item_traces: Check_result.item_trace list;
+  mutable record_types: record_type_decl list;
 }
 
 let empty_span = Syn.Ceibo.Span.make ~start:0 ~end_:0
@@ -29,6 +36,7 @@ let make_state = fun ~config file ->
     diagnostics = [];
     expr_traces = [];
     item_traces = [];
+    record_types = [];
   }
 
 let unique_env = fun env ->
@@ -79,8 +87,7 @@ let fresh_hole = fun (state: state) ->
   in
   TypeRepr.Hole hole_id
 
-let instantiate = fun (state: state) (TypeScheme.Forall (quantified, body)) ->
-  let mapping = quantified |> List.map (fun quantified_id -> (quantified_id, fresh_var state)) in
+let instantiate_type = fun ty mapping ->
   let rec loop ty =
     match TypeRepr.prune ty with
     | TypeRepr.Int ->
@@ -119,7 +126,11 @@ let instantiate = fun (state: state) (TypeScheme.Forall (quantified, body)) ->
         | None -> TypeRepr.Var var
       )
   in
-  loop body
+  loop ty
+
+let instantiate = fun (state: state) (TypeScheme.Forall (quantified, body)) ->
+  let mapping = quantified |> List.map (fun quantified_id -> (quantified_id, fresh_var state)) in
+  instantiate_type body mapping
 
 let labels_match = fun left right ->
   match (left, right) with
@@ -132,6 +143,140 @@ let type_label_of_body_label = function
   | BodyArena.Positional -> TypeRepr.Nolabel
   | BodyArena.Labeled label -> TypeRepr.Labelled label
   | BodyArena.Optional label -> TypeRepr.Optional label
+
+let diagnostic_label_of_type_label = function
+  | TypeRepr.Nolabel -> Typ_diagnostic.PositionalArgument
+  | TypeRepr.Labelled label -> Typ_diagnostic.LabeledArgument label
+  | TypeRepr.Optional label -> Typ_diagnostic.OptionalArgument label
+
+let diagnostic_label_of_body_label = function
+  | BodyArena.Positional -> Typ_diagnostic.PositionalArgument
+  | BodyArena.Labeled label -> Typ_diagnostic.LabeledArgument label
+  | BodyArena.Optional label -> Typ_diagnostic.OptionalArgument label
+
+let argument_matches_parameter_label = fun parameter_label argument_label ->
+  match (parameter_label, argument_label) with
+  | (TypeRepr.Nolabel, BodyArena.Positional) -> true
+  | (TypeRepr.Labelled expected, BodyArena.Labeled actual) -> String.equal expected actual
+  | (TypeRepr.Optional expected, BodyArena.Optional actual)
+  | (TypeRepr.Optional expected, BodyArena.Labeled actual) ->
+      String.equal expected actual
+  | _ -> false
+
+let take_matching_argument = fun parameter_label arguments ->
+  let rec loop prefix = function
+    | [] -> None
+    | ((argument: BodyArena.apply_argument) as candidate) :: rest ->
+        if argument_matches_parameter_label parameter_label argument.label then
+          Some (candidate, List.rev_append prefix rest)
+        else
+          loop (candidate :: prefix) rest
+  in
+  loop [] arguments
+
+let last_segment_text = fun text ->
+  match List.rev (String.split_on_char '.' text) with
+  | segment :: _ -> segment
+  | [] -> text
+
+let record_label_matches = fun requested candidate ->
+  String.equal requested candidate || String.equal (last_segment_text requested) candidate
+
+let owner_name_of_type = fun ty ->
+  match TypeRepr.prune ty with
+  | TypeRepr.Named { name; _ } -> Some name
+  | _ -> None
+
+let record_decl_field = fun (record_decl: record_type_decl) label_name ->
+  List.find_opt
+    (fun (field: TypeDecl.label) ->
+      record_label_matches label_name field.name)
+    record_decl.labels
+
+let record_decl_fields = fun (record_decl: record_type_decl) ->
+  List.map (fun (field: TypeDecl.label) -> field.name) record_decl.labels
+
+let instantiate_record_decl = fun (state: state) (record_decl: record_type_decl) ->
+  let mapping = record_decl.param_ids |> List.map (fun quantified_id -> (quantified_id, fresh_var state)) in
+  let owner_ty = TypeRepr.Named {
+    name = record_decl.owner_name;
+    arguments =
+      record_decl.param_ids
+      |> List.map (fun quantified_id ->
+        match List.assoc_opt quantified_id mapping with
+        | Some ty -> ty
+        | None -> TypeRepr.Hole (-200))
+  } in
+  let field_types =
+    record_decl.labels
+    |> List.map
+      (fun (field: TypeDecl.label) -> (field.name, instantiate_type field.field_type mapping))
+  in
+  (owner_ty, field_types)
+
+let record_field_type = fun field_types label_name ->
+  List.find_map
+    (fun (field_name, field_ty) ->
+      if record_label_matches label_name field_name then
+        Some field_ty
+      else
+        None)
+    field_types
+
+let add_diagnostic = fun (state: state) diagnostic -> state.diagnostics <- diagnostic :: state.diagnostics
+
+let add_record_resolution_error = fun (state: state) ~span ~context reason ->
+  add_diagnostic
+    state
+    (Typ_diagnostic.RecordResolutionError {
+      operation_span = span;
+      context;
+      reason;
+    })
+
+let resolve_record_decl = fun (state: state) ~field_names ~owner_hint ~span ~context ->
+  let candidates =
+    state.record_types
+    |> List.filter
+      (fun (record_decl: record_type_decl) ->
+        List.for_all (fun field_name -> Option.is_some (record_decl_field record_decl field_name)) field_names)
+  in
+  let known_labels =
+    state.record_types
+    |> List.concat_map record_decl_fields
+    |> List.sort_uniq String.compare
+  in
+  let candidates =
+    match owner_hint with
+    | Some owner_name ->
+        candidates |> List.filter
+          (fun (record_decl: record_type_decl) -> String.equal record_decl.owner_name owner_name)
+    | None -> candidates
+  in
+  match candidates with
+  | [ record_decl ] -> Some record_decl
+  | [] ->
+      let unknown_labels =
+        field_names |> List.filter
+          (fun field_name -> not (List.exists (record_label_matches field_name) known_labels))
+      in
+      let reason =
+        if not (List.is_empty unknown_labels) then
+          Typ_diagnostic.UnknownRecordLabels unknown_labels
+        else
+          Typ_diagnostic.IncompatibleRecordLabels field_names
+      in
+      let () = add_record_resolution_error state ~span ~context reason in
+      None
+  | _ ->
+      let () =
+        add_record_resolution_error
+          state
+          ~span
+          ~context
+          (Typ_diagnostic.AmbiguousRecordLabels field_names)
+      in
+      None
 
 let generalize = fun env ty ->
   let env_free = env_free_vars env in
@@ -155,8 +300,6 @@ let diagnostic_span = fun origin ->
   match origin with
   | Some (origin: OriginMap.origin) -> origin.span
   | None -> empty_span
-
-let add_diagnostic = fun (state: state) diagnostic -> state.diagnostics <- diagnostic :: state.diagnostics
 
 exception Unify_error of Typ_diagnostic.mismatch
 
@@ -280,6 +423,18 @@ let env_with_local_open = fun env module_path ->
   let aliases = aliases_for_local_open env module_path in
   bind_env env aliases
 
+let is_recursive_binding_supported = fun (state: state) (binding: BodyArena.binding) ->
+  match binding.name with
+  | None -> false
+  | Some _ -> (
+      match SemanticTree.find_expr state.file binding.value_id with
+      | Some value ->
+          (match value.desc with
+          | BodyArena.EFun _ -> true
+          | _ -> false)
+      | None -> false
+    )
+
 let rec constructor_pattern_argument_types = fun (state: state) constructor_ty arguments origin ->
   match arguments with
   | [] -> ([], constructor_ty)
@@ -353,6 +508,51 @@ let rec bind_pattern = fun (state: state) env pat_id expected_ty ->
               in
               List.map2 (bind_pattern state env) arguments argument_types |> List.flatten
         )
+      | BodyArena.PRecord { fields; open_ } -> (
+          let origin = origin_of_pattern state pat_id in
+          let field_names = List.map (fun (field: BodyArena.record_pattern_field) -> field.label) fields in
+          match resolve_record_decl
+            state
+            ~field_names
+            ~owner_hint:(owner_name_of_type expected_ty)
+            ~span:(diagnostic_span origin)
+            ~context:Typ_diagnostic.RecordPattern
+          with
+          | Some record_decl ->
+              let (owner_ty, field_types) = instantiate_record_decl state record_decl in
+              let () = try_unify state ~origin expected_ty owner_ty in
+              let missing_fields =
+                if open_ then
+                  []
+                else
+                  record_decl_fields record_decl
+                  |> List.filter (fun label_name -> not (List.exists (record_label_matches label_name) field_names))
+              in
+              let () =
+                if not (List.is_empty missing_fields) then
+                  add_record_resolution_error
+                    state
+                    ~span:(diagnostic_span origin)
+                    ~context:Typ_diagnostic.RecordPattern
+                    (Typ_diagnostic.MissingRecordFields missing_fields)
+              in
+              fields
+              |> List.map
+                (fun (field: BodyArena.record_pattern_field) ->
+                  let field_ty =
+                    match record_field_type field_types field.label with
+                    | Some field_ty -> field_ty
+                    | None -> fresh_hole state
+                  in
+                  bind_pattern state env field.pattern_id field_ty)
+              |> List.flatten
+          | None ->
+              fields
+              |> List.map
+                (fun (field: BodyArena.record_pattern_field) ->
+                  bind_pattern state env field.pattern_id (fresh_hole state))
+              |> List.flatten
+        )
       | BodyArena.PList elements ->
           let element_ty = fresh_var state in
           let () = try_unify
@@ -382,7 +582,99 @@ let record_expr_trace = fun (state: state) expr_id origin_id env_before inferred
   )
   :: state.expr_traces
 
-let rec infer_expr = fun (state: state) env expr_id ->
+let add_application_label_mismatch = fun (state: state) ~expr_id ~expected_label arguments ->
+  add_diagnostic
+    state
+    (Typ_diagnostic.ApplicationLabelMismatch {
+      application_span = diagnostic_span (origin_of_expr state expr_id);
+      expected_label = diagnostic_label_of_type_label expected_label;
+      actual_labels = List.map
+        (fun (argument: BodyArena.apply_argument) -> diagnostic_label_of_body_label argument.label)
+        arguments;
+    })
+
+let add_application_non_function = fun (state: state) ~expr_id current_ty ->
+  add_diagnostic
+    state
+    (Typ_diagnostic.TypeMismatch {
+      mismatch_span = diagnostic_span (origin_of_expr state expr_id);
+      mismatch = Typ_diagnostic.ExpectedActual {
+        expected = "function";
+        actual = TypePrinter.type_to_string current_ty;
+      }
+    })
+
+let rec infer_record_expr = fun (state: state) env expr_id base_id fields ->
+  let operation_span = diagnostic_span (origin_of_expr state expr_id) in
+  let base_ty =
+    match base_id with
+    | Some base_id -> Some (infer_expr state env base_id)
+    | None -> None
+  in
+  let field_names = List.map (fun (field: BodyArena.record_expr_field) -> field.label) fields in
+  let context =
+    match base_id with
+    | Some _ -> Typ_diagnostic.RecordUpdate
+    | None -> Typ_diagnostic.RecordConstruction
+  in
+  match resolve_record_decl
+    state
+    ~field_names
+    ~owner_hint:(
+      match base_ty with
+      | Some base_ty -> owner_name_of_type base_ty
+      | None -> None
+    )
+    ~span:operation_span
+    ~context
+  with
+  | Some record_decl ->
+      let (owner_ty, field_types) = instantiate_record_decl state record_decl in
+      let () =
+        match base_id, base_ty with
+        | Some base_id, Some base_ty ->
+            try_unify state ~origin:(origin_of_expr state base_id) base_ty owner_ty
+        | _ -> ()
+      in
+      let missing_fields =
+        match base_id with
+        | Some _ -> []
+        | None ->
+            record_decl_fields record_decl
+            |> List.filter (fun label_name -> not (List.exists (record_label_matches label_name) field_names))
+      in
+      let () =
+        if not (List.is_empty missing_fields) then
+          add_record_resolution_error
+            state
+            ~span:operation_span
+            ~context
+            (Typ_diagnostic.MissingRecordFields missing_fields)
+      in
+      let () =
+        List.iter
+          (fun (field: BodyArena.record_expr_field) ->
+            let field_ty =
+              match record_field_type field_types field.label with
+              | Some field_ty -> field_ty
+              | None -> fresh_hole state
+            in
+            let inferred_field_ty = infer_expr state env field.value_id in
+            try_unify state ~origin:(origin_of_expr state field.value_id) field_ty inferred_field_ty)
+          fields
+      in
+      owner_ty
+  | None ->
+      let () =
+        List.iter
+          (fun (field: BodyArena.record_expr_field) ->
+            let _ = infer_expr state env field.value_id in
+            ())
+          fields
+      in
+      fresh_hole state
+
+and infer_expr = fun (state: state) env expr_id ->
   match SemanticTree.find_expr state.file expr_id with
   | None -> fresh_hole state
   | Some expr ->
@@ -455,7 +747,45 @@ let rec infer_expr = fun (state: state) env expr_id ->
             lower_parameters env parameters
         | BodyArena.EApply (callee_id, arguments) ->
             let callee_ty = infer_expr state env callee_id in
-            let rec apply current_ty = function
+            let rec apply_with_known_type current_ty arguments =
+              match arguments with
+              | [] -> current_ty
+              | _ -> (
+                  match TypeRepr.prune current_ty with
+                  | TypeRepr.Arrow { label; lhs; rhs } -> (
+                      match take_matching_argument label arguments with
+                      | Some ((argument: BodyArena.apply_argument), rest_arguments) ->
+                          let argument_ty = infer_expr state env argument.value_id in
+                          let () = try_unify
+                            state
+                            ~origin:(origin_of_expr state argument.value_id)
+                            lhs
+                            argument_ty in
+                          apply_with_known_type rhs rest_arguments
+                      | None -> (
+                          match label with
+                          | TypeRepr.Optional _ ->
+                              apply_with_known_type rhs arguments
+                          | _ ->
+                              let () =
+                                add_application_label_mismatch
+                                  state
+                                  ~expr_id
+                                  ~expected_label:label
+                                  arguments
+                              in
+                              fresh_hole state
+                        )
+                    )
+                  | TypeRepr.Var _
+                  | TypeRepr.Hole _ ->
+                      apply_from_unknown_type current_ty arguments
+                  | ty ->
+                      let () = add_application_non_function state ~expr_id ty in
+                      fresh_hole state
+                )
+            and apply_from_unknown_type current_ty arguments =
+              match arguments with
               | [] -> current_ty
               | (argument: BodyArena.apply_argument) :: rest ->
                   let argument_ty = infer_expr state env argument.value_id in
@@ -469,9 +799,33 @@ let rec infer_expr = fun (state: state) env expr_id ->
                       lhs = argument_ty;
                       rhs = result_ty
                     }) in
-                  apply result_ty rest
+                  apply_with_known_type result_ty rest
             in
-            apply callee_ty arguments
+            apply_with_known_type callee_ty arguments
+        | BodyArena.ERecord { base_id; fields } ->
+            infer_record_expr state env expr_id base_id fields
+        | BodyArena.EFieldAccess { receiver_id; label } ->
+            let receiver_ty = infer_expr state env receiver_id in
+            let field_names = [ label ] in
+            begin
+              match resolve_record_decl
+                state
+                ~field_names
+                ~owner_hint:(owner_name_of_type receiver_ty)
+                ~span:(diagnostic_span (origin_of_expr state expr_id))
+                ~context:Typ_diagnostic.RecordFieldAccess
+              with
+              | Some record_decl ->
+                  let (owner_ty, field_types) = instantiate_record_decl state record_decl in
+                  let () = try_unify state ~origin:(origin_of_expr state receiver_id) receiver_ty owner_ty in
+                  begin
+                    match record_field_type field_types label with
+                    | Some field_ty -> field_ty
+                    | None -> fresh_hole state
+                  end
+              | None ->
+                  fresh_hole state
+            end
         | BodyArena.EIndex (collection_id, index_id) ->
             let collection_ty = infer_expr state env collection_id in
             let index_ty = infer_expr state env index_id in
@@ -580,42 +934,53 @@ and infer_nonrecursive_group = fun (state: state) env bindings ->
   List.fold_left (fun env (_, entries) -> bind_env env entries) env inferred_bindings
 
 and infer_recursive_group = fun (state: state) env bindings ->
-  let names = bindings |> List.map (fun (binding: BodyArena.binding) -> (binding, binding.name)) in
-  if List.exists (fun (_, name) -> Option.is_none name) names then
-    (
-      let () =
-        List.iter
-          (fun ((binding: BodyArena.binding), _) ->
-            add_diagnostic
-              state
-              (Typ_diagnostic.RecursiveGroupRequiresSimpleVariableBinders {
-                binding_span = diagnostic_span (origin_of_binding state binding)
-              }))
-          names
-      in
-      infer_nonrecursive_group state env bindings
-    )
-  else
+  let unsupported_bindings =
+    List.filter
+      (fun (binding: BodyArena.binding) ->
+        not (is_recursive_binding_supported state binding))
+      bindings
+  in
+  if List.is_empty unsupported_bindings then
     let placeholders =
-      names
+      bindings
+      |> List.map (fun (binding: BodyArena.binding) -> (binding, fresh_var state))
       |> List.filter_map
-        (fun ((binding: BodyArena.binding), name) ->
-          match name with
-          | Some name -> Some (binding, name, fresh_var state)
+        (fun ((binding: BodyArena.binding), ty) ->
+          match binding.name with
+          | Some name -> Some (name, ty)
           | None -> None)
     in
     let provisional_env = placeholders
-    |> List.map (fun (_, name, ty) -> (name, TypeScheme.Forall ([], ty)))
+    |> List.map (fun (name, ty) -> (name, TypeScheme.Forall ([], ty)))
     |> bind_env env in
     let () =
-      List.iter
-        (fun ((binding: BodyArena.binding), _, placeholder_ty) ->
+      List.iter2
+        (fun (binding: BodyArena.binding) placeholder_ty ->
           let value_ty = infer_expr state provisional_env binding.value_id in
           try_unify state ~origin:(origin_of_binding state binding) placeholder_ty value_ty)
-        placeholders
+        bindings
+        (placeholders |> List.map snd)
     in
-    let generalized = placeholders |> List.map (fun (_, name, ty) -> (name, generalize env ty)) in
+    let generalized = placeholders |> List.map (fun (name, ty) -> (name, generalize env ty)) in
     bind_env env generalized
+  else
+    let () =
+      List.iter
+        (fun (binding: BodyArena.binding) ->
+          add_diagnostic
+            state
+            (Typ_diagnostic.RecursiveGroupRequiresSimpleVariableBinders {
+              binding_span = diagnostic_span (origin_of_binding state binding)
+            }))
+        unsupported_bindings
+    in
+    List.fold_left
+      (fun env (binding: BodyArena.binding) ->
+        let placeholder = fresh_hole state in
+        let bound_entries = bind_pattern state env binding.pattern_id placeholder in
+        bind_env env bound_entries)
+      env
+      bindings
 
 let prelude_names = fun (config: TypConfig.t) -> config.prelude |> List.map fst
 
@@ -702,6 +1067,16 @@ let infer_file = fun ~config file ->
         | ItemTree.Type type_item ->
             let visible_exports_before = export_env config export_state in
             let introduced = TypeDecl.constructor_entries type_item.declaration in
+            let () =
+              match type_item.declaration.labels with
+              | [] -> ()
+              | labels ->
+                  state.record_types <- {
+                    owner_name = qualify_name type_item.scope_path type_item.declaration.type_name;
+                    param_ids = type_item.declaration.param_ids;
+                    labels;
+                  } :: state.record_types
+            in
             let (export_state, scope_entries) =
               match type_item.scope_path with
               | [] -> (bind_env export_state introduced, scope_entries)

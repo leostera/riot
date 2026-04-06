@@ -30,6 +30,23 @@ type mismatch =
   | TupleArityMismatch of { left: string; right: string; left_arity: int; right_arity: int }
   | OccursCheckFailed of { variable_id: int; in_type: string }
 
+type application_label =
+  | PositionalArgument
+  | LabeledArgument of string
+  | OptionalArgument of string
+
+type record_context =
+  | RecordConstruction
+  | RecordUpdate
+  | RecordPattern
+  | RecordFieldAccess
+
+type record_resolution_reason =
+  | UnknownRecordLabels of string list
+  | AmbiguousRecordLabels of string list
+  | MissingRecordFields of string list
+  | IncompatibleRecordLabels of string list
+
 type t =
   | CstBuilderError of { builder_error: Syn.CstBuilder.error }
   | UnsupportedSyntax of {
@@ -48,6 +65,16 @@ type t =
   | UnsupportedInterfaceFile of { interface_span: Syn.Ceibo.Span.t }
   | UnboundName of { reference_span: Syn.Ceibo.Span.t; name: string }
   | TypeMismatch of { mismatch_span: Syn.Ceibo.Span.t; mismatch: mismatch }
+  | ApplicationLabelMismatch of {
+      application_span: Syn.Ceibo.Span.t;
+      expected_label: application_label;
+      actual_labels: application_label list
+    }
+  | RecordResolutionError of {
+      operation_span: Syn.Ceibo.Span.t;
+      context: record_context;
+      reason: record_resolution_reason
+    }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }
 
@@ -63,6 +90,8 @@ let code = function
   | UnsupportedInterfaceFile _ -> "TYP1010"
   | UnboundName _ -> "TYP2001"
   | TypeMismatch _ -> "TYP2002"
+  | ApplicationLabelMismatch _ -> "TYP2005"
+  | RecordResolutionError _ -> "TYP2006"
   | UnsupportedSemanticExpression _ -> "TYP2010"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "TYP2004"
 
@@ -78,6 +107,8 @@ let name = function
   | UnsupportedInterfaceFile _ -> "unsupported-interface-file"
   | UnboundName _ -> "unbound-name"
   | TypeMismatch _ -> "type-mismatch"
+  | ApplicationLabelMismatch _ -> "application-label-mismatch"
+  | RecordResolutionError _ -> "record-resolution-error"
   | UnsupportedSemanticExpression _ -> "unsupported-semantic-expression"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive-group-requires-simple-variable-binders"
 
@@ -89,6 +120,8 @@ let severity = function
   | IgnoredPolymorphicAnnotation _
   | UnboundName _
   | TypeMismatch _
+  | ApplicationLabelMismatch _
+  | RecordResolutionError _
   | UnsupportedSemanticExpression _
   | RecursiveGroupRequiresSimpleVariableBinders _ -> Error
   | ParameterLoweredAsPositional _
@@ -112,6 +145,8 @@ let primary_span = function
   | UnsupportedInterfaceFile { interface_span } -> interface_span
   | UnboundName { reference_span; _ } -> reference_span
   | TypeMismatch { mismatch_span; _ } -> mismatch_span
+  | ApplicationLabelMismatch { application_span; _ } -> application_span
+  | RecordResolutionError { operation_span; _ } -> operation_span
   | UnsupportedSemanticExpression { expression_span; _ } -> expression_span
   | RecursiveGroupRequiresSimpleVariableBinders { binding_span } -> binding_span
 
@@ -147,6 +182,19 @@ let unsupported_reason_to_string = function
   | LiteralOutsideSupportedSubset { supported_literals } -> "literal kind is outside the currently supported subset (supported: "
   ^ String.concat ", " (List.map supported_literal_to_string supported_literals)
   ^ ")"
+
+let application_label_to_string = function
+  | PositionalArgument -> "positional"
+  | LabeledArgument label -> "~" ^ label
+  | OptionalArgument label -> "?" ^ label
+
+let record_context_to_string = function
+  | RecordConstruction -> "record construction"
+  | RecordUpdate -> "record update"
+  | RecordPattern -> "record pattern"
+  | RecordFieldAccess -> "record field access"
+
+let render_record_labels = fun labels -> String.concat ", " labels
 
 let message = function
   | CstBuilderError { builder_error } -> "Syn.build_cst failed before lowering: " ^ builder_error.message
@@ -201,9 +249,27 @@ let message = function
   ^ Int.to_string variable_id
   ^ " in "
   ^ in_type
+  | ApplicationLabelMismatch { expected_label; actual_labels=[]; _ } -> "application is missing an argument for "
+  ^ application_label_to_string expected_label
+  | ApplicationLabelMismatch { expected_label; actual_labels; _ } -> "application label mismatch: expected "
+  ^ application_label_to_string expected_label
+  ^ " but remaining arguments were "
+  ^ String.concat ", " (List.map application_label_to_string actual_labels)
+  | RecordResolutionError { context; reason; _ } -> (
+      match reason with
+      | UnknownRecordLabels labels ->
+          record_context_to_string context ^ " uses unknown record labels: " ^ render_record_labels labels
+      | AmbiguousRecordLabels labels ->
+          record_context_to_string context ^ " is ambiguous for record labels: " ^ render_record_labels labels
+      | MissingRecordFields labels ->
+          record_context_to_string context ^ " is missing record fields: " ^ render_record_labels labels
+      | IncompatibleRecordLabels labels ->
+          record_context_to_string context ^ " labels do not belong to a single record type: "
+          ^ render_record_labels labels
+    )
   | UnsupportedSemanticExpression { summary; _ } -> "unsupported semantic expression reached inference: "
   ^ summary
-  | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive groups currently require simple variable binders"
+  | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive groups currently require simple function bindings"
 
 let span_to_json = fun (span: Syn.Ceibo.Span.t) ->
   Data.Json.Object [ ("start", Data.Json.Int span.start); ("end", Data.Json.Int span.end_); ]
@@ -228,6 +294,41 @@ let mismatch_to_json = function
   ]
 
 let supported_literal_to_json = fun literal -> Data.Json.String (supported_literal_to_string literal)
+
+let application_label_to_json = function
+  | PositionalArgument -> Data.Json.Object [ ("tag", Data.Json.String "positional"); ]
+  | LabeledArgument label -> Data.Json.Object [
+    ("tag", Data.Json.String "labeled");
+    ("label", Data.Json.String label);
+  ]
+  | OptionalArgument label -> Data.Json.Object [
+    ("tag", Data.Json.String "optional");
+    ("label", Data.Json.String label);
+  ]
+
+let record_context_to_json = function
+  | RecordConstruction -> Data.Json.String "construction"
+  | RecordUpdate -> Data.Json.String "update"
+  | RecordPattern -> Data.Json.String "pattern"
+  | RecordFieldAccess -> Data.Json.String "field_access"
+
+let record_resolution_reason_to_json = function
+  | UnknownRecordLabels labels -> Data.Json.Object [
+    ("tag", Data.Json.String "unknown_labels");
+    ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
+  ]
+  | AmbiguousRecordLabels labels -> Data.Json.Object [
+    ("tag", Data.Json.String "ambiguous_labels");
+    ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
+  ]
+  | MissingRecordFields labels -> Data.Json.Object [
+    ("tag", Data.Json.String "missing_fields");
+    ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
+  ]
+  | IncompatibleRecordLabels labels -> Data.Json.Object [
+    ("tag", Data.Json.String "incompatible_labels");
+    ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
+  ]
 
 let unsupported_reason_to_json = function
   | LiteralOutsideSupportedSubset { supported_literals } -> Data.Json.Object [
@@ -283,6 +384,18 @@ let fields_to_json = function
       [ ("reference_span", span_to_json reference_span); ("name_text", Data.Json.String name); ]
   | TypeMismatch { mismatch_span; mismatch } ->
       [ ("mismatch_span", span_to_json mismatch_span); ("mismatch", mismatch_to_json mismatch); ]
+  | ApplicationLabelMismatch { application_span; expected_label; actual_labels } ->
+      [
+        ("application_span", span_to_json application_span);
+        ("expected_label", application_label_to_json expected_label);
+        ("actual_labels", Data.Json.Array (List.map application_label_to_json actual_labels));
+      ]
+  | RecordResolutionError { operation_span; context; reason } ->
+      [
+        ("operation_span", span_to_json operation_span);
+        ("context", record_context_to_json context);
+        ("reason", record_resolution_reason_to_json reason);
+      ]
   | UnsupportedSemanticExpression { expression_span; summary } ->
       [ ("expression_span", span_to_json expression_span); ("summary", Data.Json.String summary); ]
   | RecursiveGroupRequiresSimpleVariableBinders { binding_span } ->

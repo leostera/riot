@@ -2372,7 +2372,7 @@
     },
     "source_id": 0
   },
-  "filename": "/Users/leostera/Developer/github.com/leostera/riot/packages/typ/tests/fixtures/015_top_level_open.ml",
+  "filename": "packages/typ/tests/fixtures/015_top_level_open.ml",
   "item_traces": [
     {
       "binding_names": [],

@@ -1637,7 +1637,7 @@
     },
     "source_id": 0
   },
-  "filename": "/Users/leostera/Developer/github.com/leostera/riot/packages/typ/tests/fixtures/009_alias_pattern.ml",
+  "filename": "packages/typ/tests/fixtures/009_alias_pattern.ml",
   "item_traces": [
     {
       "binding_names": [

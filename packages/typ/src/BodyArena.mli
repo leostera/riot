@@ -22,6 +22,8 @@ type pattern_desc =
   | PTuple of PatId.t list
   (** Constructor pattern with a stable constructor name and lowered payloads. *)
   | PConstructor of { constructor: string; arguments: PatId.t list }
+  (** Record pattern with lowered field patterns and explicit openness. *)
+  | PRecord of { fields: record_pattern_field list; open_: bool }
   (** List pattern with lowered element patterns. *)
   | PList of PatId.t list
   (** Alias pattern that binds the matched value under an extra name. *)
@@ -30,6 +32,13 @@ type pattern_desc =
   | PPolyVariant of { tag: string; payload: PatId.t option }
   (** Recovery pattern preserved after unsupported surface syntax. *)
   | PUnsupported of string
+
+and record_pattern_field = {
+  (** Stable field label name as it appeared in the source. *)
+  label: string;
+  (** Lowered child pattern bound for this field. *)
+  pattern_id: PatId.t;
+}
 type pattern_node = {
   (** Best-effort stable pattern identifier. *)
   pat_id: PatId.t;
@@ -88,6 +97,10 @@ type expr_desc =
   | EFun of function_parameter list * ExprId.t
   (** Application with one callee and labeled or positional arguments. *)
   | EApply of ExprId.t * apply_argument list
+  (** Record literal or record update with lowered field expressions. *)
+  | ERecord of { base_id: ExprId.t option; fields: record_expr_field list }
+  (** Record field access off one receiver expression. *)
+  | EFieldAccess of { receiver_id: ExprId.t; label: string }
   (** Indexed access into one collection expression at one index expression. *)
   | EIndex of ExprId.t * ExprId.t
   (** Let-expression with local binding IDs and one body expression. *)
@@ -106,6 +119,13 @@ type expr_desc =
   | EUnsupported of string
   (** Recovery hole introduced during lowering. *)
   | EHole of string
+
+and record_expr_field = {
+  (** Stable field label name as it appeared in the source. *)
+  label: string;
+  (** Lowered child expression used for this field. *)
+  value_id: ExprId.t;
+}
 
 and expr_node = {
   (** Best-effort stable expression identifier. *)

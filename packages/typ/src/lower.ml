@@ -21,6 +21,11 @@ type state = {
 
 let path_text = fun path -> path |> Cst.Ident.segments |> List.map Cst.Token.text |> String.concat "."
 
+let last_path_segment_text = fun path ->
+  match List.rev (Cst.Ident.segments path) with
+  | segment :: _ -> Cst.Token.text segment
+  | [] -> ""
+
 let qualify_scoped_name = fun scope_path name ->
   match scope_path with
   | [] -> name
@@ -276,33 +281,53 @@ let add_item = fun (state: state) ~syntax_node item ->
   in
   item
 
-let lower_variant_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaration.t) ->
+let lower_record_label = fun scope_path type_params (field: Cst.RecordField.t) ->
+  {
+    TypeDecl.name = Cst.RecordField.name field;
+    field_type = lower_core_type scope_path type_params (Cst.RecordField.field_type field);
+    mutable_ = Option.is_some (Cst.RecordField.mutable_token field);
+  }
+
+let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaration.t) ->
   let type_name = Cst.TypeDeclaration.name_token declaration |> Cst.Token.text in
   let params = type_param_bindings declaration in
   let result_type = TypeRepr.Named {
     name = qualify_scoped_name state.scope_path type_name;
     arguments = params |> List.map (fun (_, id) -> TypeRepr.Var { id; link = None })
   } in
-  match Cst.TypeDeclaration.type_definition declaration with
-  | Cst.TypeDefinition.Variant { constructors; _ } ->
-      let lowered_declaration = {
-        TypeDecl.type_name = type_name;
-        constructors =
-          constructors |> List.map
-            (fun (constructor: Cst.VariantConstructor.t) ->
-              let payload_type = variant_constructor_payload state.scope_path params constructor in
-              {
-                TypeDecl.name = Cst.VariantConstructor.name constructor;
-                scheme = constructor_scheme ~params ~result_type payload_type
-              });
-      }
-      in
+  let lowered_declaration =
+    match Cst.TypeDeclaration.type_definition declaration with
+    | Cst.TypeDefinition.Variant { constructors; _ } ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors =
+            constructors |> List.map
+              (fun (constructor: Cst.VariantConstructor.t) ->
+                let payload_type = variant_constructor_payload state.scope_path params constructor in
+                {
+                  TypeDecl.name = Cst.VariantConstructor.name constructor;
+                  scheme = constructor_scheme ~params ~result_type payload_type
+                });
+          labels = [];
+        }
+    | Cst.TypeDefinition.Record { fields; _ } ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors = [];
+          labels = List.map (lower_record_label state.scope_path params) fields;
+        }
+    | _ -> None
+  in
+  match lowered_declaration with
+  | Some lowered_declaration ->
       let _ = add_item
         state
         ~syntax_node:(Cst.TypeDeclaration.syntax_node declaration)
         (`Type lowered_declaration) in
       ()
-  | _ -> ()
+  | None -> ()
 
 let lower_exception_declaration = fun (state: state) (declaration: Cst.exception_declaration) ->
   let exception_name = Cst.Token.text declaration.name_token in
@@ -459,6 +484,33 @@ let rec lower_pattern = fun (state: state) pattern ->
         (BodyArena.PConstructor {
           constructor = path_text constructor_path;
           arguments = argument_ids
+        })
+  | Cst.Pattern.Record { syntax_node; fields; closedness; _ } ->
+      let fields = fields |> List.map
+        (fun (field: Cst.record_pattern_field) ->
+          let pattern_id =
+            match field.pattern with
+            | Some pattern -> lower_pattern state pattern
+            | None ->
+                let field_name = last_path_segment_text field.field_path in
+                add_pattern
+                  state
+                  ~syntax_node:field.syntax_node
+                  ~label:"record_punned_field_pattern"
+                  (BodyArena.PVar field_name)
+          in
+          ({ BodyArena.label = path_text field.field_path; pattern_id }: BodyArena.record_pattern_field)) in
+      add_pattern
+        state
+        ~syntax_node
+        ~label:"record_pattern"
+        (BodyArena.PRecord {
+          fields;
+          open_ = (
+            match closedness with
+            | Cst.Open _ -> true
+            | Cst.Closed -> false
+          );
         })
   | Cst.Pattern.List { syntax_node; elements; _ } ->
       let element_ids = List.map (lower_pattern state) elements in
@@ -775,11 +827,42 @@ and lower_expr = fun (state: state) expression ->
             ~syntax_node
             ~label:"qualified_path_expression"
             (BodyArena.EVar qualified_name)
-      | None -> lower_unsupported_expr
-        state
-        expression
-        (unsupported_syntax_kind (Cst.Expression.syntax_node expression))
+      | None ->
+          let receiver_id = lower_expr state receiver in
+          add_expr
+            state
+            ~syntax_node
+            ~label:"field_access_expression"
+            (BodyArena.EFieldAccess {
+              receiver_id;
+              label = Cst.Token.text field_name;
+            })
     )
+  | Cst.Expression.Record (Cst.RecordExpression.Literal { syntax_node; fields; _ }) ->
+      let fields = fields |> List.map
+        (fun (field: Cst.record_expression_field) ->
+          ({
+            BodyArena.label = path_text field.field_path;
+            value_id = lower_expr state field.value;
+          }: BodyArena.record_expr_field)) in
+      add_expr
+        state
+        ~syntax_node
+        ~label:"record_expression"
+        (BodyArena.ERecord { base_id = None; fields })
+  | Cst.Expression.Record (Cst.RecordExpression.Update { syntax_node; base; fields; _ }) ->
+      let base_id = lower_expr state base in
+      let fields = fields |> List.map
+        (fun (field: Cst.record_expression_field) ->
+          ({
+            BodyArena.label = path_text field.field_path;
+            value_id = lower_expr state field.value;
+          }: BodyArena.record_expr_field)) in
+      add_expr
+        state
+        ~syntax_node
+        ~label:"record_update_expression"
+        (BodyArena.ERecord { base_id = Some base_id; fields })
   | Cst.Expression.Operator { syntax_node; operator_tokens; _ } ->
       let operator = operator_tokens |> List.map Cst.Token.text |> String.concat "" in
       add_expr state ~syntax_node ~label:"operator_expression" (BodyArena.EVar operator)
@@ -977,7 +1060,7 @@ let rec lower_structure_item = fun (state: state) item ->
     )
   | Cst.StructureItem.TypeDeclaration declaration ->
       let rec loop declaration =
-        let () = lower_variant_type_declaration state declaration in
+        let () = lower_type_declaration state declaration in
         match Cst.TypeDeclaration.next_and_declaration declaration with
         | Some declaration -> loop declaration
         | None -> ()
