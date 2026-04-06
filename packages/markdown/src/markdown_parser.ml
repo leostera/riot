@@ -504,8 +504,7 @@ let remove_prefix = fun text count ->
     String.sub text count (String.length text - count)
 
 let normalize_paragraph_line = fun text ->
-  let indent = count_indent text 3 in
-  remove_prefix text indent
+  trim_left text
 
 let take = fun count items ->
   let rec loop n acc remaining =
@@ -798,14 +797,19 @@ let parse_indented_code_block = fun lines start ->
 let parse_block_quote_prefix = fun text ->
   let indent_offset = count_indent text 3 in
   let indent = columns_of_prefix text indent_offset in
-  if indent_offset >= String.length text || char_not text.[indent_offset] '>' then
+  if indent_offset >= String.length text then
+    None
+  else if char_not text.[indent_offset] '>' then
     None
   else
     let after = indent_offset + 1 in
     let after_column = indent + 1 in
-    if after < String.length text && is_space text.[after] then
-      let content_start, content = consume_one_following_space text after after_column in
-      Some (content_start, content)
+    if after < String.length text then
+      if is_space text.[after] then
+        let content_start, content = consume_one_following_space text after after_column in
+        Some (content_start, content)
+      else
+        Some (after, remove_prefix text after)
     else
       Some (after, remove_prefix text after)
 
@@ -1264,36 +1268,75 @@ let rec parse_block_quote = fun flavor lines start ->
     match parse_block_quote_prefix first.text with
     | None -> None
     | Some (content_start, content) ->
-        let rec collect index acc =
+        let html_block_interrupts = fun text ->
+          match classify_html_block_start text with
+          | Some Html_block_7
+          | None ->
+              false
+          | Some _ ->
+              true
+        in
+        let paragraph_interrupts = fun text ->
+          is_some (parse_heading text)
+          || is_some (parse_fence_open text)
+          || is_some (parse_list_marker text)
+          || is_some (parse_block_quote_prefix text)
+          || is_some (parse_thematic_break text)
+          || is_some (parse_setext_underline text)
+          || html_block_interrupts text
+        in
+        let rec opens_paragraph = fun text ->
+          match parse_block_quote_prefix text with
+          | Some (_, nested) ->
+              opens_paragraph nested
+          | None ->
+              if line_is_blank text then
+                false
+              else if Option.is_some (drop_indent_columns text 4) then
+                false
+              else
+                not (paragraph_interrupts text)
+        in
+        let rec collect index acc paragraph_open =
           if index >= Array.length lines then
             (List.rev acc, index)
           else
             let text = lines.(index).text in
-            if line_is_blank text then
-              let rec next_nonblank next =
-                if next >= Array.length lines then
-                  next
-                else if line_is_blank lines.(next).text then
-                  next_nonblank (next + 1)
+            match parse_block_quote_prefix text with
+            | Some (nested_start, nested) ->
+                let nested_offset = lines.(index).start + nested_start in
+                let paragraph_open =
+                  if nested = "" then
+                    false
+                  else
+                    opens_paragraph nested
+                in
+                collect
+                  (index + 1)
+                  ({ text = nested; start = nested_offset } :: acc)
+                  paragraph_open
+            | None ->
+                if line_is_blank text then
+                  (List.rev acc, index)
+                else if paragraph_open && not (paragraph_interrupts text) then
+                  collect
+                    (index + 1)
+                    ({ text; start = lines.(index).start } :: acc)
+                    true
                 else
-                  next
-              in
-              let next = next_nonblank (index + 1) in
-              if next < Array.length lines && is_some (parse_block_quote_prefix lines.(next).text) then
-                collect (index + 1) ({ text = ""; start = lines.(index).start } :: acc)
-              else
-                (List.rev acc, index)
-            else
-              match parse_block_quote_prefix text with
-              | None -> (List.rev acc, index)
-              | Some (nested_start, nested) ->
-                  let nested_offset = lines.(index).start + nested_start in
-                  collect (index + 1) ({ text = nested; start = nested_offset } :: acc)
+                  (List.rev acc, index)
+        in
+        let paragraph_open =
+          if content = "" then
+            false
+          else
+            opens_paragraph content
         in
         let quote_lines, next =
           collect
             (start + 1)
             [ { text = content; start = first.start + content_start } ]
+            paragraph_open
         in
         let nested_lines = Array.of_list quote_lines in
         let blocks, diagnostics = parse_blocks ~flavor nested_lines 0 in
