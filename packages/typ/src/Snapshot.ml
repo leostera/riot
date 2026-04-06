@@ -74,47 +74,54 @@ let force_base_analysis = fun (slot: analysis_slot) ->
       in
       analysis
 
-let qualified_summaries = fun (snapshot: t) ->
-  match snapshot.qualified_summaries with
-  | Some summaries -> summaries
-  | None ->
+let summary_of_analysis = fun (slot: analysis_slot) (analysis: SourceAnalysis.t) ->
+  let module_name = Source.module_name slot.source in
+  let persisted_summary = analysis.file_summary |> PersistedSummary.of_file_summary in
+  (slot.source_id, module_name, persisted_summary)
+
+let rec qualified_summary_of = fun (snapshot: t) visiting (slot: analysis_slot) ->
+  if List.exists (SourceId.equal slot.source_id) visiting then
+    summary_of_analysis slot (force_base_analysis slot)
+  else
+    summary_of_analysis slot (force_analysis snapshot ~visiting:(slot.source_id :: visiting) slot)
+
+and qualified_summaries = fun (snapshot: t) ?(visiting = []) () ->
+  match (visiting, snapshot.qualified_summaries) with
+  | [], Some summaries -> summaries
+  | _ ->
       let summaries =
         snapshot.analyses
-        |> List.map
-          (fun (slot: analysis_slot) ->
-            let analysis = force_base_analysis slot in
-            let module_name = Source.module_name slot.source in
-            let persisted_summary = analysis.file_summary |> PersistedSummary.of_file_summary in
-            (slot.source_id, module_name, persisted_summary))
+        |> List.map (qualified_summary_of snapshot visiting)
       in
       let () =
-        snapshot.qualified_summaries <- Some summaries
+        if visiting = [] then
+          snapshot.qualified_summaries <- Some summaries
       in
       summaries
 
-let ambient_env_for = fun (snapshot: t) (slot: analysis_slot) ->
-  let local_modules = qualified_summaries snapshot
+and ambient_env_for = fun (snapshot: t) visiting (slot: analysis_slot) ->
+  let local_modules = qualified_summaries snapshot ~visiting ()
   |> List.filter
     (fun (candidate_source_id, _, _) -> not (SourceId.equal candidate_source_id slot.source_id))
   |> List.map
     (fun (_, module_name, summary) -> PersistedSummary.exports summary |> qualify_exports module_name) in
   List.flatten local_modules @ loaded_ambient_env_for slot
 
-let ambient_type_decls_for = fun (snapshot: t) (slot: analysis_slot) ->
-  let local_modules = qualified_summaries snapshot
+and ambient_type_decls_for = fun (snapshot: t) visiting (slot: analysis_slot) ->
+  let local_modules = qualified_summaries snapshot ~visiting ()
   |> List.filter
     (fun (candidate_source_id, _, _) -> not (SourceId.equal candidate_source_id slot.source_id))
   |> List.map
     (fun (_, module_name, summary) -> PersistedSummary.type_decls summary |> qualify_type_decls module_name) in
   List.flatten local_modules @ loaded_ambient_type_decls_for slot
 
-let force_analysis = fun (snapshot: t) (slot: analysis_slot) ->
+and force_analysis = fun (snapshot: t) ?(visiting = []) (slot: analysis_slot) ->
   match slot.analysis with
   | Some analysis -> analysis
   | None ->
       let config = slot.config
-      |> TypConfig.with_ambient ~ambient:(ambient_env_for snapshot slot)
-      |> TypConfig.with_ambient_type_decls ~ambient_type_decls:(ambient_type_decls_for snapshot slot) in
+      |> TypConfig.with_ambient ~ambient:(ambient_env_for snapshot visiting slot)
+      |> TypConfig.with_ambient_type_decls ~ambient_type_decls:(ambient_type_decls_for snapshot visiting slot) in
       let analysis = SourceAnalysis.analyze ~config slot.source in
       let () =
         slot.analysis <- Some analysis

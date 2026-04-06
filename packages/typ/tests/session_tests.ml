@@ -549,6 +549,52 @@ let test_module_alias_reexports_same_named_local_modules = fun _ctx ->
     let () = Test.assert_equal ~expected:[ "Cell.create"; "answer" ] ~actual:exported_names in
     Ok ()
 
+let test_loaded_module_summaries_preserve_nested_same_named_alias_exports = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, _cell_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "cell.ml")
+    ~text:"let create value = value\n" in
+  let (seed_session, _sync_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "sync.ml")
+    ~text:"module Cell = Cell\n" in
+  let (seed_session, std_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "std.ml")
+    ~text:"module Sync = Sync\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let std_summary =
+    match Query.module_summary_of seed_snapshot std_source_id with
+    | Some summary -> summary
+    | None -> panic "expected std module summary"
+  in
+  let std_exported_names = ModuleSummary.exports std_summary |> List.map fst in
+  let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ std_summary ] in
+  let client_session = Session.empty ~config:client_config in
+  let (client_session, client_source_id) = Session.create_source
+    client_session
+    ~kind:Source.File
+    ~origin:(Source.Label "client.ml")
+    ~text:"open Std.Sync\nlet answer = Cell.create 1\n" in
+  if not (List.equal String.equal std_exported_names [ "Sync.Cell.create" ]) then
+    Error ("unexpected std exports: " ^ String.concat ", " std_exported_names)
+  else
+    match Session.prepare_snapshot client_session ~roots:[ client_source_id ] with
+    | Error missing ->
+        Error ("missing requirements: " ^ (MissingRequirements.to_json missing |> Data.Json.to_string))
+    | Ok client_snapshot ->
+        let client_diagnostics = diagnostic_strings client_snapshot client_source_id in
+        if not (List.is_empty client_diagnostics) then
+          Error (String.concat "\n" client_diagnostics)
+        else
+          let answer_type = export_scheme client_snapshot client_source_id "answer" in
+          let () = Test.assert_equal ~expected:(Some "int") ~actual:answer_type in
+          Ok ()
+
 let test_sibling_source_uses_loaded_module_record_reexport = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, helpers_source_id) = Session.create_source
@@ -942,6 +988,7 @@ let () =
         Test.case "include reexports loaded module summaries" test_include_reexports_loaded_module_summaries;
         Test.case "module aliases reexport loaded module summaries" test_module_alias_reexports_loaded_module_summaries;
         Test.case "module aliases reexport same-named local modules" test_module_alias_reexports_same_named_local_modules;
+        Test.case "loaded module summaries preserve nested same-named alias exports" test_loaded_module_summaries_preserve_nested_same_named_alias_exports;
         Test.case "sibling sources use loaded module record reexports" test_sibling_source_uses_loaded_module_record_reexport;
         Test.case "prepare_snapshot is rooted" test_prepare_snapshot_is_rooted;
         Test.case "prepare_snapshot reports missing roots" test_prepare_snapshot_reports_missing_roots;

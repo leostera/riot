@@ -702,6 +702,86 @@ let test_check_expansive_bindings_stay_monomorphic = fun _ctx ->
                 Ok ()
           ))
 
+let test_check_package_filter_preserves_nested_same_named_alias_reexports = fun _ctx ->
+  with_tempdir_result "riot_check_package_nested_same_named_module_alias"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let cell_source = Path.(std_root / Path.v "src/cell.ml") in
+      let sync_source = Path.(std_root / Path.v "src/sync.ml") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~sources:{
+              empty_sources with
+              src = [ Path.v "src/cell.ml"; Path.v "src/sync.ml"; Path.v "src/std.ml" ]
+            }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml" ] }
+            ();
+        ] in
+      match write_file cell_source "let create value = value\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file sync_source "module Cell = Cell\n" with
+          | Error err -> Error err
+          | Ok () -> (
+              match write_file std_source "module Sync = Sync\n" with
+              | Error err -> Error err
+              | Ok () -> (
+                  match write_file app_source "open Std.Sync\nlet answer = Cell.create 1\n" with
+                  | Error err -> Error err
+                  | Ok () ->
+                      let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
+                      |> Result.expect ~msg:"parse check args" in
+                      let stdout, stdout_contents = make_capture_writer () in
+                      let stderr, stderr_contents = make_capture_writer () in
+                      Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                      |> Result.expect ~msg:"package check should preserve nested same-named alias reexports";
+                      let events = parse_jsonl (stdout_contents ()) in
+                      let file_paths =
+                        events
+                        |> List.filter_map
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_file") -> (
+                                match Data.Json.get_field "result" json with
+                                | Some result_json -> Data.Json.get_field "path" result_json
+                                | None -> None
+                              )
+                            | _ -> None)
+                      in
+                      let diagnostic_count =
+                        events
+                        |> List.filter
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_diagnostic") -> true
+                            | _ -> false)
+                        |> List.length
+                      in
+                      Test.assert_equal
+                        ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
+                        ~actual:file_paths;
+                      Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                      Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                      Ok ()
+                )
+            )
+        ))
+
 let test_check_relaxed_value_restriction_preserves_covariant_lists = fun _ctx ->
   with_tempdir_result "riot_check_relaxed_value_restriction"
     (fun tmpdir ->
@@ -1275,6 +1355,7 @@ let tests =
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
     case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
     case "check: package filter reexports same-named workspace modules via alias" test_check_package_filter_reexports_same_named_workspace_modules_via_alias;
+    case "check: package filter preserves nested same-named alias reexports" test_check_package_filter_preserves_nested_same_named_alias_reexports;
     case "check: expansive bindings stay monomorphic through riot check" test_check_expansive_bindings_stay_monomorphic;
     case "check: relaxed value restriction keeps covariant lists polymorphic through riot check" test_check_relaxed_value_restriction_preserves_covariant_lists;
     case "check: package filter loads transitive workspace dependency summaries" test_check_package_filter_loads_transitive_workspace_dependency_summaries;

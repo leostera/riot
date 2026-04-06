@@ -46,8 +46,43 @@ let remove_source = fun session source_id ->
       session.sources
   }
 
+let is_uppercase_ascii = fun ch -> ch >= 'A' && ch <= 'Z'
+
+let module_segments_of_export_name = fun export_name ->
+  let rec loop acc = function
+    | segment :: rest when String.length segment > 0 && is_uppercase_ascii segment.[0] ->
+        loop (segment :: acc) rest
+    | _ -> List.rev acc
+  in
+  String.split_on_char '.' export_name |> loop []
+
+let deps_env_for_loaded_modules = fun loaded_modules ->
+  let add_summary_paths = fun env summary ->
+    let module_name = ModuleSummary.module_name summary in
+    let env = Syn.Deps.Env.add_path env ~path:[ module_name ] ~free_names:[ module_name ] in
+    let env =
+      ModuleSummary.exports summary
+      |> List.fold_left
+        (fun env (export_name, _) ->
+          match module_segments_of_export_name export_name with
+          | [] -> env
+          | segments ->
+              Syn.Deps.Env.add_path env ~path:(module_name :: segments) ~free_names:[ module_name ])
+        env
+    in
+    ModuleSummary.type_decls summary
+    |> List.fold_left
+      (fun env (type_decl: FileSummary.type_decl) ->
+        match type_decl.scope_path with
+        | [] -> env
+        | scope_path ->
+            Syn.Deps.Env.add_path env ~path:(module_name :: scope_path) ~free_names:[ module_name ])
+      env
+  in
+  List.fold_left add_summary_paths Syn.Deps.Env.empty loaded_modules
+
 let collect_missing_module_summaries = fun session roots ->
-  let is_uppercase_ascii = fun ch -> ch >= 'A' && ch <= 'Z' in
+  let deps_env = deps_env_for_loaded_modules session.config.loaded_modules in
   let exported_module_prefixes = session.config.loaded_modules
     |> List.map ModuleSummary.exports
     |> List.concat
@@ -104,7 +139,7 @@ let collect_missing_module_summaries = fun session roots ->
           |> Result.unwrap_or ~default:(Path.v "<fragment>")
     in
     let parse_result = Syn.parse ~filename source.text in
-    match Syn.Deps.of_parse_result parse_result with
+    match Syn.Deps.of_parse_result ~env:deps_env parse_result with
     | Ok deps -> Syn.Deps.modules deps
     | Error _ -> []
   in

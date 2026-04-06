@@ -1,0 +1,9 @@
+[package]
+name = "app"
+version = "0.0.1"
+description = "riot-lsp nested alias app fixture"
+license = "Apache-2.0"
+public = false
+
+[dependencies]
+std = { path = "../std", version = "*" }
