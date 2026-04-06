@@ -149,7 +149,7 @@ the outside world.
 That means downstream code should not need a separate query model just because a
 module happened to come from a recursive group.
 
-Its `ModuleSummary` should still expose:
+Its `ModuleTypings` should still expose:
 
 - module identity
 - exported signature

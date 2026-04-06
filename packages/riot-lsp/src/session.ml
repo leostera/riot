@@ -153,50 +153,44 @@ let merge_module_type_decls = fun preferred fallback ->
   in
   loop [] [] (preferred @ fallback)
 
-let summary_with_payload = fun template ~exports ~type_decls ->
-  let source_id = Typ.PersistedSummary.source_id template in
-  let template = Typ.PersistedSummary.to_file_summary template in
-  match template.Typ.FileSummary.export_result, exports with
+let typings_with_payload = fun template ~source_hash ~exports ~type_decls ->
+  let module_name = Typ.ModuleTypings.module_name template in
+  match Typ.ModuleTypings.export_result template, exports with
   | Typ.FileSummary.TrustedExport _, _ ->
-      Typ.FileSummary.trusted ~source_id ~type_decls exports
+      Typ.ModuleTypings.trusted ~module_name ~source_hash ~type_decls exports
   | Typ.FileSummary.ErroredExport _, _ ->
-      Typ.FileSummary.errored ~source_id ~type_decls exports
+      Typ.ModuleTypings.errored ~module_name ~source_hash ~type_decls exports
   | Typ.FileSummary.NoExport, [] ->
-      Typ.FileSummary.missing ~source_id ~type_decls ()
+      Typ.ModuleTypings.missing ~module_name ~source_hash ~type_decls ()
   | Typ.FileSummary.NoExport, _ ->
-      Typ.FileSummary.errored ~source_id ~type_decls exports
+      Typ.ModuleTypings.errored ~module_name ~source_hash ~type_decls exports
 
-let merge_module_summary = fun preferred fallback ->
-  let module_name = Typ.ModuleSummary.module_name preferred in
+let merge_module_typings = fun preferred fallback ->
+  let module_name = Typ.ModuleTypings.module_name preferred in
   let exports =
     merge_module_exports
-      (Typ.ModuleSummary.exports preferred)
-      (Typ.ModuleSummary.exports fallback)
+      (Typ.ModuleTypings.exports preferred)
+      (Typ.ModuleTypings.exports fallback)
   in
   let type_decls =
     merge_module_type_decls
-      (Typ.ModuleSummary.type_decls preferred)
-      (Typ.ModuleSummary.type_decls fallback)
+      (Typ.ModuleTypings.type_decls preferred)
+      (Typ.ModuleTypings.type_decls fallback)
   in
-  let preferred_summary = Typ.ModuleSummary.summary preferred in
-  let fallback_summary = Typ.ModuleSummary.summary fallback in
-  let summary =
-    let preferred_file = Typ.PersistedSummary.to_file_summary preferred_summary in
-    match preferred_file.Typ.FileSummary.export_result, exports with
-    | Typ.FileSummary.NoExport, _ :: _ ->
-        summary_with_payload fallback_summary ~exports ~type_decls
-    | _ ->
-        summary_with_payload preferred_summary ~exports ~type_decls
+  let template =
+    match Typ.ModuleTypings.export_result preferred, exports with
+    | Typ.FileSummary.NoExport, _ :: _ -> fallback
+    | _ -> preferred
   in
-  let persisted_summary = Typ.PersistedSummary.of_file_summary summary in
   let source_hash =
-    Typ.PersistedSummary.Json.to_json persisted_summary
-    |> Data.Json.to_string
-    |> fun json -> Crypto.hash_string ("typ-loaded-module\x1f" ^ module_name ^ "\x1f" ^ json)
+    Typ.ModuleTypings.synthetic_source_hash
+      ~module_name
+      ~export_result:(Typ.ModuleTypings.export_result template)
+      ~type_decls
   in
-  Typ.ModuleSummary.make ~module_name ~source_hash ~summary:persisted_summary
+  typings_with_payload template ~source_hash ~exports ~type_decls
 
-let merge_loaded_module_summaries = fun preferred fallback ->
+let merge_loaded_module_typings = fun preferred fallback ->
   let rec loop order merged remaining =
     match remaining with
     | [] ->
@@ -204,13 +198,13 @@ let merge_loaded_module_summaries = fun preferred fallback ->
         |> List.rev
         |> List.filter_map (fun module_name -> List.assoc_opt module_name merged)
     | summary :: tail ->
-        let module_name = Typ.ModuleSummary.module_name summary in
+        let module_name = Typ.ModuleTypings.module_name summary in
         let (order, merged) =
           match List.assoc_opt module_name merged with
           | None ->
               (module_name :: order, (module_name, summary) :: merged)
           | Some existing ->
-              (order, (module_name, merge_module_summary existing summary) :: List.remove_assoc module_name merged)
+              (order, (module_name, merge_module_typings existing summary) :: List.remove_assoc module_name merged)
         in
         loop order merged tail
   in
@@ -239,10 +233,10 @@ let typ_session_with_paths = fun ~config paths ->
           (session, source_ids @ [ source_id ], sources @ [ source ]))
     (Typ.Session.empty ~config, [], [])
 
-let module_summaries_for_roots = fun session roots ->
+let module_typings_for_roots = fun session roots ->
   let summaries_for_snapshot snapshot roots =
     roots
-    |> List.filter_map (Typ.Query.module_summary_of snapshot)
+    |> List.filter_map (Typ.Query.module_typings_of snapshot)
   in
   match Typ.Session.prepare_snapshot session ~roots with
   | Ok snapshot ->
@@ -252,9 +246,9 @@ let module_summaries_for_roots = fun session roots ->
       |> List.filter_map
         (fun source_id ->
           match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
-          | Ok snapshot -> Typ.Query.module_summary_of snapshot source_id
+          | Ok snapshot -> Typ.Query.module_typings_of snapshot source_id
           | Error _ -> None)
-      |> merge_loaded_module_summaries []
+      |> merge_loaded_module_typings []
 
 let workspace_dependency_packages = fun ~include_dev (workspace: Riot_model.Workspace.t) (pkg: Riot_model.Package.t) ->
   let dependencies =
@@ -269,35 +263,35 @@ let workspace_dependency_packages = fun ~include_dev (workspace: Riot_model.Work
   |> List.sort_uniq
     (fun (left: Riot_model.Package.t) (right: Riot_model.Package.t) -> String.compare left.name right.name)
 
-let workspace_module_summaries_for_package =
+let workspace_module_typings_for_package =
   let rec load cache (workspace: Riot_model.Workspace.t) ?(visiting = []) (pkg: Riot_model.Package.t) =
     match List.assoc_opt pkg.name !cache with
-    | Some summaries -> summaries
+    | Some typings -> typings
     | None when List.mem pkg.name visiting -> []
     | None ->
-        let dependency_summaries =
+        let dependency_typings =
           workspace_dependency_packages ~include_dev:false workspace pkg
           |> List.concat_map
             (fun dependency_pkg ->
               load cache workspace ~visiting:(pkg.name :: visiting) dependency_pkg)
         in
         let loaded_modules =
-          merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
+          merge_loaded_module_typings dependency_typings Typ.Config.default.loaded_modules
         in
         let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
         let (session, roots, _sources) = typ_session_with_paths ~config (package_typ_summary_source_files pkg) in
-        let summaries =
+        let typings =
           match roots with
           | [] -> []
-          | _ -> module_summaries_for_roots session roots
+          | _ -> module_typings_for_roots session roots
         in
-        let summaries =
-          merge_loaded_module_summaries summaries dependency_summaries
+        let typings =
+          merge_loaded_module_typings typings dependency_typings
         in
         let () =
-          cache := (pkg.name, summaries) :: !cache
+          cache := (pkg.name, typings) :: !cache
         in
-        summaries
+        typings
   in
   load
 
@@ -347,11 +341,11 @@ let typ_config_for_document = fun state ->
                 let dependency_summaries =
                   workspace_dependency_packages ~include_dev:true workspace pkg
                   |> List.concat_map
-                    (fun dependency_pkg ->
-                      workspace_module_summaries_for_package summary_cache workspace dependency_pkg)
-                in
-                let loaded_modules =
-                  merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
+                (fun dependency_pkg ->
+                  workspace_module_typings_for_package summary_cache workspace dependency_pkg)
+              in
+              let loaded_modules =
+                merge_loaded_module_typings dependency_summaries Typ.Config.default.loaded_modules
                 in
                 Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules
           )

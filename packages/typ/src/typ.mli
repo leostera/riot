@@ -29,10 +29,9 @@ open Std
       source-backed origins for semantic IDs in one source revision
     - `FileSummary`
       export-facing result with an explicit trust state
-    - `PersistedSummary`
-      host-facing `.cmi`-like persistence seam for reusable exports
-    - `ModuleSummary`
-      persisted export summaries paired with module identity and input hashes
+    - `ModuleTypings`
+      canonical reusable module-typing artifacts paired with module identity
+      and input hashes
     - `TypeIndex`
       a query-oriented expression-type index used by `Query.type_at`
 
@@ -48,7 +47,7 @@ open Std
     - `Typ.Session.prepare_snapshot`
     - `Typ.Query.diagnostics`
     - `Typ.Query.type_at`
-    - `Typ.Query.module_summary_of`
+    - `Typ.Query.module_typings_of`
 
     Existing tests and batch-oriented tools can still use:
 
@@ -98,9 +97,7 @@ module TypeIndex: module type of TypeIndex
 
 module FileSummary: module type of FileSummary
 
-module PersistedSummary: module type of PersistedSummary
-
-module ModuleSummary: module type of ModuleSummary
+module ModuleTypings: module type of ModuleTypings
 
 module Config: module type of TypConfig
 

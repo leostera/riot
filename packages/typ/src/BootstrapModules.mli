@@ -1,9 +1,9 @@
 open Std
 
-(** Seeded module summaries used by the prototype host configuration.
+(** Seeded module typings used by the prototype host configuration.
 
-    These summaries are a temporary bridge while the build and LSP hosts learn
+    These typings are a temporary bridge while the build and LSP hosts learn
     to load real type exports from cached package outputs. They intentionally
-    use the same [ModuleSummary] shape that those hosts will later persist in
+    use the same [ModuleTypings] shape that those hosts will later persist in
     and restore from [riot_store]. *)
-val summaries: ModuleSummary.t list
+val summaries: ModuleTypings.t list

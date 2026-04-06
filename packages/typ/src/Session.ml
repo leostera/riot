@@ -58,10 +58,10 @@ let module_segments_of_export_name = fun export_name ->
 
 let deps_env_for_loaded_modules = fun loaded_modules ->
   let add_summary_paths = fun env summary ->
-    let module_name = ModuleSummary.module_name summary in
+    let module_name = ModuleTypings.module_name summary in
     let env = Syn.Deps.Env.add_path env ~path:[ module_name ] ~free_names:[ module_name ] in
     let env =
-      ModuleSummary.exports summary
+      ModuleTypings.exports summary
       |> List.fold_left
         (fun env (export_name, _) ->
           match module_segments_of_export_name export_name with
@@ -70,7 +70,7 @@ let deps_env_for_loaded_modules = fun loaded_modules ->
               Syn.Deps.Env.add_path env ~path:(module_name :: segments) ~free_names:[ module_name ])
         env
     in
-    ModuleSummary.type_decls summary
+    ModuleTypings.type_decls summary
     |> List.fold_left
       (fun env (type_decl: FileSummary.type_decl) ->
         match type_decl.scope_path with
@@ -130,7 +130,7 @@ let collect_missing_module_summaries = fun session roots ->
   in
   let loaded_module_names =
     session.config.loaded_modules
-    |> List.map ModuleSummary.module_name
+    |> List.map ModuleTypings.module_name
     |> List.sort_uniq String.compare
   in
   let local_source_of_module = fun module_name ->
@@ -155,11 +155,11 @@ let collect_missing_module_summaries = fun session roots ->
     match session.config.loaded_modules
       |> List.find_opt
         (fun summary ->
-          String.equal module_name (ModuleSummary.module_name summary))
+          String.equal module_name (ModuleTypings.module_name summary))
     with
     | None -> []
     | Some summary ->
-        ModuleSummary.exports summary
+        ModuleTypings.exports summary
         |> List.map fst
         |> List.filter_map
           (

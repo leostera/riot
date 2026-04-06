@@ -170,7 +170,7 @@ This is another example of why pattern analysis belongs in its own spec.
 ## 9. Queries And Summaries
 
 The effect subsystem changes local typing behavior and diagnostics, but it does
-not require `ModuleSummary` to export a new public "effect row" field for every
+not require `ModuleTypings` to export a new public "effect row" field for every
 ordinary value.
 
 If effect-specific exported facts become necessary later, that should be a

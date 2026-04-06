@@ -11,7 +11,7 @@
     },
     "source_id": 0
   },
-  "persisted": {
+  "module_typings": {
     "export_result": {
       "exports": [
         {
@@ -28,7 +28,8 @@
       ],
       "tag": "trusted_export"
     },
-    "source_id": 0,
+    "module_name": "Module_typings",
+    "source_hash": "bca2edbfabac0bb14a3c0c76e9448ea2de4deff4013213df4fcd623de1227588",
     "type_decls": [
       {
         "constructors": [],

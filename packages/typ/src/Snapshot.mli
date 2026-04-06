@@ -8,7 +8,7 @@ type t
     Analyses are prepared lazily per source and only forced by queries that
     actually need them. Before the final per-source analysis runs, the snapshot
     may synthesize an ambient environment from sibling source exports and
-    host-loaded module summaries so implicit file modules can participate in
+    host-loaded module typings so implicit file modules can participate in
     name resolution. *)
 val make: revision:int -> roots:SourceId.t list -> config:TypConfig.t -> sources:Source.t list -> t
 
@@ -28,28 +28,19 @@ val analyses: t -> SourceAnalysis.t list
     Calling this forces every lazy per-root analysis. *)
 val file_summaries: t -> FileSummary.t list
 
-(** Enumerate the host-facing persisted summaries for every rooted module in
-    this snapshot.
-
-    This follows the same canonical per-module boundary as [module_summaries],
-    so paired [.ml]/[.mli] roots contribute one persisted summary.
-
-    Calling this forces every lazy per-root analysis. *)
-val persisted_summaries: t -> PersistedSummary.t list
-
-(** Enumerate the host-facing module summaries for every rooted module in this
+(** Enumerate the canonical host-facing module typings for every rooted module in this
     snapshot.
 
     Calling this forces every lazy per-root analysis. *)
-val module_summaries: t -> ModuleSummary.t list
+val module_typings: t -> ModuleTypings.t list
 
-(** Find the canonical host-facing module summary for one rooted source's
+(** Find the canonical host-facing module typings for one rooted source's
     module, when present.
 
     This preserves the rooted query boundary while ensuring callers see the
-    same canonical [ModuleSummary] that [module_summaries] enumerates for that
+    same canonical [ModuleTypings] that [module_typings] enumerates for that
     module. *)
-val find_module_summary: t -> SourceId.t -> ModuleSummary.t option
+val find_module_typings: t -> SourceId.t -> ModuleTypings.t option
 
 (** Find the analysis for one logical source within this snapshot.
 

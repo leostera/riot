@@ -64,7 +64,7 @@ These docs are meant to have clear ownership boundaries.
 - `lowering.md`
   owns semantic normalization, origins, and recovery lowering
 - `engine.md`
-  owns sessions, rooted snapshots, `ModuleSummary`, store hydration, and query
+  owns sessions, rooted snapshots, `ModuleTypings`, store hydration, and query
   semantics
 - `generalization.md`
   owns value restriction, nonexpansiveness, and generalization boundaries
@@ -157,7 +157,7 @@ The spec stack says `typ` is:
 - incremental through sessions and rooted snapshots
 - semantically centered on lowered forms plus origins, not on raw CST
 - query-first at the public boundary
-- driven by canonical reusable `ModuleSummary` artifacts
+- driven by canonical reusable `ModuleTypings` artifacts
 - structured-diagnostic-first from parse through typing
 
 That is the checker and engine we are building.
@@ -197,7 +197,7 @@ This is the current status of the spec set.
 
 ### Still Meant To Evolve
 
-- the exact canonical payload shape of `ModuleSummary`
+- the exact canonical payload shape of `ModuleTypings`
 - the exact public query surface once more implementation slices land
 - any future experimental extensions Riot may want to add on top of the
   functional OCaml subset

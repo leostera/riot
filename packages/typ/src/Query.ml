@@ -19,10 +19,7 @@ let file_summary_of = fun snapshot source_id ->
   | Some analysis -> Some analysis.file_summary
   | None -> None
 
-let module_summary_of = Snapshot.find_module_summary
-
-let persisted_summary_of = fun snapshot source_id ->
-  module_summary_of snapshot source_id |> Option.map ModuleSummary.summary
+let module_typings_of = Snapshot.find_module_typings
 
 let export_of = fun snapshot source_id ->
   file_summary_of snapshot source_id |> Option.map (fun summary -> summary.FileSummary.export_result)

@@ -23,7 +23,7 @@ This document covers:
 - destructive substitution
 - opens and includes inside signatures
 - implementation-versus-interface checking
-- the export boundary that feeds `ModuleSummary`
+- the export boundary that feeds `ModuleTypings`
 
 This document does not cover:
 
@@ -48,7 +48,7 @@ It says:
 That means signatures sit directly on the persistence seam.
 
 If a module checks against a signature, then that signature shape is what
-downstream modules, queries, and `ModuleSummary` should see.
+downstream modules, queries, and `ModuleTypings` should see.
 
 ## 3. Elaboration
 
@@ -172,7 +172,7 @@ This matters for:
 
 - later lookup in the same signature
 - inclusion checking
-- exported `ModuleSummary` contents
+- exported `ModuleTypings` contents
 
 ## 8. Includes And Opens
 
@@ -255,7 +255,7 @@ The checker should preserve that shape.
 
 ## 11. Export Boundary
 
-This slice feeds directly into `ModuleSummary`.
+This slice feeds directly into `ModuleTypings`.
 
 That means the canonical persisted summary should reflect:
 

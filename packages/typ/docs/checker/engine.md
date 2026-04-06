@@ -200,13 +200,13 @@ dependencies.
 
 Missing requirements are a preparation-time failure, not a query-time surprise.
 
-## 10. ModuleSummary
+## 10. ModuleTypings
 
-`ModuleSummary` is the canonical reusable artifact for one module.
+`ModuleTypings` is the canonical reusable artifact for one module.
 
 That is the core persistence seam.
 
-A `ModuleSummary` must carry enough information for later sessions to reuse the
+A `ModuleTypings` must carry enough information for later sessions to reuse the
 module without reopening source or compiler artifacts.
 
 At a minimum that means:
@@ -224,7 +224,7 @@ At a minimum that means:
 This is the `.cmi`-like boundary for `typ`.
 
 Later richer typed-analysis artifacts may play the role of `.cmti`, but the
-core reusable module-typing boundary is `ModuleSummary`.
+core reusable module-typing boundary is `ModuleTypings`.
 
 ## 11. Store Boundary
 
@@ -232,7 +232,7 @@ The store is a host concern, not a `typ` concern.
 
 That means:
 
-- `typ` should consume `ModuleSummary` values
+- `typ` should consume `ModuleTypings` values
 - the host should decide how summaries are serialized, cached, keyed, and
   fetched
 - a content-addressable store such as `riot-store` is a great host mechanism,
@@ -241,7 +241,7 @@ That means:
 The engine contract with the host is:
 
 ```text
-host loads or computes ModuleSummary values
+host loads or computes ModuleTypings values
 host prepares a session/config with those summaries
 typ consumes them during snapshot preparation and queries
 ```
@@ -256,12 +256,12 @@ The host-side algorithm should look like this:
 2. choose the root source or root set to check
 3. parse and discover required modules for those roots
 4. for each required module:
-   - try to load its `ModuleSummary` from the store by hash or equivalent
+   - try to load its `ModuleTypings` from the store by hash or equivalent
    - if it is missing, recursively compute it from that module's package/module
      graph
 5. once all required summaries are available, prepare the snapshot
 6. run snapshot queries
-7. persist newly computed `ModuleSummary` values back to the store
+7. persist newly computed `ModuleTypings` values back to the store
 
 This is intentionally close to the planner/executor loop Riot already uses for
 builds.
@@ -287,7 +287,7 @@ But semantically, a query is just a pure read over one prepared snapshot.
 The engine should support, at minimum, queries like:
 
 - `diagnostics`
-- `module_summary_of`
+- `module_typings_of`
 - `export_of`
 - `semantic_tree_of_source`
 - `type_at`
@@ -309,9 +309,9 @@ That means:
 `definition_at` deserves one explicit rule.
 
 If the queried symbol resolves to an exported symbol from another module, the
-engine should be able to answer from `ModuleSummary` data directly.
+engine should be able to answer from `ModuleTypings` data directly.
 
-That means `ModuleSummary` must carry exact definition origin data, not just
+That means `ModuleTypings` must carry exact definition origin data, not just
 types and names.
 
 Otherwise cross-module jumps would still depend on reopening source or external
@@ -396,7 +396,7 @@ This document implies a few architectural constraints for `typ`.
 3. `Config` should carry host-loaded ambient summaries, not grow a giant fake
 prelude.
 
-4. `ModuleSummary` should become the one true reusable artifact boundary.
+4. `ModuleTypings` should become the one true reusable artifact boundary.
 
 5. `Query` should stay centered on focused semantic questions, not on one giant
 returned typed tree blob.

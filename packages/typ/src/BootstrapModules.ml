@@ -8,12 +8,12 @@ let arrow = fun ?(label = TypeRepr.Nolabel) lhs rhs -> TypeRepr.Arrow { label; l
 
 let named = fun name -> TypeRepr.Named { name; arguments = [] }
 
-let module_summary = fun ~source_id ~module_name exports ->
-  let summary = FileSummary.trusted ~source_id exports |> PersistedSummary.of_file_summary in
-  let source_hash = PersistedSummary.Json.to_json summary
-  |> Data.Json.to_string
-  |> fun json -> Crypto.hash_string ("typ-bootstrap-module\x1f" ^ module_name ^ "\x1f" ^ json) in
-  ModuleSummary.make ~module_name ~source_hash ~summary
+let module_typings = fun ~source_id ~module_name exports ->
+  let file_summary = FileSummary.trusted ~source_id exports in
+  let export_result = file_summary.export_result in
+  let type_decls = file_summary.type_decls in
+  let source_hash = ModuleTypings.synthetic_source_hash ~module_name ~export_result ~type_decls in
+  ModuleTypings.of_file_summary ~module_name ~source_hash file_summary
 
 let int_binop = monomorphic (arrow TypeRepr.Int (arrow TypeRepr.Int TypeRepr.Int))
 
@@ -121,4 +121,4 @@ let summaries = [
 ]
 |> List.mapi
   (fun index (module_name, exports) ->
-    module_summary ~source_id:(SourceId.of_int ((-1_000) - index)) ~module_name exports)
+    module_typings ~source_id:(SourceId.of_int ((-1_000) - index)) ~module_name exports)

@@ -4,7 +4,7 @@ open Std
 
     Once a source finishes checking, the reusable type environment it exports
     is captured here. Hosts should persist or reload that boundary through
-    {!PersistedSummary} rather than adding serialization concerns to the core
+    {!ModuleTypings} rather than adding serialization concerns to the core
     semantic layers. *)
 type type_decl = {
   (** Lexical module path that owns the declaration, empty at top level. *)

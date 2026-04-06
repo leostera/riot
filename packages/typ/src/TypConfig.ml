@@ -4,7 +4,7 @@ type env = (string * TypeScheme.t) list
 
 type t = {
   prelude: env;
-  loaded_modules: ModuleSummary.t list;
+  loaded_modules: ModuleTypings.t list;
   ambient: env;
   ambient_type_decls: FileSummary.type_decl list;
 }

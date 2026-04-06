@@ -13,27 +13,43 @@ let file_summary_for = fun source ->
   | Some summary -> Ok summary
   | None -> Error "expected file summary for analyzed source"
 
+let module_typings_hash_for = fun filename source ->
+  Source.make
+    ~source_id:(SourceId.of_int 0)
+    ~kind:Source.File
+    ~origin:(Source.Label filename)
+    ~revision:0
+    ~text:source
+  |> Source.input_hash
+
 let assert_roundtrip = fun ~ctx source ->
   match file_summary_for source with
   | Error _ as err -> err
   | Ok summary ->
-      let persisted = PersistedSummary.of_file_summary summary in
-      let actual_json = PersistedSummary.Json.to_json persisted in
+      let typings =
+        ModuleTypings.of_file_summary
+          ~module_name:"Module_typings"
+          ~source_hash:(module_typings_hash_for "module_typings.ml" source)
+          summary
+      in
+      let actual_json = ModuleTypings.Json.to_json typings in
       begin
-        match PersistedSummary.Json.of_json actual_json with
+        match ModuleTypings.Json.of_json actual_json with
         | Error _ as err -> err
         | Ok decoded ->
-            let roundtripped_summary = PersistedSummary.to_file_summary decoded in
-            let roundtripped_persisted_json = PersistedSummary.Json.to_json decoded in
+            let roundtripped_summary =
+              ModuleTypings.to_file_summary ~source_id:summary.source_id decoded
+            in
+            let roundtripped_persisted_json = ModuleTypings.Json.to_json decoded in
             let roundtripped_json = FileSummary.to_json roundtripped_summary in
             let original_json = FileSummary.to_json summary in
             if not (actual_json = roundtripped_persisted_json) then
-              Error ("persisted summary roundtrip changed persisted json\noriginal:\n"
+              Error ("module typings roundtrip changed module typings json\noriginal:\n"
               ^ Data.Json.to_string_pretty actual_json
               ^ "\nroundtripped:\n"
               ^ Data.Json.to_string_pretty roundtripped_persisted_json)
             else if not (original_json = roundtripped_json) then
-              Error ("persisted summary roundtrip changed file summary\noriginal:\n"
+              Error ("module typings roundtrip changed file summary\noriginal:\n"
               ^ Data.Json.to_string_pretty original_json
               ^ "\nroundtripped:\n"
               ^ Data.Json.to_string_pretty roundtripped_json)
@@ -41,7 +57,7 @@ let assert_roundtrip = fun ~ctx source ->
               Test.Snapshot.assert_json
                 ~ctx
                 ~actual:(Data.Json.Object [
-                  ("persisted", actual_json);
+                  ("module_typings", actual_json);
                   ("file_summary", original_json);
                 ])
       end
@@ -63,6 +79,6 @@ let () =
         Test.case "errored summary roundtrips through persisted json" test_errored_summary_roundtrip;
         Test.case "type declarations roundtrip through persisted json" test_type_decl_summary_roundtrip;
       ] in
-      Test.Cli.main ~name:"typ:persisted_summary" ~tests ~args)
+      Test.Cli.main ~name:"typ:module_typings" ~tests ~args)
     ~args:Env.args
     ()

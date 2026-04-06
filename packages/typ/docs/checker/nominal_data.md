@@ -484,7 +484,7 @@ data to populate:
 - the constructor environment
 - the label environment
 
-### `ModuleSummary`
+### `ModuleTypings`
 
 Module summaries should eventually persist exported:
 

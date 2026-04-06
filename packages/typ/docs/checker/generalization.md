@@ -252,11 +252,11 @@ That means:
 
 - the in-memory environment
 - the typed semantic model
-- and the persisted `ModuleSummary`
+- and the persisted `ModuleTypings`
 
 must all agree on the generalized scheme for an exported value.
 
-This is one reason `ModuleSummary` is a semantic artifact rather than a pretty
+This is one reason `ModuleTypings` is a semantic artifact rather than a pretty
 printer dump.
 
 ## 9. Signatures

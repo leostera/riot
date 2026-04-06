@@ -78,11 +78,8 @@ let trace_debug = fun snapshot source_id ->
           ^ "]") in
       item_lines @ expr_lines
 
-let persisted_summary_jsons = fun snapshot ->
-  Snapshot.persisted_summaries snapshot |> List.map PersistedSummary.Json.to_json
-
-let module_summary_jsons = fun snapshot ->
-  Snapshot.module_summaries snapshot |> List.map ModuleSummary.Json.to_json
+let module_typings_jsons = fun snapshot ->
+  Snapshot.module_typings snapshot |> List.map ModuleTypings.Json.to_json
 
 let prepare_snapshot_or_error = fun session ~roots ->
   match Session.prepare_snapshot session ~roots with
@@ -163,7 +160,7 @@ let test_snapshot_exposes_implicit_file_modules = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
     Ok ()
 
-let test_snapshot_collects_persisted_summaries = fun _ctx ->
+let test_snapshot_collects_module_typings = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, _) = Session.create_source
     session
@@ -176,7 +173,7 @@ let test_snapshot_collects_persisted_summaries = fun _ctx ->
     ~origin:(Source.Label "beta.ml")
     ~text:"let broken = missing\n" in
   let snapshot = Session.snapshot session in
-  let summaries = persisted_summary_jsons snapshot in
+  let summaries = module_typings_jsons snapshot in
   let tags =
     summaries
     |> List.filter_map
@@ -197,7 +194,7 @@ let test_snapshot_collects_persisted_summaries = fun _ctx ->
   let () = Test.assert_equal ~expected:[ "trusted_export"; "errored_export" ] ~actual:tags in
   Ok ()
 
-let test_snapshot_module_summaries_are_canonical_per_module = fun _ctx ->
+let test_snapshot_module_typings_are_canonical_per_module = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, _impl_source_id) = Session.create_source
     session
@@ -211,7 +208,7 @@ let test_snapshot_module_summaries_are_canonical_per_module = fun _ctx ->
     ~text:"val answer : int\n" in
   let snapshot = Session.snapshot session in
   let module_names =
-    module_summary_jsons snapshot
+    module_typings_jsons snapshot
     |> List.filter_map
       (
         function
@@ -226,7 +223,7 @@ let test_snapshot_module_summaries_are_canonical_per_module = fun _ctx ->
   let () = Test.assert_equal ~expected:[ "Colors" ] ~actual:module_names in
   Ok ()
 
-let test_query_module_summary_of_uses_canonical_root_summary = fun _ctx ->
+let test_query_module_typings_of_uses_canonical_root_typings = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, impl_source_id) = Session.create_source
     session
@@ -240,80 +237,20 @@ let test_query_module_summary_of_uses_canonical_root_summary = fun _ctx ->
     ~text:"val answer : int\n" in
   let snapshot = Session.snapshot session in
   let canonical_json =
-    match Snapshot.module_summaries snapshot with
-    | [ summary ] -> ModuleSummary.Json.to_json summary |> Data.Json.to_string
-    | summaries ->
-        panic ("expected one canonical module summary but got "
-        ^ string_of_int (List.length summaries))
+    match Snapshot.module_typings snapshot with
+    | [ typings ] -> ModuleTypings.Json.to_json typings |> Data.Json.to_string
+    | typings ->
+        panic ("expected one canonical module typings value but got "
+        ^ string_of_int (List.length typings))
   in
-  let summary_json = fun source_id ->
-    match Query.module_summary_of snapshot source_id with
-    | Some summary -> ModuleSummary.Json.to_json summary |> Data.Json.to_string
+  let typings_json = fun source_id ->
+    match Query.module_typings_of snapshot source_id with
+    | Some typings -> ModuleTypings.Json.to_json typings |> Data.Json.to_string
     | None ->
-        panic ("expected module summary for " ^ SourceId.to_string source_id)
+        panic ("expected module typings for " ^ SourceId.to_string source_id)
   in
-  let impl_json = summary_json impl_source_id in
-  let intf_json = summary_json intf_source_id in
-  let () = Test.assert_equal ~expected:canonical_json ~actual:impl_json in
-  let () = Test.assert_equal ~expected:canonical_json ~actual:intf_json in
-  Ok ()
-
-let test_snapshot_persisted_summaries_are_canonical_per_module = fun _ctx ->
-  let session = Session.empty ~config:Config.default in
-  let (session, _impl_source_id) = Session.create_source
-    session
-    ~kind:Source.File
-    ~origin:(Source.Label "colors.ml")
-    ~text:"let answer = 42\n" in
-  let (session, _intf_source_id) = Session.create_source
-    session
-    ~kind:Source.File
-    ~origin:(Source.Label "colors.mli")
-    ~text:"val answer : int\n" in
-  let snapshot = Session.snapshot session in
-  let canonical_json =
-    match Snapshot.module_summaries snapshot with
-    | [ summary ] -> ModuleSummary.summary summary |> PersistedSummary.Json.to_json |> Data.Json.to_string
-    | summaries ->
-        panic ("expected one canonical module summary but got "
-        ^ string_of_int (List.length summaries))
-  in
-  let persisted_jsons =
-    Snapshot.persisted_summaries snapshot
-    |> List.map PersistedSummary.Json.to_json
-    |> List.map Data.Json.to_string
-  in
-  let () = Test.assert_equal ~expected:[ canonical_json ] ~actual:persisted_jsons in
-  Ok ()
-
-let test_query_persisted_summary_of_uses_canonical_root_summary = fun _ctx ->
-  let session = Session.empty ~config:Config.default in
-  let (session, impl_source_id) = Session.create_source
-    session
-    ~kind:Source.File
-    ~origin:(Source.Label "colors.ml")
-    ~text:"let answer = 42\n" in
-  let (session, intf_source_id) = Session.create_source
-    session
-    ~kind:Source.File
-    ~origin:(Source.Label "colors.mli")
-    ~text:"val answer : int\n" in
-  let snapshot = Session.snapshot session in
-  let canonical_json =
-    match Snapshot.module_summaries snapshot with
-    | [ summary ] -> ModuleSummary.summary summary |> PersistedSummary.Json.to_json |> Data.Json.to_string
-    | summaries ->
-        panic ("expected one canonical module summary but got "
-        ^ string_of_int (List.length summaries))
-  in
-  let summary_json = fun source_id ->
-    match Query.persisted_summary_of snapshot source_id with
-    | Some summary -> PersistedSummary.Json.to_json summary |> Data.Json.to_string
-    | None ->
-        panic ("expected persisted summary for " ^ SourceId.to_string source_id)
-  in
-  let impl_json = summary_json impl_source_id in
-  let intf_json = summary_json intf_source_id in
+  let impl_json = typings_json impl_source_id in
+  let intf_json = typings_json intf_source_id in
   let () = Test.assert_equal ~expected:canonical_json ~actual:impl_json in
   let () = Test.assert_equal ~expected:canonical_json ~actual:intf_json in
   Ok ()
@@ -346,7 +283,7 @@ let test_source_input_hash_ignores_source_id_and_revision = fun _ctx ->
   else
     Ok ()
 
-let test_snapshot_uses_loaded_module_summaries = fun _ctx ->
+let test_snapshot_uses_loaded_module_typings = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, colors_source_id) = Session.create_source
     seed_session
@@ -355,9 +292,9 @@ let test_snapshot_uses_loaded_module_summaries = fun _ctx ->
     ~text:"module RGB = struct let blend x y = x end\nlet to_string value = value\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_colors =
-    match Query.module_summary_of seed_snapshot colors_source_id with
-    | Some summary -> summary
-    | None -> panic "expected seed module summary"
+    match Query.module_typings_of seed_snapshot colors_source_id with
+    | Some typings -> typings
+    | None -> panic "expected seed module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
   let session = Session.empty ~config in
@@ -371,7 +308,7 @@ let test_snapshot_uses_loaded_module_summaries = fun _ctx ->
   let midpoint_type = inferred_type_at snapshot demo_source_id 34 in
   let label_type = inferred_type_at snapshot demo_source_id 58 in
   let summary_modules =
-    module_summary_jsons snapshot
+    module_typings_jsons snapshot
     |> List.filter_map
       (
         function
@@ -410,11 +347,11 @@ let test_snapshot_uses_sibling_source_record_types = fun _ctx ->
     Error (String.concat "\n" diagnostics)
   else
     let seed_summary =
-      match Query.module_summary_of snapshot colors_source_id with
-      | Some summary -> summary
-      | None -> panic "expected colors module summary"
+      match Query.module_typings_of snapshot colors_source_id with
+      | Some typings -> typings
+      | None -> panic "expected colors module typings"
     in
-    let type_decl_names = ModuleSummary.type_decls seed_summary
+    let type_decl_names = ModuleTypings.type_decls seed_summary
     |> List.map (fun (type_decl: FileSummary.type_decl) -> type_decl.declaration.type_name) in
     let field_access_offset =
       let access_start = offset_of_substring source "point.x +" |> Option.expect ~msg:"expected record field access in test source" in
@@ -438,9 +375,9 @@ let test_snapshot_uses_loaded_module_record_types = fun _ctx ->
     ~text:"type point = { x: int; y: int }\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_colors =
-    match Query.module_summary_of seed_snapshot colors_source_id with
-    | Some summary -> summary
-    | None -> panic "expected colors module summary"
+    match Query.module_typings_of seed_snapshot colors_source_id with
+    | Some typings -> typings
+    | None -> panic "expected colors module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
   let session = Session.empty ~config in
@@ -470,9 +407,9 @@ let test_include_reexports_loaded_module_record_types = fun _ctx ->
     ~text:"type point = { x: int; y: int }\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_helpers =
-    match Query.module_summary_of seed_snapshot helpers_source_id with
-    | Some summary -> summary
-    | None -> panic "expected helper module summary"
+    match Query.module_typings_of seed_snapshot helpers_source_id with
+    | Some typings -> typings
+    | None -> panic "expected helper module typings"
   in
   let consumer_config = Config.default
   |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
@@ -488,11 +425,11 @@ let test_include_reexports_loaded_module_record_types = fun _ctx ->
     Error (String.concat "\n" consumer_diagnostics)
   else
     let consumer_summary =
-      match Query.module_summary_of consumer_snapshot consumer_source_id with
-      | Some summary -> summary
-      | None -> panic "expected consumer module summary"
+      match Query.module_typings_of consumer_snapshot consumer_source_id with
+      | Some typings -> typings
+      | None -> panic "expected consumer module typings"
     in
-    let exported_type_decls = ModuleSummary.type_decls consumer_summary
+    let exported_type_decls = ModuleTypings.type_decls consumer_summary
     |> List.map
       (fun (type_decl: FileSummary.type_decl) ->
         (type_decl.scope_path, type_decl.declaration.type_name)) in
@@ -526,9 +463,9 @@ let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
     ~text:"type point = { x: int; y: int }\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_helpers =
-    match Query.module_summary_of seed_snapshot helpers_source_id with
-    | Some summary -> summary
-    | None -> panic "expected helper module summary"
+    match Query.module_typings_of seed_snapshot helpers_source_id with
+    | Some typings -> typings
+    | None -> panic "expected helper module typings"
   in
   let consumer_config = Config.default
   |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
@@ -544,11 +481,11 @@ let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
     Error (String.concat "\n" consumer_diagnostics)
   else
     let consumer_summary =
-      match Query.module_summary_of consumer_snapshot consumer_source_id with
-      | Some summary -> summary
-      | None -> panic "expected consumer module summary"
+      match Query.module_typings_of consumer_snapshot consumer_source_id with
+      | Some typings -> typings
+      | None -> panic "expected consumer module typings"
     in
-    let exported_type_decls = ModuleSummary.type_decls consumer_summary
+    let exported_type_decls = ModuleTypings.type_decls consumer_summary
     |> List.map
       (fun (type_decl: FileSummary.type_decl) ->
         (type_decl.scope_path, type_decl.declaration.type_name)) in
@@ -573,7 +510,7 @@ let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
       let () = Test.assert_equal ~expected:(Some "Consumer.Util.point -> int") ~actual:total_type in
       Ok ()
 
-let test_include_reexports_loaded_module_summaries = fun _ctx ->
+let test_include_reexports_loaded_module_typings = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, helpers_source_id) = Session.create_source
     seed_session
@@ -582,9 +519,9 @@ let test_include_reexports_loaded_module_summaries = fun _ctx ->
     ~text:"let id x = x\nlet wrap value = Some value\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_helpers =
-    match Query.module_summary_of seed_snapshot helpers_source_id with
-    | Some summary -> summary
-    | None -> panic "expected helper module summary"
+    match Query.module_typings_of seed_snapshot helpers_source_id with
+    | Some typings -> typings
+    | None -> panic "expected helper module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let session = Session.empty ~config in
@@ -609,7 +546,7 @@ let test_include_reexports_loaded_module_summaries = fun _ctx ->
     let () = Test.assert_equal ~expected:[ "answer"; "id"; "wrap" ] ~actual:exported_names in
     Ok ()
 
-let test_module_alias_reexports_loaded_module_summaries = fun _ctx ->
+let test_module_alias_reexports_loaded_module_typings = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, helpers_source_id) = Session.create_source
     seed_session
@@ -618,9 +555,9 @@ let test_module_alias_reexports_loaded_module_summaries = fun _ctx ->
     ~text:"let id x = x\nlet wrap value = Some value\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_helpers =
-    match Query.module_summary_of seed_snapshot helpers_source_id with
-    | Some summary -> summary
-    | None -> panic "expected helper module summary"
+    match Query.module_typings_of seed_snapshot helpers_source_id with
+    | Some typings -> typings
+    | None -> panic "expected helper module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let session = Session.empty ~config in
@@ -670,7 +607,7 @@ let test_module_alias_reexports_same_named_local_modules = fun _ctx ->
     let () = Test.assert_equal ~expected:[ "Cell.create"; "answer" ] ~actual:exported_names in
     Ok ()
 
-let test_loaded_module_summaries_preserve_nested_same_named_alias_exports = fun _ctx ->
+let test_loaded_module_typings_preserve_nested_same_named_alias_exports = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, _cell_source_id) = Session.create_source
     seed_session
@@ -689,11 +626,11 @@ let test_loaded_module_summaries_preserve_nested_same_named_alias_exports = fun 
     ~text:"module Sync = Sync\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let std_summary =
-    match Query.module_summary_of seed_snapshot std_source_id with
-    | Some summary -> summary
-    | None -> panic "expected std module summary"
+    match Query.module_typings_of seed_snapshot std_source_id with
+    | Some typings -> typings
+    | None -> panic "expected std module typings"
   in
-  let std_exported_names = ModuleSummary.exports std_summary |> List.map fst in
+  let std_exported_names = ModuleTypings.exports std_summary |> List.map fst in
   let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ std_summary ] in
   let client_session = Session.empty ~config:client_config in
   let (client_session, client_source_id) = Session.create_source
@@ -725,9 +662,9 @@ let test_sibling_source_uses_loaded_module_record_reexport = fun _ctx ->
     ~text:"type point = { x: int; y: int }\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_helpers =
-    match Query.module_summary_of seed_snapshot helpers_source_id with
-    | Some summary -> summary
-    | None -> panic "expected helper module summary"
+    match Query.module_typings_of seed_snapshot helpers_source_id with
+    | Some typings -> typings
+    | None -> panic "expected helper module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let session = Session.empty ~config in
@@ -922,9 +859,9 @@ let test_prepare_snapshot_keeps_loaded_nested_module_exports_out_of_top_level_re
     ~text:"module RGB = struct let blend x y = x end\n" in
   let seed_snapshot = Session.snapshot seed_session in
   let loaded_colors =
-    match Query.module_summary_of seed_snapshot colors_source_id with
-    | Some summary -> summary
-    | None -> panic "expected colors module summary"
+    match Query.module_typings_of seed_snapshot colors_source_id with
+    | Some typings -> typings
+    | None -> panic "expected colors module typings"
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
   let session = Session.empty ~config in
@@ -1286,29 +1223,23 @@ let () =
         Test.case "snapshots remain immutable after updates" test_snapshots_remain_immutable_after_updates;
         Test.case "type_at uses smallest indexed expression" test_type_at_uses_smallest_indexed_expression;
         Test.case "snapshot exposes implicit file modules" test_snapshot_exposes_implicit_file_modules;
-        Test.case "snapshot collects persisted summaries" test_snapshot_collects_persisted_summaries;
+        Test.case "snapshot collects module typings" test_snapshot_collects_module_typings;
         Test.case
-          "snapshot module summaries are canonical per module"
-          test_snapshot_module_summaries_are_canonical_per_module;
+          "snapshot module typings are canonical per module"
+          test_snapshot_module_typings_are_canonical_per_module;
         Test.case
-          "query module_summary_of uses the canonical root summary"
-          test_query_module_summary_of_uses_canonical_root_summary;
-        Test.case
-          "snapshot persisted summaries are canonical per module"
-          test_snapshot_persisted_summaries_are_canonical_per_module;
-        Test.case
-          "query persisted_summary_of uses the canonical root summary"
-          test_query_persisted_summary_of_uses_canonical_root_summary;
+          "query module_typings_of uses the canonical root typings"
+          test_query_module_typings_of_uses_canonical_root_typings;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
-        Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
+        Test.case "snapshot uses loaded module typings" test_snapshot_uses_loaded_module_typings;
         Test.case "snapshot uses sibling source record types" test_snapshot_uses_sibling_source_record_types;
         Test.case "snapshot uses loaded module record types" test_snapshot_uses_loaded_module_record_types;
         Test.case "include reexports loaded module record types" test_include_reexports_loaded_module_record_types;
         Test.case "module alias reexports loaded module record types" test_module_alias_reexports_loaded_module_record_types;
-        Test.case "include reexports loaded module summaries" test_include_reexports_loaded_module_summaries;
-        Test.case "module aliases reexport loaded module summaries" test_module_alias_reexports_loaded_module_summaries;
+        Test.case "include reexports loaded module typings" test_include_reexports_loaded_module_typings;
+        Test.case "module aliases reexport loaded module typings" test_module_alias_reexports_loaded_module_typings;
         Test.case "module aliases reexport same-named local modules" test_module_alias_reexports_same_named_local_modules;
-        Test.case "loaded module summaries preserve nested same-named alias exports" test_loaded_module_summaries_preserve_nested_same_named_alias_exports;
+        Test.case "loaded module typings preserve nested same-named alias exports" test_loaded_module_typings_preserve_nested_same_named_alias_exports;
         Test.case "sibling sources use loaded module record reexports" test_sibling_source_uses_loaded_module_record_reexport;
         Test.case "prepare_snapshot is rooted" test_prepare_snapshot_is_rooted;
         Test.case "prepare_snapshot reports missing roots" test_prepare_snapshot_reports_missing_roots;

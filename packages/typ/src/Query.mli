@@ -18,13 +18,9 @@ val diagnostics: Snapshot.t -> SourceId.t -> diagnostic list
 (** Fetch the full export-facing summary for one source, when present. *)
 val file_summary_of: Snapshot.t -> SourceId.t -> FileSummary.t option
 
-(** Fetch the canonical host-facing persisted summary for one rooted source's
+(** Fetch the canonical host-facing module typings for one rooted source's
     module, when present. *)
-val persisted_summary_of: Snapshot.t -> SourceId.t -> PersistedSummary.t option
-
-(** Fetch the canonical host-facing module summary for one rooted source's
-    module, when present. *)
-val module_summary_of: Snapshot.t -> SourceId.t -> ModuleSummary.t option
+val module_typings_of: Snapshot.t -> SourceId.t -> ModuleTypings.t option
 
 (** Fetch the export trust result for one source, when present. *)
 val export_of: Snapshot.t -> SourceId.t -> FileSummary.export_result option

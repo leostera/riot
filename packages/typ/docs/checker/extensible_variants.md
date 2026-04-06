@@ -176,7 +176,7 @@ That means:
 
 - signatures may declare them
 - implementations may define or rebind them
-- `ModuleSummary` should persist them
+- `ModuleTypings` should persist them
 - cross-module lookup and `definition_at` should be able to find their origins
 
 This is one more reason the canonical summary cannot stop at values and plain

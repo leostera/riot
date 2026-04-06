@@ -115,27 +115,27 @@ Use for:
 - rooted snapshots
 - dependency discovery
 - `MissingRequirements`
-- `ModuleSummary`
+- `ModuleTypings`
 - compiler/LSP query behavior
 
 ## Current Tasks
 
 ### Engine
 
-- [ ] Collapse summary state around one canonical `ModuleSummary`.
-  Remove the prototype split between local file summary and persisted summary
-  as separate centers of gravity.
+- [x] Collapse summary state around one canonical `ModuleTypings`.
+  The host-facing reusable artifact now lives in `ModuleTypings`; `FileSummary`
+  stays as the per-source query result.
 - [ ] Make rooted snapshot preparation real.
   `Session.prepare_snapshot` should do dependency discovery, hydrate required
-  module summaries, and return `MissingRequirements` early when needed.
-- [ ] Stop relying on ambient fake knowledge where real loaded module summaries
+  module typings, and return `MissingRequirements` early when needed.
+- [ ] Stop relying on ambient fake knowledge where real loaded module typings
   should be used instead.
 
 ### Interfaces and exports
 
 - [ ] Implement real `.mli` / signature checking.
   Exported module views should come from the interface when present.
-- [ ] Make persisted module summaries carry the real export facts needed by
+- [ ] Make persisted module typings carry the real export facts needed by
   downstream checking and editor queries.
 - [ ] Tighten export trust / errored export / no export behavior and cover it
   with tests.
@@ -188,8 +188,7 @@ Use this as the rough implementation map.
 ### Analysis, summaries, queries
 
 - `src/SourceAnalysis.ml`
-- `src/ModuleSummary*.ml`
-- `src/PersistedSummary*.ml`
+- `src/ModuleTypings*.ml`
 - `src/Query*.ml`
 - `src/TypeIndex*.ml`
 

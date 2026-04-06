@@ -9,9 +9,9 @@ type t = {
       module summaries and host-provided ambient inputs, not by growing the
       default prelude. *)
   prelude: env;
-  (** Host-loaded persisted module summaries available to every source in the
+  (** Host-loaded reusable module typings available to every source in the
       session. *)
-  loaded_modules: ModuleSummary.t list;
+  loaded_modules: ModuleTypings.t list;
   (** Snapshot-scoped bindings synthesized from sibling sources or host context. *)
   ambient: env;
   (** Snapshot-scoped lowered type declarations synthesized from summaries. *)
@@ -21,9 +21,9 @@ type t = {
 (** Default host configuration used by the current prototype and tests.
 
     The default keeps [prelude] limited to language-level intrinsics and seeds
-    a small set of bootstrap module summaries through [loaded_modules]. Those
-    seeded summaries are a temporary stand-in for real persisted module exports
-    and intentionally flow through the same [ModuleSummary] boundary that hosts
+    a small set of bootstrap module typings through [loaded_modules]. Those
+    seeded typings are a temporary stand-in for real persisted module exports
+    and intentionally flow through the same [ModuleTypings] boundary that hosts
     will later hydrate from cache or build outputs. *)
 val default: t
 
@@ -34,6 +34,6 @@ val with_ambient: t -> ambient:env -> t
     prelude, loaded modules, and ambient value environment. *)
 val with_ambient_type_decls: t -> ambient_type_decls:FileSummary.type_decl list -> t
 
-(** Replace the host-loaded persisted module summaries while preserving the
+(** Replace the host-loaded reusable module typings while preserving the
     base prelude and snapshot ambient environment. *)
-val with_loaded_modules: t -> loaded_modules:ModuleSummary.t list -> t
+val with_loaded_modules: t -> loaded_modules:ModuleTypings.t list -> t

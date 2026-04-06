@@ -334,7 +334,7 @@ This is the rule behind upstream checks like `check_package_closed`.
 
 This slice matters for `typ`'s reusable outputs too.
 
-If a symbol is exported with package type, then its `ModuleSummary` and related
+If a symbol is exported with package type, then its `ModuleTypings` and related
 query data need to retain:
 
 - the package shape

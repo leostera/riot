@@ -519,7 +519,7 @@ fail to understand that they mean the same path-carried type.
 
 This slice has a direct consequence for `typ`'s reusable artifacts.
 
-A `ModuleSummary` for a module must contain enough information to reconstruct
+A `ModuleTypings` value for a module must contain enough information to reconstruct
 its exported module signature, including:
 
 - exported values and their schemes
@@ -532,7 +532,7 @@ its exported module signature, including:
 
 This is not optional.
 
-If `ModuleSummary` cannot answer downstream inclusion, name lookup, and
+If `ModuleTypings` cannot answer downstream inclusion, name lookup, and
 definition queries without reopening arbitrary compiler artifacts, then we have
 missed the point of building `typ` in-process.
 
