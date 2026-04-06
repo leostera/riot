@@ -4,6 +4,7 @@ open Std.Data
 module Env: sig
   type t
   val empty: t
+  val add_path: t -> path:string list -> free_names:string list -> t
 end
 
 type t

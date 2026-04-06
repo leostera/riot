@@ -42,6 +42,23 @@ module Env = struct
   let merge = fun left right ->
     List.fold_left (fun env (name, node) -> add name node env) left right
 
+  let rec add_path = fun env ~path ~free_names ->
+    match path with
+    | [] -> env
+    | segment :: rest ->
+        let existing =
+          match List.assoc_opt segment env with
+          | Some node -> node
+          | None -> Node (Names.empty, [])
+        in
+        let Node (free, children) = existing in
+        let updated_children =
+          match rest with
+          | [] -> children
+          | _ -> add_path children ~path:rest ~free_names
+        in
+        add segment (Node (Names.union free free_names, updated_children)) env
+
   let top_free = function
     | Node (free, _) -> free
 
