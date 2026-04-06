@@ -120,16 +120,48 @@ Use for:
 
 ## Current Tasks
 
+### Next Slices
+
+Build these in order unless real package diagnostics tell us a smaller slice
+should jump the queue.
+
+1. [x] Wire real hosts to `Typ.Store`.
+   `riot check` and `riot-lsp` now build a `Typ.Store` on top of
+   `Contentstore`, pass it through `Typ.Config`, hydrate from persisted module
+   typings, and persist newly produced module typings back into the store.
+2. [ ] Implement real `.mli` / signature checking.
+   When an interface exists, the exported module view should be shaped by the
+   interface, not only by the implementation.
+3. [ ] Add `definition_at`.
+   `ModuleTypings` should carry enough exported symbol origin data to answer
+   cross-module jumps precisely.
+4. [ ] Add match coverage diagnostics.
+   Exhaustiveness and redundancy should become structured diagnostics, not just
+   future nice-to-haves.
+5. [ ] Keep climbing the real package ladder.
+   Use `colors`, `tty`, `mime`, `kernel`, and `std` as the ratchet for the next
+   type-system gaps.
+
 ### Engine
 
 - [x] Collapse summary state around one canonical `ModuleTypings`.
   The host-facing reusable artifact now lives in `ModuleTypings`; `FileSummary`
   stays as the per-source query result.
-- [ ] Make rooted snapshot preparation real.
-  `Session.prepare_snapshot` should do dependency discovery, hydrate required
-  module typings, and return `MissingRequirements` early when needed.
+- [x] Make rooted snapshot preparation real.
+  `Session.prepare_snapshot` now does dependency discovery, hydrates required
+  module typings from `Typ.Store`, and returns `MissingRequirements` early when
+  needed.
+- [x] Make `riot check` use `Typ.Store` end to end.
+  The CLI should hydrate from persisted module typings and save fresh module
+  typings after successful checks.
+- [x] Make `riot-lsp` use `Typ.Store` end to end.
+  Editor snapshots should benefit from the same persisted module typings instead
+  of relying only on ad hoc loaded modules.
 - [ ] Stop relying on ambient fake knowledge where real loaded module typings
   should be used instead.
+- [ ] Tighten `ModuleTypings` provenance.
+  Dependency fingerprints and export identity should be strong enough to verify
+  reuse and invalidation cleanly.
 
 ### Interfaces and exports
 
@@ -145,6 +177,7 @@ Use for:
 - [ ] Keep `diagnostics` stable over rooted snapshots.
 - [ ] Make `type_at` and related index-backed queries line up with the manual.
 - [ ] Add `definition_at` support built on origins and exported symbol data.
+- [ ] Add `hover` and richer scope/environment queries.
 - [ ] Keep `riot-lsp` aligned with rooted snapshots instead of relying forever
   on the compatibility `Session.snapshot` path.
 
@@ -159,6 +192,12 @@ Use for:
   - one pattern rule
   - one labeled-argument behavior
   - one module/signature behavior
+- [ ] Add real match coverage diagnostics.
+  Exhaustiveness and redundancy need both semantics and diagnostics coverage.
+- [ ] Add polymorphic variants.
+- [ ] Add GADT-aware pattern refinement.
+- [ ] Add stronger signature and module-calculus behavior:
+  functors, `with type`, first-class modules, recursive modules.
 
 ### Tests and diagnostics
 
@@ -240,6 +279,8 @@ Check:
 - human diagnostics still look right
 - JSON still emits per-file events, including clean-file events
 - sibling modules still resolve correctly at package scope
+- persisted module typings hydrate when available
+- successful checks can write reusable module typings back to the store
 
 Main integration point:
 
@@ -263,6 +304,7 @@ Check:
 - spans still map to correct UTF-16 ranges
 - package-scoped typing still matches `riot check`
 - no JSON-RPC protocol noise leaks into stdout
+- persisted module typings hydrate consistently with `riot check`
 
 Main integration point:
 
