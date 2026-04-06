@@ -197,6 +197,35 @@ let test_snapshot_collects_persisted_summaries = fun _ctx ->
   let () = Test.assert_equal ~expected:[ "trusted_export"; "errored_export" ] ~actual:tags in
   Ok ()
 
+let test_snapshot_module_summaries_are_canonical_per_module = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, _impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = 42\n" in
+  let (session, _intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let module_names =
+    module_summary_jsons snapshot
+    |> List.filter_map
+      (
+        function
+        | Data.Json.Object fields -> (
+            match List.assoc_opt "module_name" fields with
+            | Some (Data.Json.String module_name) -> Some module_name
+            | _ -> None
+          )
+        | _ -> None
+      )
+  in
+  let () = Test.assert_equal ~expected:[ "Colors" ] ~actual:module_names in
+  Ok ()
+
 let test_source_input_hash_ignores_source_id_and_revision = fun _ctx ->
   let source_a = Source.make
     ~source_id:(SourceId.of_int 0)
@@ -1021,6 +1050,9 @@ let () =
         Test.case "type_at uses smallest indexed expression" test_type_at_uses_smallest_indexed_expression;
         Test.case "snapshot exposes implicit file modules" test_snapshot_exposes_implicit_file_modules;
         Test.case "snapshot collects persisted summaries" test_snapshot_collects_persisted_summaries;
+        Test.case
+          "snapshot module summaries are canonical per module"
+          test_snapshot_module_summaries_are_canonical_per_module;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
         Test.case "snapshot uses sibling source record types" test_snapshot_uses_sibling_source_record_types;

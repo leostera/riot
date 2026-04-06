@@ -61,6 +61,37 @@ let loaded_ambient_type_decls_for = fun (slot: analysis_slot) ->
     (fun summary -> ModuleSummary.type_decls summary |> qualify_type_decls (ModuleSummary.module_name summary))
   |> List.flatten
 
+let source_extension = fun (source: Source.t) ->
+  match source.origin with
+  | Source.Path path -> Path.extension path
+  | Source.Label label -> Path.v label |> Path.extension
+
+let summary_slot_rank = fun (slot: analysis_slot) ->
+  match source_extension slot.source with
+  | Some ".ml" -> 0
+  | Some ".mli" -> 1
+  | _ -> 2
+
+let prefer_summary_slot = fun existing candidate ->
+  summary_slot_rank candidate < summary_slot_rank existing
+
+let canonical_summary_slots = fun slots ->
+  let rec loop order selected = function
+    | [] ->
+        order |> List.rev |> List.filter_map (fun module_name -> List.assoc_opt module_name selected)
+    | (slot: analysis_slot) :: tail ->
+        let module_name = Source.module_name slot.source in
+        let (order, selected) =
+          match List.assoc_opt module_name selected with
+          | None -> (module_name :: order, (module_name, slot) :: selected)
+          | Some existing when prefer_summary_slot existing slot ->
+              (order, (module_name, slot) :: List.remove_assoc module_name selected)
+          | Some _ -> (order, selected)
+        in
+        loop order selected tail
+  in
+  loop [] [] slots
+
 let force_base_analysis = fun (slot: analysis_slot) ->
   match slot.base_analysis with
   | Some analysis -> analysis
@@ -91,6 +122,7 @@ and qualified_summaries = fun (snapshot: t) ?(visiting = []) () ->
   | _ ->
       let summaries =
         snapshot.analyses
+        |> canonical_summary_slots
         |> List.map (qualified_summary_of snapshot visiting)
       in
       let () =
@@ -145,12 +177,15 @@ let file_summaries = fun snapshot ->
 let persisted_summaries = fun snapshot -> file_summaries snapshot |> List.map PersistedSummary.of_file_summary
 
 let module_summaries = fun snapshot ->
-  analyses snapshot
+  snapshot.analyses
+  |> List.filter (fun (slot: analysis_slot) -> is_root snapshot slot.source_id)
+  |> canonical_summary_slots
   |> List.map
-    (fun (analysis: SourceAnalysis.t) ->
+    (fun (slot: analysis_slot) ->
+      let analysis = force_analysis snapshot slot in
       ModuleSummary.make
-        ~module_name:(Source.module_name analysis.source)
-        ~source_hash:(Source.input_hash analysis.source)
+        ~module_name:(Source.module_name slot.source)
+        ~source_hash:(Source.input_hash slot.source)
         ~summary:(PersistedSummary.of_file_summary analysis.file_summary))
 
 let find_analysis = fun snapshot source_id ->
