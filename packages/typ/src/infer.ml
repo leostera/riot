@@ -15,6 +15,11 @@ type record_type_decl = {
   labels: TypeDecl.label list;
 }
 
+type variance =
+  | Covariant
+  | Contravariant
+  | Invariant
+
 type state = {
   file: SemanticTree.file;
   config: TypConfig.t;
@@ -24,6 +29,7 @@ type state = {
   mutable expr_traces: Check_result.expr_trace list;
   mutable item_traces: Check_result.item_trace list;
   mutable record_types: record_type_decl list;
+  mutable visible_type_decls: FileSummary.type_decl list;
   mutable forced_export_names: string list;
 }
 
@@ -114,6 +120,7 @@ let make_state = fun ~config file ->
     expr_traces = [];
     item_traces = [];
     record_types = config.ambient_type_decls |> List.filter_map record_type_of_summary_decl |> unique_record_types;
+    visible_type_decls = config.ambient_type_decls;
     forced_export_names = [];
   }
 
@@ -397,9 +404,190 @@ let local_generalizable_vars = fun env ty ->
   let ty_free = TypeRepr.free_vars ty in
   TypeRepr.diff ty_free env_free |> List.rev
 
-let relaxed_generalizable_vars = fun env ty ->
+let flip_variance = function
+  | Covariant -> Contravariant
+  | Contravariant -> Covariant
+  | Invariant -> Invariant
+
+let join_variance = fun left right ->
+  match (left, right) with
+  | (Invariant, _)
+  | (_, Invariant) -> Invariant
+  | (Covariant, Covariant) -> Covariant
+  | (Contravariant, Contravariant) -> Contravariant
+  | (Covariant, Contravariant)
+  | (Contravariant, Covariant) -> Invariant
+
+let compose_variance = fun outer inner ->
+  match (outer, inner) with
+  | (Invariant, _)
+  | (_, Invariant) -> Invariant
+  | (Covariant, variance) -> variance
+  | (Contravariant, Covariant) -> Contravariant
+  | (Contravariant, Contravariant) -> Covariant
+
+let add_variance = fun acc var_id variance ->
+  match List.assoc_opt var_id acc with
+  | Some existing -> (var_id, join_variance existing variance) :: List.remove_assoc var_id acc
+  | None -> (var_id, variance) :: acc
+
+let merge_variances = fun left right ->
+  List.fold_left (fun acc (var_id, variance) -> add_variance acc var_id variance) left right
+
+let visible_type_decl = fun (state: state) name ->
+  List.find_opt
+    (fun (type_decl: FileSummary.type_decl) ->
+      String.equal (type_decl_key type_decl) name)
+    state.visible_type_decls
+
+let constructor_payload_types = fun (constructor: TypeDecl.constructor) ->
+  let rec loop acc ty =
+    match TypeRepr.prune ty with
+    | TypeRepr.Arrow { lhs; rhs; _ } -> loop (lhs :: acc) rhs
+    | _ -> List.rev acc
+  in
+  match constructor.scheme with
+  | TypeScheme.Forall (_, body) -> loop [] body
+
+(* Relaxed value restriction needs declaration-aware variance for lowered
+   nominal types. Unknown or recursive declarations stay invariant so the
+   approximation remains sound. *)
+let type_variance_helpers = fun (state: state) ->
+  let rec collect_type_variances visiting variance ty =
+    match TypeRepr.prune ty with
+    | TypeRepr.Int
+    | TypeRepr.Float
+    | TypeRepr.Bool
+    | TypeRepr.String
+    | TypeRepr.Char
+    | TypeRepr.Unit
+    | TypeRepr.Hole _ ->
+        []
+    | TypeRepr.Option element
+    | TypeRepr.List element
+    | TypeRepr.Seq element ->
+        collect_type_variances visiting variance element
+    | TypeRepr.Result (ok_ty, error_ty) ->
+        merge_variances
+          (collect_type_variances visiting variance ok_ty)
+          (collect_type_variances visiting variance error_ty)
+    | TypeRepr.Array element ->
+        collect_type_variances visiting Invariant element
+    | TypeRepr.Named { name; arguments } ->
+        let parameter_variances =
+          match visible_type_decl state name with
+          | Some type_decl ->
+              if List.mem name visiting then
+                List.map (fun _ -> Invariant) type_decl.declaration.param_ids
+              else
+                declaration_param_variances (name :: visiting) type_decl
+          | None ->
+              List.map (fun _ -> Invariant) arguments
+        in
+        let rec loop acc arguments parameter_variances =
+          match (arguments, parameter_variances) with
+          | (argument :: rest_arguments, parameter_variance :: rest_variances) ->
+              loop
+                (merge_variances
+                   acc
+                   (collect_type_variances
+                      visiting
+                      (compose_variance variance parameter_variance)
+                      argument))
+                rest_arguments
+                rest_variances
+          | _ -> acc
+        in
+        loop [] arguments parameter_variances
+    | TypeRepr.Tuple members ->
+        List.fold_left
+          (fun acc member ->
+            merge_variances acc (collect_type_variances visiting variance member))
+          []
+          members
+    | TypeRepr.Arrow { lhs; rhs; _ } ->
+        merge_variances
+          (collect_type_variances visiting (flip_variance variance) lhs)
+          (collect_type_variances visiting variance rhs)
+    | TypeRepr.Var var -> (
+        match var.link with
+        | Some linked -> collect_type_variances visiting variance linked
+        | None -> [ (var.id, variance) ]
+      )
+  and declaration_param_variances visiting (type_decl: FileSummary.type_decl) =
+    let declaration = type_decl.declaration in
+    let manifest_variances =
+      match declaration.manifest with
+      | Some (TypeDecl.Alias manifest_type) ->
+          collect_type_variances visiting Covariant manifest_type
+      | Some (TypeDecl.PolyVariant { tags; inherited; _ }) ->
+          let tag_variances =
+            tags
+            |> List.fold_left
+              (fun acc (tag: TypeDecl.poly_variant_tag) ->
+                match tag.payload_type with
+                | Some payload_type ->
+                    merge_variances acc (collect_type_variances visiting Covariant payload_type)
+                | None -> acc)
+              []
+          in
+          inherited
+          |> List.fold_left
+            (fun acc inherited_type ->
+              merge_variances acc (collect_type_variances visiting Covariant inherited_type))
+            tag_variances
+      | None ->
+          []
+    in
+    let constructor_variances =
+      declaration.constructors
+      |> List.fold_left
+        (fun acc constructor ->
+          constructor_payload_types constructor
+          |> List.fold_left
+            (fun acc payload_type ->
+              merge_variances acc (collect_type_variances visiting Covariant payload_type))
+            acc)
+        []
+    in
+    let label_variances =
+      declaration.labels
+      |> List.fold_left
+        (fun acc (label: TypeDecl.label) ->
+          let field_variance =
+            if label.mutable_ then
+              Invariant
+            else
+              Covariant
+          in
+          merge_variances acc (collect_type_variances visiting field_variance label.field_type))
+        []
+    in
+    let variances =
+      merge_variances manifest_variances (merge_variances constructor_variances label_variances)
+    in
+    declaration.param_ids
+    |> List.map
+      (fun param_id ->
+        match List.assoc_opt param_id variances with
+        | Some variance -> variance
+        | None -> Invariant)
+  in
+  collect_type_variances
+
+let covariant_vars_of_type = fun (state: state) ty ->
+  let collect_type_variances = type_variance_helpers state in
+  collect_type_variances [] Covariant ty
+  |> List.filter_map
+    (fun (var_id, variance) ->
+      match variance with
+      | Covariant -> Some var_id
+      | Contravariant
+      | Invariant -> None)
+
+let relaxed_generalizable_vars = fun (state: state) env ty ->
   let local_vars = local_generalizable_vars env ty in
-  let covariant_vars = TypeRepr.covariant_vars ty in
+  let covariant_vars = covariant_vars_of_type state ty in
   List.filter
     (fun var_id ->
       List.mem var_id covariant_vars)
@@ -501,7 +689,7 @@ let generalize_binding = fun (state: state) env expr_id ty ->
     if is_nonexpansive_expr state expr_id then
       local_generalizable_vars env ty
     else
-      relaxed_generalizable_vars env ty
+      relaxed_generalizable_vars state env ty
   in
   generalize_with_quantifiers quantified ty
 
@@ -1429,6 +1617,9 @@ let env_for_item_scope = fun export_env scope_entries scope_opens scope_path ->
   let base_env = bind_env export_env locals in
   scope_opens_for scope_opens scope_path |> List.fold_left env_with_local_open base_env
 
+let set_visible_type_decls = fun (state: state) type_decls ->
+  state.visible_type_decls <- bind_type_decls state.config.ambient_type_decls type_decls
+
 let infer_file = fun ~config file ->
   let state = make_state ~config file in
   let initial_env = bind_env config.prelude config.ambient in
@@ -1469,9 +1660,13 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
+            let type_decls = bind_type_decls type_decls introduced_type_decls in
+            let () =
+              set_visible_type_decls state type_decls
+            in
             loop
               export_state
-              (bind_type_decls type_decls introduced_type_decls)
+              type_decls
               scope_entries
               scope_opens
               rest
@@ -1554,9 +1749,13 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
+            let type_decls = bind_type_decls type_decls introduced_type_decls in
+            let () =
+              set_visible_type_decls state type_decls
+            in
             loop
               export_state
-              (bind_type_decls type_decls introduced_type_decls)
+              type_decls
               scope_entries
               scope_opens
               rest
@@ -1606,9 +1805,13 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
+            let type_decls = bind_type_decls type_decls introduced_type_decls in
+            let () =
+              set_visible_type_decls state type_decls
+            in
             loop
               export_state
-              (bind_type_decls type_decls introduced_type_decls)
+              type_decls
               scope_entries
               scope_opens
               rest

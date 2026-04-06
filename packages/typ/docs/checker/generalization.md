@@ -178,6 +178,11 @@ For the OCaml-aligned contract, this includes the relaxed value restriction:
 expansive bindings may still generalize variables that remain provably safe
 under variance constraints.
 
+For lowered nominal data, that means ordinary aliases, variants, and immutable
+record fields should contribute declaration-aware variance information.
+Abstract or recursively self-dependent declarations may conservatively fall
+back to invariant parameters until a stronger variance proof exists.
+
 That means this is acceptable as a target shape:
 
 ```text

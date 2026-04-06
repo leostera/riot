@@ -970,6 +970,48 @@ let test_expansive_covariant_lists_still_generalize = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "'a. 'a list") ~actual:xs_type in
     Ok ()
 
+let test_expansive_covariant_nominal_types_still_generalize = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source =
+    "type 'a box = Box of 'a list\n"
+    ^ "let make _ = Box []\n"
+    ^ "let boxed = make ()\n"
+  in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "nominal_value_restriction.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let boxed_type = export_scheme snapshot source_id "boxed" in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a box") ~actual:boxed_type in
+    Ok ()
+
+let test_expansive_covariant_record_types_still_generalize = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source =
+    "type 'a box = { items: 'a list }\n"
+    ^ "let make _ = { items = [] }\n"
+    ^ "let boxed = make ()\n"
+  in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "record_value_restriction.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let boxed_type = export_scheme snapshot source_id "boxed" in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a box") ~actual:boxed_type in
+    Ok ()
+
 let () =
   Actors.run
     ~main:(fun ~args ->
@@ -1001,6 +1043,12 @@ let () =
         Test.case "expansive bindings stay monomorphic" test_expansive_bindings_stay_monomorphic;
         Test.case "nonexpansive list bindings still generalize" test_nonexpansive_list_bindings_still_generalize;
         Test.case "expansive covariant lists still generalize" test_expansive_covariant_lists_still_generalize;
+        Test.case
+          "expansive covariant nominal types still generalize"
+          test_expansive_covariant_nominal_types_still_generalize;
+        Test.case
+          "expansive covariant record types still generalize"
+          test_expansive_covariant_record_types_still_generalize;
         Test.case "fun cases keep preceding parameters in scope" test_fun_cases_keep_preceding_parameters;
         Test.case "records flow through snapshot queries" test_records_flow_through_snapshot_queries;
       ]
