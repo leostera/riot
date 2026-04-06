@@ -1,0 +1,16 @@
+[package]
+name = "contentstore"
+version = "0.0.12"
+description = "Generic content-addressable storage primitives"
+license = "Apache-2.0"
+public = false
+
+[lib]
+path = "src/contentstore.ml"
+
+[dependencies]
+std = "*"
+
+[[bin]]
+name = "store_tests"
+path = "tests/store_tests.ml"

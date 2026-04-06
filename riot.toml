@@ -3,6 +3,7 @@ members = [
   "packages/blink",
   "packages/ceibo",
   "packages/colors",
+  "packages/contentstore",
   "packages/fixme",
   "packages/gooey",
   "packages/hello-foreign",

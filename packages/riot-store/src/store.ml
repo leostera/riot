@@ -2,12 +2,13 @@ open Std
 open Std.Iter
 open Std.Collections
 open Riot_model
+module ContentStore = Contentstore.Store
 
 (** Store - Content-addressable storage for build artifacts **)
 module Manifest = Manifest
 
 type t = {
-  root_dir: Path.t;  (* Root directory for the store *)
+  content_store: ContentStore.t;
 }
 
 type error = string
@@ -21,25 +22,18 @@ type export_entry = Manifest.export_entry = {
 (** Create a store rooted at a specific build lane *)
 let create_for_lane = fun ~(workspace:Workspace.t) ~profile ~target ->
   let store_dir = Path.(workspace.target_dir_root / Path.v profile / Path.v target / Path.v "cache") in
-  Fs.create_dir_all store_dir
-  |> Result.expect ~msg:(("Failed to create store directory: " ^ Path.to_string store_dir));
-  { root_dir = store_dir }
+  { content_store = ContentStore.create ~root_dir:store_dir }
 
 (** Create a new store for the given workspace *)
 let create = fun ~(workspace:Workspace.t) ->
   create_for_lane ~workspace ~profile:"debug" ~target:(Riot_dirs.host_target ())
 
 (** Get the path for a given hash in the store *)
-let get_hash_dir = fun store hash -> Path.(store.root_dir / Path.v (Std.Crypto.Digest.hex hash))
+let get_hash_dir = fun store hash -> ContentStore.hash_dir_of store.content_store hash
 
 let manifest_path = fun hash_dir -> Path.(hash_dir / Path.v "manifest.json")
 
 let manifest_cache_key = fun hash -> Std.Crypto.Digest.hex hash
-
-let plans_dir = fun store -> Path.(store.root_dir / Path.v "plans")
-
-let plan_path = fun store hash ->
-  Path.(plans_dir store / Path.v (Std.Crypto.Digest.hex hash ^ ".json"))
 
 (** Check if artifacts for a given hash exist in the store *)
 let exists = fun store hash ->
@@ -81,7 +75,7 @@ let store_artifacts = fun store ~package ?(ocamlc_warnings = []) ?(exports = [])
   let temp_dir =
     let nanos = Time.SystemTime.duration_since_epoch () |> Time.Duration.to_nanos in
     let temp_name = Std.Crypto.Digest.hex hash ^ ".tmp." ^ Int64.to_string nanos in
-    Path.(store.root_dir / Path.v temp_name)
+    Path.(ContentStore.root_dir store.content_store / Path.v temp_name)
   in
   Fs.create_dir_all temp_dir
   |> Result.expect ~msg:(("Failed to create temp directory: " ^ Path.to_string temp_dir));
@@ -119,10 +113,7 @@ let store_artifacts = fun store ~package ?(ocamlc_warnings = []) ?(exports = [])
     ~files:(List.rev stored_files_with_sizes) in
   Manifest.save manifest ~path:(manifest_path temp_dir) |> Result.expect ~msg:"Failed to save manifest";
   let commit_result =
-    if exists store hash then
-      Ok ()
-    else
-      Fs.rename ~src:temp_dir ~dst:hash_dir
+    ContentStore.commit_dir store.content_store ~hash ~source_dir:temp_dir
   in
   (
     match commit_result with
@@ -155,7 +146,7 @@ let export_source_path = fun store (entry: export_entry) ->
   if Path.is_absolute entry.path then
     None
   else
-    Some Path.(store.root_dir / Path.v entry.action_hash / entry.path)
+    Some Path.(ContentStore.root_dir store.content_store / Path.v entry.action_hash / entry.path)
 
 let load_manifest = fun store ~hash ->
   match Manifest.load ~path:(manifest_path (get_hash_dir store hash)) with
@@ -228,35 +219,14 @@ let get_artifact_dir = fun store artifact -> get_hash_dir store Artifact.(artifa
 let hash_dir_of = fun store hash -> get_hash_dir store hash
 
 let save_plan_bundle = fun store ~hash ~plan ->
-  let plans_root = plans_dir store in
-  Fs.create_dir_all plans_root
-  |> Result.expect ~msg:(("Failed to create plan cache directory: " ^ Path.to_string plans_root));
-  let destination = plan_path store hash in
-  let temp_path =
-    let nanos = Time.SystemTime.duration_since_epoch () |> Time.Duration.to_nanos in
-    Path.(plans_root
-    / Path.v (Std.Crypto.Digest.hex hash ^ ".tmp." ^ Int64.to_string nanos ^ ".json"))
-  in
-  let content = Std.Data.Json.to_string plan in
-  match Fs.write content temp_path with
-  | Error _ -> Error "Failed to write temporary plan bundle"
-  | Ok () -> (
-      match Fs.rename ~src:temp_path ~dst:destination with
-      | Ok () -> Ok ()
-      | Error _ ->
-          let _ = Fs.remove_file temp_path in
-          Error "Failed to commit plan bundle"
-    )
+  ContentStore.save_json_bundle
+    store.content_store
+    ~namespace:"plans"
+    ~hash
+    ~json:plan
 
 let load_plan_bundle = fun store ~hash ->
-  let path = plan_path store hash in
-  match Fs.read path with
-  | Ok content -> (
-      match Std.Data.Json.of_string content with
-      | Ok json -> Some json
-      | Error _ -> None
-    )
-  | Error _ -> None
+  ContentStore.load_json_bundle store.content_store ~namespace:"plans" ~hash
 
 let materialize_package_exports = fun store ~exports ~target_dir ->
   Fs.create_dir_all target_dir

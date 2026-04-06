@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "aa2559e5019d9223"
+dependency_hash = "7123252733e88180"
 
 [[packages]]
 name = "blink"
@@ -21,6 +21,14 @@ dev_dependencies = []
 [[packages]]
 name = "colors"
 root = "packages/colors"
+provenance = { kind = "workspace" }
+dependencies = [{ name = "std", package = { name = "std" } }]
+build_dependencies = []
+dev_dependencies = []
+
+[[packages]]
+name = "contentstore"
+root = "packages/contentstore"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "std", package = { name = "std" } }]
 build_dependencies = []
@@ -358,7 +366,7 @@ dev_dependencies = []
 name = "riot-store"
 root = "packages/riot-store"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "riot-model", package = { name = "riot-model" } }, { name = "std", package = { name = "std" } }]
+dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 
