@@ -438,6 +438,9 @@ let percent_encode_destination = fun text ->
 let normalize_destination = fun text ->
   text |> decode_entities |> normalize_destination_backslashes |> percent_encode_destination
 
+let normalize_autolink_destination = fun text ->
+  text |> decode_entities |> percent_encode_destination
+
 let parse_link_destination_piece = fun text start ->
   let len = String.length text in
   if start >= len then
@@ -734,48 +737,226 @@ let autolink_destination = fun inside ->
   else
     None
 
-let looks_like_raw_html = fun inside ->
-  let len = String.length inside in
-  if len = 0 then
-    false
-  else if inside.[0] = '!' || inside.[0] = '?' then
-    true
-  else
-    let start =
-      if inside.[0] = '/' then
-        1
-      else
-        0
-    in
-    if start >= len then
+let is_ascii_letter = function
+  | 'a' .. 'z' | 'A' .. 'Z' ->
+      true
+  | _ ->
       false
-    else
-      let rec scan index =
-        if index >= len then
-          index
-        else
-          let char = inside.[index] in
-          if
-            (char >= 'a' && char <= 'z')
-            || (char >= 'A' && char <= 'Z')
-            || (char >= '0' && char <= '9')
-            || char = '-'
-          then
-            scan (index + 1)
-          else
-            index
-      in
-      let finish = scan start in
-      if finish <= start then
-        false
-      else if finish >= len then
-        true
+
+let is_html_tag_name_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' ->
+      true
+  | _ ->
+      false
+
+let is_html_attribute_name_start = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '_' | ':' ->
+      true
+  | _ ->
+      false
+
+let is_html_attribute_name_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | ':' | '-' ->
+      true
+  | _ ->
+      false
+
+let is_unquoted_html_attribute_value_char = function
+  | ' ' | '\t' | '\n' | '"' | '\'' | '=' | '<' | '>' | '`' ->
+      false
+  | _ ->
+      true
+
+let scan_html_tag_name_at = fun text start ->
+  let len = String.length text in
+  if start >= len || not (is_ascii_letter text.[start]) then
+    None
+  else
+    let rec loop index =
+      if index >= len then
+        index
+      else if is_html_tag_name_char text.[index] then
+        loop (index + 1)
       else
-        match inside.[finish] with
-        | ' ' | '\t' | '\n' | '/' | '>' ->
-            true
-        | _ ->
-            false
+        index
+    in
+    Some (loop (start + 1))
+
+let scan_html_attribute_name_at = fun text start ->
+  let len = String.length text in
+  if start >= len || not (is_html_attribute_name_start text.[start]) then
+    None
+  else
+    let rec loop index =
+      if index >= len then
+        index
+      else if is_html_attribute_name_char text.[index] then
+        loop (index + 1)
+      else
+        index
+    in
+    Some (loop (start + 1))
+
+let scan_html_attribute_value_at = fun text start ->
+  let len = String.length text in
+  if start >= len then
+    None
+  else
+    match text.[start] with
+    | '"' ->
+        let rec loop index =
+          if index >= len then
+            None
+          else if text.[index] = '"' then
+            Some (index + 1)
+          else
+            loop (index + 1)
+        in
+        loop (start + 1)
+    | '\'' ->
+        let rec loop index =
+          if index >= len then
+            None
+          else if text.[index] = '\'' then
+            Some (index + 1)
+          else
+            loop (index + 1)
+        in
+        loop (start + 1)
+    | _ ->
+        if not (is_unquoted_html_attribute_value_char text.[start]) then
+          None
+        else
+          let rec loop index =
+            if index >= len then
+              index
+            else if is_unquoted_html_attribute_value_char text.[index] then
+              loop (index + 1)
+            else
+              index
+          in
+          Some (loop (start + 1))
+
+let skip_html_tag_whitespace = fun text index ->
+  let len = String.length text in
+  let rec skip_spaces_tabs current =
+    if current >= len then
+      current
+    else
+      match text.[current] with
+      | ' ' | '\t' ->
+          skip_spaces_tabs (current + 1)
+      | _ ->
+          current
+  in
+  let after_spaces = skip_spaces_tabs index in
+  if after_spaces < len && text.[after_spaces] = '\n' then
+    skip_spaces_tabs (after_spaces + 1)
+  else
+    after_spaces
+
+let scan_inline_open_tag_end = fun text start ->
+  let len = String.length text in
+  if start >= len || not (Char.equal text.[start] '<') then
+    None
+  else
+    match scan_html_tag_name_at text (start + 1) with
+    | None ->
+        None
+    | Some after_name ->
+        let rec loop index =
+          if index >= len then
+            None
+          else
+            match text.[index] with
+            | '>' ->
+                Some (index + 1)
+            | '/' ->
+                if index + 1 < len && text.[index + 1] = '>' then
+                  Some (index + 2)
+                else
+                  None
+            | ' ' | '\t' | '\n' ->
+                let after_space = skip_html_tag_whitespace text index in
+                if after_space >= len then
+                  None
+                else
+                  (
+                    match text.[after_space] with
+                    | '>' ->
+                        Some (after_space + 1)
+                    | '/' ->
+                        if after_space + 1 < len && text.[after_space + 1] = '>' then
+                          Some (after_space + 2)
+                        else
+                          None
+                    | _ ->
+                        (
+                          match scan_html_attribute_name_at text after_space with
+                          | None ->
+                              None
+                          | Some after_attribute_name ->
+                              let after_gap =
+                                skip_html_tag_whitespace text after_attribute_name
+                              in
+                              let after_attribute =
+                                if
+                                  after_gap < len
+                                  && text.[after_gap] = '='
+                                then
+                                  let value_start =
+                                    skip_html_tag_whitespace text (after_gap + 1)
+                                  in
+                                  scan_html_attribute_value_at text value_start
+                                else
+                                  Some after_attribute_name
+                              in
+                              (
+                                match after_attribute with
+                                | Some next -> loop next
+                                | None -> None
+                              )
+                        )
+                  )
+            | _ ->
+                None
+        in
+        loop after_name
+
+let scan_inline_closing_tag_end = fun text start ->
+  let len = String.length text in
+  if start + 2 > len || not (starts_with ~prefix:"</" text start) then
+    None
+  else
+    match scan_html_tag_name_at text (start + 2) with
+    | None ->
+        None
+    | Some after_name ->
+        let after_name = skip_html_tag_whitespace text after_name in
+        if after_name < len && text.[after_name] = '>' then
+          Some (after_name + 1)
+        else
+          None
+
+let scan_inline_html_end = fun text start ->
+  if starts_with ~prefix:"<!-->" text start then
+    Some (start + 5)
+  else if starts_with ~prefix:"<!--->" text start then
+    Some (start + 6)
+  else if starts_with ~prefix:"<!--" text start then
+    Option.map (fun close -> close + 3) (find_substring text (start + 4) "-->")
+  else if starts_with ~prefix:"<?" text start then
+    Option.map (fun close -> close + 2) (find_substring text (start + 2) "?>")
+  else if starts_with ~prefix:"<![CDATA[" text start then
+    Option.map (fun close -> close + 3) (find_substring text (start + 9) "]]>")
+  else if start + 2 < String.length text && starts_with ~prefix:"<!" text start && is_ascii_letter text.[start + 2] then
+    Option.map (fun close -> close + 1) (find_substring text (start + 2) ">")
+  else
+    match scan_inline_open_tag_end text start with
+    | Some ending ->
+        Some ending
+    | None ->
+        scan_inline_closing_tag_end text start
 
 let trailing_space_count = fun text ->
   let rec loop index count =
@@ -1343,23 +1524,26 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                       (inline_stack_push
                          (Link {
                          label = [ Text inside ];
-                         destination = normalize_destination destination;
+                         destination = normalize_autolink_destination destination;
                          title = None;
                        })
                          acc)
                 | None ->
-                    if looks_like_raw_html inside then
-                      loop
-                        (close + 1)
-                        (inline_stack_push (Raw_html (String.sub text index (close - index + 1))) acc)
-                    else
-                      loop
-                        (close + 1)
-                        (inline_stack_push_text
-                           (String.sub text index (close - index + 1)
-                            |> unescape_backslashes
-                            |> decode_entities)
-                           acc)
+                    (
+                      match scan_inline_html_end text index with
+                      | Some html_end ->
+                          loop
+                            html_end
+                            (inline_stack_push (Raw_html (String.sub text index (html_end - index))) acc)
+                      | None ->
+                          loop
+                            (close + 1)
+                            (inline_stack_push_text
+                               (String.sub text index (close - index + 1)
+                                |> unescape_backslashes
+                                |> decode_entities)
+                               acc)
+                    )
               )
         )
       else if text.[index] = '&' then

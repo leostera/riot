@@ -970,6 +970,24 @@ let is_html_tag_name_char = function
   | _ ->
       false
 
+let is_html_attribute_name_start = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '_' | ':' ->
+      true
+  | _ ->
+      false
+
+let is_html_attribute_name_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | ':' | '-' ->
+      true
+  | _ ->
+      false
+
+let is_unquoted_html_attribute_value_char = function
+  | ' ' | '\t' | '"' | '\'' | '=' | '<' | '>' | '`' ->
+      false
+  | _ ->
+      true
+
 let html_tag_boundary = fun text index ->
   let len = String.length text in
   if index >= len then
@@ -1001,6 +1019,129 @@ let scan_html_tag_name = fun text start ->
       None
     else
       Some (String.sub text start (finish - start) |> String.lowercase_ascii, finish)
+
+let scan_html_attribute_name = fun text start ->
+  let len = String.length text in
+  if start >= len || not (is_html_attribute_name_start text.[start]) then
+    None
+  else
+    let rec loop index =
+      if index >= len then
+        index
+      else if is_html_attribute_name_char text.[index] then
+        loop (index + 1)
+      else
+        index
+    in
+    Some (loop (start + 1))
+
+let scan_html_attribute_value = fun text start ->
+  let len = String.length text in
+  if start >= len then
+    None
+  else
+    match text.[start] with
+    | '"' ->
+        let rec loop index =
+          if index >= len then
+            None
+          else if text.[index] = '"' then
+            Some (index + 1)
+          else
+            loop (index + 1)
+        in
+        loop (start + 1)
+    | '\'' ->
+        let rec loop index =
+          if index >= len then
+            None
+          else if text.[index] = '\'' then
+            Some (index + 1)
+          else
+            loop (index + 1)
+        in
+        loop (start + 1)
+    | _ ->
+        if not (is_unquoted_html_attribute_value_char text.[start]) then
+          None
+        else
+          let rec loop index =
+            if index >= len then
+              index
+            else if is_unquoted_html_attribute_value_char text.[index] then
+              loop (index + 1)
+            else
+              index
+          in
+          Some (loop (start + 1))
+
+let scan_html_open_tag_end = fun text ->
+  let len = String.length text in
+  if len = 0 || char_not text.[0] '<' then
+    None
+  else
+    match scan_html_tag_name text 1 with
+    | None ->
+        None
+    | Some (tag, after_name) ->
+        let rec loop index =
+          if index >= len then
+            None
+          else
+            match text.[index] with
+            | '>' ->
+                Some (tag, index + 1)
+            | '/' ->
+                if index + 1 < len && text.[index + 1] = '>' then
+                  Some (tag, index + 2)
+                else
+                  None
+            | ' ' | '\t' ->
+                let after_space = skip_spaces_tabs text index in
+                if after_space >= len then
+                  None
+                else
+                  (
+                    match text.[after_space] with
+                    | '>' ->
+                        Some (tag, after_space + 1)
+                    | '/' ->
+                        if after_space + 1 < len && text.[after_space + 1] = '>' then
+                          Some (tag, after_space + 2)
+                        else
+                          None
+                    | _ ->
+                        (
+                          match scan_html_attribute_name text after_space with
+                          | None ->
+                              None
+                          | Some after_attribute_name ->
+                              let after_gap =
+                                skip_spaces_tabs text after_attribute_name
+                              in
+                              let after_attribute =
+                                if
+                                  after_gap < len
+                                  && text.[after_gap] = '='
+                                then
+                                  let value_start =
+                                    skip_spaces_tabs text (after_gap + 1)
+                                  in
+                                  scan_html_attribute_value text value_start
+                                else
+                                  Some after_attribute_name
+                              in
+                              (
+                                match after_attribute with
+                                | Some next -> loop next
+                                | None -> None
+                              )
+                        )
+                  )
+            | _ ->
+                None
+        in
+        loop after_name
 
 let type_1_html_block = fun trimmed lowered ->
   let type_1_prefix = fun prefix terminator ->
@@ -1048,52 +1189,39 @@ let type_7_html_block = fun trimmed ->
   let len = String.length trimmed in
   if len = 0 || char_not trimmed.[0] '<' then
     None
-  else if len >= 2 && (trimmed.[1] = '!' || trimmed.[1] = '?') then
-    None
-  else
-    let closing = len >= 2 && trimmed.[1] = '/' in
-    let start = if closing then 2 else 1 in
-    match scan_html_tag_name trimmed start with
-    | None ->
-        None
-    | Some (tag, index) ->
-        if (not closing) && (tag = "pre" || tag = "script" || tag = "style" || tag = "textarea") then
+  else if len >= 2 then
+    if trimmed.[1] = '!' || trimmed.[1] = '?' then
+      None
+    else
+      let closing = trimmed.[1] = '/' in
+      let start = if closing then 2 else 1 in
+      match scan_html_tag_name trimmed start with
+      | None ->
           None
-        else if closing then
-          let after_name = skip_spaces_tabs trimmed index in
-          if after_name < len && trimmed.[after_name] = '>' then
-            let rest = skip_spaces_tabs trimmed (after_name + 1) in
-            if rest = len then Some Html_block_7 else None
-          else
+      | Some (tag, index) ->
+          if
+            (not closing)
+            && (tag = "pre" || tag = "script" || tag = "style" || tag = "textarea")
+          then
             None
-        else
-          let rec find_close current quote =
-            if current >= len then
-              None
+          else if closing then
+            let after_name = skip_spaces_tabs trimmed index in
+            if after_name < len && trimmed.[after_name] = '>' then
+              let rest = skip_spaces_tabs trimmed (after_name + 1) in
+              if rest = len then Some Html_block_7 else None
             else
-              match quote with
-              | Some quote ->
-                  if trimmed.[current] = quote then
-                    find_close (current + 1) None
-                  else
-                    find_close (current + 1) (Some quote)
+              None
+          else
+            (
+              match scan_html_open_tag_end trimmed with
+              | Some (_, after_close) ->
+                  let rest = skip_spaces_tabs trimmed after_close in
+                  if rest = len then Some Html_block_7 else None
               | None ->
-                  match trimmed.[current] with
-                  | '"' | '\'' ->
-                      find_close (current + 1) (Some trimmed.[current])
-                  | '>' ->
-                      Some (current + 1)
-                  | _ ->
-                      find_close (current + 1) None
-          in
-          (
-            match find_close index None with
-            | Some after_close ->
-                let rest = skip_spaces_tabs trimmed after_close in
-                if rest = len then Some Html_block_7 else None
-            | None ->
-                None
-          )
+                  None
+            )
+  else
+        None
 
 let classify_html_block_start = fun line ->
   let trimmed = trim_left line in
@@ -1111,14 +1239,22 @@ let classify_html_block_start = fun line ->
           Some Html_block_3
         else if starts_with_ascii ~prefix:"<![CDATA[" trimmed then
           Some Html_block_5
-        else if starts_with_ascii ~prefix:"<!" trimmed && len >= 3 && is_ascii_letter trimmed.[2] then
-          Some Html_block_4
         else
-          (
-            match type_6_html_block trimmed with
-            | Some kind -> Some kind
-            | None -> type_7_html_block trimmed
-          )
+          if starts_with_ascii ~prefix:"<!" trimmed then
+            if len >= 3 && is_ascii_letter trimmed.[2] then
+              Some Html_block_4
+            else
+              (
+                match type_6_html_block trimmed with
+                | Some kind -> Some kind
+                | None -> type_7_html_block trimmed
+              )
+          else
+            (
+              match type_6_html_block trimmed with
+              | Some kind -> Some kind
+              | None -> type_7_html_block trimmed
+            )
 
 let rec parse_block_quote = fun flavor lines start ->
   if start >= Array.length lines then
