@@ -359,6 +359,62 @@ let test_query_module_typings_of_uses_canonical_root_typings = fun _ctx ->
   let () = Test.assert_equal ~expected:canonical_json ~actual:intf_json in
   Ok ()
 
+let test_paired_modules_export_interface_shaped_module_typings = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = 42\nlet hidden = true\n" in
+  let (session, intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let export_names_for source_id =
+    match Query.module_typings_of snapshot source_id with
+    | None -> []
+    | Some typings -> ModuleTypings.exports typings |> List.map fst
+  in
+  let () = Test.assert_equal ~expected:[ "answer" ] ~actual:(export_names_for impl_source_id) in
+  let () = Test.assert_equal ~expected:[ "answer" ] ~actual:(export_names_for intf_source_id) in
+  Ok ()
+
+let test_paired_modules_report_signature_inclusion_mismatches = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer = true\n" in
+  let (session, intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"val answer : int\n" in
+  let snapshot = Session.snapshot session in
+  let has_signature_error source_id =
+    Query.diagnostics snapshot source_id
+    |> List.exists
+      (
+        function
+        | Query.Typing (Diagnostic.SignatureInclusionError _) -> true
+        | _ -> false
+      )
+  in
+  let impl_typings =
+    Query.module_typings_of snapshot impl_source_id |> Option.expect ~msg:"missing impl typings"
+  in
+  let intf_typings =
+    Query.module_typings_of snapshot intf_source_id |> Option.expect ~msg:"missing interface typings"
+  in
+  let () = Test.assert_equal ~expected:true ~actual:(has_signature_error impl_source_id) in
+  let () = Test.assert_equal ~expected:true ~actual:(has_signature_error intf_source_id) in
+  let () = Test.assert_equal ~expected:[] ~actual:(ModuleTypings.exports impl_typings |> List.map fst) in
+  let () = Test.assert_equal ~expected:[] ~actual:(ModuleTypings.exports intf_typings |> List.map fst) in
+  Ok ()
+
 let test_source_input_hash_ignores_source_id_and_revision = fun _ctx ->
   let source_a = Source.make
     ~source_id:(SourceId.of_int 0)
@@ -473,6 +529,35 @@ let test_prepare_snapshot_hydrates_module_typings_from_store = fun _ctx ->
             let () = Test.assert_equal ~expected:(Some "int -> int -> int") ~actual:midpoint_type in
             let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
             Ok ())
+
+let test_prepare_snapshot_includes_interface_sibling_dependencies = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, impl_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"let answer value = value\n" in
+  let (session, intf_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.mli")
+    ~text:"open Missing_module\nval answer : int -> int\n" in
+  match Session.prepare_snapshot session ~roots:[ impl_source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to include sibling interface dependencies"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int intf_source_id) ]);
+        ];
+      ]
+      |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
 
 let test_loaded_module_typings_override_store = fun _ctx ->
   with_typ_store
@@ -1432,11 +1517,20 @@ let () =
         Test.case
           "query module_typings_of uses the canonical root typings"
           test_query_module_typings_of_uses_canonical_root_typings;
+        Test.case
+          "paired modules export interface-shaped module typings"
+          test_paired_modules_export_interface_shaped_module_typings;
+        Test.case
+          "paired modules report signature inclusion mismatches"
+          test_paired_modules_report_signature_inclusion_mismatches;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module typings" test_snapshot_uses_loaded_module_typings;
         Test.case
           "prepare_snapshot hydrates module typings from store"
           test_prepare_snapshot_hydrates_module_typings_from_store;
+        Test.case
+          "prepare_snapshot includes interface sibling dependencies"
+          test_prepare_snapshot_includes_interface_sibling_dependencies;
         Test.case
           "loaded module typings override store"
           test_loaded_module_typings_override_store;

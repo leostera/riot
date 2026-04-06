@@ -62,10 +62,10 @@ let all_entries = [
   entry
     ~diagnostic_id:"TYP1010"
     ~name:"unsupported-interface-file"
-    ~summary:".mli interface files are recognized, but the prototype does not lower them into a semantic interface model yet."
+    ~summary:"The checker recognized an interface file shape that still falls outside the currently implemented signature subset."
     ~details:[
-      "This is a prototype boundary, not a parser failure.";
-      "The long-term architecture supports interface-aware exports, but that lane is not implemented in this first cut.";
+      "Basic interface items are lowered today, but some signature forms still recover through structured diagnostics.";
+      "This is a signature-lowering boundary, not a parser failure.";
     ];
   entry
     ~diagnostic_id:"TYP1011"
@@ -130,6 +130,15 @@ let all_entries = [
     ~details:[
       "This is an internal prototype boundary between semantic lowering and inference.";
       "The diagnostic is valuable because it tells us which semantic forms still need inference rules.";
+    ];
+  entry
+    ~diagnostic_id:"TYP2011"
+    ~name:"signature-inclusion-error"
+    ~summary:"A module implementation does not satisfy the value or type declarations required by its interface."
+    ~details:[
+      "This diagnostic is emitted for paired .ml/.mli modules when the implementation fails signature inclusion.";
+      "The structured payload records whether the mismatch came from a missing value, a value-type mismatch, a missing type declaration, or a type-declaration mismatch.";
+      "When signature inclusion fails, the canonical module typings for that module downgrade to no export so downstream reuse stays sound.";
     ];
 ]
 

@@ -46,6 +46,11 @@ type record_resolution_reason =
   | AmbiguousRecordLabels of string list
   | MissingRecordFields of string list
   | IncompatibleRecordLabels of string list
+type signature_mismatch =
+  | MissingValue of { name: string }
+  | ValueTypeMismatch of { name: string; expected: string; actual: string }
+  | MissingTypeDeclaration of { name: string }
+  | TypeDeclarationMismatch of { name: string; expected: string; actual: string }
 type t =
   | CstBuilderError of { builder_error: Syn.CstBuilder.error }
   | UnsupportedSyntax of {
@@ -77,6 +82,11 @@ type t =
       pattern_span: Syn.Ceibo.Span.t;
       expected_names: string list;
       actual_names: string list
+    }
+  | SignatureInclusionError of {
+      mismatch_span: Syn.Ceibo.Span.t;
+      counterpart_span: Syn.Ceibo.Span.t option;
+      mismatch: signature_mismatch
     }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }

@@ -48,6 +48,12 @@ type record_resolution_reason =
   | MissingRecordFields of string list
   | IncompatibleRecordLabels of string list
 
+type signature_mismatch =
+  | MissingValue of { name: string }
+  | ValueTypeMismatch of { name: string; expected: string; actual: string }
+  | MissingTypeDeclaration of { name: string }
+  | TypeDeclarationMismatch of { name: string; expected: string; actual: string }
+
 type t =
   | CstBuilderError of { builder_error: Syn.CstBuilder.error }
   | UnsupportedSyntax of {
@@ -80,6 +86,11 @@ type t =
       expected_names: string list;
       actual_names: string list
     }
+  | SignatureInclusionError of {
+      mismatch_span: Syn.Ceibo.Span.t;
+      counterpart_span: Syn.Ceibo.Span.t option;
+      mismatch: signature_mismatch
+    }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }
 
@@ -97,6 +108,7 @@ let code = function
   | ApplicationLabelMismatch _ -> "TYP2005"
   | RecordResolutionError _ -> "TYP2006"
   | OrPatternBindingsMismatch _ -> "TYP2007"
+  | SignatureInclusionError _ -> "TYP2011"
   | UnsupportedSemanticExpression _ -> "TYP2010"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "TYP2004"
 
@@ -114,6 +126,7 @@ let name = function
   | ApplicationLabelMismatch _ -> "application-label-mismatch"
   | RecordResolutionError _ -> "record-resolution-error"
   | OrPatternBindingsMismatch _ -> "or-pattern-bindings-mismatch"
+  | SignatureInclusionError _ -> "signature-inclusion-error"
   | UnsupportedSemanticExpression _ -> "unsupported-semantic-expression"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive-group-requires-simple-variable-binders"
 
@@ -127,6 +140,7 @@ let severity = function
   | ApplicationLabelMismatch _
   | RecordResolutionError _
   | OrPatternBindingsMismatch _
+  | SignatureInclusionError _
   | UnsupportedSemanticExpression _
   | RecursiveGroupRequiresSimpleVariableBinders _ -> Error
   | ParameterLoweredAsPositional _
@@ -152,6 +166,7 @@ let primary_span = function
   | ApplicationLabelMismatch { application_span; _ } -> application_span
   | RecordResolutionError { operation_span; _ } -> operation_span
   | OrPatternBindingsMismatch { pattern_span; _ } -> pattern_span
+  | SignatureInclusionError { mismatch_span; _ } -> mismatch_span
   | UnsupportedSemanticExpression { expression_span; _ } -> expression_span
   | RecursiveGroupRequiresSimpleVariableBinders { binding_span } -> binding_span
 
@@ -208,6 +223,12 @@ let render_binding_names = fun names ->
   match names with
   | [] -> "(none)"
   | _ -> render_record_labels names
+
+let signature_mismatch_name = function
+  | MissingValue { name } -> "value " ^ name
+  | ValueTypeMismatch { name; _ } -> "value " ^ name
+  | MissingTypeDeclaration { name } -> "type " ^ name
+  | TypeDeclarationMismatch { name; _ } -> "type " ^ name
 
 let message = function
   | CstBuilderError { builder_error } ->
@@ -299,6 +320,27 @@ let message = function
       ^ "; actual: "
       ^ render_binding_names actual_names
       ^ ")"
+  | SignatureInclusionError { mismatch=MissingValue { name }; _ } ->
+      "signature inclusion failed: implementation does not export value "
+      ^ name
+  | SignatureInclusionError { mismatch=ValueTypeMismatch { name; expected; actual }; _ } ->
+      "signature inclusion failed: value "
+      ^ name
+      ^ " has type "
+      ^ actual
+      ^ " but the interface requires "
+      ^ expected
+  | SignatureInclusionError { mismatch=MissingTypeDeclaration { name }; _ } ->
+      "signature inclusion failed: implementation does not export type "
+      ^ name
+  | SignatureInclusionError { mismatch=TypeDeclarationMismatch { name; expected; actual }; _ } ->
+      "signature inclusion failed: type "
+      ^ name
+      ^ " does not match the interface (expected "
+      ^ expected
+      ^ ", got "
+      ^ actual
+      ^ ")"
   | UnsupportedSemanticExpression { summary; _ } ->
       "unsupported semantic expression reached inference: " ^ summary
   | RecursiveGroupRequiresSimpleVariableBinders _ ->
@@ -364,6 +406,28 @@ let record_resolution_reason_to_json = function
   ]
 
 let names_to_json = fun names -> Data.Json.Array (List.map (fun name -> Data.Json.String name) names)
+
+let signature_mismatch_to_json = function
+  | MissingValue { name } -> Data.Json.Object [
+    ("tag", Data.Json.String "missing_value");
+    ("name", Data.Json.String name);
+  ]
+  | ValueTypeMismatch { name; expected; actual } -> Data.Json.Object [
+    ("tag", Data.Json.String "value_type_mismatch");
+    ("name", Data.Json.String name);
+    ("expected", Data.Json.String expected);
+    ("actual", Data.Json.String actual);
+  ]
+  | MissingTypeDeclaration { name } -> Data.Json.Object [
+    ("tag", Data.Json.String "missing_type_declaration");
+    ("name", Data.Json.String name);
+  ]
+  | TypeDeclarationMismatch { name; expected; actual } -> Data.Json.Object [
+    ("tag", Data.Json.String "type_declaration_mismatch");
+    ("name", Data.Json.String name);
+    ("expected", Data.Json.String expected);
+    ("actual", Data.Json.String actual);
+  ]
 
 let unsupported_reason_to_json = function
   | LiteralOutsideSupportedSubset { supported_literals } -> Data.Json.Object [
@@ -434,6 +498,18 @@ let fields_to_json = function
         ("pattern_span", span_to_json pattern_span);
         ("expected_names", names_to_json expected_names);
         ("actual_names", names_to_json actual_names);
+      ]
+  | SignatureInclusionError { mismatch_span; counterpart_span; mismatch } ->
+      let counterpart_json =
+        match counterpart_span with
+        | Some span -> span_to_json span
+        | None -> Data.Json.Null
+      in
+      [
+        ("mismatch_span", span_to_json mismatch_span);
+        ("counterpart_span", counterpart_json);
+        ("mismatch", signature_mismatch_to_json mismatch);
+        ("subject", Data.Json.String (signature_mismatch_name mismatch));
       ]
   | UnsupportedSemanticExpression { expression_span; summary } ->
       [ ("expression_span", span_to_json expression_span); ("summary", Data.Json.String summary); ]

@@ -151,23 +151,22 @@ let collect_missing_module_summaries = fun session roots ->
     |> List.map ModuleTypings.module_name
     |> List.sort_uniq String.compare
   in
-  let local_source_of_module = fun module_name ->
+  let local_source_ids_of_module = fun module_name ->
     session.sources
-    |> List.find_opt
+    |> List.filter
       (
         fun (source: Source.t) ->
           String.equal module_name (Source.module_name source)
       )
-    |> Option.map (fun (source: Source.t) -> source.source_id)
+    |> List.map (fun (source: Source.t) -> source.source_id)
   in
-  let local_nested_module_prefixes = fun source_id ->
-    match List.find_opt
-      (fun (source: Source.t) -> SourceId.equal source.source_id source_id)
-      session.sources
-    with
-    | None -> []
-    | Some source ->
-        declared_modules source
+  let local_nested_module_prefixes = fun module_name ->
+    session.sources
+    |> List.filter
+      (fun (source: Source.t) ->
+        String.equal module_name (Source.module_name source))
+    |> List.concat_map declared_modules
+    |> List.sort_uniq String.compare
   in
   let loaded_nested_module_prefixes = fun module_name ->
     match session.config.loaded_modules
@@ -205,6 +204,25 @@ let collect_missing_module_summaries = fun session roots ->
     in
     loop missing
   in
+  let initial_source_ids =
+    roots
+    |> List.filter_map
+      (
+        fun source_id ->
+          session.sources
+          |> List.find_opt
+            (fun (source: Source.t) -> SourceId.equal source.source_id source_id)
+          |> Option.map
+            (fun (source: Source.t) ->
+              let siblings = local_source_ids_of_module (Source.module_name source) in
+              if List.is_empty siblings then
+                [ source_id ]
+              else
+                siblings)
+      )
+    |> List.flatten
+    |> List.sort_uniq SourceId.compare
+  in
   let rec discover = fun to_visit seen missing ->
     match to_visit with
     | [] -> missing
@@ -225,10 +243,7 @@ let collect_missing_module_summaries = fun session roots ->
                 |> List.concat_map
                   (fun module_name ->
                     let local_nested_modules =
-                      match local_source_of_module module_name with
-                      | Some dependency_source_id ->
-                          local_nested_module_prefixes dependency_source_id
-                      | None -> []
+                      local_nested_module_prefixes module_name
                     in
                     let loaded_nested_modules =
                       if List.mem module_name loaded_module_names then
@@ -247,10 +262,10 @@ let collect_missing_module_summaries = fun session roots ->
                       if List.mem module_name loaded_module_names then
                         (missing, additional)
                       else
-                        match local_source_of_module module_name with
-                        | Some dependency_source_id ->
-                            (missing, dependency_source_id :: additional)
-                        | None ->
+                        match local_source_ids_of_module module_name with
+                        | _ :: _ as dependency_source_ids ->
+                            (missing, dependency_source_ids @ additional)
+                        | [] ->
                             if List.mem module_name dependency_nested_modules then
                               (missing, additional)
                             else
@@ -261,21 +276,7 @@ let collect_missing_module_summaries = fun session roots ->
               discover (additional @ rest) seen missing'
         )
   in
-  let source_ids =
-    roots |> List.filter_map
-      (
-        fun source_id ->
-          if
-            List.exists
-              (fun (source: Source.t) -> SourceId.equal source.source_id source_id)
-              session.sources
-          then
-            Some source_id
-          else
-            None
-      )
-  in
-  let missing = discover source_ids [] [] in
+  let missing = discover initial_source_ids [] [] in
   MissingRequirements.of_list
     (missing
     |> List.map
