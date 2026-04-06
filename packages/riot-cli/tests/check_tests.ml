@@ -506,6 +506,251 @@ let test_check_explicit_workspace_file_loads_dependency_summaries = fun _ctx ->
               Ok ()
         ))
 
+let test_check_package_filter_loads_transitive_workspace_dependency_summaries = fun _ctx ->
+  with_tempdir_result "riot_check_package_transitive_dependencies"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let kernel_root = Path.(workspace_root / Path.v "packages/kernel") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let kernel_env_source = Path.(kernel_root / Path.v "src/env.ml") in
+      let kernel_source = Path.(kernel_root / Path.v "src/kernel.ml") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"kernel"
+            ~path:kernel_root
+            ~relative_path:(Path.v "packages/kernel")
+            ~sources:{ empty_sources with src = [ Path.v "src/env.ml"; Path.v "src/kernel.ml" ] }
+            ();
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~dependencies:[ make_dependency "kernel" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml" ] }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml" ] }
+            ();
+        ] in
+      match write_file kernel_env_source "let getenv_exn name = name\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file kernel_source "module Env = Env\n" with
+          | Error err -> Error err
+          | Ok () -> (
+              match write_file std_source "let sentinel = 21\n" with
+              | Error err -> Error err
+              | Ok () -> (
+                  match write_file app_source "let answer = Kernel.Env.getenv_exn \"TERM\"\n" with
+                  | Error err -> Error err
+                  | Ok () ->
+                      let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
+                      |> Result.expect ~msg:"parse check args" in
+                      let stdout, stdout_contents = make_capture_writer () in
+                      let stderr, stderr_contents = make_capture_writer () in
+                      Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                      |> Result.expect ~msg:"package check should load transitive workspace dependency summaries";
+                      let events = parse_jsonl (stdout_contents ()) in
+                      let file_paths =
+                        events
+                        |> List.filter_map
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_file") -> (
+                                match Data.Json.get_field "result" json with
+                                | Some result_json -> Data.Json.get_field "path" result_json
+                                | None -> None
+                              )
+                            | _ -> None)
+                      in
+                      let diagnostic_count =
+                        events
+                        |> List.filter
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_diagnostic") -> true
+                            | _ -> false)
+                        |> List.length
+                      in
+                      Test.assert_equal
+                        ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
+                        ~actual:file_paths;
+                      Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                      Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                      Ok ()
+                )
+            )
+        ))
+
+let test_check_explicit_workspace_file_loads_transitive_dependency_summaries = fun _ctx ->
+  with_tempdir_result "riot_check_explicit_file_transitive_dependencies"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let kernel_root = Path.(workspace_root / Path.v "packages/kernel") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let kernel_env_source = Path.(kernel_root / Path.v "src/env.ml") in
+      let kernel_source = Path.(kernel_root / Path.v "src/kernel.ml") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"kernel"
+            ~path:kernel_root
+            ~relative_path:(Path.v "packages/kernel")
+            ~sources:{ empty_sources with src = [ Path.v "src/env.ml"; Path.v "src/kernel.ml" ] }
+            ();
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~dependencies:[ make_dependency "kernel" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml" ] }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml" ] }
+            ();
+        ] in
+      match write_file kernel_env_source "let getenv_exn name = name\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file kernel_source "module Env = Env\n" with
+          | Error err -> Error err
+          | Ok () -> (
+              match write_file std_source "let sentinel = 21\n" with
+              | Error err -> Error err
+              | Ok () -> (
+                  match write_file app_source "let answer = Kernel.Env.getenv_exn \"TERM\"\n" with
+                  | Error err -> Error err
+                  | Ok () ->
+                      let matches = parse_check [ "check"; "--json"; Path.to_string app_source ]
+                      |> Result.expect ~msg:"parse check args" in
+                      let stdout, stdout_contents = make_capture_writer () in
+                      let stderr, stderr_contents = make_capture_writer () in
+                      Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                      |> Result.expect ~msg:"explicit workspace file check should load transitive dependency summaries";
+                      let events = parse_jsonl (stdout_contents ()) in
+                      let file_paths =
+                        events
+                        |> List.filter_map
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_file") -> (
+                                match Data.Json.get_field "result" json with
+                                | Some result_json -> Data.Json.get_field "path" result_json
+                                | None -> None
+                              )
+                            | _ -> None)
+                      in
+                      let diagnostic_count =
+                        events
+                        |> List.filter
+                          (fun json ->
+                            match Data.Json.get_field "type" json with
+                            | Some (Data.Json.String "check_diagnostic") -> true
+                            | _ -> false)
+                        |> List.length
+                      in
+                      Test.assert_equal
+                        ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
+                        ~actual:file_paths;
+                      Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                      Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                      Ok ()
+                )
+            )
+        ))
+
+let test_check_package_filter_keeps_dependency_summaries_when_dependency_has_broken_sources = fun _ctx ->
+  with_tempdir_result "riot_check_dependency_summary_fallback"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let support_root = Path.(workspace_root / Path.v "packages/support") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let support_source = Path.(support_root / Path.v "src/support.ml") in
+      let support_broken_source = Path.(support_root / Path.v "src/broken.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"support"
+            ~path:support_root
+            ~relative_path:(Path.v "packages/support")
+            ~sources:{
+              empty_sources with
+              src = [ Path.v "src/support.ml"; Path.v "src/broken.ml" ]
+            }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "support" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml" ] }
+            ();
+        ] in
+      match write_file support_source "let answer = 42\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file support_broken_source "let broken = Missing.answer\n" with
+          | Error err -> Error err
+          | Ok () -> (
+              match write_file app_source "let answer = Support.answer\n" with
+              | Error err -> Error err
+              | Ok () ->
+                  let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
+                  |> Result.expect ~msg:"parse check args" in
+                  let stdout, stdout_contents = make_capture_writer () in
+                  let stderr, stderr_contents = make_capture_writer () in
+                  Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                  |> Result.expect ~msg:"package check should keep dependency summaries from healthy roots";
+                  let events = parse_jsonl (stdout_contents ()) in
+                  let file_paths =
+                    events
+                    |> List.filter_map
+                      (fun json ->
+                        match Data.Json.get_field "type" json with
+                        | Some (Data.Json.String "check_file") -> (
+                            match Data.Json.get_field "result" json with
+                            | Some result_json -> Data.Json.get_field "path" result_json
+                            | None -> None
+                          )
+                        | _ -> None)
+                  in
+                  let diagnostic_count =
+                    events
+                    |> List.filter
+                      (fun json ->
+                        match Data.Json.get_field "type" json with
+                        | Some (Data.Json.String "check_diagnostic") -> true
+                        | _ -> false)
+                    |> List.length
+                  in
+                  Test.assert_equal
+                    ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
+                    ~actual:file_paths;
+                  Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                  Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                  Ok ()
+            )
+        ))
+
 let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = fun _ctx ->
   with_tempdir_result "riot_check_bootstrap_shadow"
     (fun tmpdir ->
@@ -600,8 +845,11 @@ let tests =
     case "check: package filter limits workspace scan" test_check_package_filter_limits_workspace_scan;
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
+    case "check: package filter loads transitive workspace dependency summaries" test_check_package_filter_loads_transitive_workspace_dependency_summaries;
+    case "check: package filter keeps dependency summaries when dependency has broken sources" test_check_package_filter_keeps_dependency_summaries_when_dependency_has_broken_sources;
     case "check: explicit workspace file uses sibling source exports" test_check_explicit_workspace_file_uses_sibling_source_exports;
     case "check: explicit workspace file loads dependency summaries" test_check_explicit_workspace_file_loads_dependency_summaries;
+    case "check: explicit workspace file loads transitive dependency summaries" test_check_explicit_workspace_file_loads_transitive_dependency_summaries;
     case "check: package filter merges bootstrap and dependency module exports" test_check_package_filter_merges_bootstrap_and_dependency_module_exports;
     case "check: package filter requires workspace" test_check_rejects_package_filter_without_workspace;
   ]

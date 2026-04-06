@@ -1,0 +1,9 @@
+[package]
+name = "std"
+version = "0.0.1"
+description = "riot-lsp transitive dependency std fixture"
+license = "Apache-2.0"
+public = false
+
+[dependencies]
+kernel = { path = "../kernel", version = "*" }

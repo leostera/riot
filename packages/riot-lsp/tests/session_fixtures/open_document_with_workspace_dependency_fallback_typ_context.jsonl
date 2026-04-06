@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/flurry/app/src/app.ml","languageId":"ocaml","version":1,"text":"let answer = Support.answer"}}}

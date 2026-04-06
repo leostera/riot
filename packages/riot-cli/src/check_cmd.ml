@@ -696,6 +696,23 @@ let typ_session_with_paths = fun ~config paths ->
           (session, source_ids @ [ source_id ], sources @ [ source ]))
     (Typ.Session.empty ~config, [], [])
 
+let module_summaries_for_roots = fun session roots ->
+  let summaries_for_snapshot snapshot roots =
+    roots
+    |> List.filter_map (Typ.Query.module_summary_of snapshot)
+  in
+  match Typ.Session.prepare_snapshot session ~roots with
+  | Ok snapshot ->
+      summaries_for_snapshot snapshot roots
+  | Error _ ->
+      roots
+      |> List.filter_map
+        (fun source_id ->
+          match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
+          | Ok snapshot -> Typ.Query.module_summary_of snapshot source_id
+          | Error _ -> None)
+      |> merge_loaded_module_summaries []
+
 let workspace_dependency_packages = fun ~include_dev (workspace: Workspace.t) (pkg: Package.t) ->
   let dependencies =
     if include_dev then
@@ -729,11 +746,10 @@ let workspace_module_summaries_for_package =
         let summaries =
           match roots with
           | [] -> []
-          | _ -> (
-              match Typ.Session.prepare_snapshot session ~roots with
-              | Ok snapshot -> Typ.Snapshot.module_summaries snapshot
-              | Error _ -> []
-            )
+          | _ -> module_summaries_for_roots session roots
+        in
+        let summaries =
+          merge_loaded_module_summaries summaries dependency_summaries
         in
         let () =
           cache := (pkg.name, summaries) :: !cache
