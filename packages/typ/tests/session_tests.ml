@@ -277,9 +277,7 @@ let test_snapshot_uses_sibling_source_record_types = fun _ctx ->
     ~kind:Source.File
     ~origin:(Source.Label "colors.ml")
     ~text:"type point = { x: int; y: int }\n" in
-  let source = "open Colors\n"
-  ^ "let origin = { x = 0; y = 0 }\n"
-  ^ "let total point = point.x + point.y\n" in
+  let source = "open Colors\n" ^ "let origin = { x = 0; y = 0 }\n" ^ "let total point = point.x + point.y\n" in
   let (session, demo_source_id) = Session.create_source
     session
     ~kind:Source.File
@@ -298,8 +296,7 @@ let test_snapshot_uses_sibling_source_record_types = fun _ctx ->
     let type_decl_names = ModuleSummary.type_decls seed_summary
     |> List.map (fun (type_decl: FileSummary.type_decl) -> type_decl.declaration.type_name) in
     let field_access_offset =
-      let access_start = offset_of_substring source "point.x +"
-      |> Option.expect ~msg:"expected record field access in test source" in
+      let access_start = offset_of_substring source "point.x +" |> Option.expect ~msg:"expected record field access in test source" in
       access_start + String.length "point."
     in
     let origin_type = export_scheme snapshot demo_source_id "origin" in
@@ -326,9 +323,7 @@ let test_snapshot_uses_loaded_module_record_types = fun _ctx ->
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
   let session = Session.empty ~config in
-  let source = "open Colors\n"
-  ^ "let origin = { x = 0; y = 0 }\n"
-  ^ "let total point = point.x + point.y\n" in
+  let source = "open Colors\n" ^ "let origin = { x = 0; y = 0 }\n" ^ "let total point = point.x + point.y\n" in
   let (session, source_id) = Session.create_source
     session
     ~kind:Source.File
@@ -358,7 +353,8 @@ let test_include_reexports_loaded_module_record_types = fun _ctx ->
     | Some summary -> summary
     | None -> panic "expected helper module summary"
   in
-  let consumer_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let consumer_config = Config.default
+  |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let consumer_session = Session.empty ~config:consumer_config in
   let (consumer_session, consumer_source_id) = Session.create_source
     consumer_session
@@ -377,8 +373,10 @@ let test_include_reexports_loaded_module_record_types = fun _ctx ->
     in
     let exported_type_decls = ModuleSummary.type_decls consumer_summary
     |> List.map
-      (fun (type_decl: FileSummary.type_decl) -> (type_decl.scope_path, type_decl.declaration.type_name)) in
-    let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
+      (fun (type_decl: FileSummary.type_decl) ->
+        (type_decl.scope_path, type_decl.declaration.type_name)) in
+    let client_config = Config.default
+    |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
     let client_session = Session.empty ~config:client_config in
     let client_source = "let origin = { x = 0; y = 0 }\nlet total point = point.x + point.y\n" in
     let (client_session, client_source_id) = Session.create_source
@@ -411,7 +409,8 @@ let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
     | Some summary -> summary
     | None -> panic "expected helper module summary"
   in
-  let consumer_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let consumer_config = Config.default
+  |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let consumer_session = Session.empty ~config:consumer_config in
   let (consumer_session, consumer_source_id) = Session.create_source
     consumer_session
@@ -430,8 +429,10 @@ let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
     in
     let exported_type_decls = ModuleSummary.type_decls consumer_summary
     |> List.map
-      (fun (type_decl: FileSummary.type_decl) -> (type_decl.scope_path, type_decl.declaration.type_name)) in
-    let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
+      (fun (type_decl: FileSummary.type_decl) ->
+        (type_decl.scope_path, type_decl.declaration.type_name)) in
+    let client_config = Config.default
+    |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
     let client_session = Session.empty ~config:client_config in
     let client_source = "let origin = { x = 0; y = 0 }\nlet total point = point.x + point.y\n" in
     let (client_session, client_source_id) = Session.create_source
@@ -563,8 +564,7 @@ let test_sibling_source_uses_loaded_module_record_reexport = fun _ctx ->
   in
   let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
   let session = Session.empty ~config in
-  let consumer_source = "include Helpers\n"
-  ^ "let origin = { x = 0; y = 0 }\n" in
+  let consumer_source = "include Helpers\n" ^ "let origin = { x = 0; y = 0 }\n" in
   let (session, _consumer_source_id) = Session.create_source
     session
     ~kind:Source.File
@@ -871,6 +871,59 @@ let test_fun_cases_keep_preceding_parameters = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "int") ~actual:delta_type in
     Ok ()
 
+let test_expansive_bindings_stay_monomorphic = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source = "let id x = x\n" ^ "let alias = id id\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "value_restriction.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let id_type = export_scheme snapshot source_id "id" in
+    let alias_type = export_scheme snapshot source_id "alias" in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:id_type in
+    let () = Test.assert_equal ~expected:(Some "'a -> 'a") ~actual:alias_type in
+    Ok ()
+
+let test_nonexpansive_list_bindings_still_generalize = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source = "let empty = []\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "list_value_restriction.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let empty_type = export_scheme snapshot source_id "empty" in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a list") ~actual:empty_type in
+    Ok ()
+
+let test_expansive_covariant_lists_still_generalize = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source = "let make _ = []\n" ^ "let xs = make ()\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "relaxed_value_restriction.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let xs_type = export_scheme snapshot source_id "xs" in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a list") ~actual:xs_type in
+    Ok ()
+
 let () =
   Actors.run
     ~main:(fun ~args ->
@@ -898,6 +951,9 @@ let () =
         Test.case "check_source recovers when rooted preparation reports missing module summaries" test_check_source_recovers_when_snapshot_preparation_reports_missing_module_summaries;
         Test.case "match guards typecheck in pattern scope" test_match_guards_typecheck_in_pattern_scope;
         Test.case "optional arguments can be omitted and reordered" test_optional_arguments_can_be_omitted_and_reordered;
+        Test.case "expansive bindings stay monomorphic" test_expansive_bindings_stay_monomorphic;
+        Test.case "nonexpansive list bindings still generalize" test_nonexpansive_list_bindings_still_generalize;
+        Test.case "expansive covariant lists still generalize" test_expansive_covariant_lists_still_generalize;
         Test.case "fun cases keep preceding parameters in scope" test_fun_cases_keep_preceding_parameters;
         Test.case "records flow through snapshot queries" test_records_flow_through_snapshot_queries;
       ]

@@ -37,12 +37,11 @@ let qualify_name = fun scope_path name ->
 let record_type_of_summary_decl = fun (type_decl: FileSummary.type_decl) ->
   match type_decl.declaration.labels with
   | [] -> None
-  | labels ->
-      Some {
-        owner_name = qualify_name type_decl.scope_path type_decl.declaration.type_name;
-        param_ids = type_decl.declaration.param_ids;
-        labels;
-      }
+  | labels -> Some {
+    owner_name = qualify_name type_decl.scope_path type_decl.declaration.type_name;
+    param_ids = type_decl.declaration.param_ids;
+    labels
+  }
 
 let unique_record_types = fun record_types ->
   let rec loop seen acc = function
@@ -62,7 +61,9 @@ let bind_type_decls = fun type_decls introduced ->
   List.fold_left
     (fun acc (type_decl: FileSummary.type_decl) ->
       let key = type_decl_key type_decl in
-      let acc = List.filter (fun candidate -> not (String.equal (type_decl_key candidate) key)) acc in
+      let acc =
+        List.filter (fun candidate -> not (String.equal (type_decl_key candidate) key)) acc
+      in
       acc @ [ type_decl ])
     type_decls
     introduced
@@ -76,8 +77,9 @@ let split_module_path = fun module_path ->
 let rec strip_scope_prefix = fun prefix scope_path ->
   match (prefix, scope_path) with
   | [], rest -> Some rest
-  | prefix_segment :: prefix_rest, scope_segment :: scope_rest
-    when String.equal prefix_segment scope_segment -> strip_scope_prefix prefix_rest scope_rest
+  | prefix_segment :: prefix_rest, scope_segment :: scope_rest when String.equal prefix_segment scope_segment -> strip_scope_prefix
+    prefix_rest
+    scope_rest
   | _ -> None
 
 let aliases_for_type_decls = fun type_decls module_path ->
@@ -94,8 +96,7 @@ let prefix_type_decls = fun prefix type_decls ->
       { type_decl with scope_path = prefix @ type_decl.scope_path })
     type_decls
 
-let type_decls_for_include = fun type_decls module_path ->
-  aliases_for_type_decls type_decls module_path
+let type_decls_for_include = fun type_decls module_path -> aliases_for_type_decls type_decls module_path
 
 let type_decls_for_module_alias = fun type_decls ~alias_name ~module_path ->
   if String.equal alias_name module_path then
@@ -112,8 +113,7 @@ let make_state = fun ~config file ->
     diagnostics = [];
     expr_traces = [];
     item_traces = [];
-    record_types =
-      config.ambient_type_decls |> List.filter_map record_type_of_summary_decl |> unique_record_types;
+    record_types = config.ambient_type_decls |> List.filter_map record_type_of_summary_decl |> unique_record_types;
     forced_export_names = [];
   }
 
@@ -389,6 +389,121 @@ let generalize = fun env ty ->
   let env_free = env_free_vars env in
   let ty_free = TypeRepr.free_vars ty in
   TypeScheme.Forall (TypeRepr.diff ty_free env_free |> List.rev, ty)
+
+let generalize_with_quantifiers = fun quantified ty -> TypeScheme.Forall (quantified, ty)
+
+let local_generalizable_vars = fun env ty ->
+  let env_free = env_free_vars env in
+  let ty_free = TypeRepr.free_vars ty in
+  TypeRepr.diff ty_free env_free |> List.rev
+
+let relaxed_generalizable_vars = fun env ty ->
+  let local_vars = local_generalizable_vars env ty in
+  let covariant_vars = TypeRepr.covariant_vars ty in
+  List.filter
+    (fun var_id ->
+      List.mem var_id covariant_vars)
+    local_vars
+
+let origin_label_of_expr = fun (state: state) expr_id ->
+  match SemanticTree.find_expr state.file expr_id with
+  | None -> None
+  | Some expr -> (
+      match SemanticTree.find_origin state.file expr.origin_id with
+      | Some origin -> Some origin.label
+      | None -> None
+    )
+
+let rec is_nonexpansive_expr = fun (state: state) expr_id ->
+  match SemanticTree.find_expr state.file expr_id with
+  | None -> false
+  | Some expr ->
+      match expr.desc with
+      | BodyArena.EVar _
+      | BodyArena.EInt _
+      | BodyArena.EFloat _
+      | BodyArena.EBool _
+      | BodyArena.EString _
+      | BodyArena.EChar _
+      | BodyArena.EUnit ->
+          true
+      | BodyArena.ETuple element_ids ->
+          List.for_all (is_nonexpansive_expr state) element_ids
+      | BodyArena.EFun _ ->
+          true
+      | BodyArena.EApply (callee_id, arguments) ->
+          let arguments_nonexpansive = arguments
+          |> List.for_all
+            (fun (argument: BodyArena.apply_argument) -> is_nonexpansive_expr state argument.value_id) in
+          if not arguments_nonexpansive then
+            false
+          else
+            (
+              match origin_label_of_expr state expr_id with
+              | Some "constructor_apply_expression"
+              | Some "list_literal_apply" ->
+                  true
+              | Some "infix_expression" -> (
+                  match SemanticTree.find_expr state.file callee_id with
+                  | Some { desc=BodyArena.EVar "::"; _ } -> true
+                  | _ -> false
+                )
+              | _ ->
+                  false
+            )
+      | BodyArena.ERecord { base_id=None; fields } ->
+          fields
+          |> List.for_all
+            (fun (field: BodyArena.record_expr_field) -> is_nonexpansive_expr state field.value_id)
+      | BodyArena.ERecord { base_id=Some _; _ } ->
+          false
+      | BodyArena.EFieldAccess { receiver_id; _ } ->
+          is_nonexpansive_expr state receiver_id
+      | BodyArena.EIndex _
+      | BodyArena.EArray _
+      | BodyArena.ESequence _
+      | BodyArena.EUnsupported _
+      | BodyArena.EHole _ ->
+          false
+      | BodyArena.ELet (binding_ids, body_id) ->
+          List.for_all (is_nonexpansive_binding state) binding_ids && is_nonexpansive_expr state body_id
+      | BodyArena.EIf (condition_id, then_id, else_id) ->
+          is_nonexpansive_expr state condition_id
+          && is_nonexpansive_expr state then_id
+          && is_nonexpansive_expr state else_id
+      | BodyArena.EMatch (scrutinee_id, cases) ->
+          is_nonexpansive_expr state scrutinee_id && List.for_all
+            (fun (case: BodyArena.match_case) ->
+              let guard_nonexpansive =
+                match case.guard_id with
+                | Some guard_id -> is_nonexpansive_expr state guard_id
+                | None -> true
+              in
+              guard_nonexpansive && is_nonexpansive_expr state case.body_id)
+            cases
+      | BodyArena.ETry _ ->
+          false
+      | BodyArena.EPolyVariant { payload; _ } -> (
+          match payload with
+          | Some payload_id -> is_nonexpansive_expr state payload_id
+          | None -> true
+        )
+      | BodyArena.ELocalOpen { body_id; _ } ->
+          is_nonexpansive_expr state body_id
+
+and is_nonexpansive_binding = fun (state: state) binding_id ->
+  match SemanticTree.find_binding state.file binding_id with
+  | Some (binding: BodyArena.binding) -> is_nonexpansive_expr state binding.value_id
+  | None -> false
+
+let generalize_binding = fun (state: state) env expr_id ty ->
+  let quantified =
+    if is_nonexpansive_expr state expr_id then
+      local_generalizable_vars env ty
+    else
+      relaxed_generalizable_vars env ty
+  in
+  generalize_with_quantifiers quantified ty
 
 let origin_of_expr = fun (state: state) expr_id ->
   match SemanticTree.find_expr state.file expr_id with
@@ -941,12 +1056,7 @@ and infer_expr = fun (state: state) env expr_id ->
                   | TypeRepr.Arrow { label; lhs; rhs } -> (
                       match take_matching_argument label arguments with
                       | Some ((argument: BodyArena.apply_argument), rest_arguments) ->
-                          let argument_ty = infer_expr_against state env argument.value_id lhs in
-                          let () = try_unify
-                            state
-                            ~origin:(origin_of_expr state argument.value_id)
-                            lhs
-                            argument_ty in
+                          let _ = infer_expr_against state env argument.value_id lhs in
                           apply_with_known_type rhs rest_arguments
                       | None -> (
                           match label with
@@ -1119,12 +1229,7 @@ and infer_expr_against = fun (state: state) env expr_id expected_ty ->
                             match TypeRepr.prune current_ty with
                             | TypeRepr.Arrow { label; lhs; rhs } ->
                                 if argument_matches_parameter_label label argument.label then
-                                  let argument_ty = infer_expr_against state env argument.value_id lhs in
-                                  let () = try_unify
-                                    state
-                                    ~origin:(origin_of_expr state argument.value_id)
-                                    lhs
-                                    argument_ty in
+                                  let _ = infer_expr_against state env argument.value_id lhs in
                                   apply_with_known_type rhs rest
                                 else
                                   let inferred_type = infer_expr state env expr_id in
@@ -1186,7 +1291,9 @@ and infer_nonrecursive_group = fun (state: state) env bindings ->
         let value_ty = infer_expr state env binding.value_id in
         let bound_entries = bind_pattern state env binding.pattern_id value_ty in
         let generalized = bound_entries
-        |> List.map (fun (name, TypeScheme.Forall (_, ty)) -> (name, generalize env ty)) in
+        |> List.map
+          (fun (name, TypeScheme.Forall (_, ty)) ->
+            (name, generalize_binding state env binding.value_id ty)) in
         (binding, generalized))
       bindings
   in
@@ -1219,7 +1326,13 @@ and infer_recursive_group = fun (state: state) env bindings ->
         bindings
         (placeholders |> List.map snd)
     in
-    let generalized = placeholders |> List.map (fun (name, ty) -> (name, generalize env ty)) in
+    let generalized =
+      List.map2
+        (fun (binding: BodyArena.binding) (name, ty) ->
+          (name, generalize_binding state env binding.value_id ty))
+        bindings
+        placeholders
+    in
     bind_env env generalized
   else
     let () =
@@ -1326,10 +1439,9 @@ let infer_file = fun ~config file ->
         | ItemTree.Type type_item ->
             let visible_exports_before = export_env config export_state in
             let introduced = TypeDecl.constructor_entries type_item.declaration in
-            let introduced_type_decls = [ {
-              FileSummary.scope_path = type_item.scope_path;
-              declaration = type_item.declaration;
-            } ] in
+            let introduced_type_decls = [
+              { FileSummary.scope_path = type_item.scope_path; declaration = type_item.declaration }
+            ] in
             let () =
               match type_item.declaration.labels with
               | [] -> ()
@@ -1522,5 +1634,5 @@ let infer_file = fun ~config file ->
     type_decls;
     item_traces = List.rev state.item_traces;
     expr_traces = List.rev state.expr_traces;
-    diagnostics = List.rev state.diagnostics
+    diagnostics = List.rev state.diagnostics;
   }

@@ -61,5 +61,9 @@ val diff: int list -> int list -> int list
 (** Collect free inference-variable identifiers from a type. *)
 val free_vars: t -> int list
 
+(** Collect the free inference-variable identifiers that occur only covariantly
+    in the type. *)
+val covariant_vars: t -> int list
+
 (** Check whether the given inference variable occurs inside the type. *)
 val occurs: int -> t -> bool

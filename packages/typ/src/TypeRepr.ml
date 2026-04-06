@@ -49,6 +49,25 @@ let union = fun left right ->
 let diff = fun left right ->
   List.filter (fun value -> not (List.mem value right)) left
 
+type variance =
+  | Covariant
+  | Contravariant
+  | Invariant
+
+let flip_variance = function
+  | Covariant -> Contravariant
+  | Contravariant -> Covariant
+  | Invariant -> Invariant
+
+let join_variance = fun left right ->
+  match (left, right) with
+  | (Invariant, _)
+  | (_, Invariant) -> Invariant
+  | Covariant, Covariant -> Covariant
+  | Contravariant, Contravariant -> Contravariant
+  | (Covariant, Contravariant)
+  | (Contravariant, Covariant) -> Invariant
+
 let rec free_vars = function
   | Int
   | Float
@@ -79,6 +98,59 @@ let rec free_vars = function
       | Some linked -> free_vars linked
       | None -> [ var.id ]
     )
+
+let add_variance = fun acc var_id variance ->
+  match List.assoc_opt var_id acc with
+  | Some existing -> (var_id, join_variance existing variance) :: List.remove_assoc var_id acc
+  | None -> (var_id, variance) :: acc
+
+let merge_variances = fun left right ->
+  List.fold_left (fun acc (var_id, variance) -> add_variance acc var_id variance) left right
+
+let rec collect_variances = fun variance ty ->
+  match prune ty with
+  | Int
+  | Float
+  | Bool
+  | String
+  | Char
+  | Unit
+  | Hole _ ->
+      []
+  | Option element ->
+      collect_variances variance element
+  | Result (ok_ty, error_ty) ->
+      merge_variances (collect_variances variance ok_ty) (collect_variances variance error_ty)
+  | Array element ->
+      collect_variances Invariant element
+  | List element ->
+      collect_variances variance element
+  | Seq element ->
+      collect_variances variance element
+  | Named { arguments; _ } ->
+      List.fold_left
+        (fun acc argument -> merge_variances acc (collect_variances Invariant argument))
+        []
+        arguments
+  | Tuple members ->
+      List.fold_left (fun acc member -> merge_variances acc (collect_variances variance member)) [] members
+  | Arrow { lhs; rhs; _ } ->
+      merge_variances
+        (collect_variances (flip_variance variance) lhs)
+        (collect_variances variance rhs)
+  | Var var -> (
+      match var.link with
+      | Some linked -> collect_variances variance linked
+      | None -> [ (var.id, variance) ]
+    )
+
+let covariant_vars = fun ty ->
+  collect_variances Covariant ty |> List.filter_map
+    (fun (var_id, variance) ->
+      match variance with
+      | Covariant -> Some var_id
+      | Contravariant
+      | Invariant -> None)
 
 let rec occurs = fun needle ty ->
   match prune ty with

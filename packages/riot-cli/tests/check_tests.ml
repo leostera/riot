@@ -649,6 +649,100 @@ let test_check_package_filter_reexports_same_named_workspace_modules_via_alias =
             )
         ))
 
+let test_check_expansive_bindings_stay_monomorphic = fun _ctx ->
+  with_tempdir_result "riot_check_value_restriction"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let demo_root = Path.(workspace_root / Path.v "packages/demo") in
+      let source_path = Path.(demo_root / Path.v "src/demo.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"demo"
+            ~path:demo_root
+            ~relative_path:(Path.v "packages/demo")
+            ~sources:{ empty_sources with src = [ Path.v "src/demo.ml" ] }
+            ();
+        ] in
+      match write_file
+        source_path
+        "let id x = x\nlet alias = id id\nlet _ = alias 1\nlet _ = alias true\n"
+      with
+      | Error err -> Error err
+      | Ok () ->
+          let matches = parse_check [ "check"; "--json"; "-p"; "demo" ] |> Result.expect ~msg:"parse check args" in
+          let stdout, stdout_contents = make_capture_writer () in
+          let stderr, stderr_contents = make_capture_writer () in
+          (
+            match Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches with
+            | Ok () -> Error "expected package check to fail for expansive value-restriction violation"
+            | Error _ ->
+                let events = parse_jsonl (stdout_contents ()) in
+                let diagnostic_messages =
+                  events
+                  |> List.filter_map
+                    (fun json ->
+                      match Data.Json.get_field "type" json with
+                      | Some (Data.Json.String "check_diagnostic") -> (
+                          match Data.Json.get_field "diagnostic" json with
+                          | Some diagnostic_json -> (
+                              match Data.Json.get_field "message" diagnostic_json with
+                              | Some (Data.Json.String message) -> Some message
+                              | _ -> None
+                            )
+                          | None -> None
+                        )
+                      | _ -> None)
+                in
+                Test.assert_equal
+                  ~expected:[ "type mismatch: expected int but got bool" ]
+                  ~actual:diagnostic_messages;
+                Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                Ok ()
+          ))
+
+let test_check_relaxed_value_restriction_preserves_covariant_lists = fun _ctx ->
+  with_tempdir_result "riot_check_relaxed_value_restriction"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let demo_root = Path.(workspace_root / Path.v "packages/demo") in
+      let source_path = Path.(demo_root / Path.v "src/demo.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"demo"
+            ~path:demo_root
+            ~relative_path:(Path.v "packages/demo")
+            ~sources:{ empty_sources with src = [ Path.v "src/demo.ml" ] }
+            ();
+        ] in
+      match write_file
+        source_path
+        "let make _ = []\nlet xs = make ()\nlet _ = 1 :: xs\nlet _ = true :: xs\n"
+      with
+      | Error err -> Error err
+      | Ok () ->
+          let matches = parse_check [ "check"; "--json"; "-p"; "demo" ] |> Result.expect ~msg:"parse check args" in
+          let stdout, stdout_contents = make_capture_writer () in
+          let stderr, stderr_contents = make_capture_writer () in
+          Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+          |> Result.expect ~msg:"package check should keep covariant expansive list bindings polymorphic";
+          let events = parse_jsonl (stdout_contents ()) in
+          let diagnostic_count =
+            events
+            |> List.filter
+              (fun json ->
+                match Data.Json.get_field "type" json with
+                | Some (Data.Json.String "check_diagnostic") -> true
+                | _ -> false)
+            |> List.length
+          in
+          Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+          Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+          Ok ())
+
 let test_check_explicit_workspace_file_uses_sibling_source_exports = fun _ctx ->
   with_tempdir_result "riot_check_explicit_file_package_session"
     (fun tmpdir ->
@@ -1181,6 +1275,8 @@ let tests =
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
     case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
     case "check: package filter reexports same-named workspace modules via alias" test_check_package_filter_reexports_same_named_workspace_modules_via_alias;
+    case "check: expansive bindings stay monomorphic through riot check" test_check_expansive_bindings_stay_monomorphic;
+    case "check: relaxed value restriction keeps covariant lists polymorphic through riot check" test_check_relaxed_value_restriction_preserves_covariant_lists;
     case "check: package filter loads transitive workspace dependency summaries" test_check_package_filter_loads_transitive_workspace_dependency_summaries;
     case "check: package filter keeps dependency summaries when dependency has broken sources" test_check_package_filter_keeps_dependency_summaries_when_dependency_has_broken_sources;
     case "check: explicit workspace file uses sibling source exports" test_check_explicit_workspace_file_uses_sibling_source_exports;
