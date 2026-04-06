@@ -21,6 +21,7 @@ type unsupported_reason =
   | LiteralOutsideSupportedSubset of { supported_literals: supported_literal list }
 type unsupported_context =
   | StructureItem
+  | SignatureItem
   | Pattern
   | Expression
 type unsupported_recovery =

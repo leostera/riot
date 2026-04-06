@@ -23,6 +23,14 @@ type value_item = {
   recursive: bool;
 }
 
+type declared_value_item = {
+  item_id: ItemId.t;
+  origin_id: OriginId.t;
+  scope_path: string list;
+  value_name: string;
+  scheme: TypeScheme.t;
+}
+
 type unsupported_item = {
   item_id: ItemId.t;
   origin_id: OriginId.t;
@@ -56,6 +64,7 @@ type item =
   | Type of type_item
   | Exception of exception_item
   | Value of value_item
+  | DeclaredValue of declared_value_item
   | Open of open_item
   | Include of include_item
   | ModuleAlias of module_alias_item
@@ -76,6 +85,7 @@ let find_item = fun items item_id ->
       | Type (item: type_item) -> ItemId.equal item.item_id item_id
       | Exception (item: exception_item) -> ItemId.equal item.item_id item_id
       | Value (item: value_item) -> ItemId.equal item.item_id item_id
+      | DeclaredValue (item: declared_value_item) -> ItemId.equal item.item_id item_id
       | Open (item: open_item) -> ItemId.equal item.item_id item_id
       | Include (item: include_item) -> ItemId.equal item.item_id item_id
       | ModuleAlias (item: module_alias_item) -> ItemId.equal item.item_id item_id
@@ -120,6 +130,17 @@ let item_to_json = function
         item.binding_ids)
     );
     ("recursive", Data.Json.Bool item.recursive);
+  ]
+  | DeclaredValue (item: declared_value_item) -> Data.Json.Object [
+    ("tag", Data.Json.String "declared_value");
+    ("item_id", Data.Json.Int (ItemId.to_int item.item_id));
+    ("origin_id", Data.Json.Int (OriginId.to_int item.origin_id));
+    (
+      "scope_path",
+      Data.Json.Array (List.map (fun segment -> Data.Json.String segment) item.scope_path)
+    );
+    ("value_name", Data.Json.String item.value_name);
+    ("scheme", Data.Json.String (TypePrinter.scheme_to_string item.scheme));
   ]
   | Open (item: open_item) -> Data.Json.Object [
     ("tag", Data.Json.String "open");
@@ -216,6 +237,21 @@ let to_string = fun items ->
               ^ " bindings=["
               ^ (item.binding_ids |> List.map BindingId.to_string |> String.concat ", ")
               ^ "]"
+          | DeclaredValue (item: declared_value_item) ->
+              let scope_prefix =
+                match item.scope_path with
+                | [] -> ""
+                | scope_path -> String.concat "." scope_path ^ " "
+              in
+              "  "
+              ^ ItemId.to_string item.item_id
+              ^ " declared_value "
+              ^ scope_prefix
+              ^ OriginId.to_string item.origin_id
+              ^ " "
+              ^ item.value_name
+              ^ " : "
+              ^ TypePrinter.scheme_to_string item.scheme
           | Open (item: open_item) ->
               let scope_prefix =
                 match item.scope_path with

@@ -81,6 +81,17 @@ let trace_debug = fun snapshot source_id ->
 let module_typings_jsons = fun snapshot ->
   Snapshot.module_typings snapshot |> List.map ModuleTypings.Json.to_json
 
+let exported_type_names = fun snapshot source_id ->
+  match Query.module_typings_of snapshot source_id with
+  | None -> []
+  | Some typings ->
+      ModuleTypings.type_decls typings
+      |> List.map
+        (fun (type_decl: FileSummary.type_decl) ->
+          match type_decl.scope_path with
+          | [] -> type_decl.declaration.type_name
+          | scope_path -> String.concat "." (scope_path @ [ type_decl.declaration.type_name ]))
+
 let prepare_snapshot_or_error = fun session ~roots ->
   match Session.prepare_snapshot session ~roots with
   | Ok snapshot -> Ok snapshot
@@ -199,6 +210,58 @@ let test_snapshot_exposes_implicit_file_modules = fun _ctx ->
   else
     let () = Test.assert_equal ~expected:(Some "int -> int -> int") ~actual:midpoint_type in
     let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
+    Ok ()
+
+let test_snapshot_exports_interface_declarations = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source =
+    "type color\n"
+    ^ "val id : 'a -> 'a\n"
+    ^ "module Local : sig\n"
+    ^ "  type t\n"
+    ^ "  val id : t -> t\n"
+    ^ "end\n"
+    ^ "module Uses_outer : sig\n"
+    ^ "  val paint : color -> color\n"
+    ^ "end\n"
+  in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "iface.mli")
+    ~text:source
+  in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let id_type = export_scheme snapshot source_id "id" in
+    let local_id_type = export_scheme snapshot source_id "Local.id" in
+    let paint_type = export_scheme snapshot source_id "Uses_outer.paint" in
+    let type_names = exported_type_names snapshot source_id in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:id_type in
+    let () = Test.assert_equal ~expected:(Some "Local.t -> Local.t") ~actual:local_id_type in
+    let () = Test.assert_equal ~expected:(Some "color -> color") ~actual:paint_type in
+    let () = Test.assert_equal ~expected:[ "color"; "Local.t" ] ~actual:type_names in
+    Ok ()
+
+let test_snapshot_exports_interface_externals = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source = "external strlen : string -> int = \"caml_strlen\"\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "externals.mli")
+    ~text:source
+  in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let strlen_type = export_scheme snapshot source_id "strlen" in
+    let () = Test.assert_equal ~expected:(Some "string -> int") ~actual:strlen_type in
     Ok ()
 
 let test_snapshot_collects_module_typings = fun _ctx ->
@@ -1360,6 +1423,8 @@ let () =
           "snapshot without traces still reports diagnostics and module typings"
           test_snapshot_without_traces_still_reports_diagnostics_and_module_typings;
         Test.case "snapshot exposes implicit file modules" test_snapshot_exposes_implicit_file_modules;
+        Test.case "snapshot exports interface declarations" test_snapshot_exports_interface_declarations;
+        Test.case "snapshot exports interface externals" test_snapshot_exports_interface_externals;
         Test.case "snapshot collects module typings" test_snapshot_collects_module_typings;
         Test.case
           "snapshot module typings are canonical per module"

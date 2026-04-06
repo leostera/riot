@@ -17,6 +17,7 @@ type unsupported_reason =
 
 type unsupported_context =
   | StructureItem
+  | SignatureItem
   | Pattern
   | Expression
 
@@ -164,11 +165,13 @@ let supported_literal_to_string = function
 
 let unsupported_context_tag = function
   | StructureItem -> "structure_item"
+  | SignatureItem -> "signature_item"
   | Pattern -> "pattern"
   | Expression -> "expression"
 
 let unsupported_context_to_string = function
   | StructureItem -> "structure item"
+  | SignatureItem -> "signature item"
   | Pattern -> "pattern"
   | Expression -> "expression"
 

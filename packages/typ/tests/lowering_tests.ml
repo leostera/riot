@@ -74,6 +74,12 @@ let type_item_summary_to_json = function
       ]
   | ItemTree.Value _ ->
       Data.Json.Object [ ("tag", Data.Json.String "value") ]
+  | ItemTree.DeclaredValue declared_value_item ->
+      Data.Json.Object [
+        ("tag", Data.Json.String "declared_value");
+        ("value_name", Data.Json.String declared_value_item.value_name);
+        ("scheme", Data.Json.String (TypePrinter.scheme_to_string declared_value_item.scheme));
+      ]
   | ItemTree.Exception _ ->
       Data.Json.Object [ ("tag", Data.Json.String "exception") ]
   | ItemTree.Open _ ->

@@ -37,6 +37,18 @@ type value_item = {
   (** Whether the item's binding group is recursive. *)
   recursive: bool;
 }
+type declared_value_item = {
+  (** Stable item identity. *)
+  item_id: ItemId.t;
+  (** Source origin for this item shell. *)
+  origin_id: OriginId.t;
+  (** Lexical module path that owns this item, empty at top level. *)
+  scope_path: string list;
+  (** Declared binding name introduced by the interface item. *)
+  value_name: string;
+  (** Declared type scheme introduced for downstream use. *)
+  scheme: TypeScheme.t;
+}
 type unsupported_item = {
   (** Stable item identity. *)
   item_id: ItemId.t;
@@ -86,6 +98,8 @@ type item =
   | Exception of exception_item
   (** Value-bearing top-level item. *)
   | Value of value_item
+  (** Interface value declaration exported without a body. *)
+  | DeclaredValue of declared_value_item
   (** File- or module-scope open statement. *)
   | Open of open_item
   (** File- or module-scope include statement. *)

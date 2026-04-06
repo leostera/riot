@@ -1702,6 +1702,12 @@ let infer_file = fun ~config file ->
             let introduced_type_decls = [
               { FileSummary.scope_path = type_item.scope_path; declaration = type_item.declaration }
             ] in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env config export_state)
+              else
+                None
+            in
             let () =
               match type_item.declaration.labels with
               | [] -> ()
@@ -1722,9 +1728,12 @@ let infer_file = fun ~config file ->
             in
             let () =
               if state.config.capture_traces then
-                let visible_exports_before = export_env config export_state in
                 let exports_after = export_env config export_state in
-                let binding_names = introduced_names visible_exports_before exports_after in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
                 state.item_traces <- (
                   { Check_result.item_id = type_item.item_id; binding_names; exports_after }:
                     Check_result.item_trace
@@ -1743,6 +1752,12 @@ let infer_file = fun ~config file ->
               rest
         | ItemTree.Exception exception_item ->
             let introduced = [ (exception_item.exception_name, exception_item.scheme) ] in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env config export_state)
+              else
+                None
+            in
             let (export_state, scope_entries) =
               match exception_item.scope_path with
               | [] -> (bind_env export_state introduced, scope_entries)
@@ -1753,9 +1768,12 @@ let infer_file = fun ~config file ->
             in
             let () =
               if state.config.capture_traces then
-                let visible_exports_before = export_env config export_state in
                 let exports_after = export_env config export_state in
-                let binding_names = introduced_names visible_exports_before exports_after in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
                 state.item_traces <- (
                   { Check_result.item_id = exception_item.item_id; binding_names; exports_after }:
                     Check_result.item_trace
@@ -1765,6 +1783,12 @@ let infer_file = fun ~config file ->
             loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Value value_item ->
             let item_env = env_for_item_scope export_state scope_entries scope_opens value_item.scope_path in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env config export_state)
+              else
+                None
+            in
             let env_after_item = infer_binding_group state item_env value_item.binding_ids in
             let introduced = introduced_entries item_env env_after_item in
             let (export_state, scope_entries) =
@@ -1777,12 +1801,49 @@ let infer_file = fun ~config file ->
             in
             let () =
               if state.config.capture_traces then
-                let visible_exports_before = export_env config export_state in
                 let exports_after = export_env config export_state in
-                let binding_names = introduced_names visible_exports_before exports_after in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
                 state.item_traces <- (
                   { Check_result.item_id = value_item.item_id; binding_names; exports_after }:
                     Check_result.item_trace
+                )
+                :: state.item_traces
+            in
+            loop export_state type_decls scope_entries scope_opens rest
+        | ItemTree.DeclaredValue declared_value_item ->
+            let introduced = [ (declared_value_item.value_name, declared_value_item.scheme) ] in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env config export_state)
+              else
+                None
+            in
+            let (export_state, scope_entries) =
+              match declared_value_item.scope_path with
+              | [] -> (bind_env export_state introduced, scope_entries)
+              | scope_path -> (
+                bind_env export_state (qualify_entries scope_path introduced),
+                update_scope_entries scope_entries scope_path introduced
+              )
+            in
+            let () =
+              if state.config.capture_traces then
+                let exports_after = export_env config export_state in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
+                state.item_traces <- (
+                  {
+                    Check_result.item_id = declared_value_item.item_id;
+                    binding_names;
+                    exports_after
+                  }: Check_result.item_trace
                 )
                 :: state.item_traces
             in
@@ -1801,6 +1862,12 @@ let infer_file = fun ~config file ->
             loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Include include_item ->
             let item_env = env_for_item_scope export_state scope_entries scope_opens include_item.scope_path in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env config export_state)
+              else
+                None
+            in
             let introduced = entries_for_include item_env include_item.module_path in
             let visible_type_decls = bind_type_decls config.ambient_type_decls type_decls in
             let introduced_type_decls = type_decls_for_include visible_type_decls include_item.module_path
@@ -1815,9 +1882,12 @@ let infer_file = fun ~config file ->
             in
             let () =
               if state.config.capture_traces then
-                let visible_exports_before = export_env config export_state in
                 let exports_after = export_env config export_state in
-                let binding_names = introduced_names visible_exports_before exports_after in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
                 state.item_traces <- (
                   { Check_result.item_id = include_item.item_id; binding_names; exports_after }:
                     Check_result.item_trace
@@ -1840,6 +1910,12 @@ let infer_file = fun ~config file ->
               scope_entries
               scope_opens
               module_alias_item.scope_path in
+            let visible_exports_before =
+              if state.config.capture_traces then
+                Some (export_env_with_forced_names state export_state)
+              else
+                None
+            in
             let alias_export_names = export_names_for_module_alias
               item_env
               ~alias_name:module_alias_item.alias_name
@@ -1872,9 +1948,12 @@ let infer_file = fun ~config file ->
             in
             let () =
               if state.config.capture_traces then
-                let visible_exports_before = export_env_with_forced_names state export_state in
                 let exports_after = export_env_with_forced_names state export_state in
-                let binding_names = introduced_names visible_exports_before exports_after in
+                let binding_names =
+                  match visible_exports_before with
+                  | Some visible_exports_before -> introduced_names visible_exports_before exports_after
+                  | None -> []
+                in
                 state.item_traces <- (
                   { Check_result.item_id = module_alias_item.item_id; binding_names; exports_after }:
                     Check_result.item_trace
