@@ -3,7 +3,7 @@ open Std
 let test_commit_dir_first_writer_wins = fun _ctx ->
   Fs.with_tempdir ~prefix:"contentstore-commit-dir"
     (fun tmpdir ->
-      let store = Contentstore.Store.create ~root_dir:Path.(tmpdir / Path.v "cache") in
+      let store = Contentstore.create ~root:Path.(tmpdir / Path.v "cache") ~policy:Contentstore.Policy.default () in
       let hash = Crypto.hash_string "same-content-address" in
       let first_dir = Path.(tmpdir / Path.v "first") in
       let second_dir = Path.(tmpdir / Path.v "second") in
@@ -39,7 +39,7 @@ let test_commit_dir_first_writer_wins = fun _ctx ->
 let test_blob_roundtrip = fun _ctx ->
   Fs.with_tempdir ~prefix:"contentstore-blob"
     (fun tmpdir ->
-      let store = Contentstore.Store.create ~root_dir:Path.(tmpdir / Path.v "cache") in
+      let store = Contentstore.create ~root:Path.(tmpdir / Path.v "cache") ~policy:Contentstore.Policy.default () in
       let hash = Crypto.hash_string "blob-roundtrip" in
       let _ =
         Contentstore.Store.save_blob store ~namespace:"typ" ~hash ~content:"hello"
@@ -54,7 +54,7 @@ let test_blob_roundtrip = fun _ctx ->
 let test_json_bundle_roundtrip = fun _ctx ->
   Fs.with_tempdir ~prefix:"contentstore-json"
     (fun tmpdir ->
-      let store = Contentstore.Store.create ~root_dir:Path.(tmpdir / Path.v "cache") in
+      let store = Contentstore.create ~root:Path.(tmpdir / Path.v "cache") ~policy:Contentstore.Policy.default () in
       let hash = Crypto.hash_string "json-roundtrip" in
       let json =
         Data.Json.Object [
@@ -72,6 +72,34 @@ let test_json_bundle_roundtrip = fun _ctx ->
       | None -> Error "expected saved JSON bundle")
   |> Result.unwrap_or ~default:(Error "tempdir creation failed")
 
+let test_named_json_bundle_roundtrip = fun _ctx ->
+  Fs.with_tempdir ~prefix:"contentstore-named-json"
+    (fun tmpdir ->
+      let store = Contentstore.create ~root:Path.(tmpdir / Path.v "cache") ~policy:Contentstore.Policy.default () in
+      let first = Data.Json.Object [ ("version", Data.Json.Int 1) ] in
+      let second = Data.Json.Object [ ("version", Data.Json.Int 2) ] in
+      let _ =
+        Contentstore.Store.save_named_json_bundle
+          store
+          ~namespace:"typ/module-typings"
+          ~key:"Colors"
+          ~json:first
+        |> Result.expect ~msg:"first named json save should succeed"
+      in
+      let _ =
+        Contentstore.Store.save_named_json_bundle
+          store
+          ~namespace:"typ/module-typings"
+          ~key:"Colors"
+          ~json:second
+        |> Result.expect ~msg:"second named json save should succeed"
+      in
+      match Contentstore.Store.load_named_json_bundle store ~namespace:"typ/module-typings" ~key:"Colors" with
+      | Some loaded when Data.Json.to_string loaded = Data.Json.to_string second -> Ok ()
+      | Some _ -> Error "expected named json bundle to overwrite previous value"
+      | None -> Error "expected saved named json bundle")
+  |> Result.unwrap_or ~default:(Error "tempdir creation failed")
+
 let name = "contentstore_tests"
 
 let () =
@@ -81,6 +109,7 @@ let () =
         Test.case "commit_dir keeps first writer" test_commit_dir_first_writer_wins;
         Test.case "blob roundtrip" test_blob_roundtrip;
         Test.case "json bundle roundtrip" test_json_bundle_roundtrip;
+        Test.case "named json bundle roundtrip" test_named_json_bundle_roundtrip;
       ] in
       Test.Cli.main ~name ~tests ~args)
     ~args:Env.args

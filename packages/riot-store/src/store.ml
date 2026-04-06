@@ -22,7 +22,7 @@ type export_entry = Manifest.export_entry = {
 (** Create a store rooted at a specific build lane *)
 let create_for_lane = fun ~(workspace:Workspace.t) ~profile ~target ->
   let store_dir = Path.(workspace.target_dir_root / Path.v profile / Path.v target / Path.v "cache") in
-  { content_store = ContentStore.create ~root_dir:store_dir }
+  { content_store = ContentStore.create ~root:store_dir ~policy:Contentstore.Policy.default () }
 
 (** Create a new store for the given workspace *)
 let create = fun ~(workspace:Workspace.t) ->
@@ -75,7 +75,7 @@ let store_artifacts = fun store ~package ?(ocamlc_warnings = []) ?(exports = [])
   let temp_dir =
     let nanos = Time.SystemTime.duration_since_epoch () |> Time.Duration.to_nanos in
     let temp_name = Std.Crypto.Digest.hex hash ^ ".tmp." ^ Int64.to_string nanos in
-    Path.(ContentStore.root_dir store.content_store / Path.v temp_name)
+    Path.(ContentStore.root store.content_store / Path.v temp_name)
   in
   Fs.create_dir_all temp_dir
   |> Result.expect ~msg:(("Failed to create temp directory: " ^ Path.to_string temp_dir));
@@ -146,7 +146,7 @@ let export_source_path = fun store (entry: export_entry) ->
   if Path.is_absolute entry.path then
     None
   else
-    Some Path.(ContentStore.root_dir store.content_store / Path.v entry.action_hash / entry.path)
+    Some Path.(ContentStore.root store.content_store / Path.v entry.action_hash / entry.path)
 
 let load_manifest = fun store ~hash ->
   match Manifest.load ~path:(manifest_path (get_hash_dir store hash)) with

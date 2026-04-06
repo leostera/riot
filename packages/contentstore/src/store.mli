@@ -1,15 +1,17 @@
 open Std
 
+type policy = Policy.t
+
 (** Generic content-addressable storage rooted at one filesystem directory. *)
 type t
 
 type error = string
 
-(** Create a content-addressable store rooted at [root_dir]. *)
-val create: root_dir:Path.t -> t
+(** Create a content-addressable store rooted at [root]. *)
+val create: root:Path.t -> policy:policy -> unit -> t
 
 (** Return the root directory backing this store. *)
-val root_dir: t -> Path.t
+val root: t -> Path.t
 
 (** Return the stable hash-addressed directory for [hash], whether or not it
     exists yet. *)
@@ -36,3 +38,16 @@ val save_json_bundle:
 
 (** Load one JSON value from a namespaced cache area keyed by [hash]. *)
 val load_json_bundle: t -> namespace:string -> hash:Crypto.hash -> Data.Json.t option
+
+(** Save one arbitrary blob in a mutable namespaced index keyed by [key]. *)
+val save_named_blob: t -> namespace:string -> key:string -> content:string -> (unit, error) result
+
+(** Load one arbitrary blob from a mutable namespaced index keyed by [key]. *)
+val load_named_blob: t -> namespace:string -> key:string -> string option
+
+(** Save one JSON value in a mutable namespaced index keyed by [key]. *)
+val save_named_json_bundle:
+  t -> namespace:string -> key:string -> json:Data.Json.t -> (unit, error) result
+
+(** Load one JSON value from a mutable namespaced index keyed by [key]. *)
+val load_named_json_bundle: t -> namespace:string -> key:string -> Data.Json.t option
