@@ -1,5 +1,10 @@
 open Std
 
+type type_decl = {
+  scope_path: string list;
+  declaration: TypeDecl.t;
+}
+
 type exports = (string * TypeScheme.t) list
 
 type export_result =
@@ -10,18 +15,23 @@ type export_result =
 type t = {
   source_id: SourceId.t;
   export_result: export_result;
+  type_decls: type_decl list;
 }
 
-let trusted = fun ~source_id exports -> { source_id; export_result = TrustedExport { exports } }
+let trusted = fun ~source_id ?(type_decls = []) exports ->
+  { source_id; export_result = TrustedExport { exports }; type_decls }
 
-let errored = fun ~source_id exports -> { source_id; export_result = ErroredExport { exports } }
+let errored = fun ~source_id ?(type_decls = []) exports ->
+  { source_id; export_result = ErroredExport { exports }; type_decls }
 
-let missing = fun ~source_id -> { source_id; export_result = NoExport }
+let missing = fun ~source_id ?(type_decls = []) () -> { source_id; export_result = NoExport; type_decls }
 
 let exports = function
   | { export_result=TrustedExport { exports }; _ }
   | { export_result=ErroredExport { exports }; _ } -> exports
   | { export_result=NoExport; _ } -> []
+
+let type_decls = fun summary -> summary.type_decls
 
 let exports_to_json = fun exports ->
   Data.Json.Array (exports

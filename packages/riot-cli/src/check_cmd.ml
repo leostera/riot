@@ -656,27 +656,52 @@ let merge_module_exports = fun preferred fallback ->
   in
   loop [] [] (preferred @ fallback)
 
-let summary_with_exports = fun template exports ->
+let type_decl_key = fun (type_decl: Typ.FileSummary.type_decl) ->
+  String.concat "." (type_decl.scope_path @ [ type_decl.declaration.type_name ])
+
+let merge_module_type_decls = fun preferred fallback ->
+  let rec loop seen acc remaining =
+    match remaining with
+    | [] -> List.rev acc
+    | ((type_decl: Typ.FileSummary.type_decl) as candidate) :: tail ->
+        let key = type_decl_key candidate in
+        if List.mem key seen then
+          loop seen acc tail
+        else
+          loop (key :: seen) (candidate :: acc) tail
+  in
+  loop [] [] (preferred @ fallback)
+
+let summary_with_payload = fun template ~exports ~type_decls ->
   let source_id = Typ.PersistedSummary.source_id template in
   let template = Typ.PersistedSummary.to_file_summary template in
   match template.Typ.FileSummary.export_result, exports with
-  | Typ.FileSummary.TrustedExport _, _ -> Typ.FileSummary.trusted ~source_id exports
-  | Typ.FileSummary.ErroredExport _, _ -> Typ.FileSummary.errored ~source_id exports
-  | Typ.FileSummary.NoExport, [] -> Typ.FileSummary.missing ~source_id
-  | Typ.FileSummary.NoExport, _ -> Typ.FileSummary.errored ~source_id exports
+  | Typ.FileSummary.TrustedExport _, _ ->
+      Typ.FileSummary.trusted ~source_id ~type_decls exports
+  | Typ.FileSummary.ErroredExport _, _ ->
+      Typ.FileSummary.errored ~source_id ~type_decls exports
+  | Typ.FileSummary.NoExport, [] ->
+      Typ.FileSummary.missing ~source_id ~type_decls ()
+  | Typ.FileSummary.NoExport, _ ->
+      Typ.FileSummary.errored ~source_id ~type_decls exports
 
 let merge_module_summary = fun preferred fallback ->
   let module_name = Typ.ModuleSummary.module_name preferred in
   let exports = merge_module_exports
     (Typ.ModuleSummary.exports preferred)
     (Typ.ModuleSummary.exports fallback) in
+  let type_decls = merge_module_type_decls
+    (Typ.ModuleSummary.type_decls preferred)
+    (Typ.ModuleSummary.type_decls fallback) in
   let preferred_summary = Typ.ModuleSummary.summary preferred in
   let fallback_summary = Typ.ModuleSummary.summary fallback in
   let summary =
     let preferred_file = Typ.PersistedSummary.to_file_summary preferred_summary in
     match preferred_file.Typ.FileSummary.export_result, exports with
-    | Typ.FileSummary.NoExport, _ :: _ -> summary_with_exports fallback_summary exports
-    | _ -> summary_with_exports preferred_summary exports
+    | Typ.FileSummary.NoExport, _ :: _ ->
+        summary_with_payload fallback_summary ~exports ~type_decls
+    | _ ->
+        summary_with_payload preferred_summary ~exports ~type_decls
   in
   let persisted_summary = Typ.PersistedSummary.of_file_summary summary in
   let source_hash = Typ.PersistedSummary.Json.to_json persisted_summary

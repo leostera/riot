@@ -270,6 +270,187 @@ let test_snapshot_uses_loaded_module_summaries = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
     Ok ()
 
+let test_snapshot_uses_sibling_source_record_types = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, colors_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"type point = { x: int; y: int }\n" in
+  let source = "open Colors\n"
+  ^ "let origin = { x = 0; y = 0 }\n"
+  ^ "let total point = point.x + point.y\n" in
+  let (session, demo_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "blend_demo.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot demo_source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let seed_summary =
+      match Query.module_summary_of snapshot colors_source_id with
+      | Some summary -> summary
+      | None -> panic "expected colors module summary"
+    in
+    let type_decl_names = ModuleSummary.type_decls seed_summary
+    |> List.map (fun (type_decl: FileSummary.type_decl) -> type_decl.declaration.type_name) in
+    let field_access_offset =
+      let access_start = offset_of_substring source "point.x +"
+      |> Option.expect ~msg:"expected record field access in test source" in
+      access_start + String.length "point."
+    in
+    let origin_type = export_scheme snapshot demo_source_id "origin" in
+    let total_type = export_scheme snapshot demo_source_id "total" in
+    let field_access_type = inferred_type_at snapshot demo_source_id field_access_offset in
+    let () = Test.assert_equal ~expected:[ "point" ] ~actual:type_decl_names in
+    let () = Test.assert_equal ~expected:(Some "Colors.point") ~actual:origin_type in
+    let () = Test.assert_equal ~expected:(Some "Colors.point -> int") ~actual:total_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:field_access_type in
+    Ok ()
+
+let test_snapshot_uses_loaded_module_record_types = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, colors_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "colors.ml")
+    ~text:"type point = { x: int; y: int }\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_colors =
+    match Query.module_summary_of seed_snapshot colors_source_id with
+    | Some summary -> summary
+    | None -> panic "expected colors module summary"
+  in
+  let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_colors ] in
+  let session = Session.empty ~config in
+  let source = "open Colors\n"
+  ^ "let origin = { x = 0; y = 0 }\n"
+  ^ "let total point = point.x + point.y\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let origin_type = export_scheme snapshot source_id "origin" in
+    let total_type = export_scheme snapshot source_id "total" in
+    let () = Test.assert_equal ~expected:(Some "Colors.point") ~actual:origin_type in
+    let () = Test.assert_equal ~expected:(Some "Colors.point -> int") ~actual:total_type in
+    Ok ()
+
+let test_include_reexports_loaded_module_record_types = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, helpers_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "helpers.ml")
+    ~text:"type point = { x: int; y: int }\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_helpers =
+    match Query.module_summary_of seed_snapshot helpers_source_id with
+    | Some summary -> summary
+    | None -> panic "expected helper module summary"
+  in
+  let consumer_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let consumer_session = Session.empty ~config:consumer_config in
+  let (consumer_session, consumer_source_id) = Session.create_source
+    consumer_session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:"include Helpers\n" in
+  let consumer_snapshot = Session.snapshot consumer_session in
+  let consumer_diagnostics = diagnostic_strings consumer_snapshot consumer_source_id in
+  if not (List.is_empty consumer_diagnostics) then
+    Error (String.concat "\n" consumer_diagnostics)
+  else
+    let consumer_summary =
+      match Query.module_summary_of consumer_snapshot consumer_source_id with
+      | Some summary -> summary
+      | None -> panic "expected consumer module summary"
+    in
+    let exported_type_decls = ModuleSummary.type_decls consumer_summary
+    |> List.map
+      (fun (type_decl: FileSummary.type_decl) -> (type_decl.scope_path, type_decl.declaration.type_name)) in
+    let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
+    let client_session = Session.empty ~config:client_config in
+    let client_source = "let origin = { x = 0; y = 0 }\nlet total point = point.x + point.y\n" in
+    let (client_session, client_source_id) = Session.create_source
+      client_session
+      ~kind:Source.File
+      ~origin:(Source.Label "client.ml")
+      ~text:client_source in
+    let client_snapshot = Session.snapshot client_session in
+    let client_diagnostics = diagnostic_strings client_snapshot client_source_id in
+    if not (List.is_empty client_diagnostics) then
+      Error (String.concat "\n" client_diagnostics)
+    else
+      let origin_type = export_scheme client_snapshot client_source_id "origin" in
+      let total_type = export_scheme client_snapshot client_source_id "total" in
+      let () = Test.assert_equal ~expected:[ ([], "point") ] ~actual:exported_type_decls in
+      let () = Test.assert_equal ~expected:(Some "Consumer.point") ~actual:origin_type in
+      let () = Test.assert_equal ~expected:(Some "Consumer.point -> int") ~actual:total_type in
+      Ok ()
+
+let test_module_alias_reexports_loaded_module_record_types = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, helpers_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "helpers.ml")
+    ~text:"type point = { x: int; y: int }\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_helpers =
+    match Query.module_summary_of seed_snapshot helpers_source_id with
+    | Some summary -> summary
+    | None -> panic "expected helper module summary"
+  in
+  let consumer_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let consumer_session = Session.empty ~config:consumer_config in
+  let (consumer_session, consumer_source_id) = Session.create_source
+    consumer_session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:"module Util = Helpers\n" in
+  let consumer_snapshot = Session.snapshot consumer_session in
+  let consumer_diagnostics = diagnostic_strings consumer_snapshot consumer_source_id in
+  if not (List.is_empty consumer_diagnostics) then
+    Error (String.concat "\n" consumer_diagnostics)
+  else
+    let consumer_summary =
+      match Query.module_summary_of consumer_snapshot consumer_source_id with
+      | Some summary -> summary
+      | None -> panic "expected consumer module summary"
+    in
+    let exported_type_decls = ModuleSummary.type_decls consumer_summary
+    |> List.map
+      (fun (type_decl: FileSummary.type_decl) -> (type_decl.scope_path, type_decl.declaration.type_name)) in
+    let client_config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ consumer_summary ] in
+    let client_session = Session.empty ~config:client_config in
+    let client_source = "let origin = { x = 0; y = 0 }\nlet total point = point.x + point.y\n" in
+    let (client_session, client_source_id) = Session.create_source
+      client_session
+      ~kind:Source.File
+      ~origin:(Source.Label "client.ml")
+      ~text:client_source in
+    let client_snapshot = Session.snapshot client_session in
+    let client_diagnostics = diagnostic_strings client_snapshot client_source_id in
+    if not (List.is_empty client_diagnostics) then
+      Error (String.concat "\n" client_diagnostics)
+    else
+      let origin_type = export_scheme client_snapshot client_source_id "origin" in
+      let total_type = export_scheme client_snapshot client_source_id "total" in
+      let () = Test.assert_equal ~expected:[ ([ "Util" ], "point") ] ~actual:exported_type_decls in
+      let () = Test.assert_equal ~expected:(Some "Consumer.Util.point") ~actual:origin_type in
+      let () = Test.assert_equal ~expected:(Some "Consumer.Util.point -> int") ~actual:total_type in
+      Ok ()
+
 let test_include_reexports_loaded_module_summaries = fun _ctx ->
   let seed_session = Session.empty ~config:Config.default in
   let (seed_session, helpers_source_id) = Session.create_source
@@ -365,6 +546,50 @@ let test_module_alias_reexports_same_named_local_modules = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:create_type in
     let () = Test.assert_equal ~expected:(Some "int") ~actual:answer_type in
     let () = Test.assert_equal ~expected:[ "Cell.create"; "answer" ] ~actual:exported_names in
+    Ok ()
+
+let test_sibling_source_uses_loaded_module_record_reexport = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, helpers_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "helpers.ml")
+    ~text:"type point = { x: int; y: int }\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_helpers =
+    match Query.module_summary_of seed_snapshot helpers_source_id with
+    | Some summary -> summary
+    | None -> panic "expected helper module summary"
+  in
+  let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let session = Session.empty ~config in
+  let consumer_source = "include Helpers\n"
+  ^ "let origin = { x = 0; y = 0 }\n" in
+  let (session, _consumer_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:consumer_source in
+  let client_source = "let total = Consumer.origin.x + Consumer.origin.y\n" in
+  let (session, client_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "client.ml")
+    ~text:client_source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot client_source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let field_access_offset =
+      let access_start = offset_of_substring client_source "Consumer.origin.x +"
+      |> Option.expect ~msg:"expected record field access in test source" in
+      access_start + String.length "Consumer.origin."
+    in
+    let total_type = export_scheme snapshot client_source_id "total" in
+    let field_access_type = inferred_type_at snapshot client_source_id field_access_offset in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:total_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:field_access_type in
     Ok ()
 
 let test_prepare_snapshot_is_rooted = fun _ctx ->
@@ -657,9 +882,14 @@ let () =
         Test.case "snapshot collects persisted summaries" test_snapshot_collects_persisted_summaries;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
+        Test.case "snapshot uses sibling source record types" test_snapshot_uses_sibling_source_record_types;
+        Test.case "snapshot uses loaded module record types" test_snapshot_uses_loaded_module_record_types;
+        Test.case "include reexports loaded module record types" test_include_reexports_loaded_module_record_types;
+        Test.case "module alias reexports loaded module record types" test_module_alias_reexports_loaded_module_record_types;
         Test.case "include reexports loaded module summaries" test_include_reexports_loaded_module_summaries;
         Test.case "module aliases reexport loaded module summaries" test_module_alias_reexports_loaded_module_summaries;
         Test.case "module aliases reexport same-named local modules" test_module_alias_reexports_same_named_local_modules;
+        Test.case "sibling sources use loaded module record reexports" test_sibling_source_uses_loaded_module_record_reexport;
         Test.case "prepare_snapshot is rooted" test_prepare_snapshot_is_rooted;
         Test.case "prepare_snapshot reports missing roots" test_prepare_snapshot_reports_missing_roots;
         Test.case "prepare_snapshot reports missing module summaries" test_prepare_snapshot_reports_missing_module_summary;

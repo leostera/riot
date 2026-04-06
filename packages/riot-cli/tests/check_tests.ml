@@ -353,6 +353,47 @@ let test_check_package_filter_uses_package_session_for_cross_file_exports = fun 
                   Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
                   Ok ())
 
+let test_check_package_filter_uses_package_session_for_cross_file_record_types = fun _ctx ->
+  with_tempdir_result "riot_check_package_record_types"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let colors_root = Path.(workspace_root / Path.v "packages/colors") in
+      let colors_source = Path.(colors_root / Path.v "src/colors.ml") in
+      let demo_source = Path.(colors_root / Path.v "examples/blend_demo.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") ()
+        ] in
+      match write_file colors_source "type point = { x: int; y: int }\n" with
+      | Error err -> Error err
+      | Ok () ->
+          match write_file
+            demo_source
+            "open Colors\nlet origin = { x = 0; y = 0 }\nlet total point = point.x + point.y\n"
+          with
+          | Error err -> Error err
+          | Ok () ->
+              let matches = parse_check [ "check"; "--json"; "-p"; "colors" ]
+              |> Result.expect ~msg:"parse check args" in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+              |> Result.expect ~msg:"package check should use sibling source record types";
+              let events = parse_jsonl (stdout_contents ()) in
+              let diagnostic_count =
+                events
+                |> List.filter
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_diagnostic") -> true
+                    | _ -> false)
+                |> List.length
+              in
+              Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+              Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+              Ok ())
+
 let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
   with_tempdir_result "riot_check_package_dependencies"
     (fun tmpdir ->
@@ -476,6 +517,64 @@ let test_check_package_filter_reexports_workspace_dependency_summaries_via_inclu
               Test.assert_equal ~expected:0 ~actual:diagnostic_count;
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
               Ok ())
+
+let test_check_package_filter_uses_sibling_reexported_dependency_record_types = fun _ctx ->
+  with_tempdir_result "riot_check_package_dependency_record_reexport"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let support_root = Path.(workspace_root / Path.v "packages/support") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let support_source = Path.(support_root / Path.v "src/support.ml") in
+      let proxy_source = Path.(app_root / Path.v "src/proxy.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"support"
+            ~path:support_root
+            ~relative_path:(Path.v "packages/support")
+            ~sources:{ empty_sources with src = [ Path.v "src/support.ml" ] }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "support" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/app.ml"; Path.v "src/proxy.ml" ] }
+            ();
+        ] in
+      match write_file support_source "type point = { x: int; y: int }\n" with
+      | Error err -> Error err
+      | Ok () ->
+          match write_file proxy_source "include Support\nlet origin = { x = 0; y = 0 }\n" with
+          | Error err -> Error err
+          | Ok () ->
+              match write_file
+                app_source
+                "let total = Proxy.origin.x + Proxy.origin.y\n"
+              with
+              | Error err -> Error err
+              | Ok () ->
+                  let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
+                  |> Result.expect ~msg:"parse check args" in
+                  let stdout, stdout_contents = make_capture_writer () in
+                  let stderr, stderr_contents = make_capture_writer () in
+                  Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                  |> Result.expect ~msg:"package check should use sibling dependency record reexports";
+                  let events = parse_jsonl (stdout_contents ()) in
+                  let diagnostic_count =
+                    events
+                    |> List.filter
+                      (fun json ->
+                        match Data.Json.get_field "type" json with
+                        | Some (Data.Json.String "check_diagnostic") -> true
+                        | _ -> false)
+                    |> List.length
+                  in
+                  Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                  Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                  Ok ())
 
 let test_check_package_filter_reexports_same_named_workspace_modules_via_alias = fun _ctx ->
   with_tempdir_result "riot_check_package_same_named_module_alias"
@@ -1077,8 +1176,10 @@ let tests =
     case "check: clean success is silent" test_check_success_is_silent;
     case "check: package filter limits workspace scan" test_check_package_filter_limits_workspace_scan;
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
+    case "check: package filter uses sibling source record types during package scans" test_check_package_filter_uses_package_session_for_cross_file_record_types;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
+    case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
     case "check: package filter reexports same-named workspace modules via alias" test_check_package_filter_reexports_same_named_workspace_modules_via_alias;
     case "check: package filter loads transitive workspace dependency summaries" test_check_package_filter_loads_transitive_workspace_dependency_summaries;
     case "check: package filter keeps dependency summaries when dependency has broken sources" test_check_package_filter_keeps_dependency_summaries_when_dependency_has_broken_sources;

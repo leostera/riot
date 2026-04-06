@@ -3,6 +3,7 @@ module Typ_diagnostic = Diagnostic
 
 type t = {
   exports: Check_result.env;
+  type_decls: FileSummary.type_decl list;
   item_traces: Check_result.item_trace list;
   expr_traces: Check_result.expr_trace list;
   diagnostics: Typ_diagnostic.t list;
@@ -28,6 +29,80 @@ type state = {
 
 let empty_span = Syn.Ceibo.Span.make ~start:0 ~end_:0
 
+let qualify_name = fun scope_path name ->
+  match scope_path with
+  | [] -> name
+  | _ -> String.concat "." scope_path ^ "." ^ name
+
+let record_type_of_summary_decl = fun (type_decl: FileSummary.type_decl) ->
+  match type_decl.declaration.labels with
+  | [] -> None
+  | labels ->
+      Some {
+        owner_name = qualify_name type_decl.scope_path type_decl.declaration.type_name;
+        param_ids = type_decl.declaration.param_ids;
+        labels;
+      }
+
+let unique_record_types = fun record_types ->
+  let rec loop seen acc = function
+    | [] -> List.rev acc
+    | (record_decl: record_type_decl) :: rest ->
+        if List.mem record_decl.owner_name seen then
+          loop seen acc rest
+        else
+          loop (record_decl.owner_name :: seen) (record_decl :: acc) rest
+  in
+  loop [] [] record_types
+
+let type_decl_key = fun (type_decl: FileSummary.type_decl) ->
+  qualify_name type_decl.scope_path type_decl.declaration.type_name
+
+let bind_type_decls = fun type_decls introduced ->
+  List.fold_left
+    (fun acc (type_decl: FileSummary.type_decl) ->
+      let key = type_decl_key type_decl in
+      let acc = List.filter (fun candidate -> not (String.equal (type_decl_key candidate) key)) acc in
+      acc @ [ type_decl ])
+    type_decls
+    introduced
+
+let split_module_path = fun module_path ->
+  if String.equal module_path "" then
+    []
+  else
+    String.split_on_char '.' module_path
+
+let rec strip_scope_prefix = fun prefix scope_path ->
+  match (prefix, scope_path) with
+  | [], rest -> Some rest
+  | prefix_segment :: prefix_rest, scope_segment :: scope_rest
+    when String.equal prefix_segment scope_segment -> strip_scope_prefix prefix_rest scope_rest
+  | _ -> None
+
+let aliases_for_type_decls = fun type_decls module_path ->
+  let prefix = split_module_path module_path in
+  type_decls |> List.filter_map
+    (fun (type_decl: FileSummary.type_decl) ->
+      match strip_scope_prefix prefix type_decl.scope_path with
+      | Some scope_path -> Some { type_decl with scope_path }
+      | None -> None)
+
+let prefix_type_decls = fun prefix type_decls ->
+  List.map
+    (fun (type_decl: FileSummary.type_decl) ->
+      { type_decl with scope_path = prefix @ type_decl.scope_path })
+    type_decls
+
+let type_decls_for_include = fun type_decls module_path ->
+  aliases_for_type_decls type_decls module_path
+
+let type_decls_for_module_alias = fun type_decls ~alias_name ~module_path ->
+  if String.equal alias_name module_path then
+    []
+  else
+    aliases_for_type_decls type_decls module_path |> prefix_type_decls [ alias_name ]
+
 let make_state = fun ~config file ->
   {
     file;
@@ -37,7 +112,8 @@ let make_state = fun ~config file ->
     diagnostics = [];
     expr_traces = [];
     item_traces = [];
-    record_types = [];
+    record_types =
+      config.ambient_type_decls |> List.filter_map record_type_of_summary_decl |> unique_record_types;
     forced_export_names = [];
   }
 
@@ -1184,11 +1260,6 @@ let introduced_entries = fun before after ->
     (fun (name, _) ->
       List.mem name introduced)
 
-let qualify_name = fun scope_path name ->
-  match scope_path with
-  | [] -> name
-  | _ -> String.concat "." scope_path ^ "." ^ name
-
 let qualify_entries = fun scope_path entries ->
   List.map (fun (name, scheme) -> (qualify_name scope_path name, scheme)) entries
 
@@ -1248,13 +1319,17 @@ let env_for_item_scope = fun export_env scope_entries scope_opens scope_path ->
 let infer_file = fun ~config file ->
   let state = make_state ~config file in
   let initial_env = bind_env config.prelude config.ambient in
-  let rec loop export_state scope_entries scope_opens = function
-    | [] -> export_state
+  let rec loop export_state type_decls scope_entries scope_opens = function
+    | [] -> (export_state, type_decls)
     | item :: rest -> (
         match item with
         | ItemTree.Type type_item ->
             let visible_exports_before = export_env config export_state in
             let introduced = TypeDecl.constructor_entries type_item.declaration in
+            let introduced_type_decls = [ {
+              FileSummary.scope_path = type_item.scope_path;
+              declaration = type_item.declaration;
+            } ] in
             let () =
               match type_item.declaration.labels with
               | [] -> ()
@@ -1282,7 +1357,12 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop
+              export_state
+              (bind_type_decls type_decls introduced_type_decls)
+              scope_entries
+              scope_opens
+              rest
         | ItemTree.Exception exception_item ->
             let visible_exports_before = export_env config export_state in
             let introduced = [ (exception_item.exception_name, exception_item.scheme) ] in
@@ -1303,7 +1383,7 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Value value_item ->
             let visible_exports_before = export_env config export_state in
             let item_env = env_for_item_scope export_state scope_entries scope_opens value_item.scope_path in
@@ -1326,7 +1406,7 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Open open_item ->
             let scope_opens = update_scope_opens scope_opens open_item.scope_path open_item.module_path in
             let exports_after = export_env config export_state in
@@ -1337,11 +1417,14 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Include include_item ->
             let visible_exports_before = export_env config export_state in
             let item_env = env_for_item_scope export_state scope_entries scope_opens include_item.scope_path in
             let introduced = entries_for_include item_env include_item.module_path in
+            let visible_type_decls = bind_type_decls config.ambient_type_decls type_decls in
+            let introduced_type_decls = type_decls_for_include visible_type_decls include_item.module_path
+            |> prefix_type_decls include_item.scope_path in
             let (export_state, scope_entries) =
               match include_item.scope_path with
               | [] -> (bind_env export_state introduced, scope_entries)
@@ -1359,7 +1442,12 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop
+              export_state
+              (bind_type_decls type_decls introduced_type_decls)
+              scope_entries
+              scope_opens
+              rest
         | ItemTree.ModuleAlias module_alias_item ->
             let visible_exports_before = export_env_with_forced_names state export_state in
             let item_env = env_for_item_scope
@@ -1375,6 +1463,12 @@ let infer_file = fun ~config file ->
               item_env
               ~alias_name:module_alias_item.alias_name
               ~module_path:module_alias_item.module_path in
+            let visible_type_decls = bind_type_decls config.ambient_type_decls type_decls in
+            let introduced_type_decls = type_decls_for_module_alias
+              visible_type_decls
+              ~alias_name:module_alias_item.alias_name
+              ~module_path:module_alias_item.module_path
+            |> prefix_type_decls module_alias_item.scope_path in
             let (export_state, scope_entries) =
               match module_alias_item.scope_path with
               | [] -> (bind_env export_state introduced, scope_entries)
@@ -1400,7 +1494,12 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop
+              export_state
+              (bind_type_decls type_decls introduced_type_decls)
+              scope_entries
+              scope_opens
+              rest
         | ItemTree.Unsupported unsupported_item ->
             let exports_after = export_env config export_state in
             let () =
@@ -1414,12 +1513,13 @@ let infer_file = fun ~config file ->
               )
               :: state.item_traces
             in
-            loop export_state scope_entries scope_opens rest
+            loop export_state type_decls scope_entries scope_opens rest
       )
   in
-  let exports = loop initial_env [] [] (ItemTree.items file.item_tree) in
+  let (exports, type_decls) = loop initial_env [] [] [] (ItemTree.items file.item_tree) in
   {
     exports = export_env_with_forced_names state exports;
+    type_decls;
     item_traces = List.rev state.item_traces;
     expr_traces = List.rev state.expr_traces;
     diagnostics = List.rev state.diagnostics

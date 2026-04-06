@@ -16,6 +16,8 @@ let summary = fun summary -> summary.summary
 
 let exports = fun summary -> PersistedSummary.exports summary.summary
 
+let type_decls = fun summary -> PersistedSummary.type_decls summary.summary
+
 let json_type_name = function
   | Data.Json.Null -> "null"
   | Bool _ -> "bool"

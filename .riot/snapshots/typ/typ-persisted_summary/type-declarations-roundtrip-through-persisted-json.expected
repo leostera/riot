@@ -1,0 +1,57 @@
+{
+  "file_summary": {
+    "export_result": {
+      "exports": [
+        {
+          "name": "origin",
+          "scheme": "point"
+        }
+      ],
+      "tag": "trusted_export"
+    },
+    "source_id": 0
+  },
+  "persisted": {
+    "export_result": {
+      "exports": [
+        {
+          "name": "origin",
+          "scheme": {
+            "body": {
+              "arguments": [],
+              "name": "point",
+              "tag": "named"
+            },
+            "quantified": []
+          }
+        }
+      ],
+      "tag": "trusted_export"
+    },
+    "source_id": 0,
+    "type_decls": [
+      {
+        "constructors": [],
+        "labels": [
+          {
+            "field_type": {
+              "tag": "int"
+            },
+            "mutable": false,
+            "name": "x"
+          },
+          {
+            "field_type": {
+              "tag": "int"
+            },
+            "mutable": false,
+            "name": "y"
+          }
+        ],
+        "param_ids": [],
+        "scope_path": [],
+        "type_name": "point"
+      }
+    ]
+  }
+}

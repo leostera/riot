@@ -23,6 +23,10 @@ val summary: t -> PersistedSummary.t
 (** Extract the exported environment from the underlying persisted summary. *)
 val exports: t -> FileSummary.exports
 
+(** Extract the exported lowered type declarations from the underlying
+    persisted summary. *)
+val type_decls: t -> FileSummary.type_decl list
+
 module Json: sig
   (** Encode a module summary as structured JSON. *)
   val to_json: t -> Data.Json.t

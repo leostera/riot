@@ -10,6 +10,8 @@ let source_id = fun (summary: FileSummary.t) -> summary.source_id
 
 let exports = fun (summary: FileSummary.t) -> FileSummary.exports summary
 
+let type_decls = fun (summary: FileSummary.t) -> FileSummary.type_decls summary
+
 let json_type_name = function
   | Data.Json.Null -> "null"
   | Bool _ -> "bool"
@@ -124,6 +126,68 @@ let exports_to_json = fun exports ->
   |> List.map
     (fun (name, scheme) ->
       Data.Json.Object [ ("name", Data.Json.String name); ("scheme", scheme_to_json scheme); ]))
+
+let constructor_to_json = fun (constructor: TypeDecl.constructor) ->
+  Data.Json.Object [
+    ("name", Data.Json.String constructor.name);
+    ("scheme", scheme_to_json constructor.scheme);
+  ]
+
+let label_to_json = fun (label: TypeDecl.label) ->
+  Data.Json.Object [
+    ("name", Data.Json.String label.name);
+    ("field_type", type_to_json label.field_type);
+    ("mutable", Data.Json.Bool label.mutable_);
+  ]
+
+let manifest_to_json = function
+  | TypeDecl.Alias manifest_type -> Data.Json.Object [
+    ("tag", Data.Json.String "alias");
+    ("type", type_to_json manifest_type);
+  ]
+  | TypeDecl.PolyVariant { bound; tags; inherited } ->
+      let bound =
+        match bound with
+        | TypeDecl.Exact -> "exact"
+        | TypeDecl.UpperBound -> "upper"
+        | TypeDecl.LowerBound -> "lower"
+      in
+      let tag_to_json (tag: TypeDecl.poly_variant_tag) =
+        let fields = [ ("name", Data.Json.String tag.name) ] in
+        let fields =
+          match tag.payload_type with
+          | Some payload_type -> fields @ [ ("payload_type", type_to_json payload_type) ]
+          | None -> fields
+        in
+        Data.Json.Object fields
+      in
+      Data.Json.Object [
+        ("tag", Data.Json.String "poly_variant");
+        ("bound", Data.Json.String bound);
+        ("tags", Data.Json.Array (List.map tag_to_json tags));
+        ("inherited", Data.Json.Array (List.map type_to_json inherited));
+      ]
+
+let type_decl_to_json = fun (type_decl: FileSummary.type_decl) ->
+  let fields = [
+    ("scope_path", Data.Json.Array (List.map (fun segment -> Data.Json.String segment) type_decl.scope_path));
+    ("type_name", Data.Json.String type_decl.declaration.type_name);
+    ("param_ids", Data.Json.Array (List.map (fun id -> Data.Json.Int id) type_decl.declaration.param_ids));
+    (
+      "constructors",
+      Data.Json.Array (List.map constructor_to_json type_decl.declaration.constructors)
+    );
+    ("labels", Data.Json.Array (List.map label_to_json type_decl.declaration.labels));
+  ] in
+  let fields =
+    match type_decl.declaration.manifest with
+    | Some manifest -> fields @ [ ("manifest", manifest_to_json manifest) ]
+    | None -> fields
+  in
+  Data.Json.Object fields
+
+let type_decls_to_json = fun type_decls ->
+  Data.Json.Array (List.map type_decl_to_json type_decls)
 
 let label_of_json = fun json ->
   let* fields = get_object json in
@@ -259,6 +323,156 @@ let exports_of_json = fun json ->
   in
   loop [] values
 
+let int_list_of_json = fun json ->
+  let* values = get_array json in
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | value :: rest ->
+        let* value = get_int value in
+        loop (value :: acc) rest
+  in
+  loop [] values
+
+let string_list_of_json = fun json ->
+  let* values = get_array json in
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | value :: rest ->
+        let* value = get_string value in
+        loop (value :: acc) rest
+  in
+  loop [] values
+
+let constructor_of_json = fun json ->
+  let* fields = get_object json in
+  let* name_json = field "name" fields in
+  let* scheme_json = field "scheme" fields in
+  let* name = get_string name_json in
+  let* scheme = scheme_of_json scheme_json in
+  Ok ({ TypeDecl.name = name; scheme }: TypeDecl.constructor)
+
+let label_decl_of_json = fun json ->
+  let* fields = get_object json in
+  let* name_json = field "name" fields in
+  let* field_type_json = field "field_type" fields in
+  let* mutable_json = field "mutable" fields in
+  let* name = get_string name_json in
+  let* field_type = type_of_json field_type_json in
+  let mutable_ =
+    match mutable_json with
+    | Data.Json.Bool mutable_ -> Ok mutable_
+    | other -> error_expected "bool" other
+  in
+  let* mutable_ = mutable_ in
+  Ok ({ TypeDecl.name = name; field_type; mutable_ }: TypeDecl.label)
+
+let poly_variant_tag_of_json = fun json ->
+  let* fields = get_object json in
+  let* name_json = field "name" fields in
+  let* name = get_string name_json in
+  let payload_type =
+    match List.assoc_opt "payload_type" fields with
+    | Some payload_type_json -> type_of_json payload_type_json |> Result.map Option.some
+    | None -> Ok None
+  in
+  let* payload_type = payload_type in
+  Ok ({ TypeDecl.name = name; payload_type }: TypeDecl.poly_variant_tag)
+
+let manifest_of_json = fun json ->
+  let* fields = get_object json in
+  let* tag_json = field "tag" fields in
+  let* tag = get_string tag_json in
+  match tag with
+  | "alias" ->
+      let* type_json = field "type" fields in
+      let* manifest_type = type_of_json type_json in
+      Ok (TypeDecl.Alias manifest_type)
+  | "poly_variant" ->
+      let* bound_json = field "bound" fields in
+      let* tags_json = field "tags" fields in
+      let* inherited_json = field "inherited" fields in
+      let* bound = get_string bound_json in
+      let bound =
+        match bound with
+        | "exact" -> Ok TypeDecl.Exact
+        | "upper" -> Ok TypeDecl.UpperBound
+        | "lower" -> Ok TypeDecl.LowerBound
+        | other -> Error ("unknown persisted poly-variant bound " ^ other)
+      in
+      let* bound = bound in
+      let* tags_json = get_array tags_json in
+      let rec parse_tags acc = function
+        | [] -> Ok (List.rev acc)
+        | value :: rest ->
+            let* tag = poly_variant_tag_of_json value in
+            parse_tags (tag :: acc) rest
+      in
+      let* tags = parse_tags [] tags_json in
+      let* inherited_json = get_array inherited_json in
+      let rec parse_inherited acc = function
+        | [] -> Ok (List.rev acc)
+        | value :: rest ->
+            let* inherited = type_of_json value in
+            parse_inherited (inherited :: acc) rest
+      in
+      let* inherited = parse_inherited [] inherited_json in
+      Ok (TypeDecl.PolyVariant { bound; tags; inherited })
+  | other ->
+      Error ("unknown persisted type manifest tag " ^ other)
+
+let type_decl_of_json = fun json ->
+  let* fields = get_object json in
+  let* scope_path_json = field "scope_path" fields in
+  let* type_name_json = field "type_name" fields in
+  let* param_ids_json = field "param_ids" fields in
+  let* constructors_json = field "constructors" fields in
+  let* labels_json = field "labels" fields in
+  let* scope_path = string_list_of_json scope_path_json in
+  let* type_name = get_string type_name_json in
+  let* param_ids = int_list_of_json param_ids_json in
+  let* constructors_json = get_array constructors_json in
+  let rec parse_constructors acc = function
+    | [] -> Ok (List.rev acc)
+    | value :: rest ->
+        let* constructor = constructor_of_json value in
+        parse_constructors (constructor :: acc) rest
+  in
+  let* constructors = parse_constructors [] constructors_json in
+  let* labels_json = get_array labels_json in
+  let rec parse_labels acc = function
+    | [] -> Ok (List.rev acc)
+    | value :: rest ->
+        let* label = label_decl_of_json value in
+        parse_labels (label :: acc) rest
+  in
+  let* labels = parse_labels [] labels_json in
+  let manifest =
+    match List.assoc_opt "manifest" fields with
+    | Some manifest_json -> manifest_of_json manifest_json |> Result.map Option.some
+    | None -> Ok None
+  in
+  let* manifest = manifest in
+  Ok {
+    FileSummary.scope_path = scope_path;
+    declaration = {
+      TypeDecl.type_name = type_name;
+      param_ids;
+      constructors;
+      labels;
+      manifest;
+    };
+  }
+
+let type_decls_of_json = fun json ->
+  let* values = get_array json in
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | value :: rest ->
+        let* type_decl = type_decl_of_json value in
+        loop (type_decl :: acc) rest
+  in
+  loop [] values
+
 module Json = struct
   let to_json = fun summary ->
     let export_result =
@@ -279,6 +493,7 @@ module Json = struct
     Data.Json.Object [
       ("source_id", Data.Json.Int (SourceId.to_int summary.source_id));
       ("export_result", export_result);
+      ("type_decls", type_decls_to_json summary.type_decls);
     ]
 
   let of_json = fun json ->
@@ -299,5 +514,11 @@ module Json = struct
       | other -> Error ("unknown persisted export_result tag " ^ other)
     in
     let* export_result = export_result in
-    Ok { FileSummary.source_id = SourceId.of_int source_id; export_result }
+    let type_decls =
+      match List.assoc_opt "type_decls" fields with
+      | Some type_decls_json -> type_decls_of_json type_decls_json
+      | None -> Ok []
+    in
+    let* type_decls = type_decls in
+    Ok { FileSummary.source_id = SourceId.of_int source_id; export_result; type_decls }
 end

@@ -40,9 +40,9 @@ let analyze = fun ~config (source: Source.t) ->
       let diagnostics = semantic_tree.diagnostics @ inferred.diagnostics in
       let file_summary =
         if diagnostics = [] then
-          FileSummary.trusted ~source_id:source.source_id inferred.exports
+          FileSummary.trusted ~source_id:source.source_id ~type_decls:inferred.type_decls inferred.exports
         else
-          FileSummary.errored ~source_id:source.source_id inferred.exports
+          FileSummary.errored ~source_id:source.source_id ~type_decls:inferred.type_decls inferred.exports
       in
       {
         source;
@@ -64,7 +64,7 @@ let analyze = fun ~config (source: Source.t) ->
         semantic_tree = None;
         lowering_diagnostics = [];
         typing_diagnostics = [];
-        file_summary = FileSummary.missing ~source_id:source.source_id;
+        file_summary = FileSummary.missing ~source_id:source.source_id ();
         type_index = TypeIndex.empty;
         item_traces = [];
         expr_traces = [];
@@ -77,7 +77,7 @@ let analyze = fun ~config (source: Source.t) ->
         semantic_tree = None;
         lowering_diagnostics = [ Typ_diagnostic.CstBuilderError { builder_error = error }; ];
         typing_diagnostics = [];
-        file_summary = FileSummary.missing ~source_id:source.source_id;
+        file_summary = FileSummary.missing ~source_id:source.source_id ();
         type_index = TypeIndex.empty;
         item_traces = [];
         expr_traces = [];

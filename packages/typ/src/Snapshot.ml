@@ -30,18 +30,49 @@ let make = fun ~revision ~roots ~config ~sources ->
   in
   { revision; roots; analyses; qualified_summaries = None }
 
+let qualify_exports = fun module_name exports ->
+  List.map (fun (name, scheme) -> (module_name ^ "." ^ name, scheme)) exports
+
+let qualify_type_decls = fun module_name type_decls ->
+  List.map
+    (fun (type_decl: FileSummary.type_decl) ->
+      {
+        FileSummary.scope_path = module_name :: type_decl.scope_path;
+        declaration = type_decl.declaration;
+      })
+    type_decls
+
+let loaded_ambient_env_for = fun (slot: analysis_slot) ->
+  let current_module_name = Source.module_name slot.source in
+  slot.config.loaded_modules
+  |> List.filter
+    (fun summary -> not (String.equal (ModuleSummary.module_name summary) current_module_name))
+  |> List.map
+    (fun summary ->
+      ModuleSummary.exports summary |> qualify_exports (ModuleSummary.module_name summary))
+  |> List.flatten
+
+let loaded_ambient_type_decls_for = fun (slot: analysis_slot) ->
+  let current_module_name = Source.module_name slot.source in
+  slot.config.loaded_modules
+  |> List.filter
+    (fun summary -> not (String.equal (ModuleSummary.module_name summary) current_module_name))
+  |> List.map
+    (fun summary -> ModuleSummary.type_decls summary |> qualify_type_decls (ModuleSummary.module_name summary))
+  |> List.flatten
+
 let force_base_analysis = fun (slot: analysis_slot) ->
   match slot.base_analysis with
   | Some analysis -> analysis
   | None ->
-      let analysis = SourceAnalysis.analyze ~config:slot.config slot.source in
+      let config = slot.config
+      |> TypConfig.with_ambient ~ambient:(loaded_ambient_env_for slot)
+      |> TypConfig.with_ambient_type_decls ~ambient_type_decls:(loaded_ambient_type_decls_for slot) in
+      let analysis = SourceAnalysis.analyze ~config slot.source in
       let () =
         slot.base_analysis <- Some analysis
       in
       analysis
-
-let qualify_exports = fun module_name exports ->
-  List.map (fun (name, scheme) -> (module_name ^ "." ^ name, scheme)) exports
 
 let qualified_summaries = fun (snapshot: t) ->
   match snapshot.qualified_summaries with
@@ -62,25 +93,28 @@ let qualified_summaries = fun (snapshot: t) ->
       summaries
 
 let ambient_env_for = fun (snapshot: t) (slot: analysis_slot) ->
-  let current_module_name = Source.module_name slot.source in
   let local_modules = qualified_summaries snapshot
   |> List.filter
     (fun (candidate_source_id, _, _) -> not (SourceId.equal candidate_source_id slot.source_id))
   |> List.map
     (fun (_, module_name, summary) -> PersistedSummary.exports summary |> qualify_exports module_name) in
-  let loaded_modules = slot.config.loaded_modules
+  List.flatten local_modules @ loaded_ambient_env_for slot
+
+let ambient_type_decls_for = fun (snapshot: t) (slot: analysis_slot) ->
+  let local_modules = qualified_summaries snapshot
   |> List.filter
-    (fun summary -> not (String.equal (ModuleSummary.module_name summary) current_module_name))
+    (fun (candidate_source_id, _, _) -> not (SourceId.equal candidate_source_id slot.source_id))
   |> List.map
-    (fun summary ->
-      ModuleSummary.exports summary |> qualify_exports (ModuleSummary.module_name summary)) in
-  List.flatten (local_modules @ loaded_modules)
+    (fun (_, module_name, summary) -> PersistedSummary.type_decls summary |> qualify_type_decls module_name) in
+  List.flatten local_modules @ loaded_ambient_type_decls_for slot
 
 let force_analysis = fun (snapshot: t) (slot: analysis_slot) ->
   match slot.analysis with
   | Some analysis -> analysis
   | None ->
-      let config = TypConfig.with_ambient slot.config ~ambient:(ambient_env_for snapshot slot) in
+      let config = slot.config
+      |> TypConfig.with_ambient ~ambient:(ambient_env_for snapshot slot)
+      |> TypConfig.with_ambient_type_decls ~ambient_type_decls:(ambient_type_decls_for snapshot slot) in
       let analysis = SourceAnalysis.analyze ~config slot.source in
       let () =
         slot.analysis <- Some analysis

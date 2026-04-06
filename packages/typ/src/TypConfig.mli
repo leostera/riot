@@ -14,6 +14,8 @@ type t = {
   loaded_modules: ModuleSummary.t list;
   (** Snapshot-scoped bindings synthesized from sibling sources or host context. *)
   ambient: env;
+  (** Snapshot-scoped lowered type declarations synthesized from summaries. *)
+  ambient_type_decls: FileSummary.type_decl list;
 }
 
 (** Default host configuration used by the current prototype and tests.
@@ -27,6 +29,10 @@ val default: t
 
 (** Replace the snapshot ambient environment while preserving the base prelude. *)
 val with_ambient: t -> ambient:env -> t
+
+(** Replace the snapshot ambient type declarations while preserving the base
+    prelude, loaded modules, and ambient value environment. *)
+val with_ambient_type_decls: t -> ambient_type_decls:FileSummary.type_decl list -> t
 
 (** Replace the host-loaded persisted module summaries while preserving the
     base prelude and snapshot ambient environment. *)

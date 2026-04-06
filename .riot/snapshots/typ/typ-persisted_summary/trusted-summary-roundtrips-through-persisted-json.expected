@@ -76,6 +76,7 @@
       ],
       "tag": "trusted_export"
     },
-    "source_id": 0
+    "source_id": 0,
+    "type_decls": []
   }
 }

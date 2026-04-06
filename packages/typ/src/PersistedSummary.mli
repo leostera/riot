@@ -23,6 +23,10 @@ val source_id: t -> SourceId.t
 (** Extract the exported environment carried by the persisted value. *)
 val exports: t -> FileSummary.exports
 
+(** Extract the exported lowered type declarations carried by the persisted
+    value. *)
+val type_decls: t -> FileSummary.type_decl list
+
 module Json: sig
   (** Encode a persisted summary as structured JSON.
 

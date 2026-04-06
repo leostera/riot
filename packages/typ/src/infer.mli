@@ -4,6 +4,8 @@ open Std
 type t = {
   (** File-local exports after filtering the configured prelude. *)
   exports: Check_result.env;
+  (** Exported lowered type declarations, including reexports. *)
+  type_decls: FileSummary.type_decl list;
   (** Per-item export snapshots produced during inference. *)
   item_traces: Check_result.item_trace list;
   (** Per-expression environment and type snapshots produced during inference. *)
