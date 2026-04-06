@@ -21,10 +21,9 @@ val remove_source: t -> SourceId.t -> t
 (** Prepare one rooted immutable snapshot.
 
     Preparing a rooted snapshot validates that all requested root sources are
-    present in the session and returns a structured missing-requirements payload
-    when they are not. The current prototype does not yet discover or hydrate
-    transitive dependency summaries during this step, but this is the public
-    seam where that behavior will land. *)
+    present in the session, discovers module dependencies for those roots, and
+    returns a structured missing-requirements payload when they are not
+    available. *)
 val prepare_snapshot: t -> roots:SourceId.t list -> (Snapshot.t, MissingRequirements.t) result
 
 (** Freeze the current session state into one immutable [Snapshot].

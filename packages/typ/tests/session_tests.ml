@@ -7,10 +7,37 @@ let export_names = function
   | Some FileSummary.NoExport
   | None -> []
 
+let export_scheme = fun snapshot source_id name ->
+  match Query.export_of snapshot source_id with
+  | Some (FileSummary.TrustedExport { exports })
+  | Some (FileSummary.ErroredExport { exports }) ->
+      List.assoc_opt name exports |> Option.map TypePrinter.scheme_to_string
+  | Some FileSummary.NoExport
+  | None -> None
+
 let inferred_type_at = fun snapshot source_id offset ->
   Query.type_at snapshot source_id (Position.make ~offset) |> function
   | Some ty -> Some (TypePrinter.type_to_string ty)
   | None -> None
+
+let offset_of_substring = fun text needle ->
+  let text_length = String.length text in
+  let needle_length = String.length needle in
+  let max_start = text_length - needle_length in
+  let rec loop start =
+    if start > max_start then
+      None
+    else if String.sub text start needle_length = needle then
+      Some start
+    else
+      loop (start + 1)
+  in
+  if needle_length = 0 then
+    Some 0
+  else if needle_length > text_length then
+    None
+  else
+    loop 0
 
 let has_unbound_name = fun snapshot source_id ->
   Query.diagnostics snapshot source_id |> List.exists
@@ -291,6 +318,188 @@ let test_prepare_snapshot_reports_missing_roots = fun _ctx ->
       let () = Test.assert_equal ~expected ~actual in
       Ok ()
 
+let test_prepare_snapshot_reports_missing_module_summary = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "uses_missing_module.ml")
+    ~text:"open Missing_module\nlet answer = 1\n"
+  in
+  match Session.prepare_snapshot session ~roots:[ source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to report missing module summaries"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int source_id) ]);
+        ]
+      ] |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_prepare_snapshot_collects_transitive_missing_modules = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "dependent.ml")
+    ~text:"open Inner\nlet answer = 1\n"
+  in
+  let (session, _inner_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "inner.ml")
+    ~text:"open Missing_module\nlet value = 42\n"
+  in
+  match Session.prepare_snapshot session ~roots:[ source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to report transitive missing module summaries"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [ Data.Json.Int 1 ]);
+        ]
+      ] |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_prepare_snapshot_collects_missing_module_for_qualified_reference = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "qualified.ml")
+    ~text:"let answer = Missing_module.value 1\n"
+  in
+  match Session.prepare_snapshot session ~roots:[ source_id ] with
+  | Ok _ -> Error "expected rooted snapshot preparation to report missing module summaries for qualified access"
+  | Error missing ->
+      let actual = MissingRequirements.to_json missing |> Data.Json.to_string in
+      let expected = Data.Json.Array [
+        Data.Json.Object [
+          ("tag", Data.Json.String "missing_module_summary");
+          ("module_name", Data.Json.String "Missing_module");
+          ("requested_by", Data.Json.Array [ Data.Json.Int (SourceId.to_int source_id) ]);
+        ]
+      ] |> Data.Json.to_string in
+      if String.equal expected actual then
+        Ok ()
+      else
+        Error (String.concat "\n" [ "expected"; expected; "actual"; actual ])
+
+let test_optional_arguments_can_be_omitted_and_reordered = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let source =
+    "let make_key = fun ?(kind = 0) ?(mods = 1) code -> code + kind + mods\n"
+    ^ "let omitted = make_key 3\n"
+    ^ "let reordered = make_key ~mods:4 3\n"
+    ^ "let explicit = make_key ~kind:5 ~mods:6 7\n"
+  in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "optional_apply.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let reordered_offset =
+      offset_of_substring source "make_key ~mods:4 3"
+      |> Option.expect ~msg:"expected reordered call in test source" in
+    let explicit_offset =
+      offset_of_substring source "make_key ~kind:5 ~mods:6 7"
+      |> Option.expect ~msg:"expected explicit call in test source" in
+    let make_key_type = export_scheme snapshot source_id "make_key" in
+    let omitted_type = export_scheme snapshot source_id "omitted" in
+    let reordered_type = export_scheme snapshot source_id "reordered" in
+    let explicit_type = export_scheme snapshot source_id "explicit" in
+    let reordered_callee_type = inferred_type_at snapshot source_id reordered_offset in
+    let explicit_callee_type = inferred_type_at snapshot source_id explicit_offset in
+    let () = Test.assert_equal ~expected:(Some "?kind:int -> ?mods:int -> int -> int") ~actual:make_key_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:omitted_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:reordered_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:explicit_type in
+    let () =
+      Test.assert_equal
+        ~expected:(Some "?kind:int -> ?mods:int -> int -> int")
+        ~actual:reordered_callee_type
+    in
+    let () =
+      Test.assert_equal
+        ~expected:(Some "?kind:int -> ?mods:int -> int -> int")
+        ~actual:explicit_callee_type
+      in
+      Ok ()
+
+let test_records_flow_through_snapshot_queries = fun _ctx ->
+  let expect = fun label expected actual ->
+    if actual = expected then
+      Ok ()
+    else
+      Error (
+        label
+        ^ ": expected "
+        ^ (match expected with Some value -> value | None -> "<none>")
+        ^ " but got "
+        ^ (match actual with Some value -> value | None -> "<none>")
+      )
+  in
+  let session = Session.empty ~config:Config.default in
+  let source =
+    "type point = { x: int; y: int }\n"
+    ^ "let origin = { x = 0; y = 0 }\n"
+    ^ "let move_x point dx = { point with x = point.x + dx }\n"
+    ^ "let total = fun { x; y } -> x + y\n"
+    ^ "let answer = total (move_x origin 3)\n"
+  in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "records.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+    let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let field_access_offset =
+      let access_start =
+        offset_of_substring source "point.x +"
+        |> Option.expect ~msg:"expected record field access in test source" in
+      access_start + String.length "point."
+    in
+    let origin_type = export_scheme snapshot source_id "origin" in
+    let move_x_type = export_scheme snapshot source_id "move_x" in
+    let total_type = export_scheme snapshot source_id "total" in
+    let answer_type = export_scheme snapshot source_id "answer" in
+    let field_access_type = inferred_type_at snapshot source_id field_access_offset in
+    match expect "origin type" (Some "point") origin_type with
+    | Error _ as error -> error
+    | Ok () -> (
+        match expect "move_x type" (Some "point -> int -> point") move_x_type with
+        | Error _ as error -> error
+        | Ok () -> (
+            match expect "total type" (Some "point -> int") total_type with
+            | Error _ as error -> error
+            | Ok () -> (
+                match expect "answer type" (Some "int") answer_type with
+                | Error _ as error -> error
+                | Ok () -> expect "field access type" (Some "int") field_access_type
+              )
+          )
+      )
+
 let () =
   Actors.run
     ~main:(fun ~args ->
@@ -304,6 +513,21 @@ let () =
         Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
         Test.case "prepare_snapshot is rooted" test_prepare_snapshot_is_rooted;
         Test.case "prepare_snapshot reports missing roots" test_prepare_snapshot_reports_missing_roots;
+        Test.case
+          "prepare_snapshot reports missing module summaries"
+          test_prepare_snapshot_reports_missing_module_summary;
+        Test.case
+          "prepare_snapshot collects transitive missing modules"
+          test_prepare_snapshot_collects_transitive_missing_modules;
+        Test.case
+          "prepare_snapshot collects missing modules from qualified references"
+          test_prepare_snapshot_collects_missing_module_for_qualified_reference;
+        Test.case
+          "optional arguments can be omitted and reordered"
+          test_optional_arguments_can_be_omitted_and_reordered;
+        Test.case
+          "records flow through snapshot queries"
+          test_records_flow_through_snapshot_queries;
       ] in
       Test.Cli.main ~name:"typ:session" ~tests ~args)
     ~args:Env.args
