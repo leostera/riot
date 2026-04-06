@@ -67,7 +67,12 @@ let starts_with = fun ~prefix text index ->
 let find_substring = fun text start pattern ->
   let pattern_len = String.length pattern in
   let len = String.length text in
-  let start = if start < 0 then 0 else start in
+  let start =
+    if start < 0 then
+      0
+    else
+      start
+  in
   if pattern_len = 0 then
     Some start
   else
@@ -81,7 +86,7 @@ let find_substring = fun text start pattern ->
     in
     loop start
 
-let normalize_code_span = fun text ->
+let normalize_code_span = fun marker_len text ->
   let buffer = IO.Buffer.create (String.length text) in
   String.iter
     (fun char ->
@@ -97,6 +102,7 @@ let normalize_code_span = fun text ->
     && normalized.[0] = ' '
     && normalized.[len - 1] = ' '
     && not (String.equal (trim normalized) "")
+    && (marker_len > 1 || has_char text '`' || has_char text '\n')
   then
     String.sub normalized 1 (len - 2)
   else
@@ -112,21 +118,47 @@ let unescape_backslashes = fun text ->
         IO.Buffer.add_char buffer text.[index + 1];
         loop (index + 2)
       )
-    else
-      (
-        IO.Buffer.add_char buffer text.[index];
-        loop (index + 1)
-      )
+    else (
+      IO.Buffer.add_char buffer text.[index];
+      loop (index + 1)
+    )
   in
   loop 0
 
 let is_escapable = function
-  | '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-'
-  | '.' | '/' | ':' | ';' | '<' | '=' | '>' | '?' | '@' | '[' | '\\' | ']' | '^'
-  | '_' | '`' | '{' | '|' | '}' | '~' ->
-      true
-  | _ ->
-      false
+  | '!'
+  | '"'
+  | '#'
+  | '$'
+  | '%'
+  | '&'
+  | '\''
+  | '('
+  | ')'
+  | '*'
+  | '+'
+  | ','
+  | '-'
+  | '.'
+  | '/'
+  | ':'
+  | ';'
+  | '<'
+  | '='
+  | '>'
+  | '?'
+  | '@'
+  | '['
+  | '\\'
+  | ']'
+  | '^'
+  | '_'
+  | '`'
+  | '{'
+  | '|'
+  | '}'
+  | '~' -> true
+  | _ -> false
 
 let decode_codepoint = fun code ->
   if code <= 0 then
@@ -141,7 +173,7 @@ let int_of_string_opt = fun text ->
   | _ -> None
 
 let named_entities = [
-  ("nbsp", "\u{00A0}");
+  ("nbsp", " ");
   ("amp", "&");
   ("quot", "\"");
   ("copy", "\u{00A9}");
@@ -181,7 +213,12 @@ let decode_entity_at = fun text index ->
               else
                 int_of_string_opt (String.sub body 1 (String.length body - 1))
             in
-            Option.map decode_codepoint numeric
+            (
+              match numeric with
+              | Some code when code > 0x10_ffff -> None
+              | Some code -> Some (decode_codepoint code)
+              | None -> None
+            )
           else
             List.assoc_opt body named_entities
         in
@@ -229,10 +266,10 @@ let only_spaces_tabs_and_newlines = fun text index ->
       true
     else
       match text.[current] with
-      | ' ' | '\t' | '\n' ->
-          loop (current + 1)
-      | _ ->
-          false
+      | ' '
+      | '\t'
+      | '\n' -> loop (current + 1)
+      | _ -> false
   in
   loop index
 
@@ -287,15 +324,13 @@ let find_inline_label_end = fun text start ->
     else
       index
   in
-  let skip_code_span = fun index ->
+  let skip_code_span index =
     let close_start = count_backticks (index + 1) in
     let marker_len = close_start - index in
     let marker = string_of_char '`' marker_len in
     match find_substring text close_start marker with
-    | Some close ->
-        close + marker_len
-    | None ->
-        len
+    | Some close -> close + marker_len
+    | None -> len
   in
   let rec skip_angle index quote =
     if index >= len then
@@ -360,27 +395,24 @@ let find_inline_link_close = fun text start ->
         loop (index + 1) depth true None
     else
       match text.[index] with
-      | '<' ->
-          loop (index + 1) depth true None
-      | '"' | '\'' as quote ->
-          loop (index + 1) depth false (Some quote)
-      | '(' ->
-          loop (index + 1) (depth + 1) false None
+      | '<' -> loop (index + 1) depth true None
+      | '"'
+      | '\'' as quote -> loop (index + 1) depth false (Some quote)
+      | '(' -> loop (index + 1) (depth + 1) false None
       | ')' ->
           if depth = 0 then
             Some index
           else
             loop (index + 1) (depth - 1) false None
-      | _ ->
-          loop (index + 1) depth false None
+      | _ -> loop (index + 1) depth false None
   in
   loop start 0 false None
 
 let is_title_opener = function
-  | '"' | '\'' | '(' ->
-      true
-  | _ ->
-      false
+  | '"'
+  | '\''
+  | '(' -> true
+  | _ -> false
 
 let normalize_destination_backslashes = fun text ->
   let buffer = IO.Buffer.create (String.length text) in
@@ -393,25 +425,23 @@ let normalize_destination_backslashes = fun text ->
           IO.Buffer.add_char buffer text.[index + 1];
           loop (index + 2)
         )
-      else
-        (
-          IO.Buffer.add_char buffer '\\';
-          loop (index + 1)
-        )
-    else
-      (
-        IO.Buffer.add_char buffer text.[index];
+      else (
+        IO.Buffer.add_char buffer '\\';
         loop (index + 1)
       )
+    else (
+      IO.Buffer.add_char buffer text.[index];
+      loop (index + 1)
+    )
   in
   loop 0
 
 let percent_encode_destination = fun text ->
   let hex = "0123456789ABCDEF" in
-  let needs_encoding = fun char ->
+  let needs_encoding char =
     let code = Char.code char in
     code <= 0x20
-    || code >= 0x7F
+    || code >= 0x7f
     || char = '"'
     || char = '<'
     || char = '>'
@@ -438,8 +468,7 @@ let percent_encode_destination = fun text ->
 let normalize_destination = fun text ->
   text |> decode_entities |> normalize_destination_backslashes |> percent_encode_destination
 
-let normalize_autolink_destination = fun text ->
-  text |> decode_entities |> percent_encode_destination
+let normalize_autolink_destination = fun text -> text |> decode_entities |> percent_encode_destination
 
 let parse_link_destination_piece = fun text start ->
   let len = String.length text in
@@ -460,35 +489,43 @@ let parse_link_destination_piece = fun text start ->
             IO.Buffer.add_char buffer text.[index + 1];
             loop (index + 2)
           )
-        else
-          (
-            IO.Buffer.add_char buffer '\\';
-            loop (index + 1)
-          )
-      else
-        (
-          IO.Buffer.add_char buffer text.[index];
+        else (
+          IO.Buffer.add_char buffer '\\';
           loop (index + 1)
         )
+      else (
+        IO.Buffer.add_char buffer text.[index];
+        loop (index + 1)
+      )
     in
     loop (start + 1)
   else
     let buffer = IO.Buffer.create (len - start) in
     let rec loop index depth consumed =
       if index >= len then
-        if consumed then Some (IO.Buffer.contents buffer, index) else None
+        if consumed then
+          Some (IO.Buffer.contents buffer, index)
+        else
+          None
       else
         match text.[index] with
-        | ' ' | '\t' | '\n' ->
-            if consumed then Some (IO.Buffer.contents buffer, index) else None
+        | ' '
+        | '\t'
+        | '\n' ->
+            if consumed then
+              Some (IO.Buffer.contents buffer, index)
+            else
+              None
         | ')' ->
             if depth = 0 then
-              if consumed then Some (IO.Buffer.contents buffer, index) else None
-            else
-              (
-                IO.Buffer.add_char buffer ')';
-                loop (index + 1) (depth - 1) true
-              )
+              if consumed then
+                Some (IO.Buffer.contents buffer, index)
+              else
+                None
+            else (
+              IO.Buffer.add_char buffer ')';
+              loop (index + 1) (depth - 1) true
+            )
         | '(' ->
             IO.Buffer.add_char buffer '(';
             loop (index + 1) (depth + 1) true
@@ -500,11 +537,10 @@ let parse_link_destination_piece = fun text start ->
                 IO.Buffer.add_char buffer text.[index + 1];
                 loop (index + 2) depth true
               )
-            else
-              (
-                IO.Buffer.add_char buffer '\\';
-                loop (index + 1) depth true
-              )
+            else (
+              IO.Buffer.add_char buffer '\\';
+              loop (index + 1) depth true
+            )
         | char ->
             IO.Buffer.add_char buffer char;
             loop (index + 1) depth true
@@ -517,7 +553,12 @@ let parse_link_title_piece = fun text start ->
     None
   else
     let opener = text.[start] in
-    let closer = if opener = '(' then ')' else opener in
+    let closer =
+      if opener = '(' then
+        ')'
+      else
+        opener
+    in
     let buffer = IO.Buffer.create (len - start) in
     let rec loop index =
       if index >= len then
@@ -530,16 +571,14 @@ let parse_link_title_piece = fun text start ->
             IO.Buffer.add_char buffer text.[index + 1];
             loop (index + 2)
           )
-        else
-          (
-            IO.Buffer.add_char buffer '\\';
-            loop (index + 1)
-          )
-      else
-        (
-          IO.Buffer.add_char buffer text.[index];
+        else (
+          IO.Buffer.add_char buffer '\\';
           loop (index + 1)
         )
+      else (
+        IO.Buffer.add_char buffer text.[index];
+        loop (index + 1)
+      )
     in
     loop (start + 1)
 
@@ -549,8 +588,7 @@ let parse_link_target_parts = fun raw ->
     Some { destination = ""; title = None }
   else
     match parse_link_destination_piece raw 0 with
-    | None ->
-        None
+    | None -> None
     | Some (destination, after_destination) ->
         let len = String.length raw in
         let space_index = skip_spaces_tabs raw after_destination in
@@ -575,8 +613,7 @@ let parse_link_target_parts = fun raw ->
                   Some { destination = normalize_destination destination; title = Some title }
                 else
                   None
-            | None ->
-                None
+            | None -> None
           else if only_spaces_tabs_and_newlines raw after_destination then
             Some { destination = normalize_destination destination; title = None }
           else
@@ -586,10 +623,8 @@ let parse_link_target_parts = fun raw ->
 
 let parse_link_target = fun raw ->
   match parse_link_target_parts raw with
-  | Some target ->
-      (target.destination, target.title)
-  | None ->
-      ("", None)
+  | Some target -> (target.destination, target.title)
+  | None -> ("", None)
 
 let casefold_utf8 = fun text ->
   let buffer = IO.Buffer.create (String.length text) in
@@ -600,16 +635,15 @@ let casefold_utf8 = fun text ->
       match Unicode.Utf8.decode_rune text index with
       | Some (rune, next) ->
           let code = Unicode.Rune.to_int rune in
-          if code = 0x00DF || code = 0x1E9E then
+          if code = 0x00df || code = 0x1e9e then
             (
               IO.Buffer.add_string buffer "ss";
               loop next
             )
-          else
-            (
-              IO.Buffer.add_string buffer (Unicode.Utf8.encode_rune (Unicode.Rune.to_lower rune));
-              loop next
-            )
+          else (
+            IO.Buffer.add_string buffer (Unicode.Utf8.encode_rune (Unicode.Rune.to_lower rune));
+            loop next
+          )
       | None ->
           IO.Buffer.add_char buffer text.[index];
           loop (index + 1)
@@ -627,16 +661,14 @@ let normalize_reference_label = fun label ->
       if char = ' ' || char = '\t' || char = '\n' then
         if previous_space then
           loop (index + 1) true
-        else
-          (
-            IO.Buffer.add_char buffer ' ';
-            loop (index + 1) true
-          )
-      else
-        (
-          IO.Buffer.add_char buffer char;
-          loop (index + 1) false
+        else (
+          IO.Buffer.add_char buffer ' ';
+          loop (index + 1) true
         )
+      else (
+        IO.Buffer.add_char buffer char;
+        loop (index + 1) false
+      )
   in
   loop 0 false |> trim
 
@@ -651,27 +683,24 @@ let parse_reference_definition = fun text ->
           if close + 1 >= String.length text || not (Char.equal text.[close + 1] ':') then
             None
           else
-          let normalized = normalize_reference_label label in
-          if normalized = "" then
-            None
-          else
-          let remainder =
-            if close + 2 >= String.length text then
-              ""
-            else
-              String.sub text (close + 2) (String.length text - close - 2)
-          in
-          if trim remainder = "" then
-            None
-          else
-          match parse_link_target_parts remainder with
-          | Some { destination; title } ->
-              Some (normalized, { destination; title })
-          | None ->
+            let normalized = normalize_reference_label label in
+            if normalized = "" then
               None
+            else
+              let remainder =
+                if close + 2 >= String.length text then
+                  ""
+                else
+                  String.sub text (close + 2) (String.length text - close - 2)
+              in
+              if trim remainder = "" then
+                None
+              else
+                match parse_link_target_parts remainder with
+                | Some { destination; title } -> Some (normalized, { destination; title })
+                | None -> None
   with
-  | _ ->
-      None
+  | _ -> None
 
 let find_reference = fun references label ->
   let normalized = normalize_reference_label label in
@@ -679,8 +708,7 @@ let find_reference = fun references label ->
     None
   else
     let rec loop = function
-      | [] ->
-          None
+      | [] -> None
       | (key, value) :: tail ->
           if String.equal key normalized then
             Some value
@@ -696,12 +724,8 @@ let looks_like_email = fun inside ->
   | None -> false
   | Some at ->
       let local = String.sub inside 0 at in
-      at > 0
-      && at + 1 < len
-      && let last = local.[String.length local - 1] in
-         ((last >= 'a' && last <= 'z')
-         || (last >= 'A' && last <= 'Z')
-         || (last >= '0' && last <= '9'))
+      at > 0 && at + 1 < len && let last = local.[String.length local - 1] in
+      ((last >= 'a' && last <= 'z') || (last >= 'A' && last <= 'Z') || (last >= '0' && last <= '9'))
       && Option.is_some (find_substring inside (at + 1) ".")
 
 let looks_like_scheme = fun inside ->
@@ -738,34 +762,45 @@ let autolink_destination = fun inside ->
     None
 
 let is_ascii_letter = function
-  | 'a' .. 'z' | 'A' .. 'Z' ->
-      true
-  | _ ->
-      false
+  | 'a' .. 'z'
+  | 'A' .. 'Z' -> true
+  | _ -> false
 
 let is_html_tag_name_char = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' ->
-      true
-  | _ ->
-      false
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '0' .. '9'
+  | '-' -> true
+  | _ -> false
 
 let is_html_attribute_name_start = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '_' | ':' ->
-      true
-  | _ ->
-      false
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '_'
+  | ':' -> true
+  | _ -> false
 
 let is_html_attribute_name_char = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | ':' | '-' ->
-      true
-  | _ ->
-      false
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '0' .. '9'
+  | '_'
+  | '.'
+  | ':'
+  | '-' -> true
+  | _ -> false
 
 let is_unquoted_html_attribute_value_char = function
-  | ' ' | '\t' | '\n' | '"' | '\'' | '=' | '<' | '>' | '`' ->
-      false
-  | _ ->
-      true
+  | ' '
+  | '\t'
+  | '\n'
+  | '"'
+  | '\''
+  | '='
+  | '<'
+  | '>'
+  | '`' -> false
+  | _ -> true
 
 let scan_html_tag_name_at = fun text start ->
   let len = String.length text in
@@ -844,10 +879,9 @@ let skip_html_tag_whitespace = fun text index ->
       current
     else
       match text.[current] with
-      | ' ' | '\t' ->
-          skip_spaces_tabs (current + 1)
-      | _ ->
-          current
+      | ' '
+      | '\t' -> skip_spaces_tabs (current + 1)
+      | _ -> current
   in
   let after_spaces = skip_spaces_tabs index in
   if after_spaces < len && text.[after_spaces] = '\n' then
@@ -861,8 +895,7 @@ let scan_inline_open_tag_end = fun text start ->
     None
   else
     match scan_html_tag_name_at text (start + 1) with
-    | None ->
-        None
+    | None -> None
     | Some after_name ->
         let rec loop index =
           if index >= len then
@@ -876,7 +909,9 @@ let scan_inline_open_tag_end = fun text start ->
                   Some (index + 2)
                 else
                   None
-            | ' ' | '\t' | '\n' ->
+            | ' '
+            | '\t'
+            | '\n' ->
                 let after_space = skip_html_tag_whitespace text index in
                 if after_space >= len then
                   None
@@ -890,33 +925,24 @@ let scan_inline_open_tag_end = fun text start ->
                           Some (after_space + 2)
                         else
                           None
-                    | _ ->
-                        (
-                          match scan_html_attribute_name_at text after_space with
-                          | None ->
-                              None
-                          | Some after_attribute_name ->
-                              let after_gap =
-                                skip_html_tag_whitespace text after_attribute_name
-                              in
-                              let after_attribute =
-                                if
-                                  after_gap < len
-                                  && text.[after_gap] = '='
-                                then
-                                  let value_start =
-                                    skip_html_tag_whitespace text (after_gap + 1)
-                                  in
-                                  scan_html_attribute_value_at text value_start
-                                else
-                                  Some after_attribute_name
-                              in
-                              (
-                                match after_attribute with
-                                | Some next -> loop next
-                                | None -> None
-                              )
-                        )
+                    | _ -> (
+                        match scan_html_attribute_name_at text after_space with
+                        | None -> None
+                        | Some after_attribute_name ->
+                            let after_gap = skip_html_tag_whitespace text after_attribute_name in
+                            let after_attribute =
+                              if after_gap < len && text.[after_gap] = '=' then
+                                let value_start = skip_html_tag_whitespace text (after_gap + 1) in
+                                scan_html_attribute_value_at text value_start
+                              else
+                                Some after_attribute_name
+                            in
+                            (
+                              match after_attribute with
+                              | Some next -> loop next
+                              | None -> None
+                            )
+                      )
                   )
             | _ ->
                 None
@@ -929,8 +955,7 @@ let scan_inline_closing_tag_end = fun text start ->
     None
   else
     match scan_html_tag_name_at text (start + 2) with
-    | None ->
-        None
+    | None -> None
     | Some after_name ->
         let after_name = skip_html_tag_whitespace text after_name in
         if after_name < len && text.[after_name] = '>' then
@@ -949,14 +974,16 @@ let scan_inline_html_end = fun text start ->
     Option.map (fun close -> close + 2) (find_substring text (start + 2) "?>")
   else if starts_with ~prefix:"<![CDATA[" text start then
     Option.map (fun close -> close + 3) (find_substring text (start + 9) "]]>")
-  else if start + 2 < String.length text && starts_with ~prefix:"<!" text start && is_ascii_letter text.[start + 2] then
+  else if
+    start + 2 < String.length text
+    && starts_with ~prefix:"<!" text start
+    && is_ascii_letter text.[start + 2]
+  then
     Option.map (fun close -> close + 1) (find_substring text (start + 2) ">")
   else
     match scan_inline_open_tag_end text start with
-    | Some ending ->
-        Some ending
-    | None ->
-        scan_inline_closing_tag_end text start
+    | Some ending -> Some ending
+    | None -> scan_inline_closing_tag_end text start
 
 let trailing_space_count = fun text ->
   let rec loop index count =
@@ -990,10 +1017,10 @@ type inline_stack_item =
   | Delimiter of delimiter_run
 
 let is_ascii_alnum = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' ->
-      true
-  | _ ->
-      false
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '0' .. '9' -> true
+  | _ -> false
 
 let is_punctuation_byte = fun char -> not (is_space char) && not (is_ascii_alnum char)
 
@@ -1013,24 +1040,20 @@ let rune_before = fun text index ->
     in
     let start = find_start (index - 1) in
     match Unicode.Utf8.decode_rune text start with
-    | Some (rune, _) ->
-        Some rune
-    | None ->
-        Some (rune_of_byte text.[index - 1])
+    | Some (rune, _) -> Some rune
+    | None -> Some (rune_of_byte text.[index - 1])
 
 let rune_after = fun text index ->
   if index >= String.length text then
     None
   else
     match Unicode.Utf8.decode_rune text index with
-    | Some (rune, _) ->
-        Some rune
-    | None ->
-        Some (rune_of_byte text.[index])
+    | Some (rune, _) -> Some rune
+    | None -> Some (rune_of_byte text.[index])
 
 let rune_is_space = fun rune ->
   let code = Unicode.Rune.to_int rune in
-  code = 0x09 || code = 0x0A || code = 0x0D || code = 0x20 || Unicode.Rune.is_space rune
+  code = 0x09 || code = 0x0a || code = 0x0d || code = 0x20 || Unicode.Rune.is_space rune
 
 let is_punctuation_rune = fun rune -> Unicode.Rune.is_punct rune || Unicode.Rune.is_symbol rune
 
@@ -1050,44 +1073,36 @@ let delimiter_run_properties = fun text index marker ->
   let after = rune_after text finish in
   let before_whitespace =
     match before with
-    | Some rune ->
-        rune_is_space rune
-    | None ->
-        true
+    | Some rune -> rune_is_space rune
+    | None -> true
   in
   let after_whitespace =
     match after with
-    | Some rune ->
-        rune_is_space rune
-    | None ->
-        true
+    | Some rune -> rune_is_space rune
+    | None -> true
   in
   let before_punctuation =
     match before with
-    | Some rune ->
-        is_punctuation_rune rune
-    | None ->
-        false
+    | Some rune -> is_punctuation_rune rune
+    | None -> false
   in
   let after_punctuation =
     match after with
-    | Some rune ->
-        is_punctuation_rune rune
-    | None ->
-        false
+    | Some rune -> is_punctuation_rune rune
+    | None -> false
   in
   let left_flanking =
-    (not after_whitespace) && ((not after_punctuation) || before_whitespace || before_punctuation)
-  in
+    (not after_whitespace) && ((not after_punctuation) || before_whitespace || before_punctuation) in
   let right_flanking =
-    (not before_whitespace) && ((not before_punctuation) || after_whitespace || after_punctuation)
-  in
+    (not before_whitespace) && ((not before_punctuation) || after_whitespace || after_punctuation) in
   let can_open, can_close =
     if Char.equal marker '*' then
       (left_flanking, right_flanking)
     else
-      ( left_flanking && ((not right_flanking) || before_punctuation),
-        right_flanking && ((not left_flanking) || after_punctuation) )
+      (
+        left_flanking && ((not right_flanking) || before_punctuation),
+        right_flanking && ((not left_flanking) || after_punctuation)
+      )
   in
   (run_len, can_open, can_close)
 
@@ -1106,25 +1121,21 @@ let inline_stack_push_text = fun text stack ->
 
 let inline_stack_to_nodes = fun items ->
   let rec loop acc = function
-    | [] ->
-        List.rev acc
-    | Inline_node node :: tail ->
-        loop (node :: acc) tail
-    | Delimiter delimiter :: tail ->
-        loop (Text (String.make delimiter.count delimiter.marker) :: acc) tail
+    | [] -> List.rev acc
+    | Inline_node node :: tail -> loop (node :: acc) tail
+    | Delimiter delimiter :: tail -> loop
+      (Text (String.make delimiter.count delimiter.marker) :: acc)
+      tail
   in
   loop [] items
 
-let rec find_matching_opener = fun current content -> function
-  | [] ->
-      None
-  | Delimiter opener :: rest
-    when Char.equal opener.marker current.marker
-         && opener.can_open
-         && not (delimiter_pair_disallowed opener current) ->
-      Some (rest, opener, content)
-  | item :: rest ->
-      find_matching_opener current (item :: content) rest
+let rec find_matching_opener = fun current content ->
+  function
+  | [] -> None
+  | Delimiter opener :: rest when Char.equal opener.marker current.marker
+  && opener.can_open
+  && not (delimiter_pair_disallowed opener current) -> Some (rest, opener, content)
+  | item :: rest -> find_matching_opener current (item :: content) rest
 
 let rec push_delimiter = fun current stack ->
   if current.count <= 0 then
@@ -1133,10 +1144,14 @@ let rec push_delimiter = fun current stack ->
     Delimiter current :: stack
   else
     match find_matching_opener current [] stack with
-    | None ->
-        Delimiter current :: stack
+    | None -> Delimiter current :: stack
     | Some (rest, opener, content) ->
-        let use_delimiters = if opener.count >= 2 && current.count >= 2 then 2 else 1 in
+        let use_delimiters =
+          if opener.count >= 2 && current.count >= 2 then
+            2
+          else
+            1
+        in
         let node =
           if use_delimiters = 2 then
             Strong (inline_stack_to_nodes content)
@@ -1154,31 +1169,19 @@ let rec push_delimiter = fun current stack ->
         push_delimiter { current with count = current.count - use_delimiters } stack
 
 let rec contains_link_inline = function
-  | [] ->
-      false
-  | Link _ :: _ ->
-      true
+  | [] -> false
+  | Link _ :: _ -> true
   | Emphasis children :: tail
   | Strong children :: tail
-  | Strikethrough children :: tail ->
-      contains_link_inline children || contains_link_inline tail
-  | Image { alt; _ } :: tail ->
-      contains_link_inline alt || contains_link_inline tail
-  | _ :: tail ->
-      contains_link_inline tail
+  | Strikethrough children :: tail -> contains_link_inline children || contains_link_inline tail
+  | Image { alt; _ } :: tail -> contains_link_inline alt || contains_link_inline tail
+  | _ :: tail -> contains_link_inline tail
 
 let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor ~references text ->
   try
     let len = String.length text in
-    let parse_link_label = fun label_text ->
-      let rendered =
-        parse_inline
-          ~allow_links:false
-          ~allow_images:true
-          ~flavor
-          ~references
-          label_text
-      in
+    let parse_link_label label_text =
+      let rendered = parse_inline ~allow_links:false ~allow_images:true ~flavor ~references label_text in
       let raw = parse_inline ~allow_links:true ~allow_images:true ~flavor ~references label_text in
       (rendered, contains_link_inline raw)
     in
@@ -1237,53 +1240,45 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
               let alt_text = String.sub text (index + 2) (close_text - index - 2) in
               let after_label = close_text + 1 in
               if after_label >= len then
-                let shortcut =
-                  Some (alt_text, close_text + 1)
-                in
+                let shortcut = Some (alt_text, close_text + 1) in
                 (
                   match shortcut with
                   | Some (reference_label, next_index) -> (
                       match find_reference references reference_label with
-                    | Some reference ->
-                        loop
-                          next_index
-                          (inline_stack_push
-                             (Image {
-                               alt = parse_inline ~flavor ~references alt_text;
-                               destination = reference.destination;
-                               title = reference.title;
-                             })
-                             acc)
-                      | None ->
-                          loop (index + 1) (inline_stack_push_text "!" acc)
+                      | Some reference -> loop
+                        next_index
+                        (inline_stack_push
+                          (Image {
+                            alt = parse_inline ~flavor ~references alt_text;
+                            destination = reference.destination;
+                            title = reference.title
+                          })
+                          acc)
+                      | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                     )
-                  | None ->
-                      loop (index + 1) (inline_stack_push_text "!" acc)
+                  | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                 )
               else if Char.equal text.[after_label] '(' then
                 (
                   match find_inline_link_close text (after_label + 1) with
                   | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                   | Some close_link ->
-                      let raw_target =
-                        String.sub text (after_label + 1) (close_link - after_label - 1)
-                      in
+                      let raw_target = String.sub
+                        text
+                        (after_label + 1)
+                        (close_link - after_label - 1) in
                       (
                         match parse_link_target_parts raw_target with
-                        | Some target ->
-                            loop
-                              (close_link + 1)
-                              (inline_stack_push
-                                 (Image {
-                                 alt = parse_inline ~flavor ~references alt_text;
-                                 destination = target.destination;
-                                 title = target.title;
-                               })
-                                 acc)
-                        | None ->
-                            loop
-                              (index + 1)
-                              (inline_stack_push_text "!" acc)
+                        | Some target -> loop
+                          (close_link + 1)
+                          (inline_stack_push
+                            (Image {
+                              alt = parse_inline ~flavor ~references alt_text;
+                              destination = target.destination;
+                              title = target.title
+                            })
+                            acc)
+                        | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                       )
                 )
               else
@@ -1291,7 +1286,12 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                   if close_text + 1 < len && text.[close_text + 1] = '[' then
                     match parse_reference_label text (close_text + 1) with
                     | Some (explicit, close_ref) ->
-                        let reference_label = if explicit = "" then alt_text else explicit in
+                        let reference_label =
+                          if explicit = "" then
+                            alt_text
+                          else
+                            explicit
+                        in
                         Some (reference_label, close_ref + 1)
                     | None -> None
                   else
@@ -1301,21 +1301,18 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                   match shortcut with
                   | Some (reference_label, next_index) -> (
                       match find_reference references reference_label with
-                    | Some reference ->
-                        loop
-                          next_index
-                          (inline_stack_push
-                             (Image {
-                               alt = parse_inline ~flavor ~references alt_text;
-                               destination = reference.destination;
-                               title = reference.title;
-                             })
-                             acc)
-                      | None ->
-                          loop (index + 1) (inline_stack_push_text "!" acc)
+                      | Some reference -> loop
+                        next_index
+                        (inline_stack_push
+                          (Image {
+                            alt = parse_inline ~flavor ~references alt_text;
+                            destination = reference.destination;
+                            title = reference.title
+                          })
+                          acc)
+                      | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                     )
-                  | None ->
-                      loop (index + 1) (inline_stack_push_text "!" acc)
+                  | None -> loop (index + 1) (inline_stack_push_text "!" acc)
                 )
         )
       else if starts_with ~prefix:"~~" text index then
@@ -1328,9 +1325,8 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                 loop
                   (close + 2)
                   (inline_stack_push
-                     (Strikethrough
-                        (parse_inline ~allow_links ~allow_images ~flavor ~references body))
-                     acc)
+                    (Strikethrough (parse_inline ~allow_links ~allow_images ~flavor ~references body))
+                    acc)
               else
                 loop
                   (close + 2)
@@ -1357,18 +1353,29 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
         in
         let close_start = count_backticks (index + 1) in
         let marker_len = close_start - index in
-        let marker = string_of_char '`' marker_len in
+        let rec find_matching_run current =
+          if current >= len then
+            None
+          else if Char.equal text.[current] '`' then
+            let run_end = count_backticks current in
+            if run_end - current = marker_len then
+              Some current
+            else
+              find_matching_run run_end
+          else
+            find_matching_run (current + 1)
+        in
         (
-          match find_substring text close_start marker with
-          | None ->
-              loop (index + marker_len) (inline_stack_push_text (String.sub text index marker_len) acc)
+          match find_matching_run close_start with
+          | None -> loop
+            (index + marker_len)
+            (inline_stack_push_text (String.sub text index marker_len) acc)
           | Some close ->
               let body =
                 if close <= close_start then
                   ""
                 else
-                  String.sub text close_start (close - close_start)
-                  |> normalize_code_span
+                  String.sub text close_start (close - close_start) |> normalize_code_span marker_len
               in
               loop (close + marker_len) (inline_stack_push (Code_span body) acc)
         )
@@ -1380,9 +1387,7 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
               let label_text = String.sub text (index + 1) (close_text - index - 1) in
               let after_label = close_text + 1 in
               if after_label >= len then
-                let shortcut =
-                  Some (label_text, close_text + 1)
-                in
+                let shortcut = Some (label_text, close_text + 1) in
                 (
                   match shortcut with
                   | Some (reference_label, next_index) -> (
@@ -1392,30 +1397,28 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                           if has_nested_link then
                             loop (index + 1) (inline_stack_push_text "[" acc)
                           else
-                          loop
-                            next_index
-                            (inline_stack_push
-                               (Link {
-                               label;
-                               destination = reference.destination;
-                               title = reference.title;
-                             })
-                               acc)
-                      | None ->
-                          loop (index + 1) (inline_stack_push_text "[" acc)
+                            loop
+                              next_index
+                              (inline_stack_push
+                                (Link {
+                                  label;
+                                  destination = reference.destination;
+                                  title = reference.title
+                                })
+                                acc)
+                      | None -> loop (index + 1) (inline_stack_push_text "[" acc)
                     )
-                  | None ->
-                      loop (index + 1) (inline_stack_push_text "[" acc)
+                  | None -> loop (index + 1) (inline_stack_push_text "[" acc)
                 )
               else if Char.equal text.[after_label] '(' then
                 (
                   match find_inline_link_close text (after_label + 1) with
-                  | None ->
-                      loop (index + 1) (inline_stack_push_text "[" acc)
+                  | None -> loop (index + 1) (inline_stack_push_text "[" acc)
                   | Some close_link ->
-                      let raw_target =
-                        String.sub text (after_label + 1) (close_link - after_label - 1)
-                      in
+                      let raw_target = String.sub
+                        text
+                        (after_label + 1)
+                        (close_link - after_label - 1) in
                       let special_target =
                         if
                           index = 0
@@ -1430,10 +1433,8 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                       in
                       let target =
                         match special_target with
-                        | Some target ->
-                            Some target
-                        | None ->
-                            parse_link_target_parts raw_target
+                        | Some target -> Some target
+                        | None -> parse_link_target_parts raw_target
                       in
                       (
                         match target with
@@ -1442,36 +1443,33 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                             if has_nested_link then
                               loop (index + 1) (inline_stack_push_text "[" acc)
                             else
-                            loop
-                              (close_link + 1)
-                              (inline_stack_push
-                                 (Link {
-                                 label;
-                                 destination = target.destination;
-                                 title = target.title;
-                               })
-                                 acc)
-                        | None ->
-                            (
-                              match find_reference references label_text with
-                              | Some reference ->
-                                  let label, has_nested_link = parse_link_label label_text in
-                                  if has_nested_link then
-                                    loop (index + 1) (inline_stack_push_text "[" acc)
-                                  else
-                                    loop
-                                      after_label
-                                      (inline_stack_push
-                                         (Link
-                                            {
-                                              label;
-                                              destination = reference.destination;
-                                              title = reference.title;
-                                            })
-                                         acc)
-                              | None ->
+                              loop
+                                (close_link + 1)
+                                (inline_stack_push
+                                  (Link {
+                                    label;
+                                    destination = target.destination;
+                                    title = target.title
+                                  })
+                                  acc)
+                        | None -> (
+                            match find_reference references label_text with
+                            | Some reference ->
+                                let label, has_nested_link = parse_link_label label_text in
+                                if has_nested_link then
                                   loop (index + 1) (inline_stack_push_text "[" acc)
-                            )
+                                else
+                                  loop
+                                    after_label
+                                    (inline_stack_push
+                                      (Link {
+                                        label;
+                                        destination = reference.destination;
+                                        title = reference.title
+                                      })
+                                      acc)
+                            | None -> loop (index + 1) (inline_stack_push_text "[" acc)
+                          )
                       )
                 )
               else
@@ -1479,7 +1477,12 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                   if close_text + 1 < len && text.[close_text + 1] = '[' then
                     match parse_reference_label text (close_text + 1) with
                     | Some (explicit, close_ref) ->
-                        let reference_label = if explicit = "" then label_text else explicit in
+                        let reference_label =
+                          if explicit = "" then
+                            label_text
+                          else
+                            explicit
+                        in
                         Some (reference_label, close_ref + 1)
                     | None -> None
                   else
@@ -1494,20 +1497,18 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
                           if has_nested_link then
                             loop (index + 1) (inline_stack_push_text "[" acc)
                           else
-                          loop
-                            next_index
-                            (inline_stack_push
-                               (Link {
-                               label;
-                               destination = reference.destination;
-                               title = reference.title;
-                             })
-                               acc)
-                      | None ->
-                          loop (index + 1) (inline_stack_push_text "[" acc)
+                            loop
+                              next_index
+                              (inline_stack_push
+                                (Link {
+                                  label;
+                                  destination = reference.destination;
+                                  title = reference.title
+                                })
+                                acc)
+                      | None -> loop (index + 1) (inline_stack_push_text "[" acc)
                     )
-                  | None ->
-                      loop (index + 1) (inline_stack_push_text "[" acc)
+                  | None -> loop (index + 1) (inline_stack_push_text "[" acc)
                 )
         )
       else if text.[index] = '<' then
@@ -1518,32 +1519,28 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
               let inside = String.sub text (index + 1) (close - index - 1) in
               (
                 match autolink_destination inside with
-                | Some destination ->
-                    loop
-                      (close + 1)
-                      (inline_stack_push
-                         (Link {
-                         label = [ Text inside ];
-                         destination = normalize_autolink_destination destination;
-                         title = None;
-                       })
-                         acc)
-                | None ->
-                    (
-                      match scan_inline_html_end text index with
-                      | Some html_end ->
-                          loop
-                            html_end
-                            (inline_stack_push (Raw_html (String.sub text index (html_end - index))) acc)
-                      | None ->
-                          loop
-                            (close + 1)
-                            (inline_stack_push_text
-                               (String.sub text index (close - index + 1)
-                                |> unescape_backslashes
-                                |> decode_entities)
-                               acc)
-                    )
+                | Some destination -> loop
+                  (close + 1)
+                  (inline_stack_push
+                    (Link {
+                      label = [ Text inside ];
+                      destination = normalize_autolink_destination destination;
+                      title = None
+                    })
+                    acc)
+                | None -> (
+                    match scan_inline_html_end text index with
+                    | Some html_end -> loop
+                      html_end
+                      (inline_stack_push (Raw_html (String.sub text index (html_end - index))) acc)
+                    | None ->
+                        loop (close + 1)
+                          (
+                            inline_stack_push_text
+                              (String.sub text index (close - index + 1) |> unescape_backslashes |> decode_entities)
+                              acc
+                          )
+                  )
               )
         )
       else if text.[index] = '&' then
@@ -1558,13 +1555,25 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
             current
           else
             match text.[current] with
-            | '\\' | '*' | '_' | '~' | '`' | '<' | '&' | '\n' -> current
+            | '\\'
+            | '*'
+            | '_'
+            | '~'
+            | '`'
+            | '<'
+            | '&'
+            | '\n' -> current
             | '[' when allow_links -> current
             | '!' when allow_images && current + 1 < len && text.[current + 1] = '[' -> current
             | _ -> scan (current + 1)
         in
         let next = scan (index + 1) in
-        loop next (inline_stack_push_text (String.sub text index (next - index) |> decode_entities) acc)
+        loop next
+          (
+            inline_stack_push_text
+              (String.sub text index (next - index) |> decode_entities)
+              acc
+          )
     in
     let parsed = loop 0 [] in
     let parsed =
@@ -1575,22 +1584,36 @@ let rec parse_inline = fun ?(allow_links = true) ?(allow_images = true) ~flavor 
             tail
           else
             inline_stack_push_text trimmed tail
-      | _ ->
-          parsed
+      | _ -> parsed
     in
     let parsed = inline_stack_to_nodes (List.rev parsed) in
-    if parsed = [] then [ Text text ] else parsed
-  with
-  | _ ->
+    if parsed = [] then
       [ Text text ]
+    else
+      parsed
+  with
+  | _ -> [ Text text ]
 
 let direct_token_texts = fun node ->
   Ceibo.Red.SyntaxNode.direct_tokens node |> List.map Ceibo.Red.SyntaxToken.text
+
+let ordered_list_start = fun node ->
+  Ceibo.Red.SyntaxNode.direct_tokens node |> List.find_map
+    (fun token ->
+      if Ceibo.Red.SyntaxToken.kind token = Markdown_syntax_kind.Text then
+        int_of_string_opt (Ceibo.Red.SyntaxToken.text token)
+      else
+        None) |> Option.unwrap_or ~default:1
 
 let first_token_text = fun node ->
   match direct_token_texts node with
   | [] -> ""
   | head :: _ -> head
+
+let heading_token_text = fun node ->
+  match first_token_text node with
+  | " " -> ""
+  | text -> text
 
 let child_nodes = fun node -> Ceibo.Red.SyntaxNode.direct_nodes node
 
@@ -1610,11 +1633,10 @@ let alignment_of_kind = function
   | _ -> Default
 
 let lower_table_row = fun ~flavor ~references row_node ->
-  let cells =
-    child_nodes row_node
-    |> List.map (fun cell_node -> parse_inline ~flavor ~references (first_token_text cell_node))
-  in
-  let alignments = child_nodes row_node |> List.map (fun cell_node -> alignment_of_kind (Ceibo.Red.SyntaxNode.kind cell_node)) in
+  let cells = child_nodes row_node
+  |> List.map (fun cell_node -> parse_inline ~flavor ~references (first_token_text cell_node)) in
+  let alignments = child_nodes row_node
+  |> List.map (fun cell_node -> alignment_of_kind (Ceibo.Red.SyntaxNode.kind cell_node)) in
   { cells; alignments }
 
 let rec collect_references = fun references nodes ->
@@ -1624,13 +1646,14 @@ let rec collect_references = fun references nodes ->
         match Ceibo.Red.SyntaxNode.kind node with
         | Markdown_syntax_kind.Paragraph -> (
             match parse_reference_definition (first_token_text node) with
-            | Some (label, reference) when not (List.mem_assoc label references) ->
-                (label, reference) :: references
-            | _ ->
-                references
+            | Some (label, reference) when not (List.mem_assoc label references) -> (
+              label,
+              reference
+            )
+            :: references
+            | _ -> references
           )
-        | _ ->
-            references
+        | _ -> references
       in
       collect_references references (child_nodes node))
     references
@@ -1642,13 +1665,14 @@ let is_reference_definition_node = fun node ->
 
 let rec lower_list_item = fun ~flavor ~references node ->
   let span = Ceibo.Red.SyntaxNode.span node in
-  let blocks =
-    child_nodes node
-    |> List.filter_map (lower_block_opt ~flavor ~references)
-  in
+  let blocks = child_nodes node |> List.filter_map (lower_block_opt ~flavor ~references) in
   match Ceibo.Red.SyntaxNode.kind node with
-  | Markdown_syntax_kind.Task_list_item_checked -> [ Task_list_item { checked = true; blocks; span } ]
-  | Markdown_syntax_kind.Task_list_item_unchecked -> [ Task_list_item { checked = false; blocks; span } ]
+  | Markdown_syntax_kind.Task_list_item_checked -> [
+    Task_list_item { checked = true; blocks; span }
+  ]
+  | Markdown_syntax_kind.Task_list_item_unchecked -> [
+    Task_list_item { checked = false; blocks; span }
+  ]
   | _ -> [ List_item { blocks; span } ]
 
 and lower_block_opt = fun ~flavor ~references node ->
@@ -1668,19 +1692,20 @@ and lower_block = fun ~flavor ~references node ->
   | Markdown_syntax_kind.Heading_6 ->
       Heading {
         level = heading_level_of_kind (Ceibo.Red.SyntaxNode.kind node);
-        inlines = parse_inline ~flavor ~references (first_token_text node);
-        span;
+        inlines = parse_inline ~flavor ~references (heading_token_text node);
+        span
       }
   | Markdown_syntax_kind.Paragraph ->
       Paragraph { inlines = parse_inline ~flavor ~references (first_token_text node); span }
   | Markdown_syntax_kind.Block_quote ->
       Block_quote {
         blocks = child_nodes node |> List.filter_map (lower_block_opt ~flavor ~references);
-        span;
+        span
       }
   | Markdown_syntax_kind.Ordered_list_tight ->
       List {
         ordered = true;
+        start = ordered_list_start node;
         tight = true;
         items = child_nodes node |> List.map (lower_list_item ~flavor ~references);
         span;
@@ -1688,6 +1713,7 @@ and lower_block = fun ~flavor ~references node ->
   | Markdown_syntax_kind.Ordered_list_loose ->
       List {
         ordered = true;
+        start = ordered_list_start node;
         tight = false;
         items = child_nodes node |> List.map (lower_list_item ~flavor ~references);
         span;
@@ -1695,6 +1721,7 @@ and lower_block = fun ~flavor ~references node ->
   | Markdown_syntax_kind.Unordered_list_tight ->
       List {
         ordered = false;
+        start = 1;
         tight = true;
         items = child_nodes node |> List.map (lower_list_item ~flavor ~references);
         span;
@@ -1702,6 +1729,7 @@ and lower_block = fun ~flavor ~references node ->
   | Markdown_syntax_kind.Unordered_list_loose ->
       List {
         ordered = false;
+        start = 1;
         tight = false;
         items = child_nodes node |> List.map (lower_list_item ~flavor ~references);
         span;
@@ -1711,7 +1739,7 @@ and lower_block = fun ~flavor ~references node ->
   | Markdown_syntax_kind.List_item ->
       List_item {
         blocks = child_nodes node |> List.filter_map (lower_block_opt ~flavor ~references);
-        span;
+        span
       }
   | Markdown_syntax_kind.Fenced_code_block ->
       let tokens = Ceibo.Red.SyntaxNode.direct_tokens node in
@@ -1751,7 +1779,7 @@ and lower_block = fun ~flavor ~references node ->
       Table {
         header = lower_table_row ~flavor ~references header_node;
         rows = List.map (lower_table_row ~flavor ~references) row_nodes;
-        span;
+        span
       }
   | Markdown_syntax_kind.Error ->
       Error_block { message = first_token_text node; span }

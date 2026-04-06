@@ -40,11 +40,9 @@ let tokenize = fun source ->
       List.rev (make_token ~kind:Markdown_token.EOF ~start:length ~end_:length ~text:"" :: acc)
     else if source.[index] = '\n' then
       let text = String.sub source line_start (index - line_start) in
-      let acc =
-        make_token ~kind:Markdown_token.Newline ~start:index ~end_:(index + 1) ~text:"\n"
-        :: make_token ~kind:Markdown_token.Line_text ~start:line_start ~end_:index ~text
-        :: acc
-      in
+      let acc = make_token ~kind:Markdown_token.Newline ~start:index ~end_:((index + 1)) ~text:"\n"
+      :: make_token ~kind:Markdown_token.Line_text ~start:line_start ~end_:index ~text
+      :: acc in
       loop (index + 1) (index + 1) acc
     else
       loop (index + 1) line_start acc

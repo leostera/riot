@@ -30,28 +30,17 @@ type parse_result = {
 let parse = fun source ->
   let parsed = Markdown_parser.parse source in
   let blocks = Markdown_lower.lower ~flavor:Markdown_parser.Markdown parsed.tree in
-  {
-    root = parsed.tree;
-    source = parsed.source;
-    diagnostics = parsed.diagnostics;
-    blocks
-  }
+  { root = parsed.tree; source = parsed.source; diagnostics = parsed.diagnostics; blocks }
 
 let parse_gfm = fun source ->
   let parsed = Markdown_parser.parse ~flavor:Markdown_parser.Gfm source in
   let blocks = Markdown_lower.lower ~flavor:Markdown_parser.Gfm parsed.tree in
-  {
-    root = parsed.tree;
-    source = parsed.source;
-    diagnostics = parsed.diagnostics;
-    blocks
-  }
+  { root = parsed.tree; source = parsed.source; diagnostics = parsed.diagnostics; blocks }
 
 let all_spec_fixtures = fun () ->
   List.map cast_fixture (Fixture_db.all_spec_fixtures ())
 
-let to_html = fun parse_result ->
-  Markdown_renderer.render parse_result.blocks
+let to_html = fun parse_result -> Markdown_renderer.render parse_result.blocks
 
 let compile = fun source ->
   let parse_result = parse source in
