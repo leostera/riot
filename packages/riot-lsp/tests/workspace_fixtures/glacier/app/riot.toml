@@ -1,0 +1,9 @@
+[package]
+name = "app"
+version = "0.0.1"
+description = "riot-lsp bootstrap summary app fixture"
+license = "Apache-2.0"
+public = false
+
+[dependencies]
+shadow = { path = "../shadow", version = "*" }

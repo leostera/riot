@@ -616,33 +616,98 @@ let package_typ_source_files = fun ?(include_dev = false) (pkg: Package.t) ->
   |> List.map (fun relative -> Path.(pkg.path / relative))
   |> dedupe_paths
 
-let merge_loaded_module_summaries = fun preferred fallback ->
+let merge_module_exports = fun preferred fallback ->
   let rec loop seen acc remaining =
     match remaining with
     | [] -> List.rev acc
-    | summary :: tail ->
-        let module_name = Typ.ModuleSummary.module_name summary in
-        if List.mem module_name seen then
+    | ((name, _) as export) :: tail ->
+        if List.mem name seen then
           loop seen acc tail
         else
-          loop (module_name :: seen) (summary :: acc) tail
+          loop (name :: seen) (export :: acc) tail
+  in
+  loop [] [] (preferred @ fallback)
+
+let summary_with_exports = fun template exports ->
+  let source_id = Typ.PersistedSummary.source_id template in
+  let template = Typ.PersistedSummary.to_file_summary template in
+  match template.Typ.FileSummary.export_result, exports with
+  | Typ.FileSummary.TrustedExport _, _ ->
+      Typ.FileSummary.trusted ~source_id exports
+  | Typ.FileSummary.ErroredExport _, _ ->
+      Typ.FileSummary.errored ~source_id exports
+  | Typ.FileSummary.NoExport, [] ->
+      Typ.FileSummary.missing ~source_id
+  | Typ.FileSummary.NoExport, _ ->
+      Typ.FileSummary.errored ~source_id exports
+
+let merge_module_summary = fun preferred fallback ->
+  let module_name = Typ.ModuleSummary.module_name preferred in
+  let exports =
+    merge_module_exports
+      (Typ.ModuleSummary.exports preferred)
+      (Typ.ModuleSummary.exports fallback)
+  in
+  let preferred_summary = Typ.ModuleSummary.summary preferred in
+  let fallback_summary = Typ.ModuleSummary.summary fallback in
+  let summary =
+    let preferred_file = Typ.PersistedSummary.to_file_summary preferred_summary in
+    match preferred_file.Typ.FileSummary.export_result, exports with
+    | Typ.FileSummary.NoExport, _ :: _ ->
+        summary_with_exports fallback_summary exports
+    | _ ->
+        summary_with_exports preferred_summary exports
+  in
+  let persisted_summary = Typ.PersistedSummary.of_file_summary summary in
+  let source_hash =
+    Typ.PersistedSummary.Json.to_json persisted_summary
+    |> Data.Json.to_string
+    |> fun json -> Crypto.hash_string ("typ-loaded-module\x1f" ^ module_name ^ "\x1f" ^ json)
+  in
+  Typ.ModuleSummary.make ~module_name ~source_hash ~summary:persisted_summary
+
+let merge_loaded_module_summaries = fun preferred fallback ->
+  let rec loop order merged remaining =
+    match remaining with
+    | [] ->
+        order
+        |> List.rev
+        |> List.filter_map (fun module_name -> List.assoc_opt module_name merged)
+    | summary :: tail ->
+        let module_name = Typ.ModuleSummary.module_name summary in
+        let (order, merged) =
+          match List.assoc_opt module_name merged with
+          | None ->
+              (module_name :: order, (module_name, summary) :: merged)
+          | Some existing ->
+              (order, (module_name, merge_module_summary existing summary) :: List.remove_assoc module_name merged)
+        in
+        loop order merged tail
   in
   loop [] [] (preferred @ fallback)
 
 let typ_session_with_paths = fun ~config paths ->
   paths
   |> List.fold_left
-    (fun (session, source_ids) path ->
+    (fun (session, source_ids, sources) path ->
       match Fs.read path with
-      | Error _ -> (session, source_ids)
-      | Ok source ->
+      | Error _ -> (session, source_ids, sources)
+      | Ok text ->
           let (session, source_id) = Typ.Session.create_source
             session
             ~kind:Typ.Source.File
             ~origin:(Typ.Source.Path path)
-            ~text:source in
-          (session, source_ids @ [ source_id ]))
-    (Typ.Session.empty ~config, [])
+            ~text in
+          let source =
+            Typ.Source.make
+              ~source_id
+              ~kind:Typ.Source.File
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text
+          in
+          (session, source_ids @ [ source_id ], sources @ [ source ]))
+    (Typ.Session.empty ~config, [], [])
 
 let workspace_dependency_packages = fun ~include_dev (workspace: Workspace.t) (pkg: Package.t) ->
   let dependencies =
@@ -671,7 +736,7 @@ let workspace_module_summaries_for_package =
           merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
         in
         let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
-        let (session, roots) = typ_session_with_paths ~config (package_typ_source_files pkg) in
+        let (session, roots, _sources) = typ_session_with_paths ~config (package_typ_source_files pkg) in
         let summaries =
           match roots with
           | [] -> []
@@ -735,6 +800,24 @@ let check_source_group = fun ?workspace ~summary_cache paths ->
       | Readable_source { source_id; _ } -> Some source_id
       | Unreadable_source _ -> None)
   in
+  let fallback_snapshot =
+    let sources =
+      prepared_sources
+      |> List.filter_map
+        (function
+        | Unreadable_source _ -> None
+        | Readable_source { path; source; source_id } ->
+            Some (Typ.Source.make
+              ~source_id
+              ~kind:Typ.Source.File
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text:source))
+    in
+    match roots with
+    | [] -> None
+    | _ -> Some (Typ.Snapshot.make ~revision:0 ~roots ~config ~sources)
+  in
   let fallback_results =
     prepared_sources
     |> List.map
@@ -742,14 +825,23 @@ let check_source_group = fun ?workspace ~summary_cache paths ->
         function
         | Unreadable_source { path; reason } -> Unreadable { path; reason }
         | Readable_source { path; source; source_id } ->
-            let analysis = Typ.SourceAnalysis.analyze
-              ~config
-              (Typ.Source.make
-                 ~source_id
-                 ~kind:Typ.Source.File
-                 ~origin:(Typ.Source.Path path)
-                 ~revision:0
-                 ~text:source) in
+            let source =
+              Typ.Source.make
+                ~source_id
+                ~kind:Typ.Source.File
+                ~origin:(Typ.Source.Path path)
+                ~revision:0
+                ~text:source
+            in
+            let analysis =
+              match fallback_snapshot with
+              | Some snapshot -> (
+                  match Typ.Query.analysis_of_source snapshot source_id with
+                  | Some analysis -> analysis
+                  | None -> Typ.SourceAnalysis.analyze ~config source
+                )
+              | None -> Typ.SourceAnalysis.analyze ~config source
+            in
             let report = report_of_analysis path analysis in
             let diagnostics = diagnostics_of_report report in
             Typed { path; report; diagnostics }

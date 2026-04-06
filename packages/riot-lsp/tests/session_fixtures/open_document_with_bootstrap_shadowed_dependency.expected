@@ -1,0 +1,76 @@
+{
+  "outbound": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "capabilities": {
+          "positionEncoding": "utf-16",
+          "textDocumentSync": {
+            "openClose": true,
+            "change": 1
+          },
+          "documentFormattingProvider": true,
+          "codeActionProvider": {
+            "codeActionKinds": [
+              "quickfix",
+              "source.fixAll"
+            ],
+            "resolveProvider": false
+          }
+        },
+        "serverInfo": {
+          "name": "riot-lsp"
+        }
+      }
+    },
+    {
+      "params": {
+        "diagnostics": [
+          {
+            "message": "Library source modules should usually have a matching .mli file",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 0
+              }
+            },
+            "severity": 2,
+            "code": "require-module-interfaces",
+            "source": "riot-fix",
+            "data": {
+              "severity": "warning",
+              "message": "Library source modules should usually have a matching .mli file",
+              "span": {
+                "start": 0,
+                "end": 0
+              },
+              "rule_id": "require-module-interfaces",
+              "suggestion": "Add a matching interface file at `__REPO_ROOT__/packages/riot-lsp/tests/workspace_fixtures/glacier/app/src/app.mli`.",
+              "fix": null
+            }
+          }
+        ],
+        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/glacier/app/src/app.ml",
+        "version": 1
+      },
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics"
+    }
+  ],
+  "exitCode": null,
+  "state": {
+    "initialized": true,
+    "shutdownRequested": false,
+    "documents": [
+      {
+        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/glacier/app/src/app.ml",
+        "version": 1
+      }
+    ]
+  }
+}

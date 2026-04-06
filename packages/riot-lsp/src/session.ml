@@ -125,33 +125,98 @@ let workspace_package_by_name = fun (workspace: Riot_model.Workspace.t) package_
     (fun (pkg: Riot_model.Package.t) ->
       Riot_model.Package.is_workspace_member pkg && String.equal pkg.name package_name)
 
-let merge_loaded_module_summaries = fun preferred fallback ->
+let merge_module_exports = fun preferred fallback ->
   let rec loop seen acc remaining =
     match remaining with
     | [] -> List.rev acc
-    | summary :: tail ->
-        let module_name = Typ.ModuleSummary.module_name summary in
-        if List.mem module_name seen then
+    | ((name, _) as export) :: tail ->
+        if List.mem name seen then
           loop seen acc tail
         else
-          loop (module_name :: seen) (summary :: acc) tail
+          loop (name :: seen) (export :: acc) tail
+  in
+  loop [] [] (preferred @ fallback)
+
+let summary_with_exports = fun template exports ->
+  let source_id = Typ.PersistedSummary.source_id template in
+  let template = Typ.PersistedSummary.to_file_summary template in
+  match template.Typ.FileSummary.export_result, exports with
+  | Typ.FileSummary.TrustedExport _, _ ->
+      Typ.FileSummary.trusted ~source_id exports
+  | Typ.FileSummary.ErroredExport _, _ ->
+      Typ.FileSummary.errored ~source_id exports
+  | Typ.FileSummary.NoExport, [] ->
+      Typ.FileSummary.missing ~source_id
+  | Typ.FileSummary.NoExport, _ ->
+      Typ.FileSummary.errored ~source_id exports
+
+let merge_module_summary = fun preferred fallback ->
+  let module_name = Typ.ModuleSummary.module_name preferred in
+  let exports =
+    merge_module_exports
+      (Typ.ModuleSummary.exports preferred)
+      (Typ.ModuleSummary.exports fallback)
+  in
+  let preferred_summary = Typ.ModuleSummary.summary preferred in
+  let fallback_summary = Typ.ModuleSummary.summary fallback in
+  let summary =
+    let preferred_file = Typ.PersistedSummary.to_file_summary preferred_summary in
+    match preferred_file.Typ.FileSummary.export_result, exports with
+    | Typ.FileSummary.NoExport, _ :: _ ->
+        summary_with_exports fallback_summary exports
+    | _ ->
+        summary_with_exports preferred_summary exports
+  in
+  let persisted_summary = Typ.PersistedSummary.of_file_summary summary in
+  let source_hash =
+    Typ.PersistedSummary.Json.to_json persisted_summary
+    |> Data.Json.to_string
+    |> fun json -> Crypto.hash_string ("typ-loaded-module\x1f" ^ module_name ^ "\x1f" ^ json)
+  in
+  Typ.ModuleSummary.make ~module_name ~source_hash ~summary:persisted_summary
+
+let merge_loaded_module_summaries = fun preferred fallback ->
+  let rec loop order merged remaining =
+    match remaining with
+    | [] ->
+        order
+        |> List.rev
+        |> List.filter_map (fun module_name -> List.assoc_opt module_name merged)
+    | summary :: tail ->
+        let module_name = Typ.ModuleSummary.module_name summary in
+        let (order, merged) =
+          match List.assoc_opt module_name merged with
+          | None ->
+              (module_name :: order, (module_name, summary) :: merged)
+          | Some existing ->
+              (order, (module_name, merge_module_summary existing summary) :: List.remove_assoc module_name merged)
+        in
+        loop order merged tail
   in
   loop [] [] (preferred @ fallback)
 
 let typ_session_with_paths = fun ~config paths ->
   paths
   |> List.fold_left
-    (fun (session, source_ids) path ->
+    (fun (session, source_ids, sources) path ->
       match Fs.read path with
-      | Error _ -> (session, source_ids)
+      | Error _ -> (session, source_ids, sources)
       | Ok text ->
           let (session, source_id) = Typ.Session.create_source
             session
             ~kind:Typ.Source.File
             ~origin:(Typ.Source.Path path)
             ~text in
-          (session, source_ids @ [ source_id]))
-    (Typ.Session.empty ~config, [])
+          let source =
+            Typ.Source.make
+              ~source_id
+              ~kind:Typ.Source.File
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text
+          in
+          (session, source_ids @ [ source_id ], sources @ [ source ]))
+    (Typ.Session.empty ~config, [], [])
 
 let workspace_dependency_packages = fun ~include_dev (workspace: Riot_model.Workspace.t) (pkg: Riot_model.Package.t) ->
   let dependencies =
@@ -182,7 +247,7 @@ let workspace_module_summaries_for_package =
           merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
         in
         let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
-        let (session, roots) = typ_session_with_paths ~config (package_typ_summary_source_files pkg) in
+        let (session, roots, _sources) = typ_session_with_paths ~config (package_typ_summary_source_files pkg) in
         let summaries =
           match roots with
           | [] -> []
@@ -264,60 +329,74 @@ let typ_analysis_for_document = fun state ->
       | None -> None
     in
     let paths = typ_target_files state document in
-    let initial = (Typ.Session.empty ~config, None) in
+    let initial = (Typ.Session.empty ~config, None, []) in
     let from_paths =
       List.fold_left
-        (fun (session, current_source_id) path ->
+        (fun (session, current_source_id, sources) path ->
           match text_for_path state path with
-          | None -> (session, current_source_id)
+          | None -> (session, current_source_id, sources)
           | Some text ->
               let (session, source_id) = Typ.Session.create_source
                 session
                 ~kind:Typ.Source.File
                 ~origin:(Typ.Source.Path path)
                 ~text in
+              let revision =
+                match current_key with
+                | Some key when String.equal key
+                  (Path.normalize path |> Path.to_string) -> document.version
+                | _ -> 0
+              in
+              let source =
+                Typ.Source.make
+                  ~source_id
+                  ~kind:Typ.Source.File
+                  ~origin:(Typ.Source.Path path)
+                  ~revision
+                  ~text
+              in
               let current_source_id =
                 match current_key with
                 | Some key when String.equal key
                   (Path.normalize path |> Path.to_string) -> Some source_id
                 | _ -> current_source_id
               in
-              (session, current_source_id))
+              (session, current_source_id, sources @ [ source ]))
         initial
         paths
     in
     match from_paths with
-    | (session, Some source_id) -> (
+    | (session, Some source_id, sources) -> (
         match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
         | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
         | Error _ ->
-            Some (Typ.SourceAnalysis.analyze
-              ~config
-              (Typ.Source.make
-                 ~source_id
-                 ~kind:Typ.Source.File
-                 ~origin:(typ_source_origin_of_document document)
-                 ~revision:document.version
-                 ~text:document.text))
+            Typ.Snapshot.make ~revision:document.version ~roots:[ source_id ] ~config ~sources
+            |> fun snapshot -> Typ.Query.analysis_of_source snapshot source_id
       )
-    | (session, None) ->
+    | (session, None, sources) ->
         let (session, source_id) = Typ.Session.create_source
           session
           ~kind:Typ.Source.File
           ~origin:(typ_source_origin_of_document document)
           ~text:document.text in
+        let source =
+          Typ.Source.make
+            ~source_id
+            ~kind:Typ.Source.File
+            ~origin:(typ_source_origin_of_document document)
+            ~revision:document.version
+            ~text:document.text
+        in
         (
           match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
           | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
           | Error _ ->
-              Some (Typ.SourceAnalysis.analyze
+              Typ.Snapshot.make
+                ~revision:document.version
+                ~roots:[ source_id ]
                 ~config
-                (Typ.Source.make
-                   ~source_id
-                   ~kind:Typ.Source.File
-                   ~origin:(typ_source_origin_of_document document)
-                   ~revision:document.version
-                   ~text:document.text))
+                ~sources:(sources @ [ source ])
+              |> fun snapshot -> Typ.Query.analysis_of_source snapshot source_id
         )
 
 let diagnostic_to_lsp = fun text ->

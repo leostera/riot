@@ -389,6 +389,76 @@ let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
               Ok ())
 
+let test_check_package_filter_merges_bootstrap_and_dependency_module_exports = fun _ctx ->
+  with_tempdir_result "riot_check_bootstrap_shadow"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let shadow_root = Path.(workspace_root / Path.v "packages/shadow") in
+      let app_root = Path.(workspace_root / Path.v "packages/app") in
+      let shadow_source = Path.(shadow_root / Path.v "src/int.ml") in
+      let app_source = Path.(app_root / Path.v "src/app.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"shadow"
+            ~path:shadow_root
+            ~relative_path:(Path.v "packages/shadow")
+            ~sources:{
+              empty_sources with src = [ Path.v "src/int.ml" ];
+            }
+            ();
+          make_package
+            ~name:"app"
+            ~path:app_root
+            ~relative_path:(Path.v "packages/app")
+            ~dependencies:[ make_dependency "shadow" ]
+            ~sources:{
+              empty_sources with src = [ Path.v "src/app.ml" ];
+            }
+            ();
+        ] in
+      match write_file shadow_source "let sentinel = 21\n" with
+      | Error err -> Error err
+      | Ok () ->
+          match write_file app_source "let rendered = Int.to_string Int.sentinel\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches = parse_check [ "check"; "--json"; "-p"; "app" ]
+              |> Result.expect ~msg:"parse check args" in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+              |> Result.expect ~msg:"package check should merge dependency and bootstrap module exports";
+              let events = parse_jsonl (stdout_contents ()) in
+              let file_paths =
+                events
+                |> List.filter_map
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_file") -> (
+                        match Data.Json.get_field "result" json with
+                        | Some result_json -> Data.Json.get_field "path" result_json
+                        | None -> None
+                      )
+                    | _ -> None)
+              in
+              let diagnostic_count =
+                events
+                |> List.filter
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_diagnostic") -> true
+                    | _ -> false)
+                |> List.length
+              in
+              Test.assert_equal
+                ~expected:[ Data.Json.String "packages/app/src/app.ml" ]
+                ~actual:file_paths;
+              Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+              Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+              Ok ())
+
 let test_check_rejects_package_filter_without_workspace = fun _ctx ->
   let matches = parse_check [ "check"; "--json"; "-p"; "colors" ] |> Result.expect ~msg:"parse check args" in
   let stdout, stdout_contents = make_capture_writer () in
@@ -421,6 +491,7 @@ let tests =
     case "check: package filter limits workspace scan" test_check_package_filter_limits_workspace_scan;
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
+    case "check: package filter merges bootstrap and dependency module exports" test_check_package_filter_merges_bootstrap_and_dependency_module_exports;
     case "check: package filter requires workspace" test_check_rejects_package_filter_without_workspace;
   ]
 
