@@ -1,36 +1,25 @@
 # Typ TODO
 
-This file is the working playbook for `packages/typ`.
+This is the working task list for `packages/typ`.
 
-The point is not to restate the whole manual. The point is to make the next
-work slice obvious:
+Keep this file blunt and operational.
 
-- what to read
-- how to implement a feature
-- how to verify it
-- how to make sure it helps both compiler-style and LSP-style use-cases
+## Work Loop
 
-## Core Rule
+Every slice should follow this loop:
 
-Do not design new `typ` behavior from the current prototype outward.
+1. Pick one task.
+2. Read the owning docs in `docs/checker/`.
+3. Add or update fixtures / diagnostics / session tests first.
+4. Implement the smallest semantic slice that satisfies the docs.
+5. Verify it in `typ`, `riot check`, and `riot-lsp`.
+6. Commit the slice with a conventional commit.
 
-Design from the manual inward:
-
-1. find the owning docs
-2. write or extend fixtures for the promised behavior
-3. implement the smallest missing semantic slice
-4. verify it through `typ`, `riot check`, and `riot-lsp`
-
-If the implementation and the manual disagree, either:
-
-- the code is wrong, or
-- the manual is incomplete and needs an explicit update
-
-Do not leave the disagreement implicit.
+Do not batch unrelated work into one big change.
 
 ## Read First
 
-Start here:
+Always start here:
 
 - [docs/index.md](./docs/index.md)
 - [docs/checker/index.md](./docs/checker/index.md)
@@ -39,17 +28,11 @@ Start here:
 - [docs/checker/lowering.md](./docs/checker/lowering.md)
 - [docs/checker/engine.md](./docs/checker/engine.md)
 
-Those define the center of gravity:
-
-- semantic tree, not raw CST
-- explicit origins
-- explicit sessions and snapshots
-- query-first API
-- canonical `ModuleSummary`
+Then read the owning feature doc for the task.
 
 ## Reading Map
 
-When working on a feature, read the owning manual sections first.
+Use this map before touching code.
 
 ### Core typing
 
@@ -57,7 +40,7 @@ When working on a feature, read the owning manual sections first.
 - [docs/checker/solver.md](./docs/checker/solver.md)
 - [docs/checker/generalization.md](./docs/checker/generalization.md)
 
-Use this for:
+Use for:
 
 - literals
 - variables
@@ -65,48 +48,46 @@ Use this for:
 - apply
 - let / let rec
 - value restriction
-- generalization bugs
 
-### Lowering and origins
+### Lowering, origins, diagnostics
 
 - [docs/checker/lowering.md](./docs/checker/lowering.md)
 - [docs/checker/diagnostics.md](./docs/checker/diagnostics.md)
 
-Use this for:
+Use for:
 
-- what survives lowering
-- what is normalized away
-- how to preserve source spans and origins
-- recovery nodes and unsupported syntax
+- semantic normalization
+- source spans / origins
+- recovery nodes
+- structured diagnostics
 
-### Ordinary data
+### Ordinary data and patterns
 
 - [docs/checker/nominal_data.md](./docs/checker/nominal_data.md)
 - [docs/checker/extensible_variants.md](./docs/checker/extensible_variants.md)
 - [docs/checker/pattern_analysis.md](./docs/checker/pattern_analysis.md)
 
-Use this for:
+Use for:
 
 - type declarations
 - records
 - ordinary variants
-- extension constructors
-- exceptions
+- extension constructors / exceptions
 - exhaustiveness / redundancy
 
-### Advanced core typing
+### Advanced core features
 
 - [docs/checker/labeled_args.md](./docs/checker/labeled_args.md)
 - [docs/checker/gadts.md](./docs/checker/gadts.md)
 - [docs/checker/polyvariants.md](./docs/checker/polyvariants.md)
 - [docs/checker/effects.md](./docs/checker/effects.md)
 
-Use this for:
+Use for:
 
-- labels and optional args
-- GADT refinement
+- labeled / optional args
+- GADTs
 - polymorphic variants
-- effect handlers
+- effects
 
 ### Modules
 
@@ -115,21 +96,20 @@ Use this for:
 - [docs/checker/first_class_modules.md](./docs/checker/first_class_modules.md)
 - [docs/checker/recursive_modules.md](./docs/checker/recursive_modules.md)
 
-Use this for:
+Use for:
 
 - structures
 - signatures
 - functors
 - first-class modules
 - recursive modules
-- interface checking
 
 ### Engine and host integration
 
 - [docs/checker/engine.md](./docs/checker/engine.md)
 - [docs/checker/diagnostics.md](./docs/checker/diagnostics.md)
 
-Use this for:
+Use for:
 
 - sessions
 - rooted snapshots
@@ -138,25 +118,74 @@ Use this for:
 - `ModuleSummary`
 - compiler/LSP query behavior
 
-## Where The Code Usually Lives
+## Current Tasks
 
-This is the rough mapping from the manual to the current code.
+### Engine
 
-### Parse / lowering / semantic tree
+- [ ] Collapse summary state around one canonical `ModuleSummary`.
+  Remove the prototype split between local file summary and persisted summary
+  as separate centers of gravity.
+- [ ] Make rooted snapshot preparation real.
+  `Session.prepare_snapshot` should do dependency discovery, hydrate required
+  module summaries, and return `MissingRequirements` early when needed.
+- [ ] Stop relying on ambient fake knowledge where real loaded module summaries
+  should be used instead.
+
+### Interfaces and exports
+
+- [ ] Implement real `.mli` / signature checking.
+  Exported module views should come from the interface when present.
+- [ ] Make persisted module summaries carry the real export facts needed by
+  downstream checking and editor queries.
+- [ ] Tighten export trust / errored export / no export behavior and cover it
+  with tests.
+
+### Queries and LSP support
+
+- [ ] Keep `diagnostics` stable over rooted snapshots.
+- [ ] Make `type_at` and related index-backed queries line up with the manual.
+- [ ] Add `definition_at` support built on origins and exported symbol data.
+- [ ] Keep `riot-lsp` aligned with rooted snapshots instead of relying forever
+  on the compatibility `Session.snapshot` path.
+
+### Language support
+
+- [ ] Keep pushing real package baselines upward:
+  `colors` -> `tty` -> `mime` -> `kernel` -> `std`.
+- [ ] Implement one missing feature cluster at a time, based on real package
+  diagnostics.
+- [ ] Prefer small slices like:
+  - one type-declaration rule
+  - one pattern rule
+  - one labeled-argument behavior
+  - one module/signature behavior
+
+### Tests and diagnostics
+
+- [ ] Keep adding fixture snapshots under `tests/fixtures/`.
+- [ ] Keep adding structured diagnostic snapshots under `tests/diagnostics/`.
+- [ ] Add session / summary / snapshot tests whenever engine behavior changes.
+- [ ] Keep diagnostics structured first, human rendering second.
+
+## Code Map
+
+Use this as the rough implementation map.
+
+### Lowering and semantic tree
 
 - `src/lower.ml`
 - `src/SemanticTree*.ml`
 - `src/Origin*.ml`
 - `src/Diagnostic*.ml`
 
-### Solver / inference
+### Solver and inference
 
 - `src/infer.ml`
 - `src/TypeRepr*.ml`
 - `src/TypeScheme*.ml`
 - `src/TypePrinter*.ml`
 
-### Summaries / persistence / queries
+### Analysis, summaries, queries
 
 - `src/SourceAnalysis.ml`
 - `src/ModuleSummary*.ml`
@@ -170,61 +199,23 @@ This is the rough mapping from the manual to the current code.
 - `src/Snapshot*.ml`
 - `src/MissingRequirements*.ml`
 
-If the module boundaries drift too far from the manual, that is usually a sign
-the implementation needs refactoring before adding more feature work.
-
-## Feature Implementation Loop
-
-Every new feature should follow this loop.
-
-1. Pick one semantic slice.
-   Good slices are things like:
-   - record construction
-   - one labeled-argument rule
-   - one pattern-analysis behavior
-   - one summary/query seam
-
-2. Read the owning docs first.
-   Do not start from the current prototype behavior.
-
-3. Add or extend tests before changing code.
-   The main places are:
-   - `tests/fixtures/`
-   - `tests/diagnostics/`
-   - `tests/session_tests.ml`
-   - `tests/persisted_summary_tests.ml`
-
-4. Implement the smallest missing piece.
-   Prefer:
-   - explicit origins
-   - structured diagnostics
-   - query-local mutation only
-   - recovery nodes for unsupported syntax instead of silent dropping
-
-5. Re-run verification at three levels:
-   - `typ` package behavior
-   - compiler-style `riot check`
-   - editor-style `riot-lsp`
-
-6. If the feature changes the contract, update the manual in the same slice.
-
-7. Commit the slice.
-   Use a conventional commit.
+If the code boundaries drift too far from the manual, stop and refactor before
+adding more feature work.
 
 ## Verification Loop
 
-Run these in roughly this order.
+Run these in order for each real slice.
 
-### 1. Local package checks
+### 1. Local `typ`
 
-These are the minimum checks for almost every `typ` change:
+Minimum checks:
 
 ```ocaml
 timeout 180 riot build typ
 timeout 180 riot test -p typ
 ```
 
-If the change touches docs only, still run:
+If the change is docs-only:
 
 ```ocaml
 git diff --check -- packages/typ
@@ -232,9 +223,9 @@ git diff --check -- packages/typ
 
 ### 2. Compiler-style verification
 
-`typ` is not done until it works through `riot check`.
+`typ` must work through `riot check`, not just through package-local tests.
 
-Use:
+Run:
 
 ```ocaml
 timeout 30 riot build riot-cli
@@ -244,23 +235,22 @@ riot run riot -- check -p tty
 riot run riot -- check -p colors --json
 ```
 
-What to look for:
+Check:
 
-- diagnostics still stream
-- diagnostics still use workspace-relative paths
-- human output still matches the `syn`-style report shape
-- `--json` still emits per-file events, including clean-file events
-- package-level checking still sees sibling modules the same way `typ` does
+- streaming diagnostics still work
+- human diagnostics still look right
+- JSON still emits per-file events, including clean-file events
+- sibling modules still resolve correctly at package scope
 
-The main CLI integration point is:
+Main integration point:
 
-- [check_cmd.ml](/Users/leostera/Developer/github.com/leostera/riot/packages/riot-cli/src/check_cmd.ml)
+- [check_cmd.ml](../riot-cli/src/check_cmd.ml)
 
 ### 3. LSP-style verification
 
-`typ` is also not done until the editor-facing behavior still makes sense.
+`typ` must also still help `riot-lsp`.
 
-Use:
+Run:
 
 ```ocaml
 timeout 30 riot build riot-lsp
@@ -268,34 +258,29 @@ timeout 180 riot test riot-lsp:framing_tests
 timeout 180 riot test riot-lsp:session_fixture_tests
 ```
 
-What to look for:
+Check:
 
 - type diagnostics still publish cleanly
-- spans still map correctly into LSP UTF-16 ranges
-- package-scoped typing still resolves sibling modules the same way as
-  `riot check`
-- no protocol noise leaks into stdout
+- spans still map to correct UTF-16 ranges
+- package-scoped typing still matches `riot check`
+- no JSON-RPC protocol noise leaks into stdout
 
-The main LSP integration point is:
+Main integration point:
 
-- [session.ml](/Users/leostera/Developer/github.com/leostera/riot/packages/riot-lsp/src/session.ml)
+- [session.ml](../riot-lsp/src/session.ml)
 
-Right now `riot-lsp` still uses `Typ.Session.snapshot`. As `typ` moves harder
-toward rooted snapshot preparation and `MissingRequirements`, this file is one
-of the first places that must stay aligned.
+### 4. Real package loop
 
-### 4. Real-package baseline loop
+Use real packages to decide the next feature slice.
 
-After the tests pass, run a real package.
-
-Start small:
+Start with:
 
 ```ocaml
 riot run riot -- check -p colors
 riot run riot -- check -p tty
 ```
 
-Then scale up:
+Then move upward:
 
 ```ocaml
 riot run riot -- check -p mime
@@ -303,73 +288,28 @@ riot run riot -- check -p kernel
 riot run riot -- check -p std
 ```
 
-The real-package loop is how we discover the next missing feature cluster.
+Treat the remaining diagnostics as the feature inventory for the next task.
 
-Use the remaining diagnostics as the feature inventory for the next slice.
+## Acceptance Checklist
 
-## Feature Acceptance Checklist
+Do not call a feature done until all of these are true:
 
-Before calling a feature done, make sure all of these are true.
+- [ ] It is covered by fixtures or diagnostics snapshots.
+- [ ] Its diagnostics are structured and span-backed.
+- [ ] Its origins point back to the right source region.
+- [ ] It behaves correctly through `Typ.Query`, not only one-shot checking.
+- [ ] It works through `riot check`.
+- [ ] It still helps `riot-lsp`.
+- [ ] If it affects exports, it is covered by summary / snapshot tests.
 
-- It is covered by fixtures or diagnostics snapshots in `packages/typ/tests`.
-- Its diagnostics are structured, not flattened into one string.
-- Its spans and origins point back to the right source region.
-- It behaves correctly through `Typ.Query`, not just one one-shot path.
-- It still works through `riot check`.
-- It still produces useful editor diagnostics through `riot-lsp`.
-- If it affects exports, it is reflected in summary/persistence tests.
+## Commit Rule
 
-## Current Architectural Priorities
+Commit often.
 
-These are the big structural items still worth keeping in front of us.
+Good commit shape:
 
-### 1. Canonical `ModuleSummary`
+1. one semantic slice
+2. matching tests
+3. matching docs update if the contract changed
 
-We still want one real reusable module-summary center of gravity instead of
-prototype split seams.
-
-Manual:
-
-- [docs/checker/engine.md](./docs/checker/engine.md)
-- [docs/checker/signatures.md](./docs/checker/signatures.md)
-
-### 2. Real rooted snapshot preparation
-
-We have the rooted API surface, but the full dependency-discovery and
-hydration loop still needs to match the engine spec more closely.
-
-Manual:
-
-- [docs/checker/engine.md](./docs/checker/engine.md)
-
-### 3. Real interface/signature checking
-
-`.mli` / interface behavior needs to stop being a soft edge and become part of
-the real export boundary.
-
-Manual:
-
-- [docs/checker/signatures.md](./docs/checker/signatures.md)
-- [docs/checker/modules.md](./docs/checker/modules.md)
-
-### 4. Remove ambient fake knowledge where possible
-
-Prefer loaded summaries and explicit environments over baked-in fallback
-knowledge.
-
-Manual:
-
-- [docs/checker/engine.md](./docs/checker/engine.md)
-- [docs/checker/modules.md](./docs/checker/modules.md)
-
-## Snapshot And Diagnostics Bias
-
-When in doubt:
-
-- add a fixture
-- add a diagnostics snapshot
-- dump semantic structure and environments
-- keep the diagnostic structured
-
-This package is still young enough that regressions will be caught faster by
-snapshot-heavy tests than by trying to reason about everything from memory.
+Use conventional commits.
