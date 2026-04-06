@@ -167,6 +167,11 @@ let persist_module_typings = fun store typings ->
     (fun typings ->
       ignore (Typ.Store.save_module_typings store typings))
 
+let persist_module_typings_for_source = fun store snapshot source_id ->
+  match Typ.Query.module_typings_of snapshot source_id with
+  | None -> ()
+  | Some typings -> ignore (Typ.Store.save_module_typings store typings)
+
 let workspace_package_by_name = fun (workspace: Riot_model.Workspace.t) package_name ->
   workspace.packages
   |> List.find_opt
@@ -466,7 +471,7 @@ let typ_analysis_for_document = fun state ->
             let () =
               match config.Typ.Config.store with
               | None -> ()
-              | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
+              | Some store -> persist_module_typings_for_source store snapshot source_id
             in
             Typ.Query.analysis_of_source snapshot source_id
         | Error _ ->
@@ -493,7 +498,7 @@ let typ_analysis_for_document = fun state ->
               let () =
                 match config.Typ.Config.store with
                 | None -> ()
-                | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
+                | Some store -> persist_module_typings_for_source store snapshot source_id
               in
               Typ.Query.analysis_of_source snapshot source_id
           | Error _ ->

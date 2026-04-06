@@ -30,6 +30,8 @@ type state = {
   mutable item_traces: Check_result.item_trace list;
   mutable record_types: record_type_decl list;
   mutable visible_type_decls: FileSummary.type_decl list;
+  visible_type_decl_index: (string, FileSummary.type_decl) Collections.HashMap.t;
+  declaration_variances: (string, variance list) Collections.HashMap.t;
   mutable forced_export_names: string list;
 }
 
@@ -50,15 +52,17 @@ let record_type_of_summary_decl = fun (type_decl: FileSummary.type_decl) ->
   }
 
 let unique_record_types = fun record_types ->
-  let rec loop seen acc = function
+  let seen = Collections.HashSet.with_capacity (List.length record_types) in
+  let rec loop acc = function
     | [] -> List.rev acc
     | (record_decl: record_type_decl) :: rest ->
-        if List.mem record_decl.owner_name seen then
-          loop seen acc rest
+        if Collections.HashSet.contains seen record_decl.owner_name then
+          loop acc rest
         else
-          loop (record_decl.owner_name :: seen) (record_decl :: acc) rest
+          let () = Collections.HashSet.insert seen record_decl.owner_name |> ignore in
+          loop (record_decl :: acc) rest
   in
-  loop [] [] record_types
+  loop [] record_types
 
 let type_decl_key = fun (type_decl: FileSummary.type_decl) ->
   qualify_name type_decl.scope_path type_decl.declaration.type_name
@@ -110,8 +114,18 @@ let type_decls_for_module_alias = fun type_decls ~alias_name ~module_path ->
   else
     aliases_for_type_decls type_decls module_path |> prefix_type_decls [ alias_name ]
 
+let rebuild_visible_type_decl_index = fun (state: state) ->
+  let () = Collections.HashMap.clear state.visible_type_decl_index in
+  state.visible_type_decls |> List.iter
+    (fun (type_decl: FileSummary.type_decl) ->
+      let _ = Collections.HashMap.insert state.visible_type_decl_index (type_decl_key type_decl) type_decl in
+      ())
+
+let reset_declaration_variances = fun (state: state) ->
+  Collections.HashMap.clear state.declaration_variances
+
 let make_state = fun ~config file ->
-  {
+  let state = {
     file;
     config;
     next_type_var_id = 0;
@@ -121,24 +135,43 @@ let make_state = fun ~config file ->
     item_traces = [];
     record_types = config.ambient_type_decls |> List.filter_map record_type_of_summary_decl |> unique_record_types;
     visible_type_decls = config.ambient_type_decls;
+    visible_type_decl_index = Collections.HashMap.with_capacity 32;
+    declaration_variances = Collections.HashMap.with_capacity 32;
     forced_export_names = [];
-  }
+  } in
+  let () = rebuild_visible_type_decl_index state in
+  state
 
 let unique_env = fun env ->
-  let rec loop seen acc = function
+  let seen = Collections.HashSet.with_capacity (List.length env) in
+  let rec loop acc = function
     | [] -> List.rev acc
     | (name, scheme) :: rest ->
-        if List.mem name seen then
-          loop seen acc rest
+        if Collections.HashSet.contains seen name then
+          loop acc rest
         else
-          loop (name :: seen) ((name, scheme) :: acc) rest
+          let () = Collections.HashSet.insert seen name |> ignore in
+          loop ((name, scheme) :: acc) rest
   in
-  loop [] [] env
+  loop [] env
 
 let render_env = fun env ->
   env |> unique_env |> List.sort
     (fun (left, _) (right, _) ->
       String.compare left right)
+
+let visible_env_entries = fun env ->
+  let seen = Collections.HashSet.with_capacity (List.length env) in
+  let rec loop acc = function
+    | [] -> List.rev acc
+    | ((name, _) as entry) :: rest ->
+        if Collections.HashSet.contains seen name then
+          loop acc rest
+        else
+          let () = Collections.HashSet.insert seen name |> ignore in
+          loop (entry :: acc) rest
+  in
+  loop [] env
 
 let env_lookup = fun env name ->
   List.find_opt
@@ -157,11 +190,25 @@ let env_lookup_all = fun env name ->
 let env_names = fun env -> render_env env |> List.map fst
 
 let introduced_names = fun before after ->
-  let before_names = env_names before in
-  env_names after |> List.filter (fun name -> not (List.mem name before_names))
+  let before_name_set =
+    visible_env_entries before
+    |> List.fold_left
+      (fun seen (name, _) ->
+        let () = Collections.HashSet.insert seen name |> ignore in
+        seen)
+      (Collections.HashSet.with_capacity (List.length before))
+  in
+  visible_env_entries after
+  |> List.filter_map
+    (fun (name, _) ->
+      if Collections.HashSet.contains before_name_set name then
+        None
+      else
+        Some name)
 
 let env_free_vars = fun env ->
-  env |> unique_env |> List.fold_left
+  visible_env_entries env
+  |> List.fold_left
     (fun acc (_, scheme) ->
       TypeRepr.union acc (TypeScheme.free_vars scheme))
     []
@@ -435,10 +482,7 @@ let merge_variances = fun left right ->
   List.fold_left (fun acc (var_id, variance) -> add_variance acc var_id variance) left right
 
 let visible_type_decl = fun (state: state) name ->
-  List.find_opt
-    (fun (type_decl: FileSummary.type_decl) ->
-      String.equal (type_decl_key type_decl) name)
-    state.visible_type_decls
+  Collections.HashMap.get state.visible_type_decl_index name
 
 let constructor_payload_types = fun (constructor: TypeDecl.constructor) ->
   let rec loop acc ty =
@@ -475,14 +519,22 @@ let type_variance_helpers = fun (state: state) ->
         collect_type_variances visiting Invariant element
     | TypeRepr.Named { name; arguments } ->
         let parameter_variances =
-          match visible_type_decl state name with
-          | Some type_decl ->
-              if List.mem name visiting then
-                List.map (fun _ -> Invariant) type_decl.declaration.param_ids
-              else
-                declaration_param_variances (name :: visiting) type_decl
-          | None ->
-              List.map (fun _ -> Invariant) arguments
+          if Collections.HashSet.contains visiting name then
+            List.map (fun _ -> Invariant) arguments
+          else
+            match Collections.HashMap.get state.declaration_variances name with
+            | Some variances -> variances
+            | None -> (
+                match visible_type_decl state name with
+                | Some type_decl ->
+                    let () = Collections.HashSet.insert visiting name |> ignore in
+                    let variances = declaration_param_variances visiting type_decl in
+                    let () = Collections.HashSet.remove visiting name |> ignore in
+                    let _ = Collections.HashMap.insert state.declaration_variances name variances in
+                    variances
+                | None ->
+                    List.map (fun _ -> Invariant) arguments
+              )
         in
         let rec loop acc arguments parameter_variances =
           match (arguments, parameter_variances) with
@@ -577,7 +629,7 @@ let type_variance_helpers = fun (state: state) ->
 
 let covariant_vars_of_type = fun (state: state) ty ->
   let collect_type_variances = type_variance_helpers state in
-  collect_type_variances [] Covariant ty
+  collect_type_variances (Collections.HashSet.create ()) Covariant ty
   |> List.filter_map
     (fun (var_id, variance) ->
       match variance with
@@ -588,9 +640,10 @@ let covariant_vars_of_type = fun (state: state) ty ->
 let relaxed_generalizable_vars = fun (state: state) env ty ->
   let local_vars = local_generalizable_vars env ty in
   let covariant_vars = covariant_vars_of_type state ty in
+  let covariant_var_set = Collections.HashSet.of_list covariant_vars in
   List.filter
     (fun var_id ->
-      List.mem var_id covariant_vars)
+      Collections.HashSet.contains covariant_var_set var_id)
     local_vars
 
 let origin_label_of_expr = fun (state: state) expr_id ->
@@ -1048,11 +1101,12 @@ let rec bind_pattern = fun (state: state) env pat_id expected_ty ->
     )
 
 let record_expr_trace = fun (state: state) expr_id origin_id env_before inferred_type ->
-  state.expr_traces <- (
-    { Check_result.expr_id; origin_id; env_before = render_env env_before; inferred_type }:
-      Check_result.expr_trace
-  )
-  :: state.expr_traces
+  if state.config.capture_traces then
+    state.expr_traces <- (
+      { Check_result.expr_id; origin_id; env_before = render_env env_before; inferred_type }:
+        Check_result.expr_trace
+    )
+    :: state.expr_traces
 
 let add_application_label_mismatch = fun (state: state) ~expr_id ~expected_label arguments ->
   add_diagnostic
@@ -1547,19 +1601,33 @@ let ambient_names = fun (config: TypConfig.t) -> config.ambient |> List.map fst
 
 let export_env = fun config env ->
   let hidden_names = prelude_names config @ ambient_names config in
-  render_env env |> List.filter (fun (name, _) -> not (List.mem name hidden_names))
+  let hidden_name_set = Collections.HashSet.of_list hidden_names in
+  render_env env |> List.filter
+    (fun (name, _) -> not (Collections.HashSet.contains hidden_name_set name))
 
 let export_env_with_forced_names = fun (state: state) env ->
   let hidden_names = prelude_names state.config @ ambient_names state.config in
+  let hidden_name_set = Collections.HashSet.of_list hidden_names in
+  let forced_name_set = Collections.HashSet.of_list state.forced_export_names in
   render_env env
   |> List.filter
-    (fun (name, _) -> not (List.mem name hidden_names) || List.mem name state.forced_export_names)
+    (fun (name, _) ->
+      not (Collections.HashSet.contains hidden_name_set name)
+      || Collections.HashSet.contains forced_name_set name)
 
 let introduced_entries = fun before after ->
-  let introduced = introduced_names before after in
-  render_env after |> List.filter
+  let before_name_set =
+    visible_env_entries before
+    |> List.fold_left
+      (fun seen (name, _) ->
+        let () = Collections.HashSet.insert seen name |> ignore in
+        seen)
+      (Collections.HashSet.with_capacity (List.length before))
+  in
+  visible_env_entries after
+  |> List.filter
     (fun (name, _) ->
-      List.mem name introduced)
+      not (Collections.HashSet.contains before_name_set name))
 
 let qualify_entries = fun scope_path entries ->
   List.map (fun (name, scheme) -> (qualify_name scope_path name, scheme)) entries
@@ -1618,7 +1686,9 @@ let env_for_item_scope = fun export_env scope_entries scope_opens scope_path ->
   scope_opens_for scope_opens scope_path |> List.fold_left env_with_local_open base_env
 
 let set_visible_type_decls = fun (state: state) type_decls ->
-  state.visible_type_decls <- bind_type_decls state.config.ambient_type_decls type_decls
+  let () = state.visible_type_decls <- bind_type_decls state.config.ambient_type_decls type_decls in
+  let () = rebuild_visible_type_decl_index state in
+  reset_declaration_variances state
 
 let infer_file = fun ~config file ->
   let state = make_state ~config file in
@@ -1628,7 +1698,6 @@ let infer_file = fun ~config file ->
     | item :: rest -> (
         match item with
         | ItemTree.Type type_item ->
-            let visible_exports_before = export_env config export_state in
             let introduced = TypeDecl.constructor_entries type_item.declaration in
             let introduced_type_decls = [
               { FileSummary.scope_path = type_item.scope_path; declaration = type_item.declaration }
@@ -1651,14 +1720,16 @@ let infer_file = fun ~config file ->
                 update_scope_entries scope_entries scope_path introduced
               )
             in
-            let exports_after = export_env config export_state in
-            let binding_names = introduced_names visible_exports_before exports_after in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = type_item.item_id; binding_names; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let visible_exports_before = export_env config export_state in
+                let exports_after = export_env config export_state in
+                let binding_names = introduced_names visible_exports_before exports_after in
+                state.item_traces <- (
+                  { Check_result.item_id = type_item.item_id; binding_names; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             let type_decls = bind_type_decls type_decls introduced_type_decls in
             let () =
@@ -1671,7 +1742,6 @@ let infer_file = fun ~config file ->
               scope_opens
               rest
         | ItemTree.Exception exception_item ->
-            let visible_exports_before = export_env config export_state in
             let introduced = [ (exception_item.exception_name, exception_item.scheme) ] in
             let (export_state, scope_entries) =
               match exception_item.scope_path with
@@ -1681,18 +1751,19 @@ let infer_file = fun ~config file ->
                 update_scope_entries scope_entries scope_path introduced
               )
             in
-            let exports_after = export_env config export_state in
-            let binding_names = introduced_names visible_exports_before exports_after in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = exception_item.item_id; binding_names; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let visible_exports_before = export_env config export_state in
+                let exports_after = export_env config export_state in
+                let binding_names = introduced_names visible_exports_before exports_after in
+                state.item_traces <- (
+                  { Check_result.item_id = exception_item.item_id; binding_names; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Value value_item ->
-            let visible_exports_before = export_env config export_state in
             let item_env = env_for_item_scope export_state scope_entries scope_opens value_item.scope_path in
             let env_after_item = infer_binding_group state item_env value_item.binding_ids in
             let introduced = introduced_entries item_env env_after_item in
@@ -1704,29 +1775,31 @@ let infer_file = fun ~config file ->
                 update_scope_entries scope_entries scope_path introduced
               )
             in
-            let exports_after = export_env config export_state in
-            let binding_names = introduced_names visible_exports_before exports_after in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = value_item.item_id; binding_names; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let visible_exports_before = export_env config export_state in
+                let exports_after = export_env config export_state in
+                let binding_names = introduced_names visible_exports_before exports_after in
+                state.item_traces <- (
+                  { Check_result.item_id = value_item.item_id; binding_names; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Open open_item ->
             let scope_opens = update_scope_opens scope_opens open_item.scope_path open_item.module_path in
-            let exports_after = export_env config export_state in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = open_item.item_id; binding_names = []; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let exports_after = export_env config export_state in
+                state.item_traces <- (
+                  { Check_result.item_id = open_item.item_id; binding_names = []; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             loop export_state type_decls scope_entries scope_opens rest
         | ItemTree.Include include_item ->
-            let visible_exports_before = export_env config export_state in
             let item_env = env_for_item_scope export_state scope_entries scope_opens include_item.scope_path in
             let introduced = entries_for_include item_env include_item.module_path in
             let visible_type_decls = bind_type_decls config.ambient_type_decls type_decls in
@@ -1740,14 +1813,16 @@ let infer_file = fun ~config file ->
                 update_scope_entries scope_entries scope_path introduced
               )
             in
-            let exports_after = export_env config export_state in
-            let binding_names = introduced_names visible_exports_before exports_after in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = include_item.item_id; binding_names; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let visible_exports_before = export_env config export_state in
+                let exports_after = export_env config export_state in
+                let binding_names = introduced_names visible_exports_before exports_after in
+                state.item_traces <- (
+                  { Check_result.item_id = include_item.item_id; binding_names; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             let type_decls = bind_type_decls type_decls introduced_type_decls in
             let () =
@@ -1760,7 +1835,6 @@ let infer_file = fun ~config file ->
               scope_opens
               rest
         | ItemTree.ModuleAlias module_alias_item ->
-            let visible_exports_before = export_env_with_forced_names state export_state in
             let item_env = env_for_item_scope
               export_state
               scope_entries
@@ -1796,14 +1870,16 @@ let infer_file = fun ~config file ->
             let () =
               state.forced_export_names <- forced_export_names @ state.forced_export_names
             in
-            let exports_after = export_env_with_forced_names state export_state in
-            let binding_names = introduced_names visible_exports_before exports_after in
             let () =
-              state.item_traces <- (
-                { Check_result.item_id = module_alias_item.item_id; binding_names; exports_after }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let visible_exports_before = export_env_with_forced_names state export_state in
+                let exports_after = export_env_with_forced_names state export_state in
+                let binding_names = introduced_names visible_exports_before exports_after in
+                state.item_traces <- (
+                  { Check_result.item_id = module_alias_item.item_id; binding_names; exports_after }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             let type_decls = bind_type_decls type_decls introduced_type_decls in
             let () =
@@ -1816,17 +1892,18 @@ let infer_file = fun ~config file ->
               scope_opens
               rest
         | ItemTree.Unsupported unsupported_item ->
-            let exports_after = export_env config export_state in
             let () =
-              state.item_traces <- (
-                {
-                  Check_result.item_id = unsupported_item.item_id;
-                  binding_names = [];
-                  exports_after
-                }:
-                  Check_result.item_trace
-              )
-              :: state.item_traces
+              if state.config.capture_traces then
+                let exports_after = export_env config export_state in
+                state.item_traces <- (
+                  {
+                    Check_result.item_id = unsupported_item.item_id;
+                    binding_names = [];
+                    exports_after
+                  }:
+                    Check_result.item_trace
+                )
+                :: state.item_traces
             in
             loop export_state type_decls scope_entries scope_opens rest
       )

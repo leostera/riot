@@ -15,6 +15,11 @@ type t = {
   (** Optional semantic store used to hydrate canonical module typings during
       rooted snapshot preparation. *)
   store: Store.t option;
+  (** Whether inference should retain trace payloads such as per-expression
+      environments and per-item export snapshots. Hosts that only need
+      diagnostics and module typings can disable this to avoid building large
+      trace structures. *)
+  capture_traces: bool;
   (** Snapshot-scoped bindings synthesized from sibling sources or host context. *)
   ambient: env;
   (** Snapshot-scoped lowered type declarations synthesized from summaries. *)
@@ -44,3 +49,8 @@ val with_loaded_modules: t -> loaded_modules:ModuleTypings.t list -> t
 (** Replace the optional semantic store used during rooted snapshot
     preparation. *)
 val with_store: t -> store:Store.t option -> t
+
+(** Toggle retention of expression and item traces. When disabled, the checker
+    still computes diagnostics and module typings, but omits trace payloads and
+    leaves the type index empty. *)
+val with_capture_traces: t -> capture_traces:bool -> t

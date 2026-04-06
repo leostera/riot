@@ -53,6 +53,13 @@ type prepared_source =
   | Readable_source of { path: Path.t; source: string; source_id: Typ.SourceId.t }
   | Unreadable_source of { path: Path.t; reason: string }
 
+type readable_typ_source = {
+  path: Path.t;
+  text: string;
+  source_id: Typ.SourceId.t;
+  source: Typ.Source.t;
+}
+
 type checked_summary = {
   checked_files: int;
   read_failures: int;
@@ -644,6 +651,25 @@ let package_typ_source_files = fun ?(include_dev = false) (pkg: Package.t) ->
   |> List.map (fun relative -> Path.(pkg.path / relative))
   |> dedupe_paths
 
+let package_library_typ_source_files = fun (pkg: Package.t) ->
+  match pkg.library with
+  | None -> package_typ_source_files pkg
+  | Some { path = library_path } ->
+      let interface_path = Path.(add_extension (remove_extension library_path) ~ext:"mli") in
+      let has_interface =
+        match Fs.exists interface_path with
+        | Ok true -> true
+        | Ok false
+        | Error _ -> false
+      in
+      let files =
+        if has_interface then
+          [ interface_path; library_path ]
+        else
+          [ library_path ]
+      in
+      files |> List.filter is_supported_source_file |> dedupe_paths
+
 let merge_module_exports = fun preferred fallback ->
   let rec loop seen acc remaining =
     match remaining with
@@ -726,38 +752,6 @@ let merge_loaded_module_typings = fun preferred fallback ->
   in
   loop [] [] (preferred @ fallback)
 
-let typ_session_with_paths = fun ~config paths ->
-  paths |> List.fold_left
-    (fun (session, source_ids, sources) path ->
-      match Fs.read path with
-      | Error _ -> (session, source_ids, sources)
-      | Ok text ->
-          let (session, source_id) = Typ.Session.create_source
-            session
-            ~kind:Typ.Source.File
-            ~origin:(Typ.Source.Path path)
-            ~text in
-          let source = Typ.Source.make
-            ~source_id
-            ~kind:Typ.Source.File
-            ~origin:(Typ.Source.Path path)
-            ~revision:0
-            ~text in
-          (session, source_ids @ [ source_id ], sources @ [ source ]))
-    (Typ.Session.empty ~config, [], [])
-
-let module_typings_for_roots = fun session roots ->
-  let summaries_for_snapshot snapshot roots = roots
-  |> List.filter_map (Typ.Query.module_typings_of snapshot) in
-  match Typ.Session.prepare_snapshot session ~roots with
-  | Ok snapshot -> summaries_for_snapshot snapshot roots
-  | Error _ ->
-      roots |> List.filter_map
-        (fun source_id ->
-          match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
-          | Ok snapshot -> Typ.Query.module_typings_of snapshot source_id
-          | Error _ -> None) |> merge_loaded_module_typings []
-
 let workspace_typ_store_root = fun (workspace: Workspace.t) ->
   Path.(workspace.target_dir_root / Path.v "typ-cache")
 
@@ -786,10 +780,209 @@ let module_name_for_path = fun path ->
   |> sanitize_module_name
   |> String.capitalize_ascii
 
+let source_rank_for_typ_order = fun path ->
+  match Path.extension path with
+  | Some ".mli" -> 0
+  | Some ".ml" -> 1
+  | _ -> 2
+
+let qualify_typings_exports = fun module_name exports ->
+  List.map (fun (name, scheme) -> (module_name ^ "." ^ name, scheme)) exports
+
+let qualify_typings_type_decls = fun module_name type_decls ->
+  List.map
+    (fun (type_decl: Typ.FileSummary.type_decl) ->
+      {
+        Typ.FileSummary.scope_path = module_name :: type_decl.scope_path;
+        declaration = type_decl.declaration;
+      })
+    type_decls
+
+let ambient_env_for_loaded_modules = fun current_module_name loaded_modules ->
+  loaded_modules
+  |> List.filter
+    (fun typings -> not (String.equal current_module_name (Typ.ModuleTypings.module_name typings)))
+  |> List.map
+    (fun typings ->
+      qualify_typings_exports (Typ.ModuleTypings.module_name typings) (Typ.ModuleTypings.exports typings))
+  |> List.flatten
+
+let ambient_type_decls_for_loaded_modules = fun current_module_name loaded_modules ->
+  loaded_modules
+  |> List.filter
+    (fun typings -> not (String.equal current_module_name (Typ.ModuleTypings.module_name typings)))
+  |> List.map
+    (fun typings ->
+      qualify_typings_type_decls
+        (Typ.ModuleTypings.module_name typings)
+        (Typ.ModuleTypings.type_decls typings))
+  |> List.flatten
+
+let readable_typ_source_of_prepared = function
+  | Unreadable_source _ -> None
+  | Readable_source { path; source = text; source_id } ->
+      Some {
+        path;
+        text;
+        source_id;
+        source = Typ.Source.make
+          ~source_id
+          ~kind:Typ.Source.File
+          ~origin:(Typ.Source.Path path)
+          ~revision:0
+          ~text;
+      }
+
+let readable_typ_sources_from_paths = fun paths ->
+  paths
+  |> List.fold_left
+    (fun (next_source_id, readable_sources) path ->
+      match Fs.read path with
+      | Error _ -> (next_source_id, readable_sources)
+      | Ok text ->
+          let source_id = Typ.SourceId.of_int next_source_id in
+          let readable_source = {
+            path;
+            text;
+            source_id;
+            source = Typ.Source.make
+              ~source_id
+              ~kind:Typ.Source.File
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text;
+          } in
+          (next_source_id + 1, readable_sources @ [ readable_source ]))
+    (1, [])
+  |> snd
+
+let local_module_dependencies_for_source = fun local_module_names (source: readable_typ_source) ->
+  let parse_result = Syn.parse ~filename:source.path source.text in
+  match Syn.Deps.of_parse_result parse_result with
+  | Ok deps ->
+      Syn.Deps.modules deps
+      |> List.filter
+        (fun module_name ->
+          Collections.HashSet.contains local_module_names module_name
+          && not (String.equal module_name (module_name_for_path source.path)))
+      |> List.sort_uniq String.compare
+  | Error _ -> []
+
+let ordered_readable_typ_sources = fun readable_sources ->
+  let grouped_by_module =
+    readable_sources
+    |> List.fold_left
+      (fun grouped (source: readable_typ_source) ->
+        let module_name = module_name_for_path source.path in
+        let existing =
+          match List.assoc_opt module_name grouped with
+          | Some sources -> sources
+          | None -> []
+        in
+        (module_name, existing @ [ source ]) :: List.remove_assoc module_name grouped)
+      []
+    |> List.rev
+    |> List.map
+      (fun (module_name, sources) ->
+        let sources = List.sort
+          (fun (left: readable_typ_source) (right: readable_typ_source) ->
+            Int.compare
+              (source_rank_for_typ_order left.path)
+              (source_rank_for_typ_order right.path))
+          sources in
+        (module_name, sources))
+  in
+  let module_order =
+    grouped_by_module |> List.map fst
+  in
+  let local_module_names = Collections.HashSet.of_list module_order in
+  let deps_by_module =
+    grouped_by_module
+    |> List.map
+      (fun (module_name, sources) ->
+        let dependencies =
+          sources
+          |> List.concat_map (local_module_dependencies_for_source local_module_names)
+          |> List.sort_uniq String.compare
+        in
+        (module_name, dependencies))
+  in
+  let permanent = Collections.HashSet.with_capacity (List.length module_order) in
+  let temporary = Collections.HashSet.with_capacity (List.length module_order) in
+  let rec visit ordered module_name =
+    if Collections.HashSet.contains permanent module_name then
+      ordered
+    else if Collections.HashSet.contains temporary module_name then
+      ordered
+    else
+      let () = Collections.HashSet.insert temporary module_name |> ignore in
+      let ordered =
+        match List.assoc_opt module_name deps_by_module with
+        | Some dependencies -> dependencies |> List.fold_left visit ordered
+        | None -> ordered
+      in
+      let () = Collections.HashSet.remove temporary module_name |> ignore in
+      let () = Collections.HashSet.insert permanent module_name |> ignore in
+      module_name :: ordered
+  in
+  let ordered_modules = module_order |> List.fold_left visit [] |> List.rev in
+  ordered_modules
+  |> List.concat_map
+    (fun module_name ->
+      match List.assoc_opt module_name grouped_by_module with
+      | Some sources -> sources
+      | None -> [])
+
+let analyze_typ_sources_in_order = fun config readable_sources ->
+  let ordered_sources = ordered_readable_typ_sources readable_sources in
+  let rec loop loaded_modules analyses = function
+    | [] -> List.rev analyses
+    | (source: readable_typ_source) :: rest ->
+        let module_name = module_name_for_path source.path in
+        let config = config
+          |> Typ.Config.with_loaded_modules ~loaded_modules
+          |> Typ.Config.with_ambient
+            ~ambient:(ambient_env_for_loaded_modules module_name loaded_modules)
+          |> Typ.Config.with_ambient_type_decls
+            ~ambient_type_decls:(ambient_type_decls_for_loaded_modules module_name loaded_modules)
+        in
+        let analysis = Typ.SourceAnalysis.analyze ~config source.source in
+        let typings = Typ.ModuleTypings.of_file_summary
+          ~module_name
+          ~source_hash:(Typ.Source.input_hash source.source)
+          analysis.file_summary in
+        let () =
+          match config.Typ.Config.store with
+          | Some store -> ignore (Typ.Store.save_module_typings store typings)
+          | None -> ()
+        in
+        let loaded_modules = merge_loaded_module_typings [ typings ] loaded_modules in
+        loop loaded_modules ((source.source_id, analysis) :: analyses) rest
+  in
+  loop config.Typ.Config.loaded_modules [] ordered_sources
+
+let module_typings_of_analyses = fun readable_sources analyses ->
+  analyses
+  |> List.filter_map
+    (fun (source_id, analysis) ->
+      match List.find_opt
+        (fun (source: readable_typ_source) -> Typ.SourceId.equal source.source_id source_id)
+        readable_sources
+      with
+      | None -> None
+      | Some source ->
+          Some
+            (Typ.ModuleTypings.of_file_summary
+              ~module_name:(module_name_for_path source.path)
+              ~source_hash:(Typ.Source.input_hash source.source)
+              analysis.Typ.SourceAnalysis.file_summary))
+  |> merge_loaded_module_typings []
+
 let load_package_module_typings_from_store = fun store pkg ->
   let module_names =
-    package_typ_source_files pkg
+    package_library_typ_source_files pkg
     |> List.map module_name_for_path
+    |> List.sort_uniq String.compare
   in
   let loaded =
     module_names
@@ -842,15 +1035,13 @@ let workspace_module_typings_for_package =
               let config = Typ.Config.default
               |> Typ.Config.with_loaded_modules ~loaded_modules
               |> Typ.Config.with_store ~store:(Some typ_store)
+              |> Typ.Config.with_capture_traces ~capture_traces:false
               in
-              let (session, roots, _sources) = typ_session_with_paths
-                ~config
-                (package_typ_source_files pkg)
-              in
+              let readable_sources = readable_typ_sources_from_paths (package_library_typ_source_files pkg) in
               let typings =
-                match roots with
-                | [] -> []
-                | _ -> module_typings_for_roots session roots
+                readable_sources
+                |> analyze_typ_sources_in_order config
+                |> module_typings_of_analyses readable_sources
               in
               let () = persist_module_typings typ_store typings in
               typings
@@ -867,8 +1058,8 @@ let typ_config_for_source_group = fun ?workspace ~summary_cache paths ->
   match workspace, paths with
   | Some workspace, path :: _ -> (
       match Workspace.find_package_for_path workspace ~path with
-      | None -> Typ.Config.default
-      | Some pkg ->
+	      | None -> Typ.Config.default |> Typ.Config.with_capture_traces ~capture_traces:false
+	      | Some pkg ->
           let typ_store = workspace_typ_store workspace in
           let dependency_typings = workspace_dependency_packages ~include_dev:true workspace pkg
           |> List.concat_map
@@ -878,11 +1069,12 @@ let typ_config_for_source_group = fun ?workspace ~summary_cache paths ->
           let loaded_modules = merge_loaded_module_typings
             dependency_typings
             Typ.Config.default.loaded_modules in
-          Typ.Config.default
-          |> Typ.Config.with_loaded_modules ~loaded_modules
-          |> Typ.Config.with_store ~store:(Some typ_store)
-    )
-  | _ -> Typ.Config.default
+	          Typ.Config.default
+	          |> Typ.Config.with_loaded_modules ~loaded_modules
+	          |> Typ.Config.with_store ~store:(Some typ_store)
+	          |> Typ.Config.with_capture_traces ~capture_traces:false
+	    )
+	  | _ -> Typ.Config.default |> Typ.Config.with_capture_traces ~capture_traces:false
 
 let path_key = fun path -> Path.normalize path |> Path.to_string
 
@@ -901,27 +1093,20 @@ let check_source_group = fun ?workspace ~summary_cache ?roots paths ->
     | Some roots -> roots
     | None -> paths
   in
-  let root_keys = root_paths |> List.map path_key in
-  let is_root_path path = List.mem (path_key path) root_keys in
   let config = typ_config_for_source_group ?workspace ~summary_cache root_paths in
-  let session = Typ.Session.empty ~config in
-  let (session, prepared_sources) =
+  let prepared_sources =
     paths
     |> List.fold_left
-      (fun (session, prepared_sources) path ->
+      (fun (next_source_id, prepared_sources) path ->
         match Fs.read path with
         | Error err -> (
-          session,
-          prepared_sources @ [ Unreadable_source { path; reason = IO.error_message err } ]
+          (next_source_id, prepared_sources @ [ Unreadable_source { path; reason = IO.error_message err } ])
         )
         | Ok source ->
-            let (session, source_id) = Typ.Session.create_source
-              session
-              ~kind:Typ.Source.File
-              ~origin:(Typ.Source.Path path)
-              ~text:source in
-            (session, prepared_sources @ [ Readable_source { path; source; source_id } ]))
-      (session, [])
+            let source_id = Typ.SourceId.of_int next_source_id in
+            (next_source_id + 1, prepared_sources @ [ Readable_source { path; source; source_id } ]))
+      (1, [])
+    |> snd
   in
   let prepared_source_path = function
     | Readable_source { path; _ }
@@ -937,87 +1122,30 @@ let check_source_group = fun ?workspace ~summary_cache ?roots paths ->
       (fun path ->
         List.assoc_opt (path_key path) prepared_by_path)
   in
-  let roots =
+  let readable_sources =
     prepared_sources
-    |> List.filter_map
-      (
-        function
-        | Readable_source { path; source_id; _ } when is_root_path path -> Some source_id
-        | Readable_source _ -> None
-        | Unreadable_source _ -> None
-      )
+    |> List.filter_map readable_typ_source_of_prepared
   in
-  let fallback_snapshot =
-    let sources =
-      prepared_sources
-      |> List.filter_map
-        (
-          function
-          | Unreadable_source _ -> None
-          | Readable_source { path; source; source_id } -> Some (Typ.Source.make
-            ~source_id
-            ~kind:Typ.Source.File
-            ~origin:(Typ.Source.Path path)
-            ~revision:0
-            ~text:source)
+  let analyses_by_source =
+    analyze_typ_sources_in_order config readable_sources
+    |> List.fold_left
+      (fun analyses_by_source (source_id, analysis) ->
+        (source_id, analysis) :: analyses_by_source)
+      []
+  in
+  target_prepared_sources
+  |> List.map
+    (
+      function
+      | Unreadable_source { path; reason } -> Unreadable { path; reason }
+      | Readable_source { path; source_id; _ } -> (
+          match List.assoc_opt source_id analyses_by_source with
+          | Some analysis -> checked_file_of_analysis path analysis
+          | None ->
+              let reason = "missing type analysis for " ^ Path.to_string path in
+              Unreadable { path; reason }
         )
-    in
-    match roots with
-    | [] -> None
-    | _ -> Some (Typ.Snapshot.make ~revision:0 ~roots ~config ~sources)
-  in
-  let fallback_results =
-    target_prepared_sources
-    |> List.map
-      (
-        function
-        | Unreadable_source { path; reason } -> Unreadable { path; reason }
-        | Readable_source { path; source; source_id } ->
-            let source = Typ.Source.make
-              ~source_id
-              ~kind:Typ.Source.File
-              ~origin:(Typ.Source.Path path)
-              ~revision:0
-              ~text:source in
-            let analysis =
-              match fallback_snapshot with
-              | Some snapshot -> (
-                  match Typ.Query.analysis_of_source snapshot source_id with
-                  | Some analysis -> analysis
-                  | None -> Typ.SourceAnalysis.analyze ~config source
-                )
-              | None -> Typ.SourceAnalysis.analyze ~config source
-            in
-            checked_file_of_analysis path analysis
-      )
-  in
-  match Typ.Session.prepare_snapshot session ~roots with
-  | Error _ -> fallback_results
-  | Ok snapshot ->
-      let () =
-        match config.Typ.Config.store with
-        | None -> ()
-        | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
-      in
-      target_prepared_sources |> List.map
-        (
-          function
-          | Unreadable_source { path; reason } -> Unreadable { path; reason }
-          | Readable_source { path; source; source_id } -> (
-              match Typ.Query.analysis_of_source snapshot source_id with
-              | Some analysis -> checked_file_of_analysis path analysis
-              | None ->
-                  let analysis = Typ.SourceAnalysis.analyze
-                    ~config
-                    (Typ.Source.make
-                      ~source_id
-                      ~kind:Typ.Source.File
-                      ~origin:(Typ.Source.Path path)
-                      ~revision:0
-                      ~text:source) in
-                  checked_file_of_analysis path analysis
-            )
-        )
+    )
 
 let package_root_for_target = fun (workspace: Workspace.t) path ->
   workspace.packages |> List.filter Package.is_workspace_member |> List.sort

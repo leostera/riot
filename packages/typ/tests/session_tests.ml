@@ -147,6 +147,34 @@ let test_type_at_uses_smallest_indexed_expression = fun _ctx ->
   let () = Test.assert_equal ~expected:(Some "int") ~actual:argument_type in
   Ok ()
 
+let test_snapshot_without_traces_still_reports_diagnostics_and_module_typings = fun _ctx ->
+  let config = Config.default |> Config.with_capture_traces ~capture_traces:false in
+  let session = Session.empty ~config in
+  let source = "let id x = x\nlet broken = missing\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "no_traces.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  let analysis = Query.analysis_of_source snapshot source_id |> Option.expect ~msg:"missing analysis" in
+  let module_typings = Query.module_typings_of snapshot source_id in
+  let missing_offset = offset_of_substring source "missing" |> Option.expect ~msg:"missing offset" in
+  let inferred = inferred_type_at snapshot source_id missing_offset in
+  let () = Test.assert_equal ~expected:[] ~actual:analysis.expr_traces in
+  let () = Test.assert_equal ~expected:[] ~actual:analysis.item_traces in
+  let () = Test.assert_equal ~expected:(Data.Json.Array []) ~actual:(TypeIndex.to_json analysis.type_index) in
+  let () = Test.assert_equal ~expected:None ~actual:inferred in
+  if List.exists
+    (fun diagnostic -> Option.is_some (offset_of_substring diagnostic "unbound name"))
+    diagnostics then
+    match module_typings with
+    | Some _ -> Ok ()
+    | None -> Error "expected module typings even when traces are disabled"
+  else
+    Error ("expected unbound-name diagnostics, got:\n" ^ String.concat "\n" diagnostics)
+
 let test_snapshot_exposes_implicit_file_modules = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, colors_source_id) = Session.create_source
@@ -1328,6 +1356,9 @@ let () =
         Test.case "source id stays stable across updates" test_source_id_stays_stable_across_updates;
         Test.case "snapshots remain immutable after updates" test_snapshots_remain_immutable_after_updates;
         Test.case "type_at uses smallest indexed expression" test_type_at_uses_smallest_indexed_expression;
+        Test.case
+          "snapshot without traces still reports diagnostics and module typings"
+          test_snapshot_without_traces_still_reports_diagnostics_and_module_typings;
         Test.case "snapshot exposes implicit file modules" test_snapshot_exposes_implicit_file_modules;
         Test.case "snapshot collects module typings" test_snapshot_collects_module_typings;
         Test.case

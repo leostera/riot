@@ -83,8 +83,8 @@ let empty_sources: Riot_model.Package.sources = {
   bench = [];
 }
 
-let make_package = fun ~name ~path ~relative_path ?(dependencies = []) ?(sources = empty_sources) () ->
-  Riot_model.Package.make ~name ~path ~relative_path ~dependencies ~sources ()
+let make_package = fun ~name ~path ~relative_path ?(dependencies = []) ?library ?(sources = empty_sources) () ->
+  Riot_model.Package.make ~name ~path ~relative_path ~dependencies ?library ~sources ()
 
 let make_workspace = fun workspace_root packages ->
   Riot_model.Workspace.make ~root:workspace_root ~packages ()
@@ -578,6 +578,73 @@ let test_check_package_filter_reexports_workspace_dependency_summaries_via_inclu
               Test.assert_equal ~expected:0 ~actual:diagnostic_count;
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
               Ok ())
+
+let test_check_package_filter_only_hydrates_dependency_library_module = fun _ctx ->
+  with_tempdir_result "riot_check_dependency_library_module_only"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let colors_root = Path.(workspace_root / Path.v "packages/colors") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let std_internal = Path.(std_root / Path.v "src/internal.ml") in
+      let colors_source = Path.(colors_root / Path.v "src/colors.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~library:Riot_model.Package.{ path = std_source }
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml"; Path.v "src/internal.ml" ] }
+            ();
+          make_package
+            ~name:"colors"
+            ~path:colors_root
+            ~relative_path:(Path.v "packages/colors")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/colors.ml" ] }
+            ();
+        ] in
+      match write_file std_source "let twice x = x + x\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file std_internal "let broken = missing_value\n" with
+          | Error err -> Error err
+          | Ok () -> (
+              match write_file colors_source "let answer = Std.twice 21\n" with
+              | Error err -> Error err
+              | Ok () ->
+                  let matches = parse_check [ "check"; "--json"; "-p"; "colors" ]
+                  |> Result.expect ~msg:"parse check args" in
+                  let stdout, stdout_contents = make_capture_writer () in
+                  let stderr, stderr_contents = make_capture_writer () in
+                  Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+                  |> Result.expect ~msg:"package check should only require dependency library typings";
+                  let typ_store = workspace_typ_store workspace in
+                  let std_typings = Typ.Store.load_module_typings typ_store ~module_name:"Std" in
+                  let internal_typings = Typ.Store.load_module_typings typ_store ~module_name:"Internal" in
+                  let events = parse_jsonl (stdout_contents ()) in
+                  let diagnostic_count =
+                    events
+                    |> List.filter
+                      (fun json ->
+                        match Data.Json.get_field "type" json with
+                        | Some (Data.Json.String "check_diagnostic") -> true
+                        | _ -> false)
+                    |> List.length
+                  in
+                  if not (Option.is_some std_typings) then
+                    Error "expected dependency library module typings to be persisted"
+                  else if Option.is_some internal_typings then
+                    Error "expected non-library dependency module to stay unloaded"
+                  else (
+                    Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+                    Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                    Ok ()
+                  )
+            )
+        ))
 
 let test_check_package_filter_uses_sibling_reexported_dependency_record_types = fun _ctx ->
   with_tempdir_result "riot_check_package_dependency_record_reexport"
@@ -1457,6 +1524,7 @@ let tests =
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
     case "check: package filter persists module typings to store" test_check_package_filter_persists_module_typings_to_store;
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
+    case "check: package filter only hydrates dependency library modules" test_check_package_filter_only_hydrates_dependency_library_module;
     case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
     case "check: package filter reexports same-named workspace modules via alias" test_check_package_filter_reexports_same_named_workspace_modules_via_alias;
     case "check: package filter preserves nested same-named alias reexports" test_check_package_filter_preserves_nested_same_named_alias_reexports;

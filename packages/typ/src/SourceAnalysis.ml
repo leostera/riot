@@ -28,15 +28,20 @@ let analyze = fun ~config (source: Source.t) ->
   | Ok cst ->
       let semantic_tree = Lower.lower_source_file ~source cst in
       let inferred = Infer.infer_file ~config semantic_tree in
-      let traced_exprs = inferred.expr_traces
-      |> List.map
-        (fun (trace: Check_result.expr_trace) ->
-          {
-            TypeIndex.expr_id = trace.expr_id;
-            origin_id = trace.origin_id;
-            inferred_type = trace.inferred_type
-          }) in
-      let type_index = TypeIndex.of_traced_exprs ~origin_map:semantic_tree.origin_map traced_exprs in
+      let type_index =
+        if config.capture_traces then
+          let traced_exprs = inferred.expr_traces
+          |> List.map
+            (fun (trace: Check_result.expr_trace) ->
+              {
+                TypeIndex.expr_id = trace.expr_id;
+                origin_id = trace.origin_id;
+                inferred_type = trace.inferred_type
+              }) in
+          TypeIndex.of_traced_exprs ~origin_map:semantic_tree.origin_map traced_exprs
+        else
+          TypeIndex.empty
+      in
       let diagnostics = semantic_tree.diagnostics @ inferred.diagnostics in
       let file_summary =
         if diagnostics = [] then

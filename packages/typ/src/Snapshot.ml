@@ -12,7 +12,7 @@ type t = {
   revision: int;
   roots: SourceId.t list;
   analyses: analysis_slot list;
-  mutable qualified_typings: (SourceId.t * string * ModuleTypings.t) list option;
+  qualified_typings_cache: (string, (SourceId.t * string * ModuleTypings.t) list) Collections.HashMap.t;
 }
 
 let make = fun ~revision ~roots ~config ~sources ->
@@ -28,7 +28,12 @@ let make = fun ~revision ~roots ~config ~sources ->
           analysis = None;
         })
   in
-  { revision; roots; analyses; qualified_typings = None }
+  {
+    revision;
+    roots;
+    analyses;
+    qualified_typings_cache = Collections.HashMap.with_capacity 8;
+  }
 
 let qualify_exports = fun module_name exports ->
   List.map (fun (name, scheme) -> (module_name ^ "." ^ name, scheme)) exports
@@ -115,6 +120,13 @@ let module_typings_of_analysis = fun (slot: analysis_slot) (analysis: SourceAnal
   in
   (slot.source_id, module_name, typings)
 
+let visiting_key = fun visiting ->
+  visiting
+  |> List.map SourceId.to_int
+  |> List.sort Int.compare
+  |> List.map Int.to_string
+  |> String.concat ","
+
 let rec qualified_typings_of = fun (snapshot: t) visiting (slot: analysis_slot) ->
   if List.exists (SourceId.equal slot.source_id) visiting then
     module_typings_of_analysis slot (force_base_analysis slot)
@@ -122,18 +134,16 @@ let rec qualified_typings_of = fun (snapshot: t) visiting (slot: analysis_slot) 
     module_typings_of_analysis slot (force_analysis snapshot ~visiting:(slot.source_id :: visiting) slot)
 
 and qualified_typings = fun (snapshot: t) ?(visiting = []) () ->
-  match (visiting, snapshot.qualified_typings) with
-  | [], Some typings -> typings
-  | _ ->
+  let key = visiting_key visiting in
+  match Collections.HashMap.get snapshot.qualified_typings_cache key with
+  | Some typings -> typings
+  | None ->
       let typings =
         snapshot.analyses
         |> canonical_summary_slots
         |> List.map (qualified_typings_of snapshot visiting)
       in
-      let () =
-        if visiting = [] then
-          snapshot.qualified_typings <- Some typings
-      in
+      let _ = Collections.HashMap.insert snapshot.qualified_typings_cache key typings in
       typings
 
 and ambient_env_for = fun (snapshot: t) visiting (slot: analysis_slot) ->
@@ -156,6 +166,7 @@ and force_analysis = fun (snapshot: t) ?(visiting = []) (slot: analysis_slot) ->
   match slot.analysis with
   | Some analysis -> analysis
   | None ->
+      let visiting = slot.source_id :: visiting in
       let config = slot.config
       |> TypConfig.with_ambient ~ambient:(ambient_env_for snapshot visiting slot)
       |> TypConfig.with_ambient_type_decls ~ambient_type_decls:(ambient_type_decls_for snapshot visiting slot) in
