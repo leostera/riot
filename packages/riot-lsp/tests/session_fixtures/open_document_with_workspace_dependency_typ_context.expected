@@ -50,12 +50,12 @@
                 "end": 0
               },
               "rule_id": "require-module-interfaces",
-              "suggestion": "Add a matching interface file at `__REPO_ROOT__/packages/riot-lsp/tests/workspace_fixtures/snow/app/src/app.mli`.",
+              "suggestion": "Add a matching interface file at `__REPO_ROOT__/packages/riot-lsp/tests/workspace_fixtures/frost/app/src/app.mli`.",
               "fix": null
             }
           }
         ],
-        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/snow/app/src/app.ml",
+        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/frost/app/src/app.ml",
         "version": 1
       },
       "jsonrpc": "2.0",
@@ -68,7 +68,7 @@
     "shutdownRequested": false,
     "documents": [
       {
-        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/snow/app/src/app.ml",
+        "uri": "__REPO_ROOT_URI__/packages/riot-lsp/tests/workspace_fixtures/frost/app/src/app.ml",
         "version": 1
       }
     ]

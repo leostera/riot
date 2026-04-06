@@ -51,6 +51,12 @@ let substitute_fixture_tokens = fun line ->
   |> replace_all ~pattern:"__REPO_ROOT_URI__" ~with_:(Lsp.Uri.to_string (Lsp.Uri.of_path repo_root))
   |> replace_all ~pattern:"__REPO_ROOT__" ~with_:(Path.to_string repo_root)
 
+let normalize_snapshot_tokens = fun text ->
+  let repo_root = Env.current_dir () |> Result.unwrap_or ~default:(Path.v ".") in
+  text
+  |> replace_all ~pattern:(Lsp.Uri.to_string (Lsp.Uri.of_path repo_root)) ~with_:"__REPO_ROOT_URI__"
+  |> replace_all ~pattern:(Path.to_string repo_root) ~with_:"__REPO_ROOT__"
+
 let read_lines = fun path ->
   Fs.read path
   |> Result.map_error IO.error_message
@@ -89,7 +95,7 @@ let test_fixture = fun ~(ctx:Test.FixtureRunner.ctx) ->
   let* outcome = run_fixture ctx.fixture_path in
   Test.Snapshot.assert_text
     ~ctx:ctx.test
-    ~actual:((Json.to_string_pretty (Riot_lsp.Session.outcome_to_json outcome) ^ "\n"))
+    ~actual:(normalize_snapshot_tokens (Json.to_string_pretty (Riot_lsp.Session.outcome_to_json outcome) ^ "\n"))
 
 let () =
   Actors.run

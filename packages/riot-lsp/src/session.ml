@@ -114,6 +114,91 @@ let package_source_files = fun (pkg: Riot_model.Package.t) ->
   |> List.map (fun relative -> Path.(pkg.path / relative))
   |> dedupe_paths
 
+let package_typ_summary_source_files = fun (pkg: Riot_model.Package.t) ->
+  pkg.sources.src
+  |> List.map (fun relative -> Path.(pkg.path / relative))
+  |> dedupe_paths
+
+let workspace_package_by_name = fun (workspace: Riot_model.Workspace.t) package_name ->
+  workspace.packages
+  |> List.find_opt
+    (fun (pkg: Riot_model.Package.t) ->
+      Riot_model.Package.is_workspace_member pkg && String.equal pkg.name package_name)
+
+let merge_loaded_module_summaries = fun preferred fallback ->
+  let rec loop seen acc remaining =
+    match remaining with
+    | [] -> List.rev acc
+    | summary :: tail ->
+        let module_name = Typ.ModuleSummary.module_name summary in
+        if List.mem module_name seen then
+          loop seen acc tail
+        else
+          loop (module_name :: seen) (summary :: acc) tail
+  in
+  loop [] [] (preferred @ fallback)
+
+let typ_session_with_paths = fun ~config paths ->
+  paths
+  |> List.fold_left
+    (fun (session, source_ids) path ->
+      match Fs.read path with
+      | Error _ -> (session, source_ids)
+      | Ok text ->
+          let (session, source_id) = Typ.Session.create_source
+            session
+            ~kind:Typ.Source.File
+            ~origin:(Typ.Source.Path path)
+            ~text in
+          (session, source_ids @ [ source_id]))
+    (Typ.Session.empty ~config, [])
+
+let workspace_dependency_packages = fun ~include_dev (workspace: Riot_model.Workspace.t) (pkg: Riot_model.Package.t) ->
+  let dependencies =
+    if include_dev then
+      Riot_model.Package.build_graph_dependencies pkg
+    else
+      pkg.dependencies
+  in
+  dependencies
+  |> List.filter_map
+    (fun (dependency: Riot_model.Package.dependency) -> workspace_package_by_name workspace dependency.name)
+  |> List.sort_uniq
+    (fun (left: Riot_model.Package.t) (right: Riot_model.Package.t) -> String.compare left.name right.name)
+
+let workspace_module_summaries_for_package =
+  let rec load cache (workspace: Riot_model.Workspace.t) ?(visiting = []) (pkg: Riot_model.Package.t) =
+    match List.assoc_opt pkg.name !cache with
+    | Some summaries -> summaries
+    | None when List.mem pkg.name visiting -> []
+    | None ->
+        let dependency_summaries =
+          workspace_dependency_packages ~include_dev:false workspace pkg
+          |> List.concat_map
+            (fun dependency_pkg ->
+              load cache workspace ~visiting:(pkg.name :: visiting) dependency_pkg)
+        in
+        let loaded_modules =
+          merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
+        in
+        let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
+        let (session, roots) = typ_session_with_paths ~config (package_typ_summary_source_files pkg) in
+        let summaries =
+          match roots with
+          | [] -> []
+          | _ -> (
+              match Typ.Session.prepare_snapshot session ~roots with
+              | Ok snapshot -> Typ.Snapshot.module_summaries snapshot
+              | Error _ -> []
+            )
+        in
+        let () =
+          cache := (pkg.name, summaries) :: !cache
+        in
+        summaries
+  in
+  load
+
 let typ_target_files = fun state ->
   fun (document: document) ->
     match document.path with
@@ -145,15 +230,41 @@ let text_for_path = fun state path ->
       | Error _ -> None
     )
 
-let typ_session_for_document = fun state ->
+let typ_config_for_document = fun state ->
   fun (document: document) ->
+    match document.path with
+    | None -> Typ.Config.default
+    | Some path -> (
+        match package_scope_for_file state path with
+        | None -> Typ.Config.default
+        | Some pkg -> (
+            match Riot_model.Workspace_manager.scan state.workspace_manager pkg.path with
+            | Error _ -> Typ.Config.default
+            | Ok (workspace, _errors) ->
+                let summary_cache = ref [] in
+                let dependency_summaries =
+                  workspace_dependency_packages ~include_dev:true workspace pkg
+                  |> List.concat_map
+                    (fun dependency_pkg ->
+                      workspace_module_summaries_for_package summary_cache workspace dependency_pkg)
+                in
+                let loaded_modules =
+                  merge_loaded_module_summaries dependency_summaries Typ.Config.default.loaded_modules
+                in
+                Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules
+          )
+      )
+
+let typ_analysis_for_document = fun state ->
+  fun (document: document) ->
+    let config = typ_config_for_document state document in
     let current_key =
       match document.path with
       | Some path -> Some (Path.normalize path |> Path.to_string)
       | None -> None
     in
     let paths = typ_target_files state document in
-    let initial = (Typ.Session.empty ~config:Typ.Config.default, None) in
+    let initial = (Typ.Session.empty ~config, None) in
     let from_paths =
       List.fold_left
         (fun (session, current_source_id) path ->
@@ -176,14 +287,38 @@ let typ_session_for_document = fun state ->
         paths
     in
     match from_paths with
-    | (session, Some source_id) -> Some (Typ.Session.snapshot session, source_id)
+    | (session, Some source_id) -> (
+        match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
+        | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
+        | Error _ ->
+            Some (Typ.SourceAnalysis.analyze
+              ~config
+              (Typ.Source.make
+                 ~source_id
+                 ~kind:Typ.Source.File
+                 ~origin:(typ_source_origin_of_document document)
+                 ~revision:document.version
+                 ~text:document.text))
+      )
     | (session, None) ->
         let (session, source_id) = Typ.Session.create_source
           session
           ~kind:Typ.Source.File
           ~origin:(typ_source_origin_of_document document)
           ~text:document.text in
-        Some (Typ.Session.snapshot session, source_id)
+        (
+          match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
+          | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
+          | Error _ ->
+              Some (Typ.SourceAnalysis.analyze
+                ~config
+                (Typ.Source.make
+                   ~source_id
+                   ~kind:Typ.Source.File
+                   ~origin:(typ_source_origin_of_document document)
+                   ~revision:document.version
+                   ~text:document.text))
+        )
 
 let diagnostic_to_lsp = fun text ->
   fun (diagnostic: Syn.Diagnostic.t) ->
@@ -354,16 +489,12 @@ let fix_all_action = fun document entries ->
 
 let typ_diagnostics = fun state ->
   fun document ->
-    match typ_session_for_document state document with
+    match typ_analysis_for_document state document with
     | None -> []
-    | Some (snapshot, source_id) ->
-        Typ.Query.diagnostics snapshot source_id |> List.filter_map
-          (
-            function
-            | Typ.Query.Parse _ -> None
-            | Typ.Query.Lowering diagnostic
-            | Typ.Query.Typing diagnostic -> Some (typ_diagnostic_to_lsp document.text diagnostic)
-          )
+    | Some analysis ->
+        (analysis.Typ.SourceAnalysis.lowering_diagnostics
+        @ analysis.Typ.SourceAnalysis.typing_diagnostics)
+        |> List.map (typ_diagnostic_to_lsp document.text)
 
 let publish_diagnostics = fun state ->
   fun document ->

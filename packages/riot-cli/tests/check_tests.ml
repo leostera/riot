@@ -30,8 +30,29 @@ let parse_check = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
-let make_package = fun ~name ~path ~relative_path ->
-  Riot_model.Package.make ~name ~path ~relative_path ()
+let make_dependency = fun name ->
+  Riot_model.Package.{
+    name;
+    source = {
+      workspace = true;
+      builtin = false;
+      path = None;
+      source_locator = None;
+      ref_ = None;
+      version = Some Std.Version.any;
+    };
+  }
+
+let empty_sources: Riot_model.Package.sources = {
+  src = [];
+  native = [];
+  tests = [];
+  examples = [];
+  bench = [];
+}
+
+let make_package = fun ~name ~path ~relative_path ?(dependencies = []) ?(sources = empty_sources) () ->
+  Riot_model.Package.make ~name ~path ~relative_path ~dependencies ~sources ()
 
 let make_workspace = fun workspace_root packages ->
   Riot_model.Workspace.make ~root:workspace_root ~packages ()
@@ -101,7 +122,7 @@ let test_check_json_streams_single_explicit_file_without_duplicates = fun _ctx -
       let source_path = Path.(package_root / Path.v "src/broken.ml") in
       let workspace = make_workspace
         workspace_root
-        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") ] in
+        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") () ] in
       match write_file source_path "let x = y\n" with
       | Error err -> Error err
       | Ok () ->
@@ -155,7 +176,7 @@ let test_check_human_output_snapshot = fun ctx ->
       let source_path = Path.(package_root / Path.v "src/broken.ml") in
       let workspace = make_workspace
         workspace_root
-        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") ] in
+        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") () ] in
       match write_file source_path "let x = y\n" with
       | Error err -> Error err
       | Ok () ->
@@ -178,7 +199,7 @@ let test_check_success_is_silent = fun _ctx ->
       let source_path = Path.(package_root / Path.v "src/ok.ml") in
       let workspace = make_workspace
         workspace_root
-        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") ] in
+        [ make_package ~name:"demo" ~path:package_root ~relative_path:(Path.v "packages/demo") () ] in
       match write_file source_path "let id x = x\n" with
       | Error err -> Error err
       | Ok () ->
@@ -201,8 +222,8 @@ let test_check_package_filter_limits_workspace_scan = fun _ctx ->
       let workspace = make_workspace
         workspace_root
         [
-          make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors");
-          make_package ~name:"tty" ~path:tty_root ~relative_path:(Path.v "packages/tty");
+          make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") ();
+          make_package ~name:"tty" ~path:tty_root ~relative_path:(Path.v "packages/tty") ();
         ] in
       match write_file colors_source "let color = missing_color\n" with
       | Error err -> Error err
@@ -246,7 +267,7 @@ let test_check_package_filter_uses_package_session_for_cross_file_exports = fun 
       let demo_source = Path.(colors_root / Path.v "examples/blend_demo.ml") in
       let workspace = make_workspace
         workspace_root
-        [ make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") ] in
+        [ make_package ~name:"colors" ~path:colors_root ~relative_path:(Path.v "packages/colors") () ] in
       match write_file helper_source "let twice x = x + x\n" with
       | Error err -> Error err
       | Ok () ->
@@ -298,6 +319,76 @@ let test_check_package_filter_uses_package_session_for_cross_file_exports = fun 
                   Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
                   Ok ())
 
+let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
+  with_tempdir_result "riot_check_package_dependencies"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let tty_root = Path.(workspace_root / Path.v "packages/tty") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let tty_source = Path.(tty_root / Path.v "src/tty.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~sources:{
+              empty_sources with src = [ Path.v "src/std.ml" ];
+            }
+            ();
+          make_package
+            ~name:"tty"
+            ~path:tty_root
+            ~relative_path:(Path.v "packages/tty")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{
+              empty_sources with src = [ Path.v "src/tty.ml" ];
+            }
+            ();
+        ] in
+      match write_file std_source "let twice x = x + x\n" with
+      | Error err -> Error err
+      | Ok () ->
+          match write_file tty_source "let answer = Std.twice 21\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches = parse_check [ "check"; "--json"; "-p"; "tty" ]
+              |> Result.expect ~msg:"parse check args" in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+              |> Result.expect ~msg:"package check should load workspace dependency summaries";
+              let events = parse_jsonl (stdout_contents ()) in
+              let file_paths =
+                events
+                |> List.filter_map
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_file") -> (
+                        match Data.Json.get_field "result" json with
+                        | Some result_json -> Data.Json.get_field "path" result_json
+                        | None -> None
+                      )
+                    | _ -> None)
+              in
+              let diagnostic_count =
+                events
+                |> List.filter
+                  (fun json ->
+                    match Data.Json.get_field "type" json with
+                    | Some (Data.Json.String "check_diagnostic") -> true
+                    | _ -> false)
+                |> List.length
+              in
+              Test.assert_equal
+                ~expected:[ Data.Json.String "packages/tty/src/tty.ml" ]
+                ~actual:file_paths;
+              Test.assert_equal ~expected:0 ~actual:diagnostic_count;
+              Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+              Ok ())
+
 let test_check_rejects_package_filter_without_workspace = fun _ctx ->
   let matches = parse_check [ "check"; "--json"; "-p"; "colors" ] |> Result.expect ~msg:"parse check args" in
   let stdout, stdout_contents = make_capture_writer () in
@@ -329,6 +420,7 @@ let tests =
     case "check: clean success is silent" test_check_success_is_silent;
     case "check: package filter limits workspace scan" test_check_package_filter_limits_workspace_scan;
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
+    case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
     case "check: package filter requires workspace" test_check_rejects_package_filter_without_workspace;
   ]
 
