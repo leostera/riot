@@ -43,10 +43,12 @@
 37. `--local` is only for workspace-binary installs. Do not silently reinterpret `riot install --local <remote-or-registry-target>` as a global install.
 38. `riot run` and `riot install` should allow omitting `<name>` when the current workspace or detached package has exactly one normal runnable binary. If multiple runnable binaries exist, keep the ambiguity explicit and require a binary name or `--package`.
 39. `riot run <remote-source>` and `riot install <remote-source>` should reuse a cached source checkout by default. Surface `--update` as the explicit opt-in refresh path instead of fetching on every invocation.
+<<<<<<< HEAD
 40. `riot test` should run suites in JSON mode and reconstruct the human view from the parsed results. Suppress suites whose parsed summary has zero matching cases so substring queries do not leak `running 0 tests`, but keep the human output in the familiar per-suite pretty shape plus one unified case-level summary at the end, including measured test timing stats, the slowest matched test cases, and an explicit failed-test list. `riot test --json` should carry the same aggregated failure list on the final `TestSummary` event.
 41. `riot bench` should render benchmark measurements from parsed structured suite results, not by scraping suite-local pretty output. Keep the final summary case-level (`completed`/`skipped`/`failed`) across the matched benchmark cases.
 42. `riot yank` must require an exact `<package>@<version>` target, refuse to run without a saved pkgs.ml token, and prompt for interactive confirmation before sending the registry request.
-42. `riot test --json` and `riot bench --json` should keep structured timing monotonic. Use `emitted_at_us` for generic build/progress events and `started_at_us` / `completed_at_us` / `duration_us` for suite lifecycle events instead of wall-clock timestamps.
+43. `riot test --json` and `riot bench --json` should keep structured timing monotonic. Use `emitted_at_us` for generic build/progress events and `started_at_us` / `completed_at_us` / `duration_us` for suite lifecycle events instead of wall-clock timestamps.
+44. `riot check` should resolve explicit file and directory arguments against the process cwd before workspace/package lookup so relative paths keep the same package context as absolute paths.
 
 ## Validate
 

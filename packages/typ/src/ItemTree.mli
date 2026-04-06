@@ -57,6 +57,28 @@ type open_item = {
   (** Lowered module path opened for later sibling items. *)
   module_path: string;
 }
+type include_item = {
+  (** Stable item identity. *)
+  item_id: ItemId.t;
+  (** Source origin for this include statement. *)
+  origin_id: OriginId.t;
+  (** Lexical module path that owns this item, empty at top level. *)
+  scope_path: string list;
+  (** Lowered module path whose exports are spliced into the current scope. *)
+  module_path: string;
+}
+type module_alias_item = {
+  (** Stable item identity. *)
+  item_id: ItemId.t;
+  (** Source origin for this module alias declaration. *)
+  origin_id: OriginId.t;
+  (** Lexical module path that owns this item, empty at top level. *)
+  scope_path: string list;
+  (** Alias name introduced in the current scope. *)
+  alias_name: string;
+  (** Lowered module path whose exports are rebound under [alias_name]. *)
+  module_path: string;
+}
 type item =
   (** Type declaration with exported constructor schemes. *)
   | Type of type_item
@@ -66,6 +88,10 @@ type item =
   | Value of value_item
   (** File- or module-scope open statement. *)
   | Open of open_item
+  (** File- or module-scope include statement. *)
+  | Include of include_item
+  (** File- or module-scope module alias declaration. *)
+  | ModuleAlias of module_alias_item
   (** Placeholder top-level item produced by recovery. *)
   | Unsupported of unsupported_item
 (** Ordered top-level item skeleton for one file. *)

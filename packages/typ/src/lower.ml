@@ -56,6 +56,14 @@ let rec module_path_segments_of_expr = function
   | _ ->
       None
 
+let rec module_path_segments_of_module_expression = function
+  | Cst.ModuleExpression.Path path -> Some (Cst.Ident.segments path |> List.map Cst.Token.text)
+  | Cst.ModuleExpression.Parenthesized { inner; _ }
+  | Cst.ModuleExpression.Attribute { module_expression=inner; _ }
+  | Cst.ModuleExpression.Constraint { module_expression=inner; _ } -> module_path_segments_of_module_expression
+    inner
+  | _ -> None
+
 let binding_name_of_pattern =
   let rec loop = function
     | Cst.Pattern.Identifier { name_token; _ } -> Some (Cst.Token.text name_token)
@@ -269,6 +277,20 @@ let add_item = fun (state: state) ~syntax_node item ->
       scope_path = state.scope_path;
       module_path
     }
+    | `Include module_path -> ItemTree.Include {
+      item_id;
+      origin_id;
+      scope_path = state.scope_path;
+      module_path
+    }
+    | `ModuleAlias (alias_name, module_path) ->
+        ItemTree.ModuleAlias {
+          item_id;
+          origin_id;
+          scope_path = state.scope_path;
+          alias_name;
+          module_path;
+        }
     | `Unsupported summary -> ItemTree.Unsupported {
       item_id;
       origin_id;
@@ -1055,6 +1077,8 @@ let rec lower_structure_item = fun (state: state) item ->
           ()
       | None -> ()
     )
+  | Cst.StructureItem.IncludeStatement include_statement ->
+      lower_include_statement state include_statement
   | Cst.StructureItem.TypeDeclaration declaration ->
       let rec loop declaration =
         let () = lower_type_declaration state declaration in
@@ -1085,6 +1109,35 @@ let rec lower_structure_item = fun (state: state) item ->
       let _ = add_item state ~syntax_node (`Unsupported summary) in
       ()
 
+and lower_include_statement = fun (state: state) (include_statement: Cst.include_statement) ->
+  let syntax_node = include_statement.syntax_node in
+  match include_statement.target with
+  | Cst.ModuleExpression module_expression -> (
+      match module_path_segments_of_module_expression module_expression with
+      | Some [] ->
+          ()
+      | Some segments ->
+          let _ = add_item state ~syntax_node (`Include (String.concat "." segments)) in
+          ()
+      | None ->
+          let syntax_kind = Cst.syntax_kind syntax_node in
+          let summary = SyntaxKind.to_string syntax_kind in
+          let () = add_diagnostic state
+            (
+              Typ_diagnostic.UnsupportedSyntax {
+                syntax_kind;
+                syntax_span = Ceibo.Red.SyntaxNode.span syntax_node;
+                context = Typ_diagnostic.StructureItem;
+                recovery = Typ_diagnostic.PlaceholderItem;
+                reason = None;
+              }
+            )
+          in
+          let _ = add_item state ~syntax_node (`Unsupported summary) in
+          ()
+    )
+  | Cst.ModuleType _ -> ()
+
 and lower_module_declaration = fun (state: state) (declaration: Cst.ModuleStructure.t) ->
   let syntax_node = Cst.ModuleStructure.syntax_node declaration in
   if
@@ -1107,17 +1160,25 @@ and lower_module_declaration = fun (state: state) (declaration: Cst.ModuleStruct
     let _ = add_item state ~syntax_node (`Unsupported summary) in
     ()
   else
-    let nested_scope_path = state.scope_path @ [ Cst.ModuleStructure.name declaration ] in
+    let module_name = Cst.ModuleStructure.name declaration in
     let module_expression = Cst.ModuleStructure.module_expression declaration in
-    with_scope state nested_scope_path
-      (fun () ->
-        match CstBuilder.structure_items_of_module_expression module_expression with
-        | Ok items ->
-            let _ = List.map (lower_structure_item state) items in
-            ()
-        | Error builder_error -> add_diagnostic
-          state
-          (Typ_diagnostic.CstBuilderError { builder_error }))
+    match module_path_segments_of_module_expression module_expression with
+    | Some [] ->
+        ()
+    | Some segments ->
+        let _ = add_item state ~syntax_node (`ModuleAlias (module_name, String.concat "." segments)) in
+        ()
+    | None ->
+        let nested_scope_path = state.scope_path @ [ module_name ] in
+        with_scope state nested_scope_path
+          (fun () ->
+            match CstBuilder.structure_items_of_module_expression module_expression with
+            | Ok items ->
+                let _ = List.map (lower_structure_item state) items in
+                ()
+            | Error builder_error -> add_diagnostic
+              state
+              (Typ_diagnostic.CstBuilderError { builder_error }))
 
 let lower_source_file = fun ~source source_file ->
   let state = make_state source in

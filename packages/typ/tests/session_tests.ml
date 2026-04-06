@@ -270,6 +270,103 @@ let test_snapshot_uses_loaded_module_summaries = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
     Ok ()
 
+let test_include_reexports_loaded_module_summaries = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, helpers_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "helpers.ml")
+    ~text:"let id x = x\nlet wrap value = Some value\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_helpers =
+    match Query.module_summary_of seed_snapshot helpers_source_id with
+    | Some summary -> summary
+    | None -> panic "expected helper module summary"
+  in
+  let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let session = Session.empty ~config in
+  let source = "include Helpers\nlet answer = wrap (id 1)\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let id_type = export_scheme snapshot source_id "id" in
+    let wrap_type = export_scheme snapshot source_id "wrap" in
+    let answer_type = export_scheme snapshot source_id "answer" in
+    let exported_names = export_names (Query.export_of snapshot source_id) in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:id_type in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a option") ~actual:wrap_type in
+    let () = Test.assert_equal ~expected:(Some "int option") ~actual:answer_type in
+    let () = Test.assert_equal ~expected:[ "answer"; "id"; "wrap" ] ~actual:exported_names in
+    Ok ()
+
+let test_module_alias_reexports_loaded_module_summaries = fun _ctx ->
+  let seed_session = Session.empty ~config:Config.default in
+  let (seed_session, helpers_source_id) = Session.create_source
+    seed_session
+    ~kind:Source.File
+    ~origin:(Source.Label "helpers.ml")
+    ~text:"let id x = x\nlet wrap value = Some value\n" in
+  let seed_snapshot = Session.snapshot seed_session in
+  let loaded_helpers =
+    match Query.module_summary_of seed_snapshot helpers_source_id with
+    | Some summary -> summary
+    | None -> panic "expected helper module summary"
+  in
+  let config = Config.default |> Config.with_loaded_modules ~loaded_modules:[ loaded_helpers ] in
+  let session = Session.empty ~config in
+  let source = "module Util = Helpers\nlet answer = Util.wrap (Util.id 1)\n" in
+  let (session, source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "consumer.ml")
+    ~text:source in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let util_id_type = export_scheme snapshot source_id "Util.id" in
+    let util_wrap_type = export_scheme snapshot source_id "Util.wrap" in
+    let answer_type = export_scheme snapshot source_id "answer" in
+    let exported_names = export_names (Query.export_of snapshot source_id) in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:util_id_type in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a option") ~actual:util_wrap_type in
+    let () = Test.assert_equal ~expected:(Some "int option") ~actual:answer_type in
+    let () = Test.assert_equal ~expected:[ "Util.id"; "Util.wrap"; "answer" ] ~actual:exported_names in
+    Ok ()
+
+let test_module_alias_reexports_same_named_local_modules = fun _ctx ->
+  let session = Session.empty ~config:Config.default in
+  let (session, _cell_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "cell.ml")
+    ~text:"let create value = value\n" in
+  let (session, sync_source_id) = Session.create_source
+    session
+    ~kind:Source.File
+    ~origin:(Source.Label "sync.ml")
+    ~text:"module Cell = Cell\nlet answer = Cell.create 1\n" in
+  let snapshot = Session.snapshot session in
+  let diagnostics = diagnostic_strings snapshot sync_source_id in
+  if not (List.is_empty diagnostics) then
+    Error (String.concat "\n" diagnostics)
+  else
+    let create_type = export_scheme snapshot sync_source_id "Cell.create" in
+    let answer_type = export_scheme snapshot sync_source_id "answer" in
+    let exported_names = export_names (Query.export_of snapshot sync_source_id) in
+    let () = Test.assert_equal ~expected:(Some "'a. 'a -> 'a") ~actual:create_type in
+    let () = Test.assert_equal ~expected:(Some "int") ~actual:answer_type in
+    let () = Test.assert_equal ~expected:[ "Cell.create"; "answer" ] ~actual:exported_names in
+    Ok ()
+
 let test_prepare_snapshot_is_rooted = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, colors_source_id) = Session.create_source
@@ -560,6 +657,9 @@ let () =
         Test.case "snapshot collects persisted summaries" test_snapshot_collects_persisted_summaries;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module summaries" test_snapshot_uses_loaded_module_summaries;
+        Test.case "include reexports loaded module summaries" test_include_reexports_loaded_module_summaries;
+        Test.case "module aliases reexport loaded module summaries" test_module_alias_reexports_loaded_module_summaries;
+        Test.case "module aliases reexport same-named local modules" test_module_alias_reexports_same_named_local_modules;
         Test.case "prepare_snapshot is rooted" test_prepare_snapshot_is_rooted;
         Test.case "prepare_snapshot reports missing roots" test_prepare_snapshot_reports_missing_roots;
         Test.case "prepare_snapshot reports missing module summaries" test_prepare_snapshot_reports_missing_module_summary;

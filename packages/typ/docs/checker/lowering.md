@@ -83,6 +83,8 @@ This is where we keep:
 - exception declarations
 - value-item shells
 - open items
+- include items
+- module alias items
 - unsupported top-level items
 
 The point of `ItemTree` is not to preserve every token. The point is to keep
@@ -198,6 +200,8 @@ Examples of distinctions that should survive:
 - recursive versus non-recursive bindings
 - labeled versus positional arguments
 - module opens
+- module includes
+- module alias declarations
 - recovery holes and unsupported nodes
 
 If a distinction changes how the checker reasons, it belongs in the semantic

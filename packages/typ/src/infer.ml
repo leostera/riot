@@ -23,6 +23,7 @@ type state = {
   mutable expr_traces: Check_result.expr_trace list;
   mutable item_traces: Check_result.item_trace list;
   mutable record_types: record_type_decl list;
+  mutable forced_export_names: string list;
 }
 
 let empty_span = Syn.Ceibo.Span.make ~start:0 ~end_:0
@@ -37,6 +38,7 @@ let make_state = fun ~config file ->
     expr_traces = [];
     item_traces = [];
     record_types = [];
+    forced_export_names = [];
   }
 
 let unique_env = fun env ->
@@ -451,6 +453,25 @@ let aliases_for_local_open = fun env module_path ->
 let env_with_local_open = fun env module_path ->
   let aliases = aliases_for_local_open env module_path in
   bind_env env aliases
+
+let entries_for_include = fun env module_path ->
+  aliases_for_local_open env module_path |> unique_env |> render_env
+
+let prefix_entries = fun prefix entries ->
+  entries |> List.map (fun (name, scheme) -> (prefix ^ "." ^ name, scheme))
+
+let export_names_for_module_alias = fun env ~alias_name ~module_path ->
+  aliases_for_local_open env module_path
+  |> unique_env
+  |> render_env
+  |> prefix_entries alias_name
+  |> List.map fst
+
+let entries_for_module_alias = fun env ~alias_name ~module_path ->
+  if String.equal alias_name module_path then
+    []
+  else
+    aliases_for_local_open env module_path |> unique_env |> render_env |> prefix_entries alias_name
 
 let is_recursive_binding_supported = fun (state: state) (binding: BodyArena.binding) ->
   match binding.name with
@@ -1151,6 +1172,12 @@ let export_env = fun config env ->
   let hidden_names = prelude_names config @ ambient_names config in
   render_env env |> List.filter (fun (name, _) -> not (List.mem name hidden_names))
 
+let export_env_with_forced_names = fun (state: state) env ->
+  let hidden_names = prelude_names state.config @ ambient_names state.config in
+  render_env env
+  |> List.filter
+    (fun (name, _) -> not (List.mem name hidden_names) || List.mem name state.forced_export_names)
+
 let introduced_entries = fun before after ->
   let introduced = introduced_names before after in
   render_env after |> List.filter
@@ -1311,6 +1338,69 @@ let infer_file = fun ~config file ->
               :: state.item_traces
             in
             loop export_state scope_entries scope_opens rest
+        | ItemTree.Include include_item ->
+            let visible_exports_before = export_env config export_state in
+            let item_env = env_for_item_scope export_state scope_entries scope_opens include_item.scope_path in
+            let introduced = entries_for_include item_env include_item.module_path in
+            let (export_state, scope_entries) =
+              match include_item.scope_path with
+              | [] -> (bind_env export_state introduced, scope_entries)
+              | scope_path -> (
+                bind_env export_state (qualify_entries scope_path introduced),
+                update_scope_entries scope_entries scope_path introduced
+              )
+            in
+            let exports_after = export_env config export_state in
+            let binding_names = introduced_names visible_exports_before exports_after in
+            let () =
+              state.item_traces <- (
+                { Check_result.item_id = include_item.item_id; binding_names; exports_after }:
+                  Check_result.item_trace
+              )
+              :: state.item_traces
+            in
+            loop export_state scope_entries scope_opens rest
+        | ItemTree.ModuleAlias module_alias_item ->
+            let visible_exports_before = export_env_with_forced_names state export_state in
+            let item_env = env_for_item_scope
+              export_state
+              scope_entries
+              scope_opens
+              module_alias_item.scope_path in
+            let alias_export_names = export_names_for_module_alias
+              item_env
+              ~alias_name:module_alias_item.alias_name
+              ~module_path:module_alias_item.module_path in
+            let introduced = entries_for_module_alias
+              item_env
+              ~alias_name:module_alias_item.alias_name
+              ~module_path:module_alias_item.module_path in
+            let (export_state, scope_entries) =
+              match module_alias_item.scope_path with
+              | [] -> (bind_env export_state introduced, scope_entries)
+              | scope_path -> (
+                bind_env export_state (qualify_entries scope_path introduced),
+                update_scope_entries scope_entries scope_path introduced
+              )
+            in
+            let forced_export_names =
+              match module_alias_item.scope_path with
+              | [] -> alias_export_names
+              | scope_path -> List.map (qualify_name scope_path) alias_export_names
+            in
+            let () =
+              state.forced_export_names <- forced_export_names @ state.forced_export_names
+            in
+            let exports_after = export_env_with_forced_names state export_state in
+            let binding_names = introduced_names visible_exports_before exports_after in
+            let () =
+              state.item_traces <- (
+                { Check_result.item_id = module_alias_item.item_id; binding_names; exports_after }:
+                  Check_result.item_trace
+              )
+              :: state.item_traces
+            in
+            loop export_state scope_entries scope_opens rest
         | ItemTree.Unsupported unsupported_item ->
             let exports_after = export_env config export_state in
             let () =
@@ -1329,7 +1419,7 @@ let infer_file = fun ~config file ->
   in
   let exports = loop initial_env [] [] (ItemTree.items file.item_tree) in
   {
-    exports = export_env config exports;
+    exports = export_env_with_forced_names state exports;
     item_traces = List.rev state.item_traces;
     expr_traces = List.rev state.expr_traces;
     diagnostics = List.rev state.diagnostics

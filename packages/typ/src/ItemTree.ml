@@ -37,11 +37,28 @@ type open_item = {
   module_path: string;
 }
 
+type include_item = {
+  item_id: ItemId.t;
+  origin_id: OriginId.t;
+  scope_path: string list;
+  module_path: string;
+}
+
+type module_alias_item = {
+  item_id: ItemId.t;
+  origin_id: OriginId.t;
+  scope_path: string list;
+  alias_name: string;
+  module_path: string;
+}
+
 type item =
   | Type of type_item
   | Exception of exception_item
   | Value of value_item
   | Open of open_item
+  | Include of include_item
+  | ModuleAlias of module_alias_item
   | Unsupported of unsupported_item
 
 type t = item list
@@ -60,6 +77,8 @@ let find_item = fun items item_id ->
       | Exception (item: exception_item) -> ItemId.equal item.item_id item_id
       | Value (item: value_item) -> ItemId.equal item.item_id item_id
       | Open (item: open_item) -> ItemId.equal item.item_id item_id
+      | Include (item: include_item) -> ItemId.equal item.item_id item_id
+      | ModuleAlias (item: module_alias_item) -> ItemId.equal item.item_id item_id
       | Unsupported (item: unsupported_item) -> ItemId.equal item.item_id item_id
     )
     items
@@ -110,6 +129,27 @@ let item_to_json = function
       "scope_path",
       Data.Json.Array (List.map (fun segment -> Data.Json.String segment) item.scope_path)
     );
+    ("module_path", Data.Json.String item.module_path);
+  ]
+  | Include (item: include_item) -> Data.Json.Object [
+    ("tag", Data.Json.String "include");
+    ("item_id", Data.Json.Int (ItemId.to_int item.item_id));
+    ("origin_id", Data.Json.Int (OriginId.to_int item.origin_id));
+    (
+      "scope_path",
+      Data.Json.Array (List.map (fun segment -> Data.Json.String segment) item.scope_path)
+    );
+    ("module_path", Data.Json.String item.module_path);
+  ]
+  | ModuleAlias (item: module_alias_item) -> Data.Json.Object [
+    ("tag", Data.Json.String "module_alias");
+    ("item_id", Data.Json.Int (ItemId.to_int item.item_id));
+    ("origin_id", Data.Json.Int (OriginId.to_int item.origin_id));
+    (
+      "scope_path",
+      Data.Json.Array (List.map (fun segment -> Data.Json.String segment) item.scope_path)
+    );
+    ("alias_name", Data.Json.String item.alias_name);
     ("module_path", Data.Json.String item.module_path);
   ]
   | Unsupported (item: unsupported_item) -> Data.Json.Object [
@@ -188,6 +228,34 @@ let to_string = fun items ->
               ^ scope_prefix
               ^ OriginId.to_string item.origin_id
               ^ " "
+              ^ item.module_path
+          | Include (item: include_item) ->
+              let scope_prefix =
+                match item.scope_path with
+                | [] -> ""
+                | scope_path -> String.concat "." scope_path ^ " "
+              in
+              "  "
+              ^ ItemId.to_string item.item_id
+              ^ " include "
+              ^ scope_prefix
+              ^ OriginId.to_string item.origin_id
+              ^ " "
+              ^ item.module_path
+          | ModuleAlias (item: module_alias_item) ->
+              let scope_prefix =
+                match item.scope_path with
+                | [] -> ""
+                | scope_path -> String.concat "." scope_path ^ " "
+              in
+              "  "
+              ^ ItemId.to_string item.item_id
+              ^ " module_alias "
+              ^ scope_prefix
+              ^ OriginId.to_string item.origin_id
+              ^ " "
+              ^ item.alias_name
+              ^ " = "
               ^ item.module_path
           | Unsupported (item: unsupported_item) ->
               let scope_prefix =

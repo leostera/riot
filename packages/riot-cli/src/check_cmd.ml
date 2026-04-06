@@ -207,20 +207,49 @@ let should_ignore_file = fun scope file ->
           package_scope.config.ignore_patterns
         | None -> false
 
-let validate_explicit_target = fun path ->
-  if not (Path.exists path) then
+let resolve_explicit_target_path = fun ?workspace path ->
+  if Path.is_absolute path then
+    Path.normalize path
+  else
+    let cwd_candidate =
+      match Env.current_dir () with
+      | Ok cwd -> Path.normalize Path.(cwd / path)
+      | Error _ -> Path.normalize path
+    in
+    match workspace with
+    | None -> cwd_candidate
+    | Some (workspace: Workspace.t) ->
+        let workspace_contains path =
+          let root = Path.normalize workspace.root in
+          let path = Path.normalize path in
+          Path.equal path root || match Path.strip_prefix path ~prefix:root with
+          | Ok _ -> true
+          | Error _ -> false
+        in
+        if workspace_contains cwd_candidate then
+          cwd_candidate
+        else
+          let workspace_candidate = Path.normalize Path.(workspace.root / path) in
+          if Path.exists workspace_candidate then
+            workspace_candidate
+          else
+            cwd_candidate
+
+let validate_explicit_target = fun ?workspace path ->
+  let resolved = resolve_explicit_target_path ?workspace path in
+  if not (Path.exists resolved) then
     Error (InvalidPath { path; reason = "path does not exist" })
-  else if Path.is_file path && not (is_supported_source_file path) then
+  else if Path.is_file resolved && not (is_supported_source_file resolved) then
     Error (InvalidPath { path; reason = "path is not an OCaml source file (.ml/.mli) or directory" })
   else
-    Ok path
+    Ok resolved
 
-let validate_explicit_targets = fun roots ->
+let validate_explicit_targets = fun ?workspace roots ->
   let rec loop roots acc =
     match roots with
     | [] -> Ok acc
     | head :: tail -> (
-        match validate_explicit_target head with
+        match validate_explicit_target ?workspace head with
         | Error _ as err -> err
         | Ok root -> loop tail (root :: acc)
       )
@@ -251,7 +280,7 @@ let resolve_targets = fun ?workspace ?package_filter paths ->
     if List.is_empty paths then
       resolve_search_roots ?package_filter workspace
     else
-      validate_explicit_targets paths |> Result.map (List.sort_uniq compare_paths)
+      validate_explicit_targets ?workspace paths |> Result.map (List.sort_uniq compare_paths)
   in
   match roots with
   | Error err -> Error err
@@ -697,21 +726,16 @@ let typ_session_with_paths = fun ~config paths ->
     (Typ.Session.empty ~config, [], [])
 
 let module_summaries_for_roots = fun session roots ->
-  let summaries_for_snapshot snapshot roots =
-    roots
-    |> List.filter_map (Typ.Query.module_summary_of snapshot)
-  in
+  let summaries_for_snapshot snapshot roots = roots
+  |> List.filter_map (Typ.Query.module_summary_of snapshot) in
   match Typ.Session.prepare_snapshot session ~roots with
-  | Ok snapshot ->
-      summaries_for_snapshot snapshot roots
+  | Ok snapshot -> summaries_for_snapshot snapshot roots
   | Error _ ->
-      roots
-      |> List.filter_map
+      roots |> List.filter_map
         (fun source_id ->
           match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
           | Ok snapshot -> Typ.Query.module_summary_of snapshot source_id
-          | Error _ -> None)
-      |> merge_loaded_module_summaries []
+          | Error _ -> None) |> merge_loaded_module_summaries []
 
 let workspace_dependency_packages = fun ~include_dev (workspace: Workspace.t) (pkg: Package.t) ->
   let dependencies =
@@ -748,9 +772,7 @@ let workspace_module_summaries_for_package =
           | [] -> []
           | _ -> module_summaries_for_roots session roots
         in
-        let summaries =
-          merge_loaded_module_summaries summaries dependency_summaries
-        in
+        let summaries = merge_loaded_module_summaries summaries dependency_summaries in
         let () =
           cache := (pkg.name, summaries) :: !cache
         in

@@ -218,6 +218,8 @@ This slice assumes these structure-item families:
 - type items
 - module items
 - module type items
+- open items
+- include items
 
 Value and type items reuse the rules from [checker.md](./checker.md) and
 [nominal_data.md](./nominal_data.md). The only new requirement here is that
@@ -229,6 +231,29 @@ So:
 - a type declaration contributes `SigType`
 - a module binding contributes `SigModule`
 - a module type binding contributes `SigModtype`
+
+`open M` is different.
+
+It extends lookup for later structure items, but it does not itself need to
+persist as an exported signature item.
+
+`include M` is different in the other direction.
+
+It elaborates `M` to a module type, extracts its exported signature items, and
+splices those items into both:
+
+- the environment for later structure items
+- the exported signature of the enclosing structure
+
+So a later value can refer to names introduced by the include, and downstream
+users can also see those included exports.
+
+`module X = M` is a module item, but when `M` is a stable path the checker
+should preserve the alias information instead of flattening it away
+immediately.
+
+That preserved alias is what lets downstream summaries and queries recover
+exports such as `X.y` with the right path identity.
 
 ## 7. Signatures And Module Types
 
