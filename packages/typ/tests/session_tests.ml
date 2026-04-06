@@ -87,6 +87,19 @@ let prepare_snapshot_or_error = fun session ~roots ->
   | Error missing -> Error ("unexpected missing requirements: "
   ^ Data.Json.to_string (MissingRequirements.to_json missing))
 
+let with_typ_store = fun f ->
+  Fs.with_tempdir ~prefix:"typ-store"
+    (fun tmpdir ->
+      let contentstore =
+        Contentstore.create
+          ~root:Path.(tmpdir / Path.v "cache")
+          ~policy:Contentstore.Policy.default
+          ()
+      in
+      let store = Store.create contentstore () in
+      f store)
+  |> Result.unwrap_or ~default:(Error "tempdir creation failed")
+
 let test_source_id_stays_stable_across_updates = fun _ctx ->
   let session = Session.empty ~config:Config.default in
   let (session, source_id) = Session.create_source
@@ -327,6 +340,99 @@ let test_snapshot_uses_loaded_module_typings = fun _ctx ->
     let () = Test.assert_equal ~expected:(Some "int -> int -> int") ~actual:midpoint_type in
     let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
     Ok ()
+
+let test_prepare_snapshot_hydrates_module_typings_from_store = fun _ctx ->
+  with_typ_store
+    (fun store ->
+      let seed_session = Session.empty ~config:Config.default in
+      let (seed_session, colors_source_id) = Session.create_source
+        seed_session
+        ~kind:Source.File
+        ~origin:(Source.Label "colors.ml")
+        ~text:"module RGB = struct let blend x y = x end\nlet to_string value = value\n" in
+      let seed_snapshot = Session.snapshot seed_session in
+      let loaded_colors =
+        match Query.module_typings_of seed_snapshot colors_source_id with
+        | Some typings -> typings
+        | None -> panic "expected seed module typings"
+      in
+      let _ =
+        Store.save_module_typings store loaded_colors
+        |> Result.expect ~msg:"save_module_typings should succeed"
+      in
+      let config = Config.default |> Config.with_store ~store:(Some store) in
+      let session = Session.empty ~config in
+      let (session, demo_source_id) = Session.create_source
+        session
+        ~kind:Source.File
+        ~origin:(Source.Label "blend_demo.ml")
+        ~text:"open Colors\nlet midpoint = RGB.blend 1 2\nlet label = to_string \"ok\"\n" in
+      match Session.prepare_snapshot session ~roots:[ demo_source_id ] with
+      | Error missing ->
+          Error
+            ("expected store-backed snapshot preparation to succeed, got "
+            ^ (MissingRequirements.to_json missing |> Data.Json.to_string))
+      | Ok snapshot ->
+          let diagnostics = diagnostic_strings snapshot demo_source_id in
+          if not (List.is_empty diagnostics) then
+            Error (String.concat "\n" diagnostics)
+          else
+            let midpoint_type = inferred_type_at snapshot demo_source_id 34 in
+            let label_type = inferred_type_at snapshot demo_source_id 58 in
+            let () = Test.assert_equal ~expected:(Some "int -> int -> int") ~actual:midpoint_type in
+            let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
+            Ok ())
+
+let test_loaded_module_typings_override_store = fun _ctx ->
+  with_typ_store
+    (fun store ->
+      let good_seed = Session.empty ~config:Config.default in
+      let (good_seed, good_source_id) = Session.create_source
+        good_seed
+        ~kind:Source.File
+        ~origin:(Source.Label "colors.ml")
+        ~text:"module RGB = struct let blend x y = x end\nlet to_string value = value\n" in
+      let good_snapshot = Session.snapshot good_seed in
+      let good_colors =
+        match Query.module_typings_of good_snapshot good_source_id with
+        | Some typings -> typings
+        | None -> panic "expected good colors module typings"
+      in
+      let bad_seed = Session.empty ~config:Config.default in
+      let (bad_seed, bad_source_id) = Session.create_source
+        bad_seed
+        ~kind:Source.File
+        ~origin:(Source.Label "colors.ml")
+        ~text:"let to_string value = value\n" in
+      let bad_snapshot = Session.snapshot bad_seed in
+      let bad_colors =
+        match Query.module_typings_of bad_snapshot bad_source_id with
+        | Some typings -> typings
+        | None -> panic "expected bad colors module typings"
+      in
+      let _ =
+        Store.save_module_typings store bad_colors
+        |> Result.expect ~msg:"save_module_typings should succeed"
+      in
+      let config = Config.default
+      |> Config.with_store ~store:(Some store)
+      |> Config.with_loaded_modules ~loaded_modules:[ good_colors ] in
+      let session = Session.empty ~config in
+      let (session, demo_source_id) = Session.create_source
+        session
+        ~kind:Source.File
+        ~origin:(Source.Label "blend_demo.ml")
+        ~text:"open Colors\nlet midpoint = RGB.blend 1 2\nlet label = to_string \"ok\"\n" in
+      let snapshot = Session.snapshot session in
+      let diagnostics = diagnostic_strings snapshot demo_source_id in
+      if not (List.is_empty diagnostics) then
+        Error (String.concat "\n" diagnostics)
+      else
+        let midpoint_type = inferred_type_at snapshot demo_source_id 34 in
+        let label_type = inferred_type_at snapshot demo_source_id 58 in
+        let () = Test.assert_equal ~expected:(Some "int -> int -> int") ~actual:midpoint_type in
+        let () = Test.assert_equal ~expected:(Some "string -> string") ~actual:label_type in
+        Ok ())
 
 let test_snapshot_uses_sibling_source_record_types = fun _ctx ->
   let session = Session.empty ~config:Config.default in
@@ -1232,6 +1338,12 @@ let () =
           test_query_module_typings_of_uses_canonical_root_typings;
         Test.case "source input hash ignores source id and revision" test_source_input_hash_ignores_source_id_and_revision;
         Test.case "snapshot uses loaded module typings" test_snapshot_uses_loaded_module_typings;
+        Test.case
+          "prepare_snapshot hydrates module typings from store"
+          test_prepare_snapshot_hydrates_module_typings_from_store;
+        Test.case
+          "loaded module typings override store"
+          test_loaded_module_typings_override_store;
         Test.case "snapshot uses sibling source record types" test_snapshot_uses_sibling_source_record_types;
         Test.case "snapshot uses loaded module record types" test_snapshot_uses_loaded_module_record_types;
         Test.case "include reexports loaded module record types" test_include_reexports_loaded_module_record_types;

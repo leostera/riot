@@ -24,6 +24,24 @@ let create_source = fun session ~kind ~origin ~text ->
     source_id
   )
 
+let merge_loaded_modules = fun preferred fallback ->
+  let rec loop order merged remaining =
+    match remaining with
+    | [] ->
+        order
+        |> List.rev
+        |> List.filter_map (fun module_name -> List.assoc_opt module_name merged)
+    | summary :: tail ->
+        let module_name = ModuleTypings.module_name summary in
+        let (order, merged) =
+          match List.assoc_opt module_name merged with
+          | None -> (module_name :: order, (module_name, summary) :: merged)
+          | Some _ -> (order, merged)
+        in
+        loop order merged tail
+  in
+  loop [] [] (preferred @ fallback)
+
 let update_source_text = fun session source_id ~text ->
   let revision = session.next_revision in
   let sources =
@@ -277,7 +295,38 @@ let prepare_snapshot = fun session ~roots ->
             SourceId.equal source.source_id root_id) |> not)
     |> List.map (fun source_id -> MissingRequirements.MissingRootSource { source_id })
   in
-  let missing_modules = collect_missing_module_summaries session roots in
+  let rec hydrate_session = fun session ->
+    let missing_modules = collect_missing_module_summaries session roots in
+    match session.config.store with
+    | None -> (session, missing_modules)
+    | Some store ->
+        let missing_module_names =
+          MissingRequirements.requirements missing_modules
+          |> List.filter_map
+            (function
+              | MissingRequirements.MissingModuleSummary { module_name; _ } -> Some module_name
+              | MissingRequirements.MissingRootSource _ -> None)
+          |> List.sort_uniq String.compare
+        in
+        let hydrated =
+          missing_module_names
+          |> List.filter_map (fun module_name -> Store.load_module_typings store ~module_name)
+        in
+        if List.is_empty hydrated then
+          (session, missing_modules)
+        else
+          let loaded_modules =
+            merge_loaded_modules session.config.loaded_modules hydrated
+          in
+          let session =
+            {
+              session
+              with config = TypConfig.with_loaded_modules session.config ~loaded_modules
+            }
+          in
+          hydrate_session session
+  in
+  let (session, missing_modules) = hydrate_session session in
   let missing_requirements =
     MissingRequirements.of_list
       (missing_roots @ MissingRequirements.requirements missing_modules)

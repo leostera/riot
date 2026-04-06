@@ -32,6 +32,9 @@ open Std
     - `ModuleTypings`
       canonical reusable module-typing artifacts paired with module identity
       and input hashes
+    - `Store`
+      semantic persistence helpers for canonical module typings built on top of
+      a generic contentstore
     - `TypeIndex`
       a query-oriented expression-type index used by `Query.type_at`
 
@@ -98,6 +101,8 @@ module TypeIndex: module type of TypeIndex
 module FileSummary: module type of FileSummary
 
 module ModuleTypings: module type of ModuleTypings
+
+module Store: module type of Store
 
 module Config: module type of TypConfig
 

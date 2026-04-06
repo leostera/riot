@@ -20,6 +20,7 @@ module TypePrinter = TypePrinter
 module TypeIndex = TypeIndex
 module FileSummary = FileSummary
 module ModuleTypings = ModuleTypings
+module Store = Store
 module Config = TypConfig
 module Check_result = Check_result
 module Lower = Lower

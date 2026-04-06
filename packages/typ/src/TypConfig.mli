@@ -12,6 +12,9 @@ type t = {
   (** Host-loaded reusable module typings available to every source in the
       session. *)
   loaded_modules: ModuleTypings.t list;
+  (** Optional semantic store used to hydrate canonical module typings during
+      rooted snapshot preparation. *)
+  store: Store.t option;
   (** Snapshot-scoped bindings synthesized from sibling sources or host context. *)
   ambient: env;
   (** Snapshot-scoped lowered type declarations synthesized from summaries. *)
@@ -37,3 +40,7 @@ val with_ambient_type_decls: t -> ambient_type_decls:FileSummary.type_decl list 
 (** Replace the host-loaded reusable module typings while preserving the
     base prelude and snapshot ambient environment. *)
 val with_loaded_modules: t -> loaded_modules:ModuleTypings.t list -> t
+
+(** Replace the optional semantic store used during rooted snapshot
+    preparation. *)
+val with_store: t -> store:Store.t option -> t

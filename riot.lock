@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "7123252733e88180"
+dependency_hash = "ecdfeee979ece6ca"
 
 [[packages]]
 name = "blink"
@@ -246,7 +246,7 @@ dev_dependencies = []
 name = "typ"
 root = "packages/typ"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
+dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
 dev_dependencies = []
 
