@@ -116,6 +116,14 @@ let all_entries = [
       "The structured payload records both the operation kind and whether the failure came from unknown labels, ambiguity, missing fields, or incompatible owners.";
     ];
   entry
+    ~diagnostic_id:"TYP2007"
+    ~name:"or-pattern-bindings-mismatch"
+    ~summary:"An or-pattern used alternatives that do not bind the same set of value names."
+    ~details:[
+      "Each alternative is checked against the same scrutinee type, but the body can only see names that are bound in every branch.";
+      "The structured payload records the normalized names from the first alternative and the mismatching alternative.";
+    ];
+  entry
     ~diagnostic_id:"TYP2004"
     ~name:"recursive-group-requires-simple-variable-binders"
     ~summary:"The prototype only supports let-rec groups whose binders are simple variables."

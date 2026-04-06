@@ -234,6 +234,15 @@ let add_record_resolution_error = fun (state: state) ~span ~context reason ->
       reason;
     })
 
+let add_or_pattern_bindings_mismatch = fun (state: state) ~span ~expected_names ~actual_names ->
+  add_diagnostic
+    state
+    (Typ_diagnostic.OrPatternBindingsMismatch {
+      pattern_span = span;
+      expected_names;
+      actual_names;
+    })
+
 let resolve_record_decl = fun (state: state) ~field_names ~owner_hint ~span ~context ->
   let candidates =
     state.record_types
@@ -454,6 +463,43 @@ let rec constructor_pattern_argument_types = fun (state: state) constructor_ty a
       (argument_ty :: rest_argument_types, final_result_ty)
 
 let rec bind_pattern = fun (state: state) env pat_id expected_ty ->
+  let normalize_bindings = fun bindings -> bindings |> unique_env |> render_env in
+  let binding_names = fun bindings -> bindings |> List.map fst in
+  let scheme_type = fun (TypeScheme.Forall (_, ty)) -> ty in
+  let unify_or_pattern_bindings = fun origin bindings alternatives ->
+    let expected_bindings = normalize_bindings bindings in
+    let expected_names = binding_names expected_bindings in
+    let rec loop current_bindings remaining =
+      match remaining with
+      | [] -> Some current_bindings
+      | alternative_bindings :: rest ->
+          let alternative_bindings = normalize_bindings alternative_bindings in
+          let actual_names = binding_names alternative_bindings in
+          if not (List.equal String.equal expected_names actual_names) then
+            let () =
+              add_or_pattern_bindings_mismatch
+                state
+                ~span:(diagnostic_span origin)
+                ~expected_names
+                ~actual_names
+            in
+            None
+          else
+            let () =
+              List.iter2
+                (fun (_, expected_scheme) (_, actual_scheme) ->
+                  try_unify
+                    state
+                    ~origin
+                    (scheme_type expected_scheme)
+                    (scheme_type actual_scheme))
+                current_bindings
+                alternative_bindings
+            in
+            loop current_bindings rest
+    in
+    loop expected_bindings alternatives
+  in
   match SemanticTree.find_pattern state.file pat_id with
   | None -> []
   | Some pattern -> (
@@ -490,6 +536,19 @@ let rec bind_pattern = fun (state: state) env pat_id expected_ty ->
             expected_ty
             (TypeRepr.Tuple element_types) in
           List.map2 (bind_pattern state env) elements element_types |> List.flatten
+      | BodyArena.POr alternatives -> (
+          match alternatives with
+          | [] -> []
+          | alternative :: rest ->
+              let origin = origin_of_pattern state pat_id in
+              let bindings = bind_pattern state env alternative expected_ty in
+              let alternative_bindings =
+                rest |> List.map (fun alternative_id -> bind_pattern state env alternative_id expected_ty)
+              in
+              match unify_or_pattern_bindings origin bindings alternative_bindings with
+              | Some bindings -> bindings
+              | None -> []
+        )
       | BodyArena.PConstructor { constructor; arguments } -> (
           match env_lookup env constructor with
           | Some (_, scheme) ->

@@ -10,6 +10,7 @@ type pattern_desc =
   | PChar of string
   | PUnit
   | PTuple of PatId.t list
+  | POr of PatId.t list
   | PConstructor of { constructor: string; arguments: PatId.t list }
   | PRecord of { fields: record_pattern_field list; open_: bool }
   | PList of PatId.t list
@@ -166,6 +167,8 @@ let render_pattern_desc = function
       "unit"
   | PTuple elements ->
       "tuple [" ^ render_ids PatId.to_string elements ^ "]"
+  | POr alternatives ->
+      "or [" ^ render_ids PatId.to_string alternatives ^ "]"
   | PConstructor { constructor; arguments } ->
       "constructor " ^ constructor ^ " [" ^ render_ids PatId.to_string arguments ^ "]"
   | PRecord { fields; open_ } ->
@@ -365,6 +368,13 @@ let pattern_desc_to_json = function
     (
       "elements",
       Data.Json.Array (List.map (fun pat_id -> Data.Json.Int (PatId.to_int pat_id)) elements)
+    );
+  ]
+  | POr alternatives -> Data.Json.Object [
+    ("tag", Data.Json.String "or");
+    (
+      "alternatives",
+      Data.Json.Array (List.map (fun pat_id -> Data.Json.Int (PatId.to_int pat_id)) alternatives)
     );
   ]
   | PUnsupported summary -> Data.Json.Object [

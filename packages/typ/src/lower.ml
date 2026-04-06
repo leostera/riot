@@ -475,6 +475,9 @@ let rec lower_pattern = fun (state: state) pattern ->
       let element_ids = elements
       |> List.map (fun (element: Cst.tuple_pattern_element) -> lower_pattern state element.pattern) in
       add_pattern state ~syntax_node ~label:"tuple_pattern" (BodyArena.PTuple element_ids)
+  | Cst.Pattern.Or { syntax_node; alternatives; _ } ->
+      let alternative_ids = List.map (lower_pattern state) alternatives in
+      add_pattern state ~syntax_node ~label:"or_pattern" (BodyArena.POr alternative_ids)
   | Cst.Pattern.Constructor { syntax_node; constructor_path; arguments; _ } ->
       let argument_ids = List.map (lower_pattern state) arguments in
       add_pattern

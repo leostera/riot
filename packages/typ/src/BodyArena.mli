@@ -20,6 +20,8 @@ type pattern_desc =
   | PUnit
   (** Tuple pattern with child pattern IDs. *)
   | PTuple of PatId.t list
+  (** Or-pattern with child pattern IDs in source order. *)
+  | POr of PatId.t list
   (** Constructor pattern with a stable constructor name and lowered payloads. *)
   | PConstructor of { constructor: string; arguments: PatId.t list }
   (** Record pattern with lowered field patterns and explicit openness. *)

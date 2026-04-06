@@ -75,6 +75,11 @@ type t =
       context: record_context;
       reason: record_resolution_reason
     }
+  | OrPatternBindingsMismatch of {
+      pattern_span: Syn.Ceibo.Span.t;
+      expected_names: string list;
+      actual_names: string list
+    }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }
 
@@ -92,6 +97,7 @@ let code = function
   | TypeMismatch _ -> "TYP2002"
   | ApplicationLabelMismatch _ -> "TYP2005"
   | RecordResolutionError _ -> "TYP2006"
+  | OrPatternBindingsMismatch _ -> "TYP2007"
   | UnsupportedSemanticExpression _ -> "TYP2010"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "TYP2004"
 
@@ -109,6 +115,7 @@ let name = function
   | TypeMismatch _ -> "type-mismatch"
   | ApplicationLabelMismatch _ -> "application-label-mismatch"
   | RecordResolutionError _ -> "record-resolution-error"
+  | OrPatternBindingsMismatch _ -> "or-pattern-bindings-mismatch"
   | UnsupportedSemanticExpression _ -> "unsupported-semantic-expression"
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive-group-requires-simple-variable-binders"
 
@@ -122,6 +129,7 @@ let severity = function
   | TypeMismatch _
   | ApplicationLabelMismatch _
   | RecordResolutionError _
+  | OrPatternBindingsMismatch _
   | UnsupportedSemanticExpression _
   | RecursiveGroupRequiresSimpleVariableBinders _ -> Error
   | ParameterLoweredAsPositional _
@@ -147,6 +155,7 @@ let primary_span = function
   | TypeMismatch { mismatch_span; _ } -> mismatch_span
   | ApplicationLabelMismatch { application_span; _ } -> application_span
   | RecordResolutionError { operation_span; _ } -> operation_span
+  | OrPatternBindingsMismatch { pattern_span; _ } -> pattern_span
   | UnsupportedSemanticExpression { expression_span; _ } -> expression_span
   | RecursiveGroupRequiresSimpleVariableBinders { binding_span } -> binding_span
 
@@ -195,6 +204,11 @@ let record_context_to_string = function
   | RecordFieldAccess -> "record field access"
 
 let render_record_labels = fun labels -> String.concat ", " labels
+
+let render_binding_names = fun names ->
+  match names with
+  | [] -> "(none)"
+  | _ -> render_record_labels names
 
 let message = function
   | CstBuilderError { builder_error } -> "Syn.build_cst failed before lowering: " ^ builder_error.message
@@ -267,6 +281,12 @@ let message = function
           record_context_to_string context ^ " labels do not belong to a single record type: "
           ^ render_record_labels labels
     )
+  | OrPatternBindingsMismatch { expected_names; actual_names; _ } ->
+      "or-pattern alternatives must bind the same names (expected: "
+      ^ render_binding_names expected_names
+      ^ "; actual: "
+      ^ render_binding_names actual_names
+      ^ ")"
   | UnsupportedSemanticExpression { summary; _ } -> "unsupported semantic expression reached inference: "
   ^ summary
   | RecursiveGroupRequiresSimpleVariableBinders _ -> "recursive groups currently require simple function bindings"
@@ -329,6 +349,9 @@ let record_resolution_reason_to_json = function
     ("tag", Data.Json.String "incompatible_labels");
     ("labels", Data.Json.Array (List.map (fun label -> Data.Json.String label) labels));
   ]
+
+let names_to_json = fun names ->
+  Data.Json.Array (List.map (fun name -> Data.Json.String name) names)
 
 let unsupported_reason_to_json = function
   | LiteralOutsideSupportedSubset { supported_literals } -> Data.Json.Object [
@@ -395,6 +418,12 @@ let fields_to_json = function
         ("operation_span", span_to_json operation_span);
         ("context", record_context_to_json context);
         ("reason", record_resolution_reason_to_json reason);
+      ]
+  | OrPatternBindingsMismatch { pattern_span; expected_names; actual_names } ->
+      [
+        ("pattern_span", span_to_json pattern_span);
+        ("expected_names", names_to_json expected_names);
+        ("actual_names", names_to_json actual_names);
       ]
   | UnsupportedSemanticExpression { expression_span; summary } ->
       [ ("expression_span", span_to_json expression_span); ("summary", Data.Json.String summary); ]

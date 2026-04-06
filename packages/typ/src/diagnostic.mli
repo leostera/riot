@@ -73,6 +73,11 @@ type t =
       context: record_context;
       reason: record_resolution_reason
     }
+  | OrPatternBindingsMismatch of {
+      pattern_span: Syn.Ceibo.Span.t;
+      expected_names: string list;
+      actual_names: string list
+    }
   | UnsupportedSemanticExpression of { expression_span: Syn.Ceibo.Span.t; summary: string }
   | RecursiveGroupRequiresSimpleVariableBinders of { binding_span: Syn.Ceibo.Span.t }
 val code: t -> string
