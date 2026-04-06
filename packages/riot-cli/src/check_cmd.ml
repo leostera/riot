@@ -828,10 +828,40 @@ let readable_typ_source_of_prepared = function
         source = Typ.Source.make
           ~source_id
           ~kind:Typ.Source.File
-          ~origin:(Typ.Source.Path path)
-          ~revision:0
-          ~text;
+              ~origin:(Typ.Source.Path path)
+              ~revision:0
+              ~text;
       }
+
+let create_typ_session = fun config paths ->
+  let rec loop session prepared_sources = function
+    | [] -> (session, List.rev prepared_sources)
+    | path :: tail -> (
+        match Fs.read path with
+        | Error err ->
+            loop session (Unreadable_source { path; reason = IO.error_message err } :: prepared_sources) tail
+        | Ok source ->
+            let (session, source_id) =
+              Typ.Session.create_source
+                session
+                ~kind:Typ.Source.File
+                ~origin:(Typ.Source.Path path)
+                ~text:source
+            in
+            loop
+              session
+              (Readable_source { path; source; source_id } :: prepared_sources)
+              tail
+      )
+  in
+  loop (Typ.Session.empty ~config) [] paths
+
+let source_id_of_prepared = function
+  | Readable_source { source_id; _ } -> Some source_id
+  | Unreadable_source _ -> None
+
+let missing_requirements_reason = fun missing ->
+  "missing type requirements: " ^ Data.Json.to_string (Typ.MissingRequirements.to_json missing)
 
 let readable_typ_sources_from_paths = fun paths ->
   paths
@@ -1037,11 +1067,33 @@ let workspace_module_typings_for_package =
               |> Typ.Config.with_store ~store:(Some typ_store)
               |> Typ.Config.with_capture_traces ~capture_traces:false
               in
-              let readable_sources = readable_typ_sources_from_paths (package_library_typ_source_files pkg) in
+              let (session, prepared_sources) =
+                create_typ_session config (package_library_typ_source_files pkg)
+              in
               let typings =
-                readable_sources
-                |> analyze_typ_sources_in_order config
-                |> module_typings_of_analyses readable_sources
+                prepared_sources
+                |> List.filter_map
+                  (
+                    function
+                    | Readable_source { path; source_id; _ } ->
+                        Some (module_name_for_path path, source_id)
+                    | Unreadable_source _ -> None
+                  )
+                |> List.fold_left
+                  (fun grouped (module_name, source_id) ->
+                    let existing =
+                      match List.assoc_opt module_name grouped with
+                      | Some source_ids -> source_ids
+                      | None -> []
+                    in
+                    (module_name, existing @ [ source_id ]) :: List.remove_assoc module_name grouped)
+                  []
+                |> List.rev
+                |> List.concat_map
+                  (fun (_module_name, roots) ->
+                    match Typ.Session.prepare_snapshot session ~roots with
+                    | Ok snapshot -> Typ.Snapshot.module_typings snapshot
+                    | Error _ -> [])
               in
               let () = persist_module_typings typ_store typings in
               typings
@@ -1094,20 +1146,7 @@ let check_source_group = fun ?workspace ~summary_cache ?roots paths ->
     | None -> paths
   in
   let config = typ_config_for_source_group ?workspace ~summary_cache root_paths in
-  let prepared_sources =
-    paths
-    |> List.fold_left
-      (fun (next_source_id, prepared_sources) path ->
-        match Fs.read path with
-        | Error err -> (
-          (next_source_id, prepared_sources @ [ Unreadable_source { path; reason = IO.error_message err } ])
-        )
-        | Ok source ->
-            let source_id = Typ.SourceId.of_int next_source_id in
-            (next_source_id + 1, prepared_sources @ [ Readable_source { path; source; source_id } ]))
-      (1, [])
-    |> snd
-  in
+  let (session, prepared_sources) = create_typ_session config paths in
   let prepared_source_path = function
     | Readable_source { path; _ }
     | Unreadable_source { path; _ } -> path
@@ -1122,30 +1161,39 @@ let check_source_group = fun ?workspace ~summary_cache ?roots paths ->
       (fun path ->
         List.assoc_opt (path_key path) prepared_by_path)
   in
-  let readable_sources =
-    prepared_sources
-    |> List.filter_map readable_typ_source_of_prepared
+  let root_source_ids =
+    target_prepared_sources
+    |> List.filter_map source_id_of_prepared
   in
-  let analyses_by_source =
-    analyze_typ_sources_in_order config readable_sources
-    |> List.fold_left
-      (fun analyses_by_source (source_id, analysis) ->
-        (source_id, analysis) :: analyses_by_source)
-      []
-  in
-  target_prepared_sources
-  |> List.map
-    (
-      function
-      | Unreadable_source { path; reason } -> Unreadable { path; reason }
-      | Readable_source { path; source_id; _ } -> (
-          match List.assoc_opt source_id analyses_by_source with
-          | Some analysis -> checked_file_of_analysis path analysis
-          | None ->
-              let reason = "missing type analysis for " ^ Path.to_string path in
-              Unreadable { path; reason }
+  match Typ.Session.prepare_snapshot session ~roots:root_source_ids with
+  | Error missing ->
+      let reason = missing_requirements_reason missing in
+      target_prepared_sources
+      |> List.map
+        (
+          function
+          | Unreadable_source { path; reason } -> Unreadable { path; reason }
+          | Readable_source { path; _ } -> Unreadable { path; reason }
         )
-    )
+  | Ok snapshot ->
+      let () =
+        match config.Typ.Config.store with
+        | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
+        | None -> ()
+      in
+      target_prepared_sources
+      |> List.map
+        (
+          function
+          | Unreadable_source { path; reason } -> Unreadable { path; reason }
+          | Readable_source { path; source_id; _ } -> (
+              match Typ.Query.analysis_of_source snapshot source_id with
+              | Some analysis -> checked_file_of_analysis path analysis
+              | None ->
+                  let reason = "missing type analysis for " ^ Path.to_string path in
+                  Unreadable { path; reason }
+            )
+        )
 
 let package_root_for_target = fun (workspace: Workspace.t) path ->
   workspace.packages |> List.filter Package.is_workspace_member |> List.sort

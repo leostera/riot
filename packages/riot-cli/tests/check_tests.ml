@@ -517,6 +517,102 @@ let test_check_package_filter_persists_module_typings_to_store = fun _ctx ->
               )
         ))
 
+let test_check_package_filter_persists_interface_shaped_module_typings = fun _ctx ->
+  with_tempdir_result "riot_check_package_interface_typings"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let colors_root = Path.(workspace_root / Path.v "packages/colors") in
+      let colors_impl = Path.(colors_root / Path.v "src/colors.ml") in
+      let colors_intf = Path.(colors_root / Path.v "src/colors.mli") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"colors"
+            ~path:colors_root
+            ~relative_path:(Path.v "packages/colors")
+            ~sources:{ empty_sources with src = [ Path.v "src/colors.ml"; Path.v "src/colors.mli" ] }
+            ();
+        ] in
+      match write_file colors_impl "let answer = 42\nlet hidden = true\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file colors_intf "val answer : int\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches =
+                parse_check [ "check"; "--json"; "-p"; "colors" ]
+                |> Result.expect ~msg:"parse check args"
+              in
+              let stdout, _stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+              |> Result.expect ~msg:"package check should succeed and persist interface-shaped module typings";
+              let typ_store = workspace_typ_store workspace in
+              let colors_typings = Typ.Store.load_module_typings typ_store ~module_name:"Colors" in
+              match colors_typings with
+              | None -> Error "expected Colors module typings to be persisted"
+              | Some typings ->
+                  let exports = Typ.ModuleTypings.exports typings |> List.map fst in
+                  Test.assert_equal ~expected:[ "answer" ] ~actual:exports;
+                  Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                  Ok ()
+        ))
+
+let test_check_package_filter_reports_signature_inclusion_errors = fun _ctx ->
+  with_tempdir_result "riot_check_package_signature_inclusion"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let colors_root = Path.(workspace_root / Path.v "packages/colors") in
+      let colors_impl = Path.(colors_root / Path.v "src/colors.ml") in
+      let colors_intf = Path.(colors_root / Path.v "src/colors.mli") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"colors"
+            ~path:colors_root
+            ~relative_path:(Path.v "packages/colors")
+            ~sources:{ empty_sources with src = [ Path.v "src/colors.ml"; Path.v "src/colors.mli" ] }
+            ();
+        ] in
+      match write_file colors_impl "let answer = true\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file colors_intf "val answer : int\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches =
+                parse_check [ "check"; "--json"; "-p"; "colors" ]
+                |> Result.expect ~msg:"parse check args"
+              in
+              let stdout, stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              (
+                match Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches with
+                | Ok () -> Error "expected package check to fail on signature inclusion mismatch"
+                | Error _ ->
+                    let events = parse_jsonl (stdout_contents ()) in
+                    let codes =
+                      events
+                      |> List.filter_map
+                        (fun json ->
+                          match Data.Json.get_field "type" json with
+                          | Some (Data.Json.String "check_diagnostic") -> (
+                              match Data.Json.get_field "diagnostic" json with
+                              | Some diagnostic_json -> Data.Json.get_field "code" diagnostic_json
+                              | None -> None
+                            )
+                          | _ -> None)
+                    in
+                    Test.assert_equal
+                      ~expected:true
+                      ~actual:(List.mem (Data.Json.String "TYP2011") codes);
+                    Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                    Ok ()
+              )
+        ))
+
 let test_check_package_filter_reexports_workspace_dependency_summaries_via_include = fun _ctx ->
   with_tempdir_result "riot_check_package_dependency_include"
     (fun tmpdir ->
@@ -1523,6 +1619,8 @@ let tests =
     case "check: package filter uses sibling source record types during package scans" test_check_package_filter_uses_package_session_for_cross_file_record_types;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
     case "check: package filter persists module typings to store" test_check_package_filter_persists_module_typings_to_store;
+    case "check: package filter persists interface-shaped module typings" test_check_package_filter_persists_interface_shaped_module_typings;
+    case "check: package filter reports signature inclusion errors" test_check_package_filter_reports_signature_inclusion_errors;
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
     case "check: package filter only hydrates dependency library modules" test_check_package_filter_only_hydrates_dependency_library_module;
     case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
