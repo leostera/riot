@@ -89,6 +89,15 @@ let make_package = fun ~name ~path ~relative_path ?(dependencies = []) ?(sources
 let make_workspace = fun workspace_root packages ->
   Riot_model.Workspace.make ~root:workspace_root ~packages ()
 
+let workspace_typ_store = fun (workspace: Riot_model.Workspace.t) ->
+  let contentstore =
+    Contentstore.create
+      ~root:Path.(workspace.target_dir_root / Path.v "typ-cache")
+      ~policy:Contentstore.Policy.default
+      ()
+  in
+  Typ.Store.create contentstore ()
+
 let test_check_accepts_json_flag = fun _ctx ->
   match parse_check [ "check"; "--json"; "app.ml" ] with
   | Error err -> Error ("expected check args to parse: " ^ err)
@@ -455,6 +464,58 @@ let test_check_package_filter_loads_workspace_dependency_summaries = fun _ctx ->
               Test.assert_equal ~expected:0 ~actual:diagnostic_count;
               Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
               Ok ())
+
+let test_check_package_filter_persists_module_typings_to_store = fun _ctx ->
+  with_tempdir_result "riot_check_package_typ_store"
+    (fun tmpdir ->
+      let workspace_root = Path.(tmpdir / Path.v "workspace") in
+      let std_root = Path.(workspace_root / Path.v "packages/std") in
+      let tty_root = Path.(workspace_root / Path.v "packages/tty") in
+      let std_source = Path.(std_root / Path.v "src/std.ml") in
+      let tty_source = Path.(tty_root / Path.v "src/tty.ml") in
+      let workspace = make_workspace
+        workspace_root
+        [
+          make_package
+            ~name:"std"
+            ~path:std_root
+            ~relative_path:(Path.v "packages/std")
+            ~sources:{ empty_sources with src = [ Path.v "src/std.ml" ] }
+            ();
+          make_package
+            ~name:"tty"
+            ~path:tty_root
+            ~relative_path:(Path.v "packages/tty")
+            ~dependencies:[ make_dependency "std" ]
+            ~sources:{ empty_sources with src = [ Path.v "src/tty.ml" ] }
+            ();
+        ] in
+      match write_file std_source "let twice x = x + x\n" with
+      | Error err -> Error err
+      | Ok () -> (
+          match write_file tty_source "let answer = Std.twice 21\n" with
+          | Error err -> Error err
+          | Ok () ->
+              let matches =
+                parse_check [ "check"; "--json"; "-p"; "tty" ]
+                |> Result.expect ~msg:"parse check args"
+              in
+              let stdout, _stdout_contents = make_capture_writer () in
+              let stderr, stderr_contents = make_capture_writer () in
+              Riot_cli.Check_cmd.run ~workspace ~stdout ~stderr matches
+              |> Result.expect ~msg:"package check should succeed and persist module typings";
+              let typ_store = workspace_typ_store workspace in
+              let std_typings = Typ.Store.load_module_typings typ_store ~module_name:"Std" in
+              let tty_typings = Typ.Store.load_module_typings typ_store ~module_name:"Tty" in
+              if not (Option.is_some std_typings) then
+                Error "expected Std module typings to be persisted"
+              else if not (Option.is_some tty_typings) then
+                Error "expected Tty module typings to be persisted"
+              else (
+                Test.assert_equal ~expected:"" ~actual:(stderr_contents ());
+                Ok ()
+              )
+        ))
 
 let test_check_package_filter_reexports_workspace_dependency_summaries_via_include = fun _ctx ->
   with_tempdir_result "riot_check_package_dependency_include"
@@ -1394,6 +1455,7 @@ let tests =
     case "check: package filter uses sibling source exports during package scans" test_check_package_filter_uses_package_session_for_cross_file_exports;
     case "check: package filter uses sibling source record types during package scans" test_check_package_filter_uses_package_session_for_cross_file_record_types;
     case "check: package filter loads workspace dependency summaries" test_check_package_filter_loads_workspace_dependency_summaries;
+    case "check: package filter persists module typings to store" test_check_package_filter_persists_module_typings_to_store;
     case "check: package filter reexports workspace dependency summaries via include" test_check_package_filter_reexports_workspace_dependency_summaries_via_include;
     case "check: package filter uses sibling dependency record reexports during package scans" test_check_package_filter_uses_sibling_reexported_dependency_record_types;
     case "check: package filter reexports same-named workspace modules via alias" test_check_package_filter_reexports_same_named_workspace_modules_via_alias;

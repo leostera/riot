@@ -25,3 +25,4 @@ riot-model = { path = "../riot-model", version = "*" }
 std = { path = "../std", version = "*" }
 syn = { path = "../syn", version = "*" }
 typ = { path = "../typ", version = "*" }
+contentstore = { path = "../contentstore", version = "*" }

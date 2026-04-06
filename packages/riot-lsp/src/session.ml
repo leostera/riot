@@ -119,6 +119,54 @@ let package_typ_summary_source_files = fun (pkg: Riot_model.Package.t) ->
   |> List.map (fun relative -> Path.(pkg.path / relative))
   |> dedupe_paths
 
+let workspace_typ_store_root = fun (workspace: Riot_model.Workspace.t) ->
+  Path.(workspace.target_dir_root / Path.v "typ-cache")
+
+let workspace_typ_store = fun (workspace: Riot_model.Workspace.t) ->
+  let contentstore =
+    Contentstore.create
+      ~root:(workspace_typ_store_root workspace)
+      ~policy:Contentstore.Policy.default
+      ()
+  in
+  Typ.Store.create contentstore ()
+
+let sanitize_module_name = fun name ->
+  String.map
+    (fun ch ->
+      if ch = '-' then
+        '_'
+      else
+        ch)
+    name
+
+let module_name_for_path = fun path ->
+  path
+  |> Path.remove_extension
+  |> Path.basename
+  |> sanitize_module_name
+  |> String.capitalize_ascii
+
+let load_package_module_typings_from_store = fun store pkg ->
+  let module_names =
+    package_typ_summary_source_files pkg
+    |> List.map module_name_for_path
+  in
+  let loaded =
+    module_names
+    |> List.filter_map (fun module_name -> Typ.Store.load_module_typings store ~module_name)
+  in
+  if List.length loaded = List.length module_names then
+    Some loaded
+  else
+    None
+
+let persist_module_typings = fun store typings ->
+  typings
+  |> List.iter
+    (fun typings ->
+      ignore (Typ.Store.save_module_typings store typings))
+
 let workspace_package_by_name = fun (workspace: Riot_model.Workspace.t) package_name ->
   workspace.packages
   |> List.find_opt
@@ -264,7 +312,7 @@ let workspace_dependency_packages = fun ~include_dev (workspace: Riot_model.Work
     (fun (left: Riot_model.Package.t) (right: Riot_model.Package.t) -> String.compare left.name right.name)
 
 let workspace_module_typings_for_package =
-  let rec load cache (workspace: Riot_model.Workspace.t) ?(visiting = []) (pkg: Riot_model.Package.t) =
+  let rec load cache typ_store (workspace: Riot_model.Workspace.t) ?(visiting = []) (pkg: Riot_model.Package.t) =
     match List.assoc_opt pkg.name !cache with
     | Some typings -> typings
     | None when List.mem pkg.name visiting -> []
@@ -273,20 +321,32 @@ let workspace_module_typings_for_package =
           workspace_dependency_packages ~include_dev:false workspace pkg
           |> List.concat_map
             (fun dependency_pkg ->
-              load cache workspace ~visiting:(pkg.name :: visiting) dependency_pkg)
+              load cache typ_store workspace ~visiting:(pkg.name :: visiting) dependency_pkg)
         in
-        let loaded_modules =
-          merge_loaded_module_typings dependency_typings Typ.Config.default.loaded_modules
+        let package_typings =
+          match load_package_module_typings_from_store typ_store pkg with
+          | Some typings -> typings
+          | None ->
+              let loaded_modules =
+                merge_loaded_module_typings dependency_typings Typ.Config.default.loaded_modules
+              in
+              let config = Typ.Config.default
+              |> Typ.Config.with_loaded_modules ~loaded_modules
+              |> Typ.Config.with_store ~store:(Some typ_store)
+              in
+              let (session, roots, _sources) =
+                typ_session_with_paths ~config (package_typ_summary_source_files pkg)
+              in
+              let typings =
+                match roots with
+                | [] -> []
+                | _ -> module_typings_for_roots session roots
+              in
+              let () = persist_module_typings typ_store typings in
+              typings
         in
-        let config = Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules in
-        let (session, roots, _sources) = typ_session_with_paths ~config (package_typ_summary_source_files pkg) in
         let typings =
-          match roots with
-          | [] -> []
-          | _ -> module_typings_for_roots session roots
-        in
-        let typings =
-          merge_loaded_module_typings typings dependency_typings
+          merge_loaded_module_typings package_typings dependency_typings
         in
         let () =
           cache := (pkg.name, typings) :: !cache
@@ -337,17 +397,20 @@ let typ_config_for_document = fun state ->
             match Riot_model.Workspace_manager.scan state.workspace_manager pkg.path with
             | Error _ -> Typ.Config.default
             | Ok (workspace, _errors) ->
+                let typ_store = workspace_typ_store workspace in
                 let summary_cache = ref [] in
                 let dependency_summaries =
                   workspace_dependency_packages ~include_dev:true workspace pkg
                   |> List.concat_map
-                (fun dependency_pkg ->
-                  workspace_module_typings_for_package summary_cache workspace dependency_pkg)
+                  (fun dependency_pkg ->
+                    workspace_module_typings_for_package summary_cache typ_store workspace dependency_pkg)
               in
               let loaded_modules =
                 merge_loaded_module_typings dependency_summaries Typ.Config.default.loaded_modules
                 in
-                Typ.Config.with_loaded_modules Typ.Config.default ~loaded_modules
+                Typ.Config.default
+                |> Typ.Config.with_loaded_modules ~loaded_modules
+                |> Typ.Config.with_store ~store:(Some typ_store)
           )
       )
 
@@ -399,7 +462,13 @@ let typ_analysis_for_document = fun state ->
     match from_paths with
     | (session, Some source_id, sources) -> (
         match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
-        | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
+        | Ok snapshot ->
+            let () =
+              match config.Typ.Config.store with
+              | None -> ()
+              | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
+            in
+            Typ.Query.analysis_of_source snapshot source_id
         | Error _ ->
             Typ.Snapshot.make ~revision:document.version ~roots:[ source_id ] ~config ~sources
             |> fun snapshot -> Typ.Query.analysis_of_source snapshot source_id
@@ -420,7 +489,13 @@ let typ_analysis_for_document = fun state ->
         in
         (
           match Typ.Session.prepare_snapshot session ~roots:[ source_id ] with
-          | Ok snapshot -> Typ.Query.analysis_of_source snapshot source_id
+          | Ok snapshot ->
+              let () =
+                match config.Typ.Config.store with
+                | None -> ()
+                | Some store -> persist_module_typings store (Typ.Snapshot.module_typings snapshot)
+              in
+              Typ.Query.analysis_of_source snapshot source_id
           | Error _ ->
               Typ.Snapshot.make
                 ~revision:document.version

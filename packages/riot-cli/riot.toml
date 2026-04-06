@@ -30,3 +30,4 @@ riot-deps = { path = "../riot-deps", version = "*" }
 riot-publish = { path = "../riot-publish", version = "*" }
 pkgs-ml = { path = "../pkgs-ml", version = "*" }
 tty = { path = "../tty", version = "*" }
+contentstore = { path = "../contentstore", version = "*" }
