@@ -11528,7 +11528,7 @@
           "scheme": "'a. 'a -> string"
         }
       ],
-      "tag": "errored_export"
+      "tag": "trusted_export"
     },
     "source_id": 0
   },
@@ -11600,11 +11600,29 @@
       "tag": "open"
     },
     {
+      "declaration": {
+        "constructors": [],
+        "manifest": {
+          "bound": "exact",
+          "inherited": [],
+          "tag": "poly_variant",
+          "tags": [
+            {
+              "name": "ansi",
+              "payload_type": "int"
+            },
+            {
+              "name": "rgb",
+              "payload_type": "int * int * int"
+            }
+          ]
+        },
+        "type_name": "color"
+      },
       "item_id": 1,
       "origin_id": 1,
       "scope_path": [],
-      "summary": "TYPE_DECL",
-      "tag": "unsupported"
+      "tag": "type"
     },
     {
       "binding_ids": [
@@ -11627,22 +11645,7 @@
       "tag": "value"
     }
   ],
-  "lowering_diagnostics": [
-    {
-      "context": "structure_item",
-      "id": "TYP1001",
-      "message": "unsupported structure item lowered using placeholder item: TYPE_DECL",
-      "name": "unsupported-syntax",
-      "reason": null,
-      "recovery": "placeholder_item",
-      "severity": "error",
-      "syntax_kind": "TYPE_DECL",
-      "syntax_span": {
-        "end": 69,
-        "start": 8
-      }
-    }
-  ],
+  "lowering_diagnostics": [],
   "origin_map": [
     {
       "kind": "item",

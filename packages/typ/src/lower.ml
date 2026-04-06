@@ -310,6 +310,40 @@ let lower_record_label = fun scope_path type_params (field: Cst.RecordField.t) -
     mutable_ = Option.is_some (Cst.RecordField.mutable_token field)
   }
 
+let lower_poly_variant_bound = function
+  | Cst.PolyVariantBound.Exact -> TypeDecl.Exact
+  | Cst.PolyVariantBound.UpperBound _ -> TypeDecl.UpperBound
+  | Cst.PolyVariantBound.LowerBound _ -> TypeDecl.LowerBound
+
+let lower_poly_variant_tag = fun scope_path type_params (tag: Cst.PolyVariantTag.t) ->
+  {
+    TypeDecl.name = Cst.PolyVariantTag.name tag;
+    payload_type = Cst.PolyVariantTag.payload_type tag
+    |> Option.map (lower_core_type scope_path type_params)
+  }
+
+let lower_poly_variant_manifest = fun scope_path type_params (poly_variant: Cst.PolyVariant.t) ->
+  let (tags, inherited) =
+    Cst.PolyVariant.fields poly_variant
+    |> List.fold_left
+      (fun (tags, inherited) field ->
+        match field with
+        | Cst.RowField.Tag tag -> (
+          lower_poly_variant_tag scope_path type_params tag :: tags,
+          inherited
+        )
+        | Cst.RowField.Inherit { type_; _ } -> (
+          tags,
+          lower_core_type scope_path type_params type_ :: inherited
+        ))
+      ([], [])
+  in
+  TypeDecl.PolyVariant {
+    bound = lower_poly_variant_bound (Cst.PolyVariant.kind poly_variant);
+    tags = List.rev tags;
+    inherited = List.rev inherited
+  }
+
 let add_unsupported_structure_item = fun (state: state) syntax_node ->
   let syntax_kind = Cst.syntax_kind syntax_node in
   let summary = SyntaxKind.to_string syntax_kind in
@@ -337,12 +371,22 @@ let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaratio
   } in
   let lowered_declaration =
     match Cst.TypeDeclaration.type_definition declaration with
-    | Cst.TypeDefinition.Abstract -> Some {
-      TypeDecl.type_name = type_name;
-      param_ids = List.map snd params;
-      constructors = [];
-      labels = [];
-    }
+    | Cst.TypeDefinition.Abstract ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors = [];
+          labels = [];
+          manifest = None;
+        }
+    | Cst.TypeDefinition.Alias { manifest; _ } ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors = [];
+          labels = [];
+          manifest = Some (TypeDecl.Alias (lower_core_type state.scope_path params manifest));
+        }
     | Cst.TypeDefinition.Variant { constructors; _ } ->
         Some {
           TypeDecl.type_name = type_name;
@@ -356,13 +400,24 @@ let lower_type_declaration = fun (state: state) (declaration: Cst.TypeDeclaratio
                   scheme = constructor_scheme ~params ~result_type payload_type
                 });
           labels = [];
+          manifest = None;
         }
-    | Cst.TypeDefinition.Record { fields; _ } -> Some {
-      TypeDecl.type_name = type_name;
-      param_ids = List.map snd params;
-      constructors = [];
-      labels = List.map (lower_record_label state.scope_path params) fields
-    }
+    | Cst.TypeDefinition.Record { fields; _ } ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors = [];
+          labels = List.map (lower_record_label state.scope_path params) fields;
+          manifest = None;
+        }
+    | Cst.TypeDefinition.PolyVariant poly_variant ->
+        Some {
+          TypeDecl.type_name = type_name;
+          param_ids = List.map snd params;
+          constructors = [];
+          labels = [];
+          manifest = Some (lower_poly_variant_manifest state.scope_path params poly_variant);
+        }
     | _ -> None
   in
   match lowered_declaration with
@@ -1125,7 +1180,8 @@ and lower_include_statement = fun (state: state) (include_statement: Cst.include
       | Some segments ->
           let _ = add_item state ~syntax_node (`Include (String.concat "." segments)) in
           ()
-      | None -> add_unsupported_structure_item state syntax_node
+      | None ->
+          add_unsupported_structure_item state syntax_node
     )
   | Cst.ModuleType _ -> ()
 

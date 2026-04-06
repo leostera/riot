@@ -18,15 +18,55 @@ let export_to_json = fun (name, scheme) ->
     ("scheme", Data.Json.String (TypePrinter.scheme_to_string scheme));
   ]
 
+let manifest_to_json = function
+  | TypeDecl.Alias manifest_type -> Data.Json.Object [
+    ("tag", Data.Json.String "alias");
+    ("type", Data.Json.String (TypePrinter.type_to_string manifest_type));
+  ]
+  | TypeDecl.PolyVariant { bound; tags; inherited } ->
+      let bound =
+        match bound with
+        | TypeDecl.Exact -> "exact"
+        | TypeDecl.UpperBound -> "upper"
+        | TypeDecl.LowerBound -> "lower"
+      in
+      let tag_to_json (tag: TypeDecl.poly_variant_tag) =
+        let fields = [ ("name", Data.Json.String tag.name) ] in
+        let fields =
+          match tag.payload_type with
+          | Some payload_type -> fields
+          @ [ ("payload_type", Data.Json.String (TypePrinter.type_to_string payload_type)) ]
+          | None -> fields
+        in
+        Data.Json.Object fields
+      in
+      Data.Json.Object [
+        ("tag", Data.Json.String "poly_variant");
+        ("bound", Data.Json.String bound);
+        ("tags", Data.Json.Array (List.map tag_to_json tags));
+        (
+          "inherited",
+          Data.Json.Array (List.map
+            (fun inherited -> Data.Json.String (TypePrinter.type_to_string inherited))
+            inherited)
+        );
+      ]
+
 let type_item_summary_to_json = function
   | ItemTree.Type type_item ->
-      Data.Json.Object [
+      let fields = [
         ("tag", Data.Json.String "type");
         ("type_name", Data.Json.String type_item.declaration.type_name);
         ("param_count", Data.Json.Int (List.length type_item.declaration.param_ids));
         ("constructor_count", Data.Json.Int (List.length type_item.declaration.constructors));
         ("label_count", Data.Json.Int (List.length type_item.declaration.labels));
-      ]
+      ] in
+      let fields =
+        match type_item.declaration.manifest with
+        | Some manifest -> fields @ [ ("manifest", manifest_to_json manifest) ]
+        | None -> fields
+      in
+      Data.Json.Object fields
   | ItemTree.Unsupported unsupported_item ->
       Data.Json.Object [
         ("tag", Data.Json.String "unsupported");
@@ -110,10 +150,7 @@ let expected_lowering_json = Data.Json.Object [
 let actual_type_item_lowering_json = fun (report: Check_result.t) ->
   let item_tree = report.item_tree |> Option.expect ~msg:"expected lowered item tree in lowering test" in
   Data.Json.Object [
-    (
-      "items",
-      Data.Json.Array (ItemTree.items item_tree |> List.map type_item_summary_to_json)
-    );
+    ("items", Data.Json.Array (ItemTree.items item_tree |> List.map type_item_summary_to_json));
     (
       "lowering_diagnostics",
       Data.Json.Array (List.map Diagnostic.to_json report.lowering_diagnostics)
@@ -144,42 +181,101 @@ let expected_abstract_type_lowering_json = Data.Json.Object [
   ("lowering_diagnostics", Data.Json.Array []);
 ]
 
-let expected_type_alias_recovery_json = Data.Json.Object [
+let expected_manifest_alias_lowering_json = Data.Json.Object [
   (
     "items",
     Data.Json.Array [
       Data.Json.Object [
-        ("tag", Data.Json.String "unsupported");
-        ("summary", Data.Json.String "TYPE_DECL");
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "name");
+        ("param_count", Data.Json.Int 0);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+        (
+          "manifest",
+          Data.Json.Object [
+            ("tag", Data.Json.String "alias");
+            ("type", Data.Json.String "string");
+          ]
+        );
       ];
       Data.Json.Object [ ("tag", Data.Json.String "value") ];
     ]
   );
+  ("lowering_diagnostics", Data.Json.Array []);
+]
+
+let expected_poly_variant_type_lowering_json = Data.Json.Object [
   (
-    "lowering_diagnostics",
+    "items",
     Data.Json.Array [
       Data.Json.Object [
-        ("id", Data.Json.String "TYP1001");
-        ("name", Data.Json.String "unsupported-syntax");
-        ("severity", Data.Json.String "error");
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "ansi");
+        ("param_count", Data.Json.Int 0);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
         (
-          "message",
-          Data.Json.String "unsupported structure item lowered using placeholder item: TYPE_DECL"
-        );
-        (
-          "syntax_span",
+          "manifest",
           Data.Json.Object [
-            ("start", Data.Json.Int 0);
-            ("end", Data.Json.Int 18);
+            ("tag", Data.Json.String "poly_variant");
+            ("bound", Data.Json.String "exact");
+            (
+              "tags",
+              Data.Json.Array [
+                Data.Json.Object [
+                  ("name", Data.Json.String "ansi");
+                  ("payload_type", Data.Json.String "int");
+                ];
+              ]
+            );
+            ("inherited", Data.Json.Array []);
           ]
         );
-        ("syntax_kind", Data.Json.String "TYPE_DECL");
-        ("context", Data.Json.String "structure_item");
-        ("recovery", Data.Json.String "placeholder_item");
-        ("reason", Data.Json.Null);
+      ];
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "rgb");
+        ("param_count", Data.Json.Int 0);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+        (
+          "manifest",
+          Data.Json.Object [
+            ("tag", Data.Json.String "poly_variant");
+            ("bound", Data.Json.String "exact");
+            (
+              "tags",
+              Data.Json.Array [
+                Data.Json.Object [
+                  ("name", Data.Json.String "rgb");
+                  ("payload_type", Data.Json.String "int * int * int");
+                ];
+              ]
+            );
+            ("inherited", Data.Json.Array []);
+          ]
+        );
+      ];
+      Data.Json.Object [
+        ("tag", Data.Json.String "type");
+        ("type_name", Data.Json.String "color");
+        ("param_count", Data.Json.Int 0);
+        ("constructor_count", Data.Json.Int 0);
+        ("label_count", Data.Json.Int 0);
+        (
+          "manifest",
+          Data.Json.Object [
+            ("tag", Data.Json.String "poly_variant");
+            ("bound", Data.Json.String "exact");
+            ("tags", Data.Json.Array [ Data.Json.Object [ ("name", Data.Json.String "hex") ]; ]);
+            ("inherited", Data.Json.Array [ Data.Json.String "ansi"; Data.Json.String "rgb"; ]);
+          ]
+        );
       ];
     ]
   );
+  ("lowering_diagnostics", Data.Json.Array []);
 ]
 
 let test_fun_cases_preserve_preceding_parameters = fun ctx ->
@@ -200,30 +296,33 @@ let test_fun_cases_preserve_preceding_parameters = fun ctx ->
 let test_abstract_type_declarations_lower_to_type_items = fun ctx ->
   let source = String.concat "\n" [ "type t"; "type ('a, 'b) pair"; "let value = ()"; "" ] in
   let report = Check.check_source ~filename:(Path.v "packages/typ/tests/abstract_types.ml") source in
-  Test.Snapshot.assert_inline_json
-    ~ctx
-    ~actual:(actual_type_item_lowering_json report)
-    ~expected:expected_abstract_type_lowering_json
+  Test.Snapshot.assert_inline_json ~ctx ~actual:(actual_type_item_lowering_json report) ~expected:expected_abstract_type_lowering_json
 
-let test_unsupported_type_aliases_lower_to_placeholder_items = fun ctx ->
+let test_manifest_type_aliases_lower_to_type_items = fun ctx ->
   let source = String.concat "\n" [ "type name = string"; "let value = \"riot\""; "" ] in
   let report = Check.check_source ~filename:(Path.v "packages/typ/tests/type_alias_recovery.ml") source in
-  Test.Snapshot.assert_inline_json
-    ~ctx
-    ~actual:(actual_type_item_lowering_json report)
-    ~expected:expected_type_alias_recovery_json
+  Test.Snapshot.assert_inline_json ~ctx ~actual:(actual_type_item_lowering_json report) ~expected:expected_manifest_alias_lowering_json
+
+let test_poly_variant_type_declarations_lower_to_type_items = fun ctx ->
+  let source = String.concat
+    "\n"
+    [
+      "type ansi = [ `ansi of int ]";
+      "type rgb = [ `rgb of int * int * int ]";
+      "type color = [ ansi | rgb | `hex ]";
+      "";
+    ] in
+  let report = Check.check_source ~filename:(Path.v "packages/typ/tests/poly_variant_types.ml") source in
+  Test.Snapshot.assert_inline_json ~ctx ~actual:(actual_type_item_lowering_json report) ~expected:expected_poly_variant_type_lowering_json
 
 let () =
   Actors.run
     ~main:(fun ~args ->
       let tests = [
         Test.case "fun cases preserve preceding parameters during lowering" test_fun_cases_preserve_preceding_parameters;
-        Test.case
-          "abstract type declarations lower to type items"
-          test_abstract_type_declarations_lower_to_type_items;
-        Test.case
-          "unsupported type aliases lower to placeholder items"
-          test_unsupported_type_aliases_lower_to_placeholder_items;
+        Test.case "abstract type declarations lower to type items" test_abstract_type_declarations_lower_to_type_items;
+        Test.case "manifest type aliases lower to type items" test_manifest_type_aliases_lower_to_type_items;
+        Test.case "polymorphic-variant type declarations lower to type items" test_poly_variant_type_declarations_lower_to_type_items;
       ] in
       Test.Cli.main ~name:"typ:lowering" ~tests ~args)
     ~args:Env.args

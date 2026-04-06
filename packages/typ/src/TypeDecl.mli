@@ -7,7 +7,6 @@ type constructor = {
   (** Constructor scheme derived from the declaration payload. *)
   scheme: TypeScheme.t;
 }
-
 (** One record label recovered from a lowered type declaration. *)
 type label = {
   (** Surface label name as it appears in record syntax. *)
@@ -17,13 +16,32 @@ type label = {
   (** Whether the field was declared mutable. *)
   mutable_: bool;
 }
-
+(** Bound kind carried by lowered polymorphic-variant declarations. *)
+type poly_variant_bound =
+  | Exact
+  | UpperBound
+  | LowerBound
+(** One tag recovered from a lowered polymorphic-variant declaration. *)
+type poly_variant_tag = {
+  (** Surface tag name without the backtick prefix. *)
+  name: string;
+  (** Optional payload type carried by the tag. *)
+  payload_type: TypeRepr.t option;
+}
+(** Manifest payload preserved by lowering for non-abstract declarations that do
+    not elaborate into ordinary constructors or labels yet. *)
+type manifest =
+  | Alias of TypeRepr.t
+  | PolyVariant of {
+      bound: poly_variant_bound;
+      tags: poly_variant_tag list;
+      inherited: TypeRepr.t list
+    }
 (** Lowered semantic summary for one type declaration item.
 
-    The current prototype only consumes enough declaration detail to surface
-    constructor and record-label declarations to later term inference. The representation is kept
-    explicit so future work can grow type-head and manifest support here rather
-    than smuggling it through ad hoc environment entries. *)
+    The current prototype consumes constructor and record-label declarations
+    during term inference, while preserving manifest alias and
+    polymorphic-variant declaration detail explicitly for later slices. *)
 type t = {
   (** Declared type name. *)
   type_name: string;
@@ -33,6 +51,8 @@ type t = {
   constructors: constructor list;
   (** Record labels introduced by the declaration. *)
   labels: label list;
+  (** Explicit lowered manifest payload when the declaration was not abstract. *)
+  manifest: manifest option;
 }
 
 (** Extract constructor entries in environment form. *)
