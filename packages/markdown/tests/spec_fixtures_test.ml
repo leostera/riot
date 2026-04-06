@@ -1,5 +1,5 @@
 open Std
-open Commonmark
+open Markdown
 
 let normalize_label = fun label ->
   let normalized = String.lowercase_ascii label in
@@ -49,27 +49,70 @@ let fixture_test_name = fun index fixture ->
     Option.map Int.to_string fixture.example
     |> Option.unwrap_or ~default:(Int.to_string (index + 1))
   in
-  "commonmark/" ^ normalize_label section ^ "/" ^ example ^ "_" ^ Int.to_string index
+  "markdown/spec/" ^ normalize_label section ^ "/" ^ example ^ "_" ^ Int.to_string index
 
 let test_fixture = fun fixture index ctx ->
-  let actual = Commonmark.compile fixture.markdown in
+  let actual = Markdown.compile fixture.markdown in
   Test.Snapshot.assert_inline_text
     ~ctx
     ~actual
     ~expected:fixture.html
 
-let cases = fun () ->
+let fixture_cases = fun () ->
   all_spec_fixtures ()
   |> List.mapi (fun index fixture ->
     Test.case
       (fixture_test_name index fixture)
       (fun ctx -> test_fixture fixture index ctx))
 
+let gfm_cases = fun () ->
+  [
+    Test.case "markdown/gfm/strikethrough" (fun ctx ->
+      Test.Snapshot.assert_inline_text
+        ~ctx
+        ~actual:(Markdown.compile_gfm "~~gone~~\n")
+        ~expected:"<p><del>gone</del></p>\n");
+    Test.case "markdown/gfm/task-list" (fun ctx ->
+      Test.Snapshot.assert_inline_text
+        ~ctx
+        ~actual:(Markdown.compile_gfm "- [ ] todo\n- [x] done\n")
+        ~expected:
+          "<ul>\n\
+          <li class=\"task-list-item\">\n\
+          <input type=\"checkbox\" disabled /><p>todo</p>\n\
+          </li>\n\
+          <li class=\"task-list-item\">\n\
+          <input type=\"checkbox\" checked disabled /><p>done</p>\n\
+          </li>\n\
+          </ul>\n");
+    Test.case "markdown/gfm/table" (fun ctx ->
+      Test.Snapshot.assert_inline_text
+        ~ctx
+        ~actual:(Markdown.compile_gfm "| a | b |\n| --- | ---: |\n| c | d |\n")
+        ~expected:
+          "<table>\n\
+          <thead>\n\
+          <tr>\n\
+          <th>a</th>\n\
+          <th align=\"right\">b</th>\n\
+          </tr>\n\
+          </thead>\n\
+          <tbody>\n\
+          <tr>\n\
+          <td>c</td>\n\
+          <td align=\"right\">d</td>\n\
+          </tr>\n\
+          </tbody>\n\
+          </table>\n");
+  ]
+
+let cases = fun () -> fixture_cases () @ gfm_cases ()
+
 let () =
   Actors.run
     ~main:(fun ~args ->
       Test.Cli.main
-        ~name:"commonmark-spec-fixtures"
+        ~name:"markdown-spec-fixtures"
         ~tests:(cases ())
         ~args)
     ~args:Env.args

@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "packages/blink",
-  "packages/commonmark",
+  "packages/markdown",
   "packages/ceibo",
   "packages/colors",
   "packages/contentstore",

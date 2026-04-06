@@ -23,8 +23,13 @@ module Syntax_kind: sig
     | Code_block
     | List
     | List_item
+    | Task_list_item
+    | Table
+    | Table_row
+    | Table_cell
     | Horizontal_rule
     | Raw_html
+    | Strikethrough
     | Text
     | Error
   val to_string: t -> string
@@ -96,24 +101,24 @@ type parse_result = {
   root: (Syntax_kind.t, string) Ceibo.Green.node;
   source: string;
   diagnostics: Diagnostic.t list;
-  blocks: Commonmark_parser.block_node list;
+  blocks: Markdown_parser.block_node list;
 }
 
 (** Parse markdown into a CEIBO red-green tree plus structured diagnostics.
     Parsing is lossless and never raises. *)
 val parse: string -> parse_result
 
-(** Compile a parsed result into HTML.
-    If the input matches an accepted CommonMark spec fixture, this function
-    returns the fixture HTML exactly for deterministic suite compatibility. *)
+val parse_gfm: string -> parse_result
+
+(** Compile a parsed result into HTML. *)
 val to_html: parse_result -> string
 
 (** Parse and compile in one step. *)
 val compile: string -> string
 
+val compile_gfm: string -> string
+
 (** Access the spec fixture corpus loaded from disk.
     Returns an empty list when fixtures cannot be loaded (for embedded or
     distribution-only builds). *)
 val all_spec_fixtures: unit -> fixture list
-
-val fixture_lookup: string -> fixture option

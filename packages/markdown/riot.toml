@@ -1,9 +1,9 @@
 [package]
-name = "commonmark"
+name = "markdown"
 version = "0.1.0"
 
 [lib]
-path = "src/Commonmark.ml"
+path = "src/Markdown.ml"
 
 [dependencies]
 std = "*"

@@ -209,15 +209,19 @@ let locate_fixture_path = fun () ->
   |> List.map
     (fun root ->
       [
-        Path.join root (Path.v "packages/commonmark/tests/spec_fixtures.json");
-        Path.join root (Path.v "commonmark/tests/spec_fixtures.json");
+        Path.join root (Path.v "packages/markdown/tests/spec_fixtures.json");
+        Path.join root (Path.v "packages/markdown/tests/spec_fixtures.json");
+        Path.join root (Path.v "markdown/tests/spec_fixtures.json");
+        Path.join root (Path.v "markdown/tests/spec_fixtures.json");
         Path.join root (Path.v "tests/spec_fixtures.json");
         Path.join root (Path.v "spec_fixtures.json");
       ])
   |> List.concat in
   let candidates = file_candidates
-  @ [ Path.v "packages/commonmark/tests/spec_fixtures.json" ]
-  @ [ Path.v "commonmark/tests/spec_fixtures.json" ]
+  @ [ Path.v "packages/markdown/tests/spec_fixtures.json" ]
+  @ [ Path.v "packages/markdown/tests/spec_fixtures.json" ]
+  @ [ Path.v "markdown/tests/spec_fixtures.json" ]
+  @ [ Path.v "markdown/tests/spec_fixtures.json" ]
   @ [ Path.v "tests/spec_fixtures.json" ]
   @ [ Path.v "spec_fixtures.json" ] in
   let candidates = dedupe candidates in

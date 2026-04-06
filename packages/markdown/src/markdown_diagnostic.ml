@@ -1,5 +1,5 @@
 open Std
-module Error = Commonmark_error
+module Error = Markdown_error
 
 type found_token = {
   kind: string;
@@ -86,11 +86,11 @@ let main_message = fun diag ->
 let to_string = fun diag ->
   let diag_id =
     match diag.kind with
-    | Invalid_markdown _ -> "commonmark_invalid_markdown"
-    | Unsupported_feature _ -> "commonmark_unsupported_feature"
-    | Unclosed_fenced_code_block _ -> "commonmark_unclosed_fenced_code_block"
-    | Unexpected_control_character _ -> "commonmark_unexpected_control_character"
-    | Parser_internal _ -> "commonmark_parser_internal"
+    | Invalid_markdown _ -> "markdown_invalid_markdown"
+    | Unsupported_feature _ -> "markdown_unsupported_feature"
+    | Unclosed_fenced_code_block _ -> "markdown_unclosed_fenced_code_block"
+    | Unexpected_control_character _ -> "markdown_unexpected_control_character"
+    | Parser_internal _ -> "markdown_parser_internal"
   in
   let fix = Option.unwrap_or ~default:"" (fix_message diag) in
   let hint = hint_message diag in
@@ -111,11 +111,11 @@ let to_string = fun diag ->
 
 let error_id = fun diag ->
   match diag.kind with
-  | Invalid_markdown _ -> "commonmark_invalid_markdown"
-  | Unsupported_feature _ -> "commonmark_unsupported_feature"
-  | Unclosed_fenced_code_block _ -> "commonmark_unclosed_fenced_code_block"
-  | Unexpected_control_character _ -> "commonmark_unexpected_control_character"
-  | Parser_internal _ -> "commonmark_parser_internal"
+  | Invalid_markdown _ -> "markdown_invalid_markdown"
+  | Unsupported_feature _ -> "markdown_unsupported_feature"
+  | Unclosed_fenced_code_block _ -> "markdown_unclosed_fenced_code_block"
+  | Unexpected_control_character _ -> "markdown_unexpected_control_character"
+  | Parser_internal _ -> "markdown_parser_internal"
 
 let id = fun diag -> error_id diag
 
@@ -244,9 +244,9 @@ let from_json = fun json ->
           in
           let span = Ceibo.Span.make ~start ~end_ in
           match id with
-          | Some "commonmark_invalid_markdown" ->
+          | Some "markdown_invalid_markdown" ->
               Ok { kind = Invalid_markdown { found }; span }
-          | Some "commonmark_unsupported_feature" -> (
+          | Some "markdown_unsupported_feature" -> (
               let feature =
                 match List.assoc_opt "feature" kind_fields with
                 | Some (Data.Json.String value) -> value
@@ -254,7 +254,7 @@ let from_json = fun json ->
               in
               Ok { kind = Unsupported_feature { found; feature }; span }
             )
-          | Some "commonmark_unclosed_fenced_code_block" -> (
+          | Some "markdown_unclosed_fenced_code_block" -> (
               let opener =
                 match List.assoc_opt "opener" kind_fields with
                 | Some (Data.Json.String value) -> value
@@ -262,7 +262,7 @@ let from_json = fun json ->
               in
               Ok { kind = Unclosed_fenced_code_block { found; opener }; span }
             )
-          | Some "commonmark_unexpected_control_character" -> (
+          | Some "markdown_unexpected_control_character" -> (
               let code =
                 match List.assoc_opt "code" kind_fields with
                 | Some (Data.Json.Int value) -> value
@@ -270,7 +270,7 @@ let from_json = fun json ->
               in
               Ok { kind = Unexpected_control_character { found; code }; span }
             )
-          | Some "commonmark_parser_internal" -> (
+          | Some "markdown_parser_internal" -> (
               let message =
                 match List.assoc_opt "message" kind_fields with
                 | Some (Data.Json.String value) -> value

@@ -1,5 +1,5 @@
 open Std
-module Diagnostic = Commonmark_diagnostic
+module Diagnostic = Markdown_diagnostic
 
 type source_layout = {
   lines: string list;

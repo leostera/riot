@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "95d4bfa631e69bf8"
+dependency_hash = "c428e7b2a8d1b310"
 
 [[packages]]
 name = "blink"
@@ -11,8 +11,8 @@ build_dependencies = []
 dev_dependencies = []
 
 [[packages]]
-name = "commonmark"
-root = "packages/commonmark"
+name = "markdown"
+root = "packages/markdown"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "ceibo", package = { name = "ceibo" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
