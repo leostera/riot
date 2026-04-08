@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "7ec2e73753d86c06"
+dependency_hash = "5bfba9093b92e5b3"
 
 [[packages]]
 name = "blink"
@@ -126,7 +126,7 @@ dev_dependencies = []
 name = "macro"
 root = "packages/macro"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }, { name = "riot-model", package = { name = "riot-model" } }]
+dependencies = [{ name = "riot-model", package = { name = "riot-model" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -294,7 +294,7 @@ dev_dependencies = []
 name = "riot-executor"
 root = "packages/riot-executor"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "riot-model", package = { name = "riot-planner" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-store", package = { name = "riot-planner" } }, { name = "riot-toolchain", package = { name = "riot-planner" } }, { name = "std", package = { name = "riot-planner" } }]
+dependencies = [{ name = "macro", package = { name = "macro" } }, { name = "riot-model", package = { name = "riot-planner" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-store", package = { name = "riot-planner" } }, { name = "riot-toolchain", package = { name = "riot-planner" } }, { name = "std", package = { name = "riot-planner" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -350,7 +350,7 @@ dev_dependencies = []
 name = "riot-planner"
 root = "packages/riot-planner"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "std", package = { name = "std" } }, { name = "macro", package = { name = "macro" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "syn", package = { name = "syn" } }]
+dependencies = [{ name = "macro", package = { name = "macro" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
 dev_dependencies = []
 
