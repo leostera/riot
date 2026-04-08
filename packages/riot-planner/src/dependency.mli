@@ -19,3 +19,5 @@ val library_cmxa: t -> Path.t
 (** Flatten dependencies and their transitive deps in dependency-first order,
     deduplicated by package name. *)
 val transitive_closure: t list -> t list
+
+val runtime_closure: t list -> t list

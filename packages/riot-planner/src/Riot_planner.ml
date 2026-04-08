@@ -50,6 +50,7 @@ module Module_registry = Module_registry
 module Module_scanner = Module_scanner
 module Module_graph = Module_graph
 module Alias_module = Alias_module
+module Compilation_pipeline = Compilation_pipeline
 module Library_interface = Library_interface
 module Library_definition = Library_definition
 module Dependency = Dependency

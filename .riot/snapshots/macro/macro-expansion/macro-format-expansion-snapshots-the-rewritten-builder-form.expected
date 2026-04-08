@@ -1,0 +1,1 @@
+let msg = (let __riot_macro_format_buffer = Std.IO.Buffer.create 10 in Std.IO.Buffer.add_string __riot_macro_format_buffer "hello "; Std.IO.Buffer.add_string __riot_macro_format_buffer (name); Std.IO.Buffer.contents __riot_macro_format_buffer)

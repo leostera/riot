@@ -1,0 +1,14 @@
+[package]
+name = "macro"
+version = "0.0.1"
+description = "Procedural macro expansion utilities built on syn."
+license = "Apache-2.0"
+public = true
+
+[lib]
+path = "src/macro.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+syn = { path = "../syn", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }

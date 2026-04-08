@@ -1,0 +1,880 @@
+open Std
+
+(** [macro_runner] generates a small throwaway Riot workspace that embeds the
+    reachable macro providers directly into one executable.
+
+    That executable serves two jobs:
+    - expand macro-bearing source files during execution
+    - prove that the provider implementation actually exports the module path
+      and macro names its manifest declared *)
+type generated_provider = {
+  provider: Riot_model.Macro_provider.t;
+  module_name: string;
+  support_module_sources: (string * Path.t) list;
+}
+
+type dependency_source =
+  | Consumer_workspace
+  | Tool_workspace
+  | External_path
+
+type dependency = {
+  name: string;
+  path: Path.t;
+  source: dependency_source;
+}
+
+(* Runtime export surface reported back by the generated runner. This is the
+   shape we compare against manifest metadata to catch declaration drift. *)
+type runtime_provider = {
+  module_path: string list;
+  macros: string list;
+}
+
+type plan = {
+  provider_hash: string;
+  generated_dir: Path.t;
+  workspace_root: Path.t;
+  stamp_path: Path.t;
+  workspace_toml_path: Path.t;
+  toolchain_toml_path: Path.t;
+  build_dir_root: Path.t;
+  package_dir: Path.t;
+  package_toml_path: Path.t;
+  src_dir: Path.t;
+  library_path: Path.t;
+  main_path: Path.t;
+  binary_path: Path.t;
+  package_name: string;
+  binary_name: string;
+  dependencies: dependency list;
+  providers: generated_provider list;
+}
+
+let trace_enabled = fun () ->
+  match Env.var String ~name:"RIOT_MACRO_TRACE" with
+  | Some ("1" | "true" | "yes") -> true
+  | _ -> false
+
+let trace = fun message ->
+  if trace_enabled () then
+    eprintln ("[macro-runner] " ^ message)
+
+let sort_uniq_strings = fun values ->
+  List.sort_uniq String.compare values
+
+let provider_path_string = fun module_path ->
+  match module_path with
+  | [] -> "<root>"
+  | _ -> String.concat "." module_path
+
+let qualified_macro_name = fun module_path macro_name ->
+  let provider_path = provider_path_string module_path in
+  if String.equal provider_path "<root>" then
+    macro_name ^ "!"
+  else
+    provider_path ^ "." ^ macro_name ^ "!"
+
+let qualified_macro_names = fun module_path macros ->
+  macros
+  |> sort_uniq_strings
+  |> List.map (qualified_macro_name module_path)
+
+let with_list_suffix = fun label values ->
+  match values with
+  | [] -> ""
+  | _ -> "; " ^ label ^ ": " ^ String.concat ", " values
+
+let is_shell_safe_char = function
+  | 'a' .. 'z'
+  | 'A' .. 'Z'
+  | '0' .. '9'
+  | '_'
+  | '-'
+  | '.'
+  | '/'
+  | ':'
+  | '+'
+  | '='
+  | ','
+  | '@'
+  | '%' -> true
+  | _ -> false
+
+let shell_quote = fun value ->
+  if String.equal value "" then
+    "''"
+  else if String.for_all is_shell_safe_char value then
+    value
+  else
+    "'" ^ String.concat "'\"'\"'" (String.split_on_char '\'' value) ^ "'"
+
+let sanitize_component = fun text ->
+  String.map
+    (fun ch ->
+      if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') then
+        ch
+      else
+        '_')
+    text
+
+let generated_module_name = fun (provider: Riot_model.Macro_provider.t) ->
+  "Provider_" ^ sanitize_component provider.package_name ^ "_" ^ sanitize_component provider.module_name
+
+let provider_source_path = fun (provider: Riot_model.Macro_provider.t) ->
+  if Path.is_absolute provider.source_path then
+    provider.source_path
+  else
+    Path.(provider.package_path / provider.source_path)
+
+let ocaml_module_name_of_path = fun path ->
+  let base = Path.basename path |> Path.v |> Path.remove_extension |> Path.to_string in
+  if String.length base = 0 then
+    "Generated"
+  else
+    String.uppercase_ascii (String.sub base 0 1) ^ String.sub base 1 (String.length base - 1)
+
+let support_module_sources = fun (provider: Riot_model.Macro_provider.t) ->
+  let source_path = provider_source_path provider in
+  let provider_dir = Path.dirname source_path in
+  let provider_basename = Path.basename source_path in
+  match Fs.read_dir provider_dir with
+  | Error _ -> []
+  | Ok iter ->
+      Std.Iter.MutIterator.to_list iter
+      |> List.filter_map (fun entry ->
+        let source_path = Path.(provider_dir / entry) in
+        let entry_name = Path.basename entry in
+        if
+          String.equal entry_name provider_basename
+          || not (String.ends_with ~suffix:".ml" entry_name)
+        then
+          None
+        else
+          Some (ocaml_module_name_of_path source_path, source_path))
+      |> List.sort
+        (fun (left_name, left_path) (right_name, right_path) ->
+          match String.compare left_name right_name with
+          | 0 -> String.compare (Path.to_string left_path) (Path.to_string right_path)
+          | cmp -> cmp)
+
+let file_content_hash = fun path ->
+  match Fs.read path with
+  | Ok source -> Crypto.hash_string source |> Crypto.Digest.hex
+  | Error _ -> "missing"
+
+let provider_fingerprint = fun (provider: Riot_model.Macro_provider.t) ->
+  let source_path = provider_source_path provider in
+  let support_hashes = support_module_sources provider
+  |> List.map
+    (fun (module_name, source_path) ->
+      module_name ^ ":" ^ Path.to_string source_path ^ ":" ^ file_content_hash source_path)
+  |> String.concat "," in
+  String.concat
+    ":"
+    [
+      Riot_model.Macro_provider.fingerprint provider;
+      Path.to_string source_path;
+      file_content_hash source_path;
+      support_hashes;
+    ]
+
+let validate_providers = Macro_provider_contract.validate_all
+
+let runtime_provider_of_manifest = fun (provider: Riot_model.Macro_provider.t) ->
+  { module_path = provider.module_path; macros = sort_uniq_strings provider.macros }
+
+let generated_provider = fun provider ->
+  {
+    provider;
+    module_name = generated_module_name provider;
+    support_module_sources = support_module_sources provider
+  }
+
+let normalized_path_string = fun path -> Path.normalize path |> Path.to_string
+
+let path_equal = fun left right ->
+  String.equal (normalized_path_string left) (normalized_path_string right)
+
+let dependency = fun ~source name path -> { name; path; source }
+
+let option_or_else_lazy = fun fallback value ->
+  match value with
+  | Some _ -> value
+  | None -> fallback ()
+
+let scan_workspace_packages = fun workspace_root ->
+  let workspace_manager = Riot_model.Workspace_manager.create () in
+  match Riot_model.Workspace_manager.scan workspace_manager workspace_root with
+  | Ok (workspace, _errors) -> Riot_model.Workspace.(workspace.packages)
+  | Error _ -> []
+
+let has_workspace_package = fun workspace_root name ->
+  match Fs.exists Path.(workspace_root / Path.v "packages" / Path.v name / Path.v "riot.toml") with
+  | Ok true -> true
+  | _ -> false
+
+let tool_workspace_root = fun consumer_workspace_root ->
+  if
+    List.for_all
+      (has_workspace_package consumer_workspace_root)
+      [ "std"; "syn"; "macro"; "riot-model" ]
+  then
+    consumer_workspace_root
+  else
+    match Env.current_dir () with
+    | Ok cwd when List.for_all (has_workspace_package cwd) [ "std"; "syn"; "macro"; "riot-model" ] -> cwd
+    | _ -> consumer_workspace_root
+
+let find_package_by_name = fun packages name ->
+  List.find_opt
+    (fun (pkg: Riot_model.Package.t) ->
+      String.equal pkg.name name)
+    packages
+
+let find_package_by_path = fun packages path ->
+  List.find_opt (fun (pkg: Riot_model.Package.t) -> path_equal pkg.path path) packages
+
+let dependency_from_package = fun ~source (pkg: Riot_model.Package.t) ->
+  dependency ~source pkg.name pkg.path
+
+let resolve_dependency_path = fun ~package_path path ->
+  if Path.is_absolute path then
+    Path.normalize path
+  else
+    Path.normalize Path.(package_path / path)
+
+let is_generated_artifact_entry = fun entry_name ->
+  match entry_name with
+  | ".git"
+  | ".riot"
+  | "_build"
+  | "target" -> true
+  | _ -> false
+
+let package_lookup_order = fun ~consumer_packages ~tool_packages (provider: Riot_model.Macro_provider.t) ->
+  [
+    find_package_by_path consumer_packages provider.package_path |> Option.map (fun pkg -> Consumer_workspace, pkg);
+    find_package_by_path tool_packages provider.package_path |> Option.map (fun pkg -> Tool_workspace, pkg);
+    find_package_by_name consumer_packages provider.package_name |> Option.map (fun pkg -> Consumer_workspace, pkg);
+    find_package_by_name tool_packages provider.package_name |> Option.map (fun pkg -> Tool_workspace, pkg);
+  ]
+
+let first_some = fun options ->
+  let rec loop = function
+    | [] -> None
+    | Some value :: _ -> Some value
+    | None :: rest -> loop rest
+  in
+  loop options
+
+let dependency_entries_for_workspace = fun workspace_root providers ->
+  let consumer_packages = scan_workspace_packages workspace_root in
+  let tool_workspace_root = tool_workspace_root workspace_root in
+  let tool_packages =
+    if path_equal tool_workspace_root workspace_root then
+      []
+    else
+      scan_workspace_packages tool_workspace_root
+  in
+  let resolve_workspace_package ~source name =
+    match source with
+    | Consumer_workspace -> find_package_by_name consumer_packages name
+    |> Option.map (dependency_from_package ~source:Consumer_workspace)
+    |> option_or_else_lazy
+      (fun () ->
+        find_package_by_name tool_packages name
+        |> Option.map (dependency_from_package ~source:Tool_workspace))
+    | Tool_workspace -> find_package_by_name tool_packages name
+    |> Option.map (dependency_from_package ~source:Tool_workspace)
+    |> option_or_else_lazy
+      (fun () ->
+        find_package_by_name consumer_packages name
+        |> Option.map (dependency_from_package ~source:Consumer_workspace))
+    | External_path -> None
+  in
+
+  let package_for_dependency (dep: dependency) =
+    match dep.source with
+    | Consumer_workspace -> find_package_by_path consumer_packages dep.path
+    | Tool_workspace -> find_package_by_path tool_packages dep.path
+    | External_path -> None
+  in
+
+  let dependency_source_for_lookup = function
+    | Consumer_workspace -> Consumer_workspace
+    | Tool_workspace -> Tool_workspace
+    | External_path -> External_path
+  in
+
+  let resolve_path_dependency ~source ~package_path dep_name path =
+    let abs_path = resolve_dependency_path ~package_path path in
+    let package_lookup =
+      match source with
+      | Consumer_workspace -> consumer_packages
+      | Tool_workspace -> tool_packages
+      | External_path -> []
+    in
+    find_package_by_path package_lookup abs_path
+    |> Option.map
+      (fun pkg ->
+        dependency_from_package ~source:(dependency_source_for_lookup source) pkg)
+    |> option_or_else_lazy
+      (fun () -> Some (dependency ~source:External_path dep_name abs_path))
+  in
+
+  let resolve_dependency_entry ~source ~package_path (dep: Riot_model.Package.dependency) =
+    match dep.source with
+    | { workspace=true; _ } ->
+        resolve_workspace_package ~source dep.name
+    | { builtin=true; _ } ->
+        None
+    | { path=Some path; _ } ->
+        resolve_path_dependency ~source ~package_path dep.name path
+    | { path=None; _ } ->
+        None
+  in
+
+  let resolve_provider_package provider =
+    package_lookup_order ~consumer_packages ~tool_packages provider
+    |> first_some
+  in
+
+  let provider_dependency_entries =
+    providers
+    |> List.concat_map
+      (fun ({ provider; _ }: generated_provider) ->
+        match resolve_provider_package provider with
+        | None -> []
+        | Some (source, pkg) -> Riot_model.Package.all_dependencies pkg
+        |> List.filter_map (resolve_dependency_entry ~source ~package_path:pkg.path))
+  in
+  let core_dependencies = [ "std"; "syn"; "macro"; "riot-model" ]
+  |> List.filter_map
+    (fun name ->
+      find_package_by_name tool_packages name
+      |> Option.map (dependency_from_package ~source:Tool_workspace)) in
+  let rec expand seen acc = function
+    | [] -> List.rev acc
+    | dep :: rest ->
+        if List.mem dep.name seen then
+          expand seen acc rest
+        else
+          let next =
+            match package_for_dependency dep with
+            | None -> []
+            | Some pkg -> Riot_model.Package.all_dependencies pkg
+            |> List.filter_map (resolve_dependency_entry ~source:dep.source ~package_path:pkg.path)
+          in
+          expand (dep.name :: seen) (dep :: acc) (next @ rest)
+  in
+  expand [] [] (core_dependencies @ provider_dependency_entries)
+
+let rec tree_hash_entry = fun path ->
+  let name = Path.basename path in
+  if is_generated_artifact_entry name then
+    None
+  else
+    match Fs.is_dir path with
+    | Ok true -> (
+        match Fs.read_dir path with
+        | Error _ -> Some ("dir:" ^ name ^ ":missing")
+        | Ok iter ->
+            let children =
+              Std.Iter.MutIterator.to_list iter
+              |> List.filter_map
+                (fun entry ->
+                  tree_hash_entry Path.(path / entry))
+              |> List.sort String.compare
+            in
+            Some ("dir:" ^ name ^ "[" ^ String.concat "," children ^ "]")
+      )
+    | _ ->
+        Some ("file:" ^ name ^ ":" ^ file_content_hash path)
+
+let dependency_fingerprint = fun (dep: dependency) ->
+  let source_tag =
+    match dep.source with
+    | Consumer_workspace -> "consumer"
+    | Tool_workspace -> "tool"
+    | External_path -> "external"
+  in
+  let tree_hash =
+    match tree_hash_entry dep.path with
+    | Some tree_hash -> tree_hash
+    | None -> "skipped"
+  in
+  String.concat ":" [ dep.name; source_tag; Path.to_string dep.path; tree_hash ]
+
+let local_toolchain_source = fun workspace_root ->
+  let direct_config = Path.(workspace_root / Path.v "ocaml-toolchain.toml") in
+  let local_compiler = Path.(workspace_root / Path.v "vendor" / Path.v "ocaml" / Path.v "compiler") in
+  match Fs.exists direct_config with
+  | Ok true -> Some (`Copy direct_config)
+  | _ -> (
+      match Fs.is_dir local_compiler with
+      | Ok true -> Some (`Generate local_compiler)
+      | _ -> None
+    )
+
+let toolchain_input_fingerprint = fun workspace_root ->
+  match local_toolchain_source workspace_root with
+  | Some (`Copy source_path) ->
+      "copy:" ^ Path.to_string source_path ^ ":" ^ file_content_hash source_path
+  | Some (`Generate compiler_path) ->
+      "generate:" ^ Path.to_string compiler_path
+  | None -> "none"
+
+let providers_hash = fun ~workspace_root providers ->
+  let generated_providers = List.map generated_provider providers in
+  let dependencies = dependency_entries_for_workspace workspace_root generated_providers in
+  let provider_fingerprints =
+    providers
+    |> List.sort Riot_model.Macro_provider.compare
+    |> List.map provider_fingerprint
+  in
+  let dependency_fingerprints =
+    dependencies
+    |> List.sort
+      (fun left right ->
+        match String.compare left.name right.name with
+        | 0 -> String.compare (Path.to_string left.path) (Path.to_string right.path)
+        | cmp -> cmp)
+    |> List.map dependency_fingerprint
+  in
+  String.concat
+    "\n"
+    (
+      [ "toolchain:" ^ toolchain_input_fingerprint workspace_root ]
+      @ provider_fingerprints
+      @ dependency_fingerprints
+    )
+  |> Crypto.hash_string
+  |> Crypto.Digest.hex
+
+let plan = fun ~workspace_root ~target_dir_root providers ->
+  let generated_providers = List.map generated_provider providers in
+  let dependencies = dependency_entries_for_workspace workspace_root generated_providers in
+  let hash = providers_hash ~workspace_root providers in
+  let generated_dir = Path.(target_dir_root / Path.v "macro" / Path.v "macro-runner" / Path.v hash) in
+  let workspace_root = Path.(generated_dir / Path.v "workspace") in
+  let build_dir_root = Path.(generated_dir / Path.v "build") in
+  let package_dir = Path.(workspace_root / Path.v "packages" / Path.v "macro-runner") in
+  let src_dir = Path.(package_dir / Path.v "src") in
+  let package_name = "macro-runner" in
+  let binary_name = "macro-runner" in
+  {
+    provider_hash = hash;
+    generated_dir;
+    workspace_root;
+    stamp_path =
+      Path.(generated_dir / Path.v "inputs.sha256");
+    workspace_toml_path =
+      Path.(workspace_root / Path.v "riot.toml");
+    toolchain_toml_path =
+      Path.(workspace_root / Path.v "ocaml-toolchain.toml");
+    build_dir_root;
+    package_dir;
+    package_toml_path =
+      Path.(package_dir / Path.v "riot.toml");
+    src_dir;
+    library_path =
+      Path.(src_dir / Path.v "macro_runner.ml");
+    main_path =
+      Path.(src_dir / Path.v "main.ml");
+    binary_path =
+      Path.(build_dir_root
+      / Path.v "debug"
+      / Path.v (Riot_model.Riot_dirs.host_target ())
+      / Path.v "out"
+      / Path.v (package_name ^ "/" ^ binary_name));
+    package_name;
+    binary_name;
+    dependencies;
+    providers = generated_providers;
+  }
+
+let workspace_root = fun plan -> plan.workspace_root
+
+(* Support modules live alongside the declared provider source and are embedded
+   directly into the generated runner so helper code travels with the provider. *)
+let embedded_provider_module_source = fun (provider: generated_provider) ->
+  let source_path = provider_source_path provider.provider in
+  let source = Fs.read source_path
+  |> Result.expect ~msg:(("failed to read macro provider source " ^ Path.to_string source_path)) in
+  String.concat "\n"
+    [ "module " ^ provider.module_name ^ " = struct"; String.concat "\n"
+        (
+          List.map
+            (fun (module_name, source_path) ->
+              let support_source = Fs.read source_path
+              |> Result.expect
+                ~msg:(("failed to read macro support source " ^ Path.to_string source_path)) in
+              String.concat "\n" [ "module " ^ module_name ^ " = struct"; support_source; "end"; "" ])
+            provider.support_module_sources
+        ); source; "end"; ""; ]
+
+let provider_line = fun (provider: generated_provider) -> "    " ^ provider.module_name ^ ".provider ();"
+
+let workspace_toml_source = fun plan ->
+  let members = [ "packages/" ^ plan.package_name ]
+  @ List.map (fun (dep: dependency) -> "packages/" ^ dep.name) plan.dependencies
+  |> List.sort_uniq String.compare in
+  String.concat
+    "\n"
+    [
+      "[workspace]";
+      "members = [" ^ String.concat ", " (List.map (fun member -> "\"" ^ member ^ "\"") members) ^ "]";
+      "";
+      "[riot]";
+      "target_dir = \"" ^ Path.to_string plan.build_dir_root ^ "\"";
+      "";
+    ]
+
+let package_toml_source = fun plan ->
+  let dependency_lines = plan.dependencies
+  |> List.map
+    (fun (dep: dependency) -> dep.name ^ " = { path = \"../" ^ dep.name ^ "\", version = \"*\" }") in
+  String.concat "\n"
+    [
+      "[package]";
+      "name = \"" ^ plan.package_name ^ "\"";
+      "version = \"0.1.0\"";
+      "";
+      "[lib]";
+      "path = \"src/macro_runner.ml\"";
+      "";
+      "[[bin]]";
+      "name = \"" ^ plan.binary_name ^ "\"";
+      "path = \"src/main.ml\"";
+      "";
+      "[dependencies]";
+      String.concat "\n" dependency_lines;
+      "";
+    ]
+
+let library_source = fun plan ->
+  String.concat "\n"
+    [
+      "open Std";
+      "";
+      String.concat "\n" (List.map embedded_provider_module_source plan.providers);
+      "let providers () =";
+      "  [";
+      String.concat "\n" (List.map provider_line plan.providers);
+      "  ]";
+      "";
+      "let provider_metadata_json provider =";
+      "  Data.Json.Object [";
+      "    (\"module_path\", Data.Json.Array (List.map (fun segment -> Data.Json.String segment) (Macro.Provider.module_path provider)));";
+      "    (\"macros\", Data.Json.Array (List.map (fun macro_name -> Data.Json.String macro_name) (Macro.Provider.macro_names provider)));";
+      "  ]";
+      "";
+      "let describe_providers () =";
+      "  providers ()";
+      "  |> List.map provider_metadata_json";
+      "  |> fun providers -> Data.Json.Array providers";
+      "  |> Data.Json.to_string";
+      "";
+      "let expand_file ~input_path ~output_path =";
+      "  match Fs.read input_path with";
+      "  | Error err -> Error (\"failed to read macro input: \" ^ IO.error_message err)";
+      "  | Ok source ->";
+      "      match Macro.expand_source ~providers:(providers ()) ~filename:input_path source with";
+      "      | Error err -> Error (Macro.error_message err)";
+      "      | Ok { Macro.source = expanded; _ } ->";
+      "          match Fs.write expanded output_path with";
+      "          | Ok () -> Ok ()";
+      "          | Error err -> Error (\"failed to write macro output: \" ^ IO.error_message err)";
+      "";
+      "let main ~args =";
+      "  match args with";
+      "  | _program :: \"describe\" :: [] ->";
+      "      println (describe_providers ());";
+      "      Ok ()";
+      "  | _program :: \"expand\" :: input_path :: output_path :: [] ->";
+      "      (match expand_file ~input_path:(Path.v input_path) ~output_path:(Path.v output_path) with";
+      "      | Ok () -> Ok ()";
+      "      | Error err -> Error (Failure err))";
+      "  | _ -> Error (Failure \"usage: macro-runner describe | macro-runner expand <input> <output>\")";
+      "";
+    ]
+
+let main_source = String.concat
+  "\n"
+  [ "open Std"; ""; "let () ="; "  Actors.run ~main:Macro_runner.main ~args:Env.args ()"; ""; ]
+
+let toolchain_toml_source = fun compiler_path ->
+  String.concat
+    "\n"
+    [ "[toolchain]"; "version = { path = \"" ^ Path.to_string compiler_path ^ "\" }"; ""; ]
+
+let write_file = fun path content ->
+  Fs.write content path |> Result.expect ~msg:(("failed to write " ^ Path.to_string path))
+
+let remove_dir_if_exists = fun path ->
+  match Fs.exists path with
+  | Ok true -> Fs.remove_dir_all path
+  |> Result.expect ~msg:(("failed to clean generated macro runner dir " ^ Path.to_string path))
+  | _ -> ()
+
+let ensure_directories = fun plan ->
+  List.iter
+    (fun path ->
+      Fs.create_dir_all path
+      |> Result.expect ~msg:(("failed to create generated macro runner dir " ^ Path.to_string path)))
+    [ plan.workspace_root; plan.package_dir; plan.src_dir ]
+
+let rec copy_directory = fun ~src ~dst ->
+  Fs.create_dir_all dst
+  |> Result.expect ~msg:(("failed to create copied macro dependency dir " ^ Path.to_string dst));
+  match Fs.read_dir src with
+  | Error err -> panic
+    ("failed to read macro dependency dir " ^ Path.to_string src ^ ": " ^ IO.error_message err)
+  | Ok iter ->
+      Std.Iter.MutIterator.to_list iter |> List.iter
+        (fun entry ->
+          if is_generated_artifact_entry (Path.basename entry) then
+            ()
+          else
+            let src_path = Path.(src / entry) in
+            let dst_path = Path.(dst / entry) in
+            match Fs.is_dir src_path with
+            | Ok true -> copy_directory ~src:src_path ~dst:dst_path
+            | _ -> Fs.copy ~src:src_path ~dst:dst_path
+            |> Result.expect ~msg:(("failed to copy macro dependency file " ^ Path.to_string src_path)))
+
+let materialize_dependency_packages = fun plan ->
+  List.iter
+    (fun (dep: dependency) ->
+      let destination = Path.(plan.workspace_root / Path.v "packages" / Path.v dep.name) in
+      copy_directory ~src:dep.path ~dst:destination)
+    plan.dependencies
+
+let materialize_toolchain = fun workspace_root plan ->
+  match local_toolchain_source workspace_root with
+  | Some (`Copy source_path) -> Fs.copy ~src:source_path ~dst:plan.toolchain_toml_path
+  |> Result.expect
+    ~msg:(("failed to copy " ^ Path.to_string source_path ^ " into macro runner workspace"))
+  | Some (`Generate compiler_path) -> write_file
+    plan.toolchain_toml_path
+    (toolchain_toml_source compiler_path)
+  | None -> ()
+
+let binary_path = fun plan -> plan.binary_path
+
+let write_stamp = fun plan ->
+  write_file plan.stamp_path plan.provider_hash
+
+let stamp_matches = fun plan ->
+  match Fs.read plan.stamp_path with
+  | Ok stamp -> String.equal (String.trim stamp) plan.provider_hash
+  | Error _ -> false
+
+let has_materialized_workspace = fun plan ->
+  stamp_matches plan
+  && Result.unwrap_or ~default:false (Fs.exists plan.workspace_toml_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.package_toml_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.library_path)
+  && Result.unwrap_or ~default:false (Fs.exists plan.main_path)
+
+let materialize = fun ~workspace_root ~target_dir_root providers ->
+  let plan = plan ~workspace_root ~target_dir_root providers in
+  if has_materialized_workspace plan then
+    trace ("reusing generated runner workspace " ^ Path.to_string plan.generated_dir)
+  else
+    (
+      trace ("materializing generated runner at " ^ Path.to_string plan.generated_dir);
+      remove_dir_if_exists plan.generated_dir;
+      ensure_directories plan;
+      materialize_dependency_packages plan;
+      write_file plan.workspace_toml_path (workspace_toml_source plan);
+      materialize_toolchain workspace_root plan;
+      write_file plan.package_toml_path (package_toml_source plan);
+      write_file plan.library_path (library_source plan);
+      write_file plan.main_path main_source;
+      write_stamp plan
+    );
+  plan
+
+let ensure_built = fun plan ->
+  match Fs.exists plan.binary_path with
+  | Ok true when stamp_matches plan ->
+      trace ("reusing generated runner binary " ^ Path.to_string plan.binary_path);
+      Ok ()
+  | _ ->
+      trace ("building generated runner package " ^ plan.package_name);
+      let shell_command = "cd "
+      ^ shell_quote (Path.to_string plan.workspace_root)
+      ^ " && riot build "
+      ^ shell_quote plan.package_name in
+      let command = Command.make "/bin/sh" ~args:[ "-lc"; shell_command ] in
+      trace ("generated runner build command: " ^ shell_command);
+      match Command.status command with
+      | Ok status when Int.equal status 0 ->
+          trace ("generated runner build finished: " ^ Path.to_string plan.binary_path);
+          Ok ()
+      | Ok status ->
+          Error ("failed to build macro runner: exited with status " ^ Int.to_string status)
+      | Error (Command.SystemError error) ->
+          Error ("failed to build macro runner: " ^ error)
+
+let command_details = fun output ->
+  match String.trim output.Command.stderr with
+  | "" -> output.Command.stdout
+  | stderr -> stderr
+
+let run_runner_command = fun plan args ~failure_label ->
+  let command = Command.make
+    (Path.to_string plan.binary_path)
+    ~cwd:(Path.to_string plan.workspace_root)
+    ~args in
+  match Command.output command with
+  | Ok output when Int.equal output.Command.status 0 -> Ok output
+  | Ok output -> Error (failure_label ^ ": " ^ command_details output)
+  | Error (Command.SystemError error) -> Error (failure_label ^ ": " ^ error)
+
+let decode_json_string_list = fun label values ->
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc |> sort_uniq_strings)
+    | Data.Json.String value :: rest -> loop (value :: acc) rest
+    | _ -> Error ("invalid generated macro runner " ^ label ^ " payload")
+  in
+  loop [] values
+
+let runtime_provider_of_json = function
+  | Data.Json.Object fields -> (
+      match List.assoc_opt "module_path" fields, List.assoc_opt "macros" fields with
+      | Some (Data.Json.Array module_path), Some (Data.Json.Array macros) -> (
+          match decode_json_string_list "module_path" module_path, decode_json_string_list "macros" macros with
+          | Ok module_path, Ok macros -> Ok { module_path; macros }
+          | Error err, _
+          | _, Error err -> Error err
+        )
+      | _ -> Error "invalid generated macro runner provider payload"
+    )
+  | _ -> Error "generated macro runner provider payload must be an object"
+
+let runtime_providers_of_json = function
+  | Data.Json.Array providers ->
+      let rec loop acc = function
+        | [] -> Ok (List.rev acc)
+        | provider_json :: rest -> (
+            match runtime_provider_of_json provider_json with
+            | Ok provider -> loop (provider :: acc) rest
+            | Error _ as err -> err
+          )
+      in
+      loop [] providers
+  | _ -> Error "generated macro runner describe output must be a JSON array"
+
+(* The generated runner is the source of truth for runtime exports. We ask it to
+   describe the embedded providers and compare that back against manifest data
+   before running expansion. *)
+let read_runtime_provider_exports = fun plan ->
+  match run_runner_command plan [ "describe" ] ~failure_label:"macro runner describe failed" with
+  | Ok output -> (
+      match Data.Json.of_string output.Command.stdout with
+      | Ok json -> runtime_providers_of_json json
+      | Error err -> Error ("failed to parse generated macro runner describe output: " ^ Data.Json.error_to_string err)
+    )
+  | Error _ as err -> err
+
+let validate_runtime_provider_exports = fun expected actual ->
+  let expected =
+    expected
+    |> List.map runtime_provider_of_manifest
+    |> List.sort
+      (fun left right ->
+        String.compare
+          (provider_path_string left.module_path)
+          (provider_path_string right.module_path))
+  in
+  let actual =
+    actual
+    |> List.map (fun provider -> { provider with macros = sort_uniq_strings provider.macros })
+    |> List.sort
+      (fun left right ->
+        String.compare
+          (provider_path_string left.module_path)
+          (provider_path_string right.module_path))
+  in
+  let expected_paths = expected |> List.map (fun provider -> provider_path_string provider.module_path) |> sort_uniq_strings in
+  let actual_paths = actual |> List.map (fun provider -> provider_path_string provider.module_path) |> sort_uniq_strings in
+  if not (expected_paths = actual_paths) then
+    Error ("macro provider export mismatch"
+    ^ with_list_suffix "manifest declares providers" expected_paths
+    ^ with_list_suffix "runner reported providers" actual_paths)
+  else
+    let rec loop = function
+      | [] -> Ok ()
+      | provider :: rest ->
+          let provider_path = provider_path_string provider.module_path in
+          match List.find_opt
+            (fun actual_provider ->
+              actual_provider.module_path = provider.module_path)
+            actual with
+          | None ->
+              Error ("macro provider export mismatch: manifest declares provider " ^ provider_path ^ " but the runner did not export it")
+          | Some actual_provider ->
+              if provider.macros = actual_provider.macros then
+                loop rest
+              else
+                Error ("macro provider export mismatch for provider "
+                ^ provider_path
+                ^ with_list_suffix "manifest declares" (qualified_macro_names provider.module_path provider.macros)
+                ^ with_list_suffix "runner exports" (qualified_macro_names actual_provider.module_path actual_provider.macros))
+    in
+    loop expected
+
+let validate_built_provider_exports = fun providers plan ->
+  match read_runtime_provider_exports plan with
+  | Error _ as err -> err
+  | Ok actual_providers -> (
+      match validate_runtime_provider_exports providers actual_providers with
+      | Ok () -> Ok plan
+      | Error _ as err -> err
+    )
+
+let ensure_runner_ready = fun providers plan ->
+  match ensure_built plan with
+  | Error _ as err -> err
+  | Ok () -> validate_built_provider_exports providers plan
+
+(* Preparing a runner plan means proving both halves of the provider contract:
+   the provider source has a valid [let provider () = ...] entrypoint, and the
+   built runner reports the same exported surface the manifest declared. *)
+let prepare_plan = fun ~workspace_root ~target_dir_root providers ->
+  match validate_providers providers with
+  | Error err -> Error (Macro_error.message err)
+  | Ok () ->
+      materialize ~workspace_root ~target_dir_root providers
+      |> ensure_runner_ready providers
+
+let validate_provider_exports = fun ~workspace_root ~target_dir_root providers ->
+  match prepare_plan ~workspace_root ~target_dir_root providers with
+  | Ok _ -> Ok ()
+  | Error _ as err -> err
+
+let run_file = fun ~workspace_root ~target_dir_root providers ~input_path ~output_path ->
+  trace
+    ("expanding "
+    ^ Path.to_string input_path
+    ^ " with providers ["
+    ^ String.concat
+      ", "
+      (List.map (fun (provider: Riot_model.Macro_provider.t) -> provider.package_name) providers)
+    ^ "]");
+  match prepare_plan ~workspace_root ~target_dir_root providers with
+  | Error _ as err -> err
+  | Ok plan -> (
+      trace ("running generated runner " ^ Path.to_string plan.binary_path);
+      match run_runner_command
+        plan
+        [ "expand"; Path.to_string input_path; Path.to_string output_path; ]
+        ~failure_label:"macro expansion runner failed" with
+      | Ok _output ->
+          trace ("macro expansion finished for " ^ Path.to_string input_path);
+          Ok ()
+      | Error _ as err -> err
+    )

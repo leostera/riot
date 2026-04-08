@@ -12,6 +12,7 @@ RFDs use a small lifecycle vocabulary:
 These are the RFDs that are still only `presented` and therefore the most obvious candidates for follow-up work:
 
 - `RFD0008` - Macro
+- `RFD0030` - Macro V1 Amendment to RFD0008
 - `RFD0033` - Remote Source Install and Run
 - `RFD0035` - New Test, Bench, and Example Target Layout
 

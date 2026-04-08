@@ -70,6 +70,8 @@ type t =
   (** Infix operator: `a + b`, `x :: xs` *)
   | PREFIX_EXPR
   (** Prefix operator: `-x`, `!ref` *)
+  | MACRO_EXPR
+  (** Function-like macro invocation: `Macro.format! expr` *)
   | IF_EXPR
   (** If expression: `if cond then e1 else e2` *)
   | MATCH_EXPR

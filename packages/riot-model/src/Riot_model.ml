@@ -3,6 +3,7 @@ module Build_ctx = Build_ctx
 module Fix_provider = Fix_provider
 module Fmt_config = Fmt_config
 module Lockfile = Lockfile
+module Macro_provider = Macro_provider
 module Package_command = Package_command
 module Error = Error
 module Event = Event

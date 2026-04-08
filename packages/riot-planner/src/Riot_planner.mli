@@ -50,6 +50,8 @@ module Action_node = Action_node
 
 module Alias_module = Alias_module
 
+module Compilation_pipeline = Compilation_pipeline
+
 module Dependency = Dependency
 
 module Module_graph = Module_graph

@@ -34,6 +34,8 @@ type t =
   (* x + y *)
   | PREFIX_EXPR
   (* -x, !ref *)
+  | MACRO_EXPR
+  (* format! expr *)
   | IF_EXPR
   (* if c then e1 else e2 *)
   | MATCH_EXPR
@@ -306,6 +308,7 @@ let to_string = function
   | OPTIONAL_ARG -> "OPTIONAL_ARG"
   | INFIX_EXPR -> "INFIX_EXPR"
   | PREFIX_EXPR -> "PREFIX_EXPR"
+  | MACRO_EXPR -> "MACRO_EXPR"
   | IF_EXPR -> "IF_EXPR"
   | MATCH_EXPR -> "MATCH_EXPR"
   | FUN_EXPR -> "FUN_EXPR"
@@ -444,6 +447,7 @@ let from_string = function
   | "OPTIONAL_ARG" -> Some OPTIONAL_ARG
   | "INFIX_EXPR" -> Some INFIX_EXPR
   | "PREFIX_EXPR" -> Some PREFIX_EXPR
+  | "MACRO_EXPR" -> Some MACRO_EXPR
   | "IF_EXPR" -> Some IF_EXPR
   | "MATCH_EXPR" -> Some MATCH_EXPR
   | "FUN_EXPR" -> Some FUN_EXPR

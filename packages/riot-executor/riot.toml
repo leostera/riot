@@ -10,6 +10,7 @@ path = "src/riot_executor.ml"
 
 [dependencies]
 std = { path = "../riot-planner", version = "*" }
+macro = { path = "../macro", version = "*" }
 riot-model = { path = "../riot-planner", version = "*" }
 riot-planner = { path = "../riot-planner", version = "*" }
 riot-toolchain = { path = "../riot-planner", version = "*" }

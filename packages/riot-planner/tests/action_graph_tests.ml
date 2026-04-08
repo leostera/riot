@@ -351,6 +351,146 @@ let test_release_profile_flags_flow_into_compile_actions = fun _ctx ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
+let test_macro_modules_write_expanded_source_before_compile = fun () ->
+  match
+    Fs.with_tempdir ~prefix:"planner_macro_module"
+      (fun tmpdir ->
+        let package_root = Path.(tmpdir / Path.v "packages" / Path.v "demo") in
+        let src_dir = Path.(package_root / Path.v "src") in
+        let source_path = Path.(src_dir / Path.v "demo.ml") in
+        let _ = Fs.create_dir_all src_dir |> Result.expect ~msg:"create src dir failed" in
+        let _ = Fs.write "let message name = format! \"hello {}\" name\n" source_path
+        |> Result.expect ~msg:"write ml source failed" in
+        let workspace = Tusk_model.Workspace.make ~root:tmpdir ~packages:[] () in
+        let store = Tusk_store.Store.create ~workspace in
+        let package = make_package_with_paths
+          ~name:"demo"
+          ~path:package_root
+          ~relative_path:(Path.v "packages/demo") in
+        let ctx = Tusk_model.Build_ctx.make
+          ~session_id:(Tusk_model.Session_id.of_string "test-session")
+          ~profile:Tusk_model.Profile.debug
+          () in
+        let module_graph = G.make () in
+        let demo_module = Tusk_model.Module.make
+          ~namespace:Tusk_model.Namespace.empty
+          ~filename:(Path.v "src/demo.ml") in
+        let _ = G.add_node
+          module_graph
+          (Tusk_planner.Module_node.make_ml
+            demo_module
+            (Tusk_planner.Module_node.Concrete (Path.v "src/demo.ml"))) in
+        let action_graph, _ = Tusk_planner.Action_graph.from_module_graph
+          ~package
+          ~profile:Tusk_model.Profile.debug
+          ~ctx
+          ~toolchain:test_toolchain
+          ~store
+          ~depset:[]
+          ~needs_unix:false
+          ~needs_dynlink:false
+          module_graph in
+        match Tusk_planner.Action_graph.nodes action_graph with
+        | [ node ] -> (
+            match node.value.actions with
+            | [
+                Tusk_planner.Action.WriteFile { destination; content };
+                Tusk_planner.Action.CompileImplementation { source; _ };
+              ] ->
+                if not (Path.equal destination (Path.v "src/demo.ml")) then
+                  Error "expected macro write action to target the original module path"
+                else if not (Path.equal source (Path.v "src/demo.ml")) then
+                  Error "expected macro-expanded compile action to preserve the original module path"
+                else if node.value.srcs != [ Path.v "src/demo.ml" ] then
+                  Error "expected action hashing to keep the original source path"
+                else if not (String.contains content "Stdlib.Buffer.add_string") then
+                  Error "expected expanded module source to append through Stdlib.Buffer.add_string"
+                else if not (String.contains content "\"hello \"") then
+                  Error "expected expanded module source to preserve literal builder segments"
+                else if not (String.contains content "(name)") then
+                  Error "expected expanded module source to append the supplied argument"
+                else
+                  Ok ()
+            | _ ->
+                Error "expected a write-then-compile action node for a macro-bearing module"
+          )
+        | _ ->
+            Error "expected a single action node for the test module")
+  with
+  | Ok result -> result
+  | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
+
+let test_macro_binaries_write_expanded_source_before_compile = fun () ->
+  match
+    Fs.with_tempdir ~prefix:"planner_macro_binary"
+      (fun tmpdir ->
+        let package_root = Path.(tmpdir / Path.v "packages" / Path.v "demo") in
+        let bin_dir = Path.(package_root / Path.v "bin") in
+        let source_path = Path.(bin_dir / Path.v "main.ml") in
+        let _ = Fs.create_dir_all bin_dir |> Result.expect ~msg:"create bin dir failed" in
+        let _ = Fs.write "let () = ignore (format! \"hello {}\" name)\n" source_path
+        |> Result.expect ~msg:"write binary source failed" in
+        let workspace = Tusk_model.Workspace.make ~root:tmpdir ~packages:[] () in
+        let store = Tusk_store.Store.create ~workspace in
+        let package = make_package_with_paths
+          ~name:"demo"
+          ~path:package_root
+          ~relative_path:(Path.v "packages/demo") in
+        let ctx = Tusk_model.Build_ctx.make
+          ~session_id:(Tusk_model.Session_id.of_string "test-session")
+          ~profile:Tusk_model.Profile.debug
+          () in
+        let module_graph = G.make () in
+        let _ = G.add_node
+          module_graph
+          (Tusk_planner.Module_node.make_binary
+            ~name:"demo"
+            ~source:(Path.v "bin/main.ml")
+            ~libraries:[]
+            ~includes:[ Path.v "." ]) in
+        let action_graph, _ = Tusk_planner.Action_graph.from_module_graph
+          ~package
+          ~profile:Tusk_model.Profile.debug
+          ~ctx
+          ~toolchain:test_toolchain
+          ~store
+          ~depset:[]
+          ~needs_unix:false
+          ~needs_dynlink:false
+          module_graph in
+        match Tusk_planner.Action_graph.nodes action_graph with
+        | [ node ] -> (
+            match node.value.actions with
+            | [
+                Tusk_planner.Action.WriteFile { destination; content };
+                Tusk_planner.Action.CompileImplementation { source; _ };
+                Tusk_planner.Action.CreateExecutable { outputs = [ output ]; _ };
+              ] ->
+                if not (Path.equal destination (Path.v "bin/main.ml")) then
+                  Error "expected macro write action to target the original binary path"
+                else if not (Path.equal source (Path.v "bin/main.ml")) then
+                  Error "expected binary compile action to preserve the original source path"
+                else if not (Path.equal output (Path.v "demo")) then
+                  Error "expected the binary node to keep its executable output"
+                else if node.value.srcs != [ Path.v "bin/main.ml" ] then
+                  Error "expected binary action hashing to keep the original source path"
+                else if not (String.contains content "Stdlib.Buffer.add_string") then
+                  Error "expected expanded binary source to append through Stdlib.Buffer.add_string"
+                else if not (String.contains content "\"hello \"") then
+                  Error "expected expanded binary source to preserve literal builder segments"
+                else if not (String.contains content "(name)") then
+                  Error "expected expanded binary source to append the supplied argument"
+                else
+                  Ok ()
+            | _ ->
+                Error "expected a write-compile-link action node for a macro-bearing binary"
+          )
+        | _ ->
+            Error "expected a single action node for the test binary")
+  with
+  | Ok result -> result
+  | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
+
 let tests =
   Test.[
     case "action graph json round-trip preserves edges" test_action_graph_json_round_trip_preserves_dependencies;
@@ -359,6 +499,8 @@ let tests =
     case "library builds skip shared native plugin artifacts by default" test_library_builds_do_not_emit_shared_library_actions;
     case "library actions exclude ML object files while keeping native stubs" test_library_actions_exclude_ml_object_files;
     case "release profile flags flow into compile actions" test_release_profile_flags_flow_into_compile_actions;
+    case "macro-bearing modules write expanded source before compile" test_macro_modules_write_expanded_source_before_compile;
+    case "macro-bearing binaries write expanded source before compile" test_macro_binaries_write_expanded_source_before_compile;
   ]
 
 let name = "Planner Action Graph Tests"

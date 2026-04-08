@@ -105,38 +105,64 @@ let profile_compile_flags = fun (profile: Profile.t) ->
     @ List.map (fun mod_name -> Riot_toolchain.Ocamlc.Open mod_name) profile.open_modules
     @ List.map (fun flag -> Riot_toolchain.Ocamlc.Raw flag) profile.ocamlc_flags)
 
-let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get_dep_kind ~depset ~needs_unix ~needs_dynlink (
+type planned_source = {
+  actions: Action.t list;
+  compile_source: Path.t;
+  copied_sources: Path.t list;
+}
+
+let available_macro_provider_packages = fun ~(workspace:Workspace.t) ~(package:Package.t) ->
+  let provider_names = package.build_dependencies
+  |> List.map (fun (dep: Package.dependency) -> dep.name) in
+  workspace.packages |> List.filter
+    (fun (pkg: Package.t) ->
+      List.mem pkg.name provider_names) |> List.filter_map Package.macro_provider
+
+let plan_compilation_pipeline = fun ~(package:Package.t) ~(workspace:Workspace.t) path ->
+  let macro_providers = available_macro_provider_packages ~workspace ~package in
+  match Compilation_pipeline.plan_concrete_source
+    ~macro_providers
+    ~workspace_root:workspace.root
+    ~target_dir_root:workspace.target_dir_root
+    ~package
+    path with
+  | Ok planned_source -> planned_source
+  | Error message -> panic message
+
+let module_to_actions ~package ~workspace ~profile ~ctx ~dep_includes ~get_dep_outputs ~get_dep_kind ~depset ~needs_unix ~needs_dynlink (
   module_node: Module_node.t
 ) (deps: G.Node_id.t list):
   Action.t list * Path.t list * Path.t list =
   let base_compile_flags = stdlib_flags package @ profile_compile_flags profile in
   match module_node with
   | { kind=MLI mod_; file=Concrete path; open_modules; _ } ->
+      let planned_source = plan_compilation_pipeline ~package ~workspace path in
       let cmi_output = Module.cmi mod_ in
       let cmti_output = Module.cmti mod_ in
       let outputs = [ cmti_output; cmi_output ] in
-      let sources = [ path ] in
+      let sources = planned_source.copied_sources in
       let compile = Action.CompileInterface {
-        source = path;
+        source = planned_source.compile_source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules
       } in
-      ([ compile ], outputs, sources)
+      (planned_source.actions @ [ compile ], outputs, sources)
   | { kind=ML mod_; file=Concrete path; open_modules; _ } ->
+      let planned_source = plan_compilation_pipeline ~package ~workspace path in
       let native_object_output = Module.o mod_ in
       let cmx_output = Module.cmx mod_ in
       let cmi_output = Module.cmi mod_ in
       let cmt_output = Module.cmt mod_ in
       let outputs = [ cmt_output; cmi_output; cmx_output; native_object_output ] in
-      let sources = [ path ] in
+      let sources = planned_source.copied_sources in
       let compile = Action.CompileImplementation {
-        source = path;
+        source = planned_source.compile_source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules
       } in
-      ([ compile ], outputs, sources)
+      (planned_source.actions @ [ compile ], outputs, sources)
   | { kind=ML mod_; file=Generated { path; contents }; open_modules; _ } ->
       let write_action = Action.WriteFile { destination = path; content = contents } in
       let native_object_output = Module.o mod_ in
@@ -238,11 +264,12 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
       let all_outputs = [ library_name; archive_name ] in
       ([ create_lib ], all_outputs, sources)
   | { kind=Binary { name; source; libraries; includes }; _ } ->
+      let planned_source = plan_compilation_pipeline ~package ~workspace source in
       let binary_mod = Module.make ~namespace:Namespace.empty ~filename:source in
       let binary_cmx = Module.cmx binary_mod in
-      let sources = [ source ] in
+      let sources = planned_source.copied_sources in
       let compile_action = Action.CompileImplementation {
-        source;
+        source = planned_source.compile_source;
         outputs = [ binary_cmx ];
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags
@@ -334,13 +361,13 @@ let module_to_actions ~package ~profile ~ctx ~dep_includes ~get_dep_outputs ~get
         cclib_flags;
       }
       in
-      ([ compile_action; link_action ], [ binary_output ], sources)
+      (planned_source.actions @ [ compile_action; link_action ], [ binary_output ], sources)
 
-let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_unix ~needs_dynlink (
+let from_module_graph ~package ~workspace ~profile ~ctx ~toolchain ~store ~depset ~needs_unix ~needs_dynlink (
   module_graph: Module_node.t G.t
 ):
   t * Path.t list =
-  let transitive_deps = Dependency.transitive_closure depset in
+  let transitive_deps = Dependency.runtime_closure depset in
   (* Extract dependency cache include paths - no file copying needed! *)
   let dep_cache_includes =
     List.map (fun (dep: Dependency.t) -> dep.artifact_dir) transitive_deps
@@ -393,6 +420,7 @@ let from_module_graph ~package ~profile ~ctx ~toolchain ~store ~depset ~needs_un
     (fun (module_node: Module_node.t G.node) ->
       let actions, outputs, sources = module_to_actions
         ~package
+        ~workspace
         ~profile
         ~ctx
         ~dep_includes

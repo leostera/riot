@@ -42,6 +42,14 @@ type t =
     }
   | CopyFile of { source: Path.t; destination: Path.t }
   | WriteFile of { destination: Path.t; content: string }
+  | RunMacroExpansion of {
+      source: Path.t;
+      destination: Path.t;
+      workspace_root: Path.t;
+      target_dir_root: Path.t;
+      providers: Riot_model.Macro_provider.t list;
+      provider_hash: string
+    }
   | BuildForeignDependency of {
       name: string;
       path: Path.t;

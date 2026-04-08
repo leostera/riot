@@ -269,6 +269,30 @@ let run_action = fun ~session_id ~package ~node ocamlc sandbox_dir action ->
           Log.error ("WriteFile: failed - " ^ msg);
           ocamlc_failed ("Write failed: " ^ Path.to_string destination ^ " - " ^ msg)
     )
+  | Action.RunMacroExpansion {
+    source;
+    destination;
+    workspace_root;
+    target_dir_root;
+    providers;
+    _
+  } -> (
+      let input_path =
+        if Path.is_absolute source then
+          source
+        else
+          Path.join sandbox_dir source
+      in
+      let output_path =
+        if Path.is_absolute destination then
+          destination
+        else
+          Path.join sandbox_dir destination
+      in
+      match Macro.Runner.run_file ~workspace_root ~target_dir_root providers ~input_path ~output_path with
+      | Ok () -> ocamlc_success "Expanded macros"
+      | Error message -> ocamlc_failed message
+    )
   | Action.BuildForeignDependency {
     name;
     path;

@@ -34,6 +34,7 @@ let make_test_package () =
       compiler = { profile_overrides = []; target_overrides = [] };
       commands = [];
       fix_providers = [];
+      macro_providers = [];
       publish = { version = None; description = None; license = None; is_public = None };
     }
 

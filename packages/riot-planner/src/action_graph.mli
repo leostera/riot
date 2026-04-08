@@ -38,6 +38,7 @@ val hash_action_node: t -> Action_node.t -> Crypto.hash
 *)
 val from_module_graph:
   package:Package.t ->
+  workspace:Workspace.t ->
   profile:Profile.t ->
   ctx:Build_ctx.t ->
   toolchain:Riot_toolchain.t ->

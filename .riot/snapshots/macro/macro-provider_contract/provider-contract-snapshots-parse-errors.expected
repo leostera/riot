@@ -1,0 +1,1 @@
+macro package 'demo-macro' provider source must parse cleanly: expected expression, found end of file

@@ -50,3 +50,6 @@ val find_command: t -> string -> Package_command.t option
 
 (** Discover all package-provided riot-fix providers in the workspace *)
 val discover_fix_providers: t -> Fix_provider.t list
+
+(** Discover all macro-package providers in the workspace *)
+val discover_macro_providers: t -> Macro_provider.t list

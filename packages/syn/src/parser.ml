@@ -204,9 +204,9 @@ let has_custom_index_payload_after_dot = fun parser ->
   in
   loop 0
 
-let has_dot_ident_continuation = fun parser ->
-  peek_kind parser = Token.Dot && match (peek_n parser 1).Token.kind with
-  | Token.Ident _ -> true
+let token_has_no_leading_trivia = fun (token: Token.t) ->
+  match token.Token.leading_trivia with
+  | [] -> true
   | _ -> false
 
 let looks_like_record_field_after_offset = fun parser offset ->
@@ -556,6 +556,56 @@ let tokens_to_green = fun parser tokens ->
       else
         Some (make_token parser token))
     tokens
+
+let has_dot_ident_continuation = fun parser ->
+  peek_kind parser = Token.Dot && match (peek_n parser 1).Token.kind with
+  | Token.Ident _ -> true
+  | _ -> false
+
+let rec macro_callee_ends_with_bang_after = fun parser offset ->
+  match (peek_n parser offset).Token.kind with
+  | Token.Ident _ -> (
+      match (peek_n parser (offset + 1)).Token.kind with
+      | Token.Bang ->
+          token_has_no_leading_trivia (peek_n parser (offset + 1))
+      | Token.Dot -> (
+          match (peek_n parser (offset + 2)).Token.kind with
+          | Token.Ident _ -> macro_callee_ends_with_bang_after parser (offset + 2)
+          | _ -> false
+        )
+      | _ ->
+          false
+    )
+  | _ -> false
+
+let looks_like_macro_callee = fun parser -> macro_callee_ends_with_bang_after parser 0
+
+let parse_macro_callee = fun parser ->
+  let first_ident = consume parser in
+  let rec parse_tail acc saw_path =
+    let trivia_after_ident = consume_trivia parser in
+    let acc = acc @ tokens_to_green parser trivia_after_ident in
+    if has_dot_ident_continuation parser then
+      let dot = consume parser in
+      let trivia_after_dot = consume_trivia parser in
+      let ident = consume parser in
+      parse_tail
+        (acc
+        @ [ make_token parser dot ]
+        @ tokens_to_green parser trivia_after_dot
+        @ [ make_token parser ident ])
+        true
+    else
+      make_node
+        (
+          if saw_path then
+            Syntax_kind.PATH_EXPR
+          else
+            Syntax_kind.IDENT_EXPR
+        )
+        acc
+  in
+  parse_tail [ make_token parser first_ident ] false
 
 let make_error_node = fun parser ~diagnostic ~consumed_tokens ->
   report_diagnostic parser diagnostic;
@@ -4567,9 +4617,14 @@ and parse_primary_expr = fun parser ->
   | Token.Dot ->
       let dot = consume parser in
       make_node Syntax_kind.UNREACHABLE_EXPR [ make_token parser dot ]
-  | Token.Ident _ ->
-      let ident = consume parser in
-      make_node Syntax_kind.IDENT_EXPR [ make_token parser ident ]
+  | Token.Ident _ -> (
+      if looks_like_macro_callee parser then
+        let callee = parse_macro_callee parser in
+        parse_macro_expr parser callee
+      else
+        let ident = consume parser in
+        make_node Syntax_kind.IDENT_EXPR [ make_token parser ident ]
+    )
   | Token.Literal _ ->
       parse_constant parser
   | Token.Keyword Keyword.True ->
@@ -4770,6 +4825,37 @@ and can_start_poly_variant_payload_expr = fun parser ->
   | Token.Tilde
   | Token.Question -> false
   | _ -> can_start_arg_expr parser
+
+(** Check if current token can start a macro body parsed in expression position. *)
+and can_start_macro_body_expr = fun parser ->
+  match peek_kind parser with
+  | Token.Dot
+  | Token.Hash
+  | Token.Quote
+  | Token.Unknown '\'' -> true
+  | _ -> can_start_expr parser
+
+(** Parse a function-like macro invocation: path! expr *)
+and parse_macro_expr = fun parser callee ->
+  let bang = consume parser in
+  let trivia_after_bang = consume_trivia parser in
+  let body =
+    if can_start_macro_body_expr parser then
+      parse_expr parser
+    else
+      let found = peek parser in
+      let diagnostic = Diagnostic.invalid_expression
+        ~found
+        ~text:(token_text parser found)
+        ~span:(expected_span parser) in
+      make_error_node parser ~diagnostic ~consumed_tokens:[]
+  in
+  make_node
+    Syntax_kind.MACRO_EXPR
+    ([ Ceibo.Green.Node callee ]
+    @ [ make_token parser bang ]
+    @ tokens_to_green parser trivia_after_bang
+    @ [ Ceibo.Green.Node body ])
 
 (** Parse postfix expressions: field access (.), array indexing (.), etc.
     This has higher precedence than application.

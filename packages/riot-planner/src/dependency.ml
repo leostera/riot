@@ -29,3 +29,5 @@ let transitive_closure = fun deps ->
   in
   List.iter collect deps;
   Vector.into_iter ordered |> Iterator.to_list
+
+let runtime_closure = transitive_closure
