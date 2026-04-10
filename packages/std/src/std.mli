@@ -1274,6 +1274,12 @@ module Result = Result
     `Std.Global`, and `Std.Timer` helpers. *)
 module Runtime = Runtime
 
+(** Compatibility alias for runtime-facing code that still refers to
+    `Actors.*` through `open Std`.
+
+    New code should prefer {!Runtime}. *)
+module Actors = Runtime
+
 (** **When to use:** Explicit error handling
     
     Use Result for operations that can fail in expected, recoverable ways.

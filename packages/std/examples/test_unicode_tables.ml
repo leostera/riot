@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args:_ ->
       (* Test Greek letter *)
       let alpha =

@@ -64,6 +64,9 @@ let head = Head.middleware
 (** Convenience alias for Runner.middleware *)
 module Runner = Runner
 
+(** Convenience alias for Request_runtime.middleware *)
+module Runtime = Request_runtime
+
 let runner = Runner.middleware
 
 (** Convenience alias for Method_override.middleware with default param *)

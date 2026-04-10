@@ -21,7 +21,6 @@ rules = [
 ]
 
 [dependencies]
-actors = { path = "../actors", version = "*" }
 kernel = { path = "../kernel", version = "*" }
 
 [dev-dependencies]

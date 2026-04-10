@@ -89,4 +89,4 @@ let main = fun ~args ->
           if config.count_only then
             println (string_of_int !count))
 
-let () = Actors.run ~main ~args:Env.args ()
+let () = Runtime.run ~main ~args:Env.args ()

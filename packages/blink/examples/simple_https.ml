@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args ->
       (* Parse command-line arguments *)
       let cmd = ArgParser.command "simple_https"

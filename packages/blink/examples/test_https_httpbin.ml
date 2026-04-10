@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args:_ ->
       println "Starting HTTPS test with httpbin.org...";
       let uri =

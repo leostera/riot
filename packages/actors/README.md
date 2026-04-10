@@ -2,15 +2,12 @@
 
 Multicore actors for Riot.
 
-`actors` is Riot's actor runtime package that everything runs on: `std`,
-`blink`, `suri`, and the rest of the ecosystem ultimately run on top of these
-process, mailbox, timer, and scheduler semantics.
+`actors` is Riot's compatibility facade for the actor runtime now owned by
+`Std.Runtime`.
 
-This package exists so that runtime-level libraries and lower-level Riot code
-can depend on that layer directly and explicitly. It gives you lightweight
-processes, typed message passing, links and monitors, timers, async syscalls,
-and a multicore runtime that can spread runnable actors across scheduler
-workers with work stealing.
+The implementation lives in `std`. This package remains so existing code that
+depends on `Actors.*` can keep building while the repo migrates toward a
+two-package core of `kernel` and `std`.
 
 ## Install
 
@@ -31,19 +28,10 @@ Everything built on Riot gets these properties because it runs on `actors`:
   runtime;
 - a small runtime package you can build other Riot infrastructure on top of.
 
-You add `actors` as a direct dependency when you are working at the runtime
-layer itself. In practice that usually means:
+For new code, prefer `std` and call the runtime through `Std.Runtime`.
 
-- build systems and task executors;
-- schedulers, brokers, queues, and orchestration layers;
-- protocol runtimes and infrastructure packages;
-- systems code that wants actor semantics without the rest of the application
-  stack.
-
-If you are building a normal application, service, or CLI, you are still using
-`actors`, just indirectly through `std`. Most application code should start
-with `std`, because it already builds on the same runtime and gives you the
-rest of the practical surface area around it.
+Keep a direct dependency on `actors` only when you are intentionally preserving
+older `Actors.*` call sites during migration.
 
 ## Quick start
 
@@ -75,7 +63,7 @@ let main = fun ~args:_ ->
     ();
   Ok ()
 
-let () = run ~main ~args:Env.args ()
+let () = Std.Runtime.run ~main ~args:Env.args ()
 ```
 
 The package also ships a runnable example:
@@ -185,8 +173,9 @@ Patterns that fit naturally in `actors`:
 
 ## Related packages
 
-- `kernel` provides the lower-level async and runtime primitives that `actors`
-  builds on.
-- `std` is the higher-level application stack built on the same actor runtime.
+- `kernel` provides the lower-level async and runtime primitives under
+  `Std.Runtime`.
+- `std` owns the actor runtime implementation and the higher-level application
+  stack built on it.
 - `blink` and `suri` are examples of packages that build richer abstractions on
   top of Riot's concurrency model.

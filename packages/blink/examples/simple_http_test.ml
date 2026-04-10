@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args:_ ->
       println "Starting HTTP example...";
       (* Build HTTP URL *)

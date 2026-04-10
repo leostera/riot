@@ -975,6 +975,8 @@ val head: conn:Conn.t -> next:(Conn.t -> Conn.t) -> Conn.t
 
 module Runner = Runner
 
+module Runtime = Request_runtime
+
 (** {b Request Timing Middleware}
     
     Adds X-Runtime header with request processing time.

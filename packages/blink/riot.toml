@@ -19,4 +19,3 @@ path = "examples/test_https_httpbin.ml"
 [dependencies]
 std = { path = "../std", version = "*" }
 http = { path = "../http", version = "*" }
-actors = { path = "../actors", version = "*" }

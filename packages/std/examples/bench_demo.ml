@@ -56,7 +56,7 @@ let benchmarks =
   ]
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args -> Bench.Cli.main ~name:"Example Benchmarks" ~benchmarks ~args)
     ~args:Env.args
     ()

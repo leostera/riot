@@ -44,6 +44,7 @@ module Regex = Regex
 module Ref = Ref
 module Result = Result
 module Runtime = Runtime
+module Actors = Runtime
 module String = String
 module Supervisor = Supervisor
 module Sync = Sync

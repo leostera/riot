@@ -205,7 +205,7 @@ let benchmarks =
   ]
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args -> Bench.Cli.main ~name:"HashMap Benchmarks" ~benchmarks ~args)
     ~args:Env.args
     ()

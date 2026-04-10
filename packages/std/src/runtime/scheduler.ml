@@ -667,19 +667,18 @@ let handle_receive = fun k t proc ~selector ~timeout ->
                 scan_mailbox (remaining - 1)
           )
     in
-    let selected =
-      if Process.has_empty_mailbox proc then
-        None
-      else
-        scan_saved (Process.save_queue_count proc)
-    in
-    match selected with
-    | Some selected -> continue_with selected
-    | None ->
-        if timeout_expired then
-          timeout_receive ()
+    if timeout_expired then
+      timeout_receive ()
+    else
+      let selected =
+        if Process.has_empty_mailbox proc then
+          None
         else
-          park_for_receive ()
+          scan_saved (Process.save_queue_count proc)
+      in
+      match selected with
+      | Some selected -> continue_with selected
+      | None -> park_for_receive ()
 
 let handle_syscall = fun k t proc name interest source timeout ->
   let open Proc_state in

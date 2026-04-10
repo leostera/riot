@@ -51,7 +51,7 @@ let main = fun ~args:_ ->
   Log.info "loaded config successfully";
   Ok ()
 
-let () = Actors.run ~main ~args:Env.args ()
+let () = Runtime.run ~main ~args:Env.args ()
 ```
 
 ## What `std` includes
@@ -175,7 +175,7 @@ riot run -p std walker_find -- --count-only packages/std/examples
 
 The examples directory currently includes:
 
-- `hello_world.ml` for the smallest possible `Std` + `Actors.run` program.
+- `hello_world.ml` for the smallest possible `Std` + `Runtime.run` program.
 - `walker_find.ml` for recursive filesystem walking and glob-based filtering.
 - `test_uri.ml` for URI parsing and manipulation.
 - `unicode_example.ml`, `test_unicode_tables.ml`, and
@@ -196,7 +196,8 @@ The examples directory currently includes:
 ## Related packages
 
 - `kernel` is the lower-level substrate beneath `std`.
-- `actors` gives you a smaller, more focused actor-runtime package.
+- `actors` is a compatibility facade over `Std.Runtime` while the repo
+  finishes migrating off the old package boundary.
 - `blink` builds an HTTP client on top of the same model.
 - `suri` is the web framework layer when you need HTTP routing and server-side
   application structure.

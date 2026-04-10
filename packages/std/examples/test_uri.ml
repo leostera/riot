@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args:_ ->
       let test_uris = [
         "https://api.ipify.org?format=json";

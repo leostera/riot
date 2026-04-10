@@ -1,7 +1,7 @@
 [package]
 name = "actors"
 license = "Apache-2.0"
-description = "The multicore actor runtime that powers Riot"
+description = "Compatibility facade for Riot's actor runtime"
 version = "0.0.17"
 categories = ["runtime", "actors"]
 keywords = ["actors", "scheduler", "mailbox"]
@@ -17,11 +17,10 @@ rules = [ "loop-yield" ]
 path = "src/actors.ml"
 
 [dependencies]
-kernel = { path = "../kernel", version = "*" }
+std = { path = "../std", version = "*" }
 
 [build-dependencies]
 fixme = { path = "../fixme", version = "*" }
 
 [dev-dependencies]
 propane = { path = "../propane", version = "*" }
-std = { path = "../std", version = "*" }

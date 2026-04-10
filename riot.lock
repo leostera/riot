@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "02920aaf38ba28e6"
+dependency_hash = "4f83a02eb18ac680"
 
 [[packages]]
 name = "raml"
@@ -54,7 +54,7 @@ dev_dependencies = []
 name = "blink"
 root = "packages/blink"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "actors", package = { name = "actors" } }, { name = "http", package = { name = "http" } }, { name = "std", package = { name = "std" } }]
+dependencies = [{ name = "http", package = { name = "http" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -182,9 +182,9 @@ dev_dependencies = []
 name = "actors"
 root = "packages/actors"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "kernel", package = { name = "kernel" } }]
+dependencies = [{ name = "std", package = { name = "std" } }]
 build_dependencies = [{ name = "fixme", package = { name = "fixme" } }]
-dev_dependencies = [{ name = "propane", package = { name = "propane" } }, { name = "std", package = { name = "std" } }]
+dev_dependencies = [{ name = "propane", package = { name = "propane" } }]
 
 [[packages]]
 name = "miniriot"
@@ -334,7 +334,7 @@ dev_dependencies = []
 name = "std"
 root = "packages/std"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "actors", package = { name = "actors" } }, { name = "kernel", package = { name = "kernel" } }]
+dependencies = [{ name = "kernel", package = { name = "kernel" } }]
 build_dependencies = [{ name = "fixme", package = { name = "fixme" } }]
 dev_dependencies = [{ name = "propane", package = { name = "propane" } }]
 
@@ -527,13 +527,5 @@ name = "riot-check"
 root = "packages/riot-check"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "riot-build", package = { name = "riot-build" } }, { name = "riot-deps", package = { name = "riot-deps" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "std", package = { name = "std" } }, { name = "tty", package = { name = "tty" } }, { name = "typ", package = { name = "typ" } }]
-build_dependencies = []
-dev_dependencies = []
-
-[[packages]]
-name = "hello-foreign"
-root = "packages/hello-foreign"
-provenance = { kind = "workspace" }
-dependencies = [{ name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []

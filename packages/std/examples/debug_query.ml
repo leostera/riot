@@ -1,7 +1,7 @@
 open Std
 
 let () =
-  Actors.run
+  Runtime.run
     ~main:(fun ~args:_ ->
       match Net.Uri.of_string "https://example.com/search?q=hello+world&filter=name%3DJohn" with
       | Ok uri ->
