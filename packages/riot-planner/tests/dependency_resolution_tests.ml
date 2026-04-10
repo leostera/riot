@@ -214,7 +214,7 @@ let test_module_graph_resolves_nested_local_unix_backend = fun _ctx ->
             source_dir = Path.v "src";
             allowed_source_files = package.sources.src;
             root_mode = Riot_planner.Module_graph.Library_root { library_name = package.name };
-            namespace = Riot_model.Package.root_module_name package;
+            namespace = Riot_model.Module_name.(package.name |> of_string |> to_string);
             package;
             toolchain;
             workspace;
@@ -325,7 +325,7 @@ let test_module_graph_resolves_deeply_nested_modules_namespace_first = fun _ctx 
             source_dir = Path.v "src";
             allowed_source_files = package.sources.src;
             root_mode = Riot_planner.Module_graph.Library_root { library_name = package.name };
-            namespace = Riot_model.Package.root_module_name package;
+            namespace = Riot_model.Module_name.(package.name |> of_string |> to_string);
             package;
             toolchain;
             workspace;

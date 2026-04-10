@@ -26,7 +26,7 @@ type plan_result = {
 }
 
 let plan_node = fun input ->
-  let namespace = Package.root_module_name input.package in
+  let namespace = Module_name.(input.package.name |> of_string |> to_string) in
   let config =
     Module_graph.{
       root = input.package.path;

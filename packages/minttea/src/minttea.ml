@@ -42,5 +42,5 @@ let start = fun ?(config = config ()) (app: 'model App.t) initial_model ->
       in
       wait ()
   in
-  let _ = Actors.run ~main ~args:[] () in
+  let _ = Std.Runtime.run ~main ~args:[] () in
   ()
