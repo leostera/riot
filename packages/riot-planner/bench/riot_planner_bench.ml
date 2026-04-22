@@ -100,11 +100,7 @@ let make_plan_workspace_all_bench = fun root ~count ->
       ~target:Workspace_planner.All
       ~scope:Package_graph.Runtime
       ~load_errors:[]
-      ~dev_artifacts:{
-        tests = true;
-        examples = true;
-        benches = true;
-      }
+      ~dev_artifacts:{ tests = true; examples = true; benches = true }
     |> Result.expect ~msg:"plan workspace all bench should succeed" in
     ()
 
@@ -120,11 +116,7 @@ let make_plan_workspace_target_bench = fun root ~count ->
       |> Result.expect ~msg:("expected valid package name: " ^ target_package)))
       ~scope:Package_graph.Runtime
       ~load_errors:[]
-      ~dev_artifacts:{
-        tests = true;
-        examples = true;
-        benches = true;
-      }
+      ~dev_artifacts:{ tests = true; examples = true; benches = true }
     |> Result.expect ~msg:"plan workspace target bench should succeed" in
     ()
 

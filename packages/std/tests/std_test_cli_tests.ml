@@ -73,9 +73,10 @@ let sample_tests = [
   Test.case "ctx_probe"
     (fun ctx ->
       match (ctx.package_name, ctx.workspace_root, Test.Context.find_binary ctx "demo") with
-      | Some "demo", Some workspace_root, Some binary_path
-        when String.equal (Path.to_string workspace_root) "/tmp/demo-workspace"
-          && String.equal (Path.to_string binary_path) "/tmp/demo-bin" -> Ok ()
+      | Some "demo", Some workspace_root, Some binary_path when String.equal
+        (Path.to_string workspace_root)
+        "/tmp/demo-workspace"
+      && String.equal (Path.to_string binary_path) "/tmp/demo-bin" -> Ok ()
       | _ -> Error "expected ctx_probe to receive structured context from --ctx");
   Test.case "after_timeout" (fun _ctx -> Ok ());
 ]
@@ -471,8 +472,7 @@ let test_run_tests_json_emits_heartbeat_for_long_tests = fun _ctx ->
     Error "expected a TestCaseHeartbeat event for a long-running test"
 
 let test_run_tests_ctx_flag_populates_structured_context = fun _ctx ->
-  let ctx_json =
-    "{\"workspace_root\":\"/tmp/demo-workspace\",\
+  let ctx_json = "{\"workspace_root\":\"/tmp/demo-workspace\",\
      \"package_name\":\"demo\",\
      \"binary_path\":\"/tmp/sample-suite\",\
      \"source_file\":\"/tmp/sample-suite.ml\",\
