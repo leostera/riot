@@ -1,6 +1,6 @@
 [package]
 name = "minttea"
-version = "0.0.18"
+version = "0.0.19"
 description = "Elm-style terminal UI framework"
 license = "Apache-2.0"
 public = true

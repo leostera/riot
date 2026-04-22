@@ -1,6 +1,6 @@
 [package]
 name = "riot-model"
-version = "0.0.18"
+version = "0.0.19"
 description = "Shared workspace, package, and build types"
 license = "Apache-2.0"
 public = false

@@ -1,6 +1,6 @@
 [package]
 name = "riot-fix"
-version = "0.0.18"
+version = "0.0.19"
 description = "Linting and auto-fix pipeline"
 license = "Apache-2.0"
 public = false

@@ -1,6 +1,6 @@
 [package]
 name = "raml-native"
-version = "0.0.18"
+version = "0.0.19"
 
 [lib]
 path = "src/RamlNative.ml"

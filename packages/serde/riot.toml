@@ -1,6 +1,6 @@
 [package]
 name = "serde"
-version = "0.0.18"
+version = "0.0.19"
 description = "Type-safe serialization framework for Riot"
 public = true
 license = "Apache-2.0"

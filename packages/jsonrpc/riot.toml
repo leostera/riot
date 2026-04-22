@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpc"
-version = "0.0.18"
+version = "0.0.19"
 description = "JSON-RPC framing, codecs, and types"
 license = "Apache-2.0"
 public = true

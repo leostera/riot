@@ -1,6 +1,6 @@
 [package]
 name = "syn"
-version = "0.0.18"
+version = "0.0.19"
 description = "Parser, lexer, CST, and diagnostics toolkit"
 license = "Apache-2.0"
 public = true

@@ -1,6 +1,6 @@
 [package]
 name = "riot-publish"
-version = "0.0.18"
+version = "0.0.19"
 description = "Publish workflow orchestration"
 license = "Apache-2.0"
 public = false

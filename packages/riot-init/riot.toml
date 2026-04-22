@@ -1,6 +1,6 @@
 [package]
 name = "riot-init"
-version = "0.0.18"
+version = "0.0.19"
 description = "Workspace and package scaffolding"
 license = "Apache-2.0"
 public = false

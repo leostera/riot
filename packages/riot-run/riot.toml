@@ -1,6 +1,6 @@
 [package]
 name = "riot-run"
-version = "0.0.18"
+version = "0.0.19"
 description = "Run command orchestration on top of riot-build"
 license = "Apache-2.0"
 public = false

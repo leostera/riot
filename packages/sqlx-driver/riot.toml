@@ -1,6 +1,6 @@
 [package]
 name = "sqlx-driver"
-version = "0.0.18"
+version = "0.0.19"
 description = "Database driver interface for sqlx"
 license = "Apache-2.0"
 public = true

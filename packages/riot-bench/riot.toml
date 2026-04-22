@@ -1,6 +1,6 @@
 [package]
 name = "riot-bench"
-version = "0.0.18"
+version = "0.0.19"
 description = "Benchmark history storage and future regression tracking for Riot"
 license = "Apache-2.0"
 public = false

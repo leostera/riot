@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.19 - 2026-04-22
+
+### riot
+- `riot test` now streams human output per test case, passes structured suite context through `--ctx`, exposes built runtime binaries to tests, and treats small tests as a tighter fast path with clearer small/large summaries.
+- `riot bench` now records and compares benchmark history, streams benchmark progress/heartbeats, surfaces GC counters and variance, and supports top-level `--warmup`, `--iterations`, and `--compare` controls.
+- `riot build` now uses explicit `-p/--package` selection and can build dev artifacts with `--tests`, `--benches`, `--examples`, and `--all`.
+- `riot info` now reports workspace/package details more clearly, `riot clean` locks active build lanes before cleaning and reports lock waits, and `riot fmt` stays scoped to workspace sources.
+- `riot init` now preserves dotted workspace names while still normalizing starter package names correctly.
+
+### planner-build
+- Riot planning now trims unreachable library modules and computes target-private module closures for binaries, tests, examples, and benches, so helper modules can stay target-local instead of being forced into the package library.
+- Build caching is more reliable after dependency and manifest changes, including cache invalidation for build dependency path updates and stronger runtime/build dependency hashing.
+- Build and test execution gained more stability through lane-lock coordination, generated-root dependency fixes, and tighter small/large test classification.
+
+### std-kernel
+- Added `Std.Collections.Proplist` for duplicate-friendly property-list workflows.
+- Continued IO/runtime hardening and performance work across `std`, `kernel`, `http`, and `serde-json`, including vectored TLS fallback support and lower-overhead buffer/reader paths.
+
+### docs
+- Added an RFD for target-specific module reachability and clarified how that planner model composes with future conditional compilation.
+
 ## 0.0.18 - 2026-04-15
 
 ### riot

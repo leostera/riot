@@ -1,6 +1,6 @@
 [package]
 name = "serde-toml"
-version = "0.0.18"
+version = "0.0.19"
 description = "TOML support for the Serde serialization framework"
 public = true
 license = "Apache-2.0"

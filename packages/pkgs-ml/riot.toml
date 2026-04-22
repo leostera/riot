@@ -1,6 +1,6 @@
 [package]
 name = "pkgs-ml"
-version = "0.0.18"
+version = "0.0.19"
 description = "pkgs.ml registry client and cache helpers"
 license = "Apache-2.0"
 public = true

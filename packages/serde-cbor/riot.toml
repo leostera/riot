@@ -1,6 +1,6 @@
 [package]
 name = "serde-cbor"
-version = "0.0.18"
+version = "0.0.19"
 description = "CBOR support for the Serde serialization framework"
 public = true
 license = "Apache-2.0"

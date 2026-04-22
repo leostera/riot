@@ -1,6 +1,6 @@
 [package]
 name = "riot-toolchain"
-version = "0.0.18"
+version = "0.0.19"
 description = "Compiler and toolchain invocation wrappers"
 license = "Apache-2.0"
 public = false

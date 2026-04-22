@@ -1,6 +1,6 @@
 [package]
 name = "riot-cmd"
-version = "0.0.18"
+version = "0.0.19"
 description = "Shared command registration interfaces"
 license = "Apache-2.0"
 public = false

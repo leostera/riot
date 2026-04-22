@@ -1,6 +1,6 @@
 [package]
 name = "pretext"
-version = "0.0.18"
+version = "0.0.19"
 description = "Tiny Unicode-aware pretty-printing documents"
 license = "Apache-2.0"
 public = true

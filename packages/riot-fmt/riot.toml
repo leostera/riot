@@ -1,6 +1,6 @@
 [package]
 name = "riot-fmt"
-version = "0.0.18"
+version = "0.0.19"
 description = "Formatting checks around Krasny"
 license = "Apache-2.0"
 public = false

@@ -1,6 +1,6 @@
 [package]
 name = "blink"
-version = "0.0.18"
+version = "0.0.19"
 description = "Streaming HTTP client built on Riot actors"
 license = "Apache-2.0"
 public = true

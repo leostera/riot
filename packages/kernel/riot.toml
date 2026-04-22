@@ -1,7 +1,7 @@
 [package]
 name = "kernel"
 description = "Platform abstraction layer for Riot"
-version = "0.0.18"
+version = "0.0.19"
 license = "Apache-2.0"
 public = true
 

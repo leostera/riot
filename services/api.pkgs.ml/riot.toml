@@ -1,6 +1,6 @@
 [package]
 name = "registry"
-version = "0.0.18"
+version = "0.0.19"
 description = "Package registry service for Riot"
 license = "Apache-2.0"
 public = true

@@ -1,6 +1,6 @@
 [package]
 name = "fixme"
-version = "0.0.18"
+version = "0.0.19"
 description = "Rule-authoring types for riot-fix"
 license = "Apache-2.0"
 public = true
