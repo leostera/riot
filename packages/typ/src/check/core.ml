@@ -36,10 +36,17 @@ type binding = {
 
 type env = binding list
 
+type record_label = {
+  label: SurfacePath.t;
+  owner_ty: ty;
+  field_ty: ty;
+}
+
 type state = {
   mutable next_tyvar: int;
   mutable next_binding_stamp: int;
   mutable diagnostics: Diagnostics.Diagnostic.t list;
+  mutable record_labels: record_label list;
 }
 
 let unsupported_syntax = fun origin summary ->
@@ -54,7 +61,8 @@ let unsupported_type = fun origin summary ->
 
 let add_diagnostic = fun state diagnostic -> state.diagnostics <- diagnostic :: state.diagnostics
 
-let make_state = fun ~next_binding_stamp -> { next_tyvar = 0; next_binding_stamp; diagnostics = [] }
+let make_state = fun ~next_binding_stamp ->
+  { next_tyvar = 0; next_binding_stamp; diagnostics = []; record_labels = [] }
 
 let fresh_tyvar = fun state ~level ->
   let id = state.next_tyvar in
@@ -242,6 +250,37 @@ let instantiate = fun state ~level ty ->
   in
   loop ty
 
+let instantiate_pair = fun state ~level left right ->
+  let subst = ref [] in
+  let rec loop ty =
+    match prune ty with
+    | TVar { var=Generic id } -> (
+        match
+          List.find !subst
+            ~fn:(fun (other_id, _) ->
+              Int.equal id other_id)
+        with
+        | Some (_, replacement) -> replacement
+        | None ->
+            let replacement = fresh_tyvar state ~level in
+            subst := (id, replacement) :: !subst;
+            replacement
+      )
+    | TList element ->
+        TList (loop element)
+    | TOption element ->
+        TOption (loop element)
+    | TTuple elements ->
+        TTuple (List.map elements ~fn:loop)
+    | TArrow (parameter, result) ->
+        TArrow (loop parameter, loop result)
+    | TCon (path, arguments) ->
+        TCon (path, List.map arguments ~fn:loop)
+    | ty ->
+        ty
+  in
+  (loop left, loop right)
+
 let path_int = SurfacePath.from_name "int"
 
 let path_bool = SurfacePath.from_name "bool"
@@ -398,18 +437,25 @@ let rec lookup_env_binding = fun env surface_path ->
       else
         lookup_env_binding rest surface_path
 
-let lookup_surface_path = fun state env ~level ~at surface_path ->
+let lookup_value_type = fun env surface_path ->
   match lookup_env_binding env surface_path with
-  | Some binding -> instantiate state ~level binding.ty
+  | Some binding -> Some binding.ty
+  | None -> lookup_builtin surface_path builtin_bindings
+
+let lookup_surface_path = fun state env ~level ~at surface_path ->
+  match lookup_value_type env surface_path with
+  | Some ty -> instantiate state ~level ty
   | None -> (
-      match lookup_builtin surface_path builtin_bindings with
-      | Some ty -> instantiate state ~level ty
-      | None ->
-          add_diagnostic
-            state
-            (unsupported_type at ("unbound value " ^ SurfacePath.to_string surface_path));
-          fresh_tyvar state ~level
+      add_diagnostic
+        state
+        (unsupported_type at ("unbound value " ^ SurfacePath.to_string surface_path));
+      fresh_tyvar state ~level
     )
+
+let lookup_record_label = fun state label ->
+  List.find state.record_labels
+    ~fn:(fun record_label ->
+      SurfacePath.equal record_label.label label)
 
 let literal_type = function
   | TypAst.Int -> TInt
@@ -506,9 +552,9 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
       lower_labeled_type state ~level vars type_expr
   | TypAst.Parenthesized inner ->
       lower_core_type state ~level vars inner
-  | TypAst.Poly _ ->
-      add_diagnostic state (unsupported_type type_expr.origin "polymorphic annotation");
-      fresh_tyvar state ~level
+  | TypAst.Poly { body; _ } ->
+      let ty = lower_core_type state ~level:(level + 1) vars body in
+      generalize level ty
 
 let extend_mono = fun (env: env) (bindings: binding list) ->
   List.fold_left bindings ~init:env ~fn:(fun extended_env binding -> binding :: extended_env)
@@ -531,6 +577,14 @@ let simple_path_name = fun path ->
   match List.reverse (SurfacePath.to_segments path) with
   | name :: _ -> Some name
   | [] -> None
+
+let split_field_path = fun path ->
+  match List.reverse (SurfacePath.to_segments path) with
+  | field :: receiver when not (List.is_empty receiver) -> Some (
+    SurfacePath.from_segments (List.reverse receiver),
+    SurfacePath.from_name field
+  )
+  | _ -> None
 
 let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
   match pattern.kind with
@@ -632,13 +686,26 @@ and infer_labeled_parameter = fun state env ~level label pattern ->
       let binding = make_binding state ~name:(SurfacePath.from_name label) ~ty in
       (ty, [ binding ])
 
+and infer_path_expression = fun state env ~level ~at path ->
+  match lookup_value_type env path with
+  | Some ty -> instantiate state ~level ty
+  | None -> (
+      match split_field_path path with
+      | Some (receiver_path, field) when Option.is_some (lookup_record_label state field) ->
+          let receiver_ty = infer_path_expression state env ~level ~at receiver_path in
+          infer_record_field state ~level ~at receiver_ty field
+      | _ ->
+          add_diagnostic state (unsupported_type at ("unbound value " ^ SurfacePath.to_string path));
+          fresh_tyvar state ~level
+    )
+
 and infer_expression = fun state env ~level (expression: TypAst.expression) ->
   let inferred =
     match expression.kind with
     | TypAst.Literal literal ->
         literal_type literal
     | TypAst.Path path ->
-        lookup_surface_path state env ~level ~at:expression.origin path
+        infer_path_expression state env ~level ~at:expression.origin path
     | TypAst.Tuple elements ->
         TTuple (List.map elements ~fn:(infer_expression state env ~level))
     | TypAst.List elements ->
@@ -648,6 +715,10 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
             let child_ty = infer_expression state env ~level child in
             unify state ~at:child.origin element_ty child_ty);
         TList element_ty
+    | TypAst.Record fields ->
+        infer_record state env ~level ~at:expression.origin fields
+    | TypAst.FieldAccess { receiver; field } ->
+        infer_field_access state env ~level ~at:expression.origin receiver field
     | TypAst.Sequence { left; right } ->
         let _ = infer_expression state env ~level left in
         infer_expression state env ~level right
@@ -721,6 +792,56 @@ and infer_apply_argument = fun state env ~level (argument: TypAst.argument) ->
       add_diagnostic state (unsupported_syntax argument.origin "missing argument value");
       fresh_tyvar state ~level
 
+and infer_record = fun state env ~level ~at fields ->
+  match fields with
+  | [] ->
+      add_diagnostic state (unsupported_syntax at "empty record expression");
+      fresh_tyvar state ~level
+  | fields ->
+      let owner_ty = ref None in
+      List.for_each fields
+        ~fn:(fun (field: TypAst.record_expression_field) ->
+          let value_ty = infer_expression state env ~level field.value in
+          match lookup_record_label state field.name with
+          | None -> add_diagnostic
+            state
+            (unsupported_type
+              field.origin
+              ("unbound record field " ^ SurfacePath.to_string field.name))
+          | Some label ->
+              let label_owner_ty, label_field_ty = instantiate_pair
+                state
+                ~level
+                label.owner_ty
+                label.field_ty in
+              unify state ~at:field.origin label_field_ty value_ty;
+              (
+                match !owner_ty with
+                | Some owner_ty -> unify state ~at:field.origin owner_ty label_owner_ty
+                | None -> owner_ty := Some label_owner_ty
+              ));
+      (
+        match !owner_ty with
+        | Some owner_ty -> owner_ty
+        | None -> fresh_tyvar state ~level
+      )
+
+and infer_record_field = fun state ~level ~at receiver_ty field ->
+  match lookup_record_label state field with
+  | None ->
+      add_diagnostic
+        state
+        (unsupported_type at ("unbound record field " ^ SurfacePath.to_string field));
+      fresh_tyvar state ~level
+  | Some label ->
+      let owner_ty, field_ty = instantiate_pair state ~level label.owner_ty label.field_ty in
+      unify state ~at:at receiver_ty owner_ty;
+      field_ty
+
+and infer_field_access = fun state env ~level ~at receiver field ->
+  let receiver_ty = infer_expression state env ~level receiver in
+  infer_record_field state ~level ~at receiver_ty field
+
 and infer_function = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_function_body state env ~level body
@@ -774,6 +895,10 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Function _ -> true
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
+  | TypAst.Record fields -> List.all
+    fields
+    ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
+  | TypAst.FieldAccess { receiver; _ } -> is_nonexpansive_expression receiver
   | TypAst.Apply { callee; arguments } -> is_constructor_expression callee
   && List.all arguments ~fn:is_nonexpansive_argument
   | TypAst.Sequence _
@@ -865,6 +990,12 @@ let constructor_binding_of_declaration = fun state ~level ~result_ty vars (
   in
   make_binding state ~name:(SurfacePath.from_name constructor.name) ~ty
 
+let bind_record_field_declaration = fun state ~level ~owner_ty vars (
+  field: TypAst.record_field_declaration
+) ->
+  let field_ty = lower_core_type state ~level (ref vars) field.type_annotation in
+  state.record_labels <- { label = SurfacePath.from_name field.name; owner_ty; field_ty } :: state.record_labels
+
 let bind_type_declaration = fun state env ~level (declaration: TypAst.type_declaration) ->
   let vars, arguments = type_parameter_bindings declaration.parameters in
   let result_ty = TCon (SurfacePath.from_name declaration.name, arguments) in
@@ -875,6 +1006,10 @@ let bind_type_declaration = fun state env ~level (declaration: TypAst.type_decla
       |> extend_generalized env ~level
   | TypAst.Alias type_ ->
       let _ = lower_core_type state ~level (ref vars) type_ in
+      env
+  | TypAst.Record fields ->
+      fields
+      |> List.for_each ~fn:(bind_record_field_declaration state ~level ~owner_ty:result_ty vars);
       env
   | TypAst.Abstract ->
       env

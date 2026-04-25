@@ -94,6 +94,10 @@ let render_type_parameters = function
   | [ parameter ] -> render_type_parameter parameter ^ " "
   | parameters -> "(" ^ (parameters |> List.map ~fn:render_type_parameter |> String.concat ", ") ^ ") "
 
+let render_poly_type_parameters = function
+  | [] -> ""
+  | parameters -> (parameters |> List.map ~fn:(fun name -> "'" ^ name) |> String.concat " ") ^ ". "
+
 let render_constructor_path = fun path -> SurfacePath.to_string path
 
 let rec render_type = fun ~type_var_name type_ ->
@@ -166,7 +170,8 @@ let rec render_ast_core_type = fun (type_: TypAst.core_type) ->
   | TypAst.Arrow { left; right } -> render_ast_arrow_parameter left ^ " -> " ^ render_ast_core_type right
   | TypAst.Tuple elements -> elements |> List.map ~fn:render_ast_tuple_element |> String.concat " * "
   | TypAst.Labeled annotation -> render_ast_core_type annotation
-  | TypAst.Poly body -> render_ast_core_type body
+  | TypAst.Poly { parameters; body } -> render_poly_type_parameters parameters
+  ^ render_ast_core_type body
   | TypAst.Parenthesized inner -> render_ast_core_type inner
 
 and render_ast_type_application = fun type_ ->
@@ -206,12 +211,18 @@ let render_type_constructor = fun (constructor: TypAst.type_constructor) ->
   | None -> constructor.name
   | Some payload -> constructor.name ^ " of " ^ render_ast_core_type payload
 
+let render_record_field_declaration = fun (field: TypAst.record_field_declaration) ->
+  field.name ^ " : " ^ render_ast_core_type field.type_annotation ^ ";"
+
 let render_type_definition = fun (definition: TypAst.type_definition) ->
   match definition.kind with
   | TypAst.Abstract -> ""
   | TypAst.Alias type_ -> " = " ^ render_ast_core_type type_
   | TypAst.Variant constructors -> " = "
   ^ (constructors |> List.map ~fn:render_type_constructor |> String.concat " | ")
+  | TypAst.Record fields -> " = { "
+  ^ (fields |> List.map ~fn:render_record_field_declaration |> String.concat " ")
+  ^ " }"
 
 let render_type_declaration = fun (declaration: TypAst.type_declaration) ->
   "type "

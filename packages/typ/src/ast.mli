@@ -31,13 +31,18 @@ and core_type_kind =
   | Arrow of { left: core_type; right: core_type }
   | Tuple of core_type list
   | Labeled of core_type
-  | Poly of core_type
+  | Poly of { parameters: string list; body: core_type }
   | Parenthesized of core_type
 type type_parameter = string option
 type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+}
+type record_field_declaration = {
+  origin: origin;
+  name: string;
+  type_annotation: core_type;
 }
 type type_definition = {
   origin: origin;
@@ -48,6 +53,7 @@ and type_definition_kind =
   | Abstract
   | Alias of core_type
   | Variant of type_constructor list
+  | Record of record_field_declaration list
 type type_declaration = {
   origin: origin;
   name: string;
@@ -104,6 +110,8 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | Record of record_expression_field list
+  | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Function of { parameters: pattern list; body: function_body }
@@ -121,6 +129,12 @@ and match_case = {
   pattern: pattern;
   guard: expression option;
   body: expression;
+}
+
+and record_expression_field = {
+  origin: origin;
+  name: path;
+  value: expression;
 }
 
 and argument = {

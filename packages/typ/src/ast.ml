@@ -38,7 +38,7 @@ and core_type_kind =
   | Arrow of { left: core_type; right: core_type }
   | Tuple of core_type list
   | Labeled of core_type
-  | Poly of core_type
+  | Poly of { parameters: string list; body: core_type }
   | Parenthesized of core_type
 
 type type_parameter = string option
@@ -47,6 +47,12 @@ type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+}
+
+type record_field_declaration = {
+  origin: origin;
+  name: string;
+  type_annotation: core_type;
 }
 
 type type_definition = {
@@ -58,6 +64,7 @@ and type_definition_kind =
   | Abstract
   | Alias of core_type
   | Variant of type_constructor list
+  | Record of record_field_declaration list
 
 type type_declaration = {
   origin: origin;
@@ -116,6 +123,8 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | Record of record_expression_field list
+  | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Function of { parameters: pattern list; body: function_body }
@@ -133,6 +142,12 @@ and match_case = {
   pattern: pattern;
   guard: expression option;
   body: expression;
+}
+
+and record_expression_field = {
+  origin: origin;
+  name: path;
+  value: expression;
 }
 
 and argument = {
@@ -319,6 +334,13 @@ let require_some = fun origin summary value ->
 
 let unsupported_node = fun node summary -> build_failed (origin_from_node node) summary
 
+let poly_type_parameters = fun type_expr ->
+  let names = ref [] in
+  SynAst.TypeExpr.for_each_poly_type_name
+    type_expr
+    ~fn:(fun token -> names := token_text token :: !names);
+  List.reverse !names
+
 let rec build_core_type = fun type_expr ->
   let origin = origin_from_node type_expr in
   (match SynAst.TypeExpr.view type_expr with
@@ -354,7 +376,10 @@ let rec build_core_type = fun type_expr ->
     | SynAst.TypeExpr.Poly { body } ->
         make_core_type
           origin
-          (Poly (build_core_type (require_some origin "missing polymorphic type body" body)))
+          (Poly {
+            parameters = poly_type_parameters type_expr;
+            body = build_core_type (require_some origin "missing polymorphic type body" body)
+          })
     | SynAst.TypeExpr.Parenthesized { inner } ->
         make_core_type
           origin
@@ -505,6 +530,24 @@ and build_match_cases = fun syntax_expression ->
     ~fn:(fun match_case -> cases := build_match_case match_case :: !cases);
   List.reverse !cases
 
+and build_record_expression_field = fun (field: SynAst.RecordExpr.field) ->
+  let origin = origin_from_node field.node in
+  (
+    {
+      origin;
+      name = path_from_syn_path (require_some origin "missing record field name" field.path);
+      value = build_expression (require_some origin "missing record field value" field.value)
+    }:
+      record_expression_field
+  )
+
+and build_record_expression_fields = fun record ->
+  let fields = ref [] in
+  SynAst.RecordExpr.for_each_field
+    record
+    ~fn:(fun field -> fields := build_record_expression_field field :: !fields);
+  List.reverse !fields
+
 and build_expression = fun syntax_expression ->
   let origin = origin_from_node syntax_expression in
   (match SynAst.Expr.view syntax_expression with
@@ -536,6 +579,22 @@ and build_expression = fun syntax_expression ->
         make_expression
           origin
           (List (child_exprs syntax_expression |> List.map ~fn:build_expression))
+    | SynAst.Expr.Record ->
+        let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record expression" in
+        (
+          match SynAst.RecordExpr.base record with
+          | Some _ -> build_failed origin "record update"
+          | None -> make_expression origin (Record (build_record_expression_fields record))
+        )
+    | SynAst.Expr.FieldAccess { target=Some target; field=Some field } ->
+        make_expression
+          origin
+          (FieldAccess {
+            receiver = build_expression target;
+            field = SurfacePath.from_name (token_text field)
+          })
+    | SynAst.Expr.FieldAccess _ ->
+        build_failed origin "incomplete field access"
     | SynAst.Expr.Sequence { left=Some left; right=Some right } ->
         make_expression
           origin
@@ -610,12 +669,9 @@ and build_expression = fun syntax_expression ->
         unsupported_node node (node_summary node)
     | SynAst.Expr.Unknown node ->
         unsupported_node node (node_summary node)
-    | SynAst.Expr.FieldAccess _ ->
-        build_failed origin "field access"
     | SynAst.Expr.Match _ ->
         build_failed origin "match expression"
     | SynAst.Expr.Array
-    | SynAst.Expr.Record
     | SynAst.Expr.RecordUpdate
     | SynAst.Expr.Extension
     | SynAst.Expr.FirstClassModule
@@ -724,6 +780,26 @@ let build_type_constructor = fun constructor ->
       type_constructor
   )
 
+let build_record_field_declaration = fun field ->
+  let origin = origin_from_node field in
+  (
+    {
+      origin;
+      name = SynAst.RecordField.name field |> require_some origin "missing record field name" |> token_text;
+      type_annotation = SynAst.RecordField.type_annotation field
+      |> require_some origin "missing record field type annotation"
+      |> build_core_type
+    }:
+      record_field_declaration
+  )
+
+let build_record_field_declarations = fun record ->
+  let fields = ref [] in
+  SynAst.RecordType.for_each_field
+    record
+    ~fn:(fun field -> fields := build_record_field_declaration field :: !fields);
+  List.reverse !fields
+
 let build_type_declaration_member = fun member ->
   let origin = origin_from_node (SynAst.TypeDeclaration.Member.declaration member) in
   let parameters = ref [] in
@@ -742,7 +818,7 @@ let build_type_declaration_member = fun member ->
           ~fn:(fun constructor -> constructors := build_type_constructor constructor :: !constructors);
         make_type_definition origin (Variant (List.reverse !constructors))
     | None, None, Some record ->
-        build_failed (origin_from_node record) (Syn.SyntaxKind.to_string (SynAst.Node.kind record))
+        make_type_definition origin (Record (build_record_field_declarations record))
     | None, None, None ->
         make_type_definition origin Abstract
   in
