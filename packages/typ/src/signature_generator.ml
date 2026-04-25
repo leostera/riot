@@ -282,15 +282,46 @@ let render_type_definition = fun (definition: TypAst.type_definition) ->
   ^ (fields |> List.map ~fn:render_record_field_declaration |> String.concat " ")
   ^ " }"
 
-let render_type_declaration = fun (declaration: TypAst.type_declaration) ->
-  "type "
+let render_type_declaration_with_keyword = fun keyword (declaration: TypAst.type_declaration) ->
+  keyword
+  ^ " "
   ^ render_type_parameters declaration.parameters
   ^ declaration.name
   ^ render_type_definition declaration.definition
 
+let render_type_declaration = render_type_declaration_with_keyword "type"
+
+let render_type_declaration_group = function
+  | [] -> ""
+  | declaration :: declarations ->
+      let lines = render_type_declaration declaration
+      :: List.map declarations ~fn:(render_type_declaration_with_keyword "and") in
+      String.concat "\n" lines
+
+let ast_type_declaration_groups = fun (ast: TypAst.t) ->
+  match ast.kind with
+  | TypAst.Implementation items ->
+      items |> List.filter_map
+        ~fn:(fun (item: TypAst.structure_item) ->
+          match item.kind with
+          | TypAst.Type declarations -> Some declarations
+          | _ -> None)
+  | TypAst.Interface items ->
+      items |> List.filter_map
+        ~fn:(fun (item: TypAst.signature_item) ->
+          match item.kind with
+          | TypAst.Type declarations -> Some declarations
+          | _ -> None)
+  | TypAst.Empty _ -> []
+
 let from_typings = fun (typings: Check.Typings.t) ->
+  let type_declaration_groups =
+    match ast_type_declaration_groups typings.ast with
+    | [] -> List.map typings.type_declarations ~fn:(fun declaration -> [ declaration ])
+    | groups -> groups
+  in
   let lines = List.append
-    (List.map typings.type_declarations ~fn:render_type_declaration)
+    (List.map type_declaration_groups ~fn:render_type_declaration_group)
     (List.map typings.bindings ~fn:render_binding) in
   match lines with
   | [] -> ""
