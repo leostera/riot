@@ -100,6 +100,21 @@ let render_poly_type_parameters = function
 
 let render_constructor_path = fun path -> SurfacePath.to_string path
 
+let normalized_poly_variant_tags = fun tags ->
+  tags |> List.sort ~compare:String.compare |> List.unique ~compare:String.compare
+
+let render_poly_variant_tags = fun tags ->
+  tags |> normalized_poly_variant_tags |> List.map ~fn:(fun tag -> "`" ^ tag) |> String.concat " | "
+
+let render_poly_variant_type = fun bound tags ->
+  let prefix =
+    if String.equal bound "" then
+      "[ "
+    else
+      "[" ^ bound
+  in
+  prefix ^ render_poly_variant_tags tags ^ " ]"
+
 let rec render_type = fun ~type_var_name type_ ->
   match type_ with
   | TypingContext.Int ->
@@ -135,6 +150,12 @@ let rec render_type = fun ~type_var_name type_ ->
       ^ render_constructor_path path
   | TypingContext.Var id ->
       type_var_name id
+  | TypingContext.PolyVariant { bound; tags } -> (
+      match bound with
+      | TypingContext.Exact -> render_poly_variant_type "" tags
+      | TypingContext.Upper -> render_poly_variant_type "< " tags
+      | TypingContext.Lower -> render_poly_variant_type "> " tags
+    )
 
 and render_postfix_argument = fun ~type_var_name type_ ->
   match type_ with
@@ -172,6 +193,7 @@ let rec render_ast_core_type = fun (type_: TypAst.core_type) ->
   | TypAst.Labeled annotation -> render_ast_core_type annotation
   | TypAst.Poly { parameters; body } -> render_poly_type_parameters parameters
   ^ render_ast_core_type body
+  | TypAst.PolyVariant tags -> render_poly_variant_type "" tags
   | TypAst.Parenthesized inner -> render_ast_core_type inner
 
 and render_ast_type_application = fun type_ ->

@@ -17,7 +17,17 @@ type ty =
   | TTuple of ty list
   | TArrow of ty * ty
   | TCon of SurfacePath.t * ty list
+  | TPolyVariant of poly_variant_bound * poly_variant_tags
   | TVar of tyvar_cell
+
+and poly_variant_bound =
+  | Exact
+  | Upper
+  | Lower
+
+and poly_variant_tags = {
+  mutable tags: string list;
+}
 
 and tyvar_cell = {
   mutable var: tvar;
@@ -86,6 +96,14 @@ let rec prune = function
       linked_ty
   | ty -> ty
 
+let normalized_poly_variant_tags = fun tags ->
+  tags |> List.sort ~compare:String.compare |> List.unique ~compare:String.compare
+
+let merge_poly_variant_tags = fun left right -> normalized_poly_variant_tags (List.append left right)
+
+let render_poly_variant_tags = fun tags ->
+  tags |> normalized_poly_variant_tags |> List.map ~fn:(fun tag -> "`" ^ tag) |> String.concat " | "
+
 let rec string_of_ty = fun ty ->
   match prune ty with
   | TInt -> "int"
@@ -104,11 +122,25 @@ let rec string_of_ty = fun ty ->
   ^ (arguments |> List.map ~fn:string_of_ty |> String.concat ", ")
   ^ ") "
   ^ SurfacePath.to_string path
+  | TPolyVariant (Exact, tags) -> "[ " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Upper, tags) -> "[< " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Lower, tags) -> "[> " ^ render_poly_variant_tags tags.tags ^ " ]"
   | TVar { var=Unbound (id, _) } -> "'_" ^ Int.to_string id
   | TVar { var=Generic id } -> "'a" ^ Int.to_string id
   | TVar { var=Link linked_ty } -> string_of_ty linked_ty
 
 exception Occurs
+
+let poly_variant_tags_subset = fun left right ->
+  List.all left
+    ~fn:(fun tag ->
+      List.exists
+        (fun other ->
+          String.equal tag other)
+        right)
+
+let same_poly_variant_tags = fun left right ->
+  poly_variant_tags_subset left right && poly_variant_tags_subset right left
 
 let rec occurs_adjust_levels = fun id level ty ->
   match prune ty with
@@ -130,6 +162,8 @@ let rec occurs_adjust_levels = fun id level ty ->
       occurs_adjust_levels id level result
   | TCon (_, arguments) ->
       List.for_each arguments ~fn:(occurs_adjust_levels id level)
+  | TPolyVariant _ ->
+      ()
   | TInt
   | TBool
   | TChar
@@ -185,6 +219,41 @@ let rec unify = fun state ~at left right ->
             ^ Int.to_string (List.length left_arguments)
             ^ " but got "
             ^ Int.to_string (List.length right_arguments)))
+  | TPolyVariant (left_bound, left_tags), TPolyVariant (right_bound, right_tags) ->
+      let left = normalized_poly_variant_tags left_tags.tags in
+      let right = normalized_poly_variant_tags right_tags.tags in
+      let merged = merge_poly_variant_tags left right in
+      let ok =
+        match left_bound, right_bound with
+        | (Upper, Upper)
+        | (Lower, Lower) ->
+            left_tags.tags <- merged;
+            right_tags.tags <- merged;
+            true
+        | Exact, Exact ->
+            same_poly_variant_tags left right
+        | Upper, Lower ->
+            poly_variant_tags_subset right left
+        | Lower, Upper ->
+            poly_variant_tags_subset left right
+        | Exact, Upper ->
+            poly_variant_tags_subset left right
+        | Upper, Exact ->
+            poly_variant_tags_subset right left
+        | Exact, Lower ->
+            poly_variant_tags_subset right left
+        | Lower, Exact ->
+            poly_variant_tags_subset left right
+      in
+      if not ok then
+        add_diagnostic
+          state
+          (unsupported_type
+            at
+            ("polymorphic variant mismatch: "
+            ^ string_of_ty (TPolyVariant (left_bound, { tags = left }))
+            ^ " vs "
+            ^ string_of_ty (TPolyVariant (right_bound, { tags = right }))))
   | (TVar ({ var=Unbound (id, level) } as cell), ty)
   | (ty, TVar ({ var=Unbound (id, level) } as cell)) -> (
       try
@@ -216,6 +285,8 @@ let rec generalize = fun level ty ->
       TArrow (generalize level parameter, generalize level result)
   | TCon (path, arguments) ->
       TCon (path, List.map arguments ~fn:(generalize level))
+  | TPolyVariant (bound, tags) ->
+      TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
   | ty ->
       ty
 
@@ -245,6 +316,8 @@ let instantiate = fun state ~level ty ->
         TArrow (loop parameter, loop result)
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
+    | TPolyVariant (bound, tags) ->
+        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
     | ty ->
         ty
   in
@@ -276,6 +349,8 @@ let instantiate_pair = fun state ~level left right ->
         TArrow (loop parameter, loop result)
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
+    | TPolyVariant (bound, tags) ->
+        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
     | ty ->
         ty
   in
@@ -368,6 +443,10 @@ let rec public_type_of_ty = fun vars ty ->
     path;
     arguments = List.map arguments ~fn:(public_type_of_ty vars)
   }
+  | TPolyVariant (bound, tags) -> Typing_context.PolyVariant {
+    bound = public_poly_variant_bound bound;
+    tags = normalized_poly_variant_tags tags.tags
+  }
   | TVar { var=Generic id } -> Typing_context.Var (public_tyvar_id vars id)
   | TVar { var=Unbound (id, _) } -> Typing_context.Var (public_tyvar_id vars id)
   | TVar { var=Link linked_ty } -> public_type_of_ty vars linked_ty
@@ -384,6 +463,11 @@ and public_tyvar_id = fun vars id ->
       vars := (id, public_id) :: !vars;
       public_id
 
+and public_poly_variant_bound = function
+  | Exact -> Typing_context.Exact
+  | Upper -> Typing_context.Upper
+  | Lower -> Typing_context.Lower
+
 let public_scheme_of_ty = fun ty ->
   let vars = ref [] in
   let body = public_type_of_ty vars ty in
@@ -397,7 +481,7 @@ let public_binding_of_binding = fun binding ->
     scheme = public_scheme_of_ty binding.ty
   }
 
-let import_scheme = fun scheme ->
+let rec import_scheme = fun scheme ->
   let rec loop type_expr =
     match type_expr with
     | Typing_context.Int -> TInt
@@ -411,10 +495,19 @@ let import_scheme = fun scheme ->
     | Typing_context.Tuple elements -> TTuple (List.map elements ~fn:loop)
     | Typing_context.Arrow { parameter; result } -> TArrow (loop parameter, loop result)
     | Typing_context.TypeConstructor { path; arguments } -> TCon (path, List.map arguments ~fn:loop)
+    | Typing_context.PolyVariant { bound; tags } -> TPolyVariant (
+      import_poly_variant_bound bound,
+      { tags = normalized_poly_variant_tags tags }
+    )
     | Typing_context.Var id -> TVar { var = Generic id }
   in
   let _ = scheme.Typing_context.forall in
   loop scheme.body
+
+and import_poly_variant_bound = function
+  | Typing_context.Exact -> Exact
+  | Typing_context.Upper -> Upper
+  | Typing_context.Lower -> Lower
 
 let env_of_typing_context = fun typing_context ->
   List.fold_left
@@ -555,6 +648,8 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.Poly { body; _ } ->
       let ty = lower_core_type state ~level:(level + 1) vars body in
       generalize level ty
+  | TypAst.PolyVariant tags ->
+      TPolyVariant (Exact, { tags = normalized_poly_variant_tags tags })
 
 let extend_mono = fun (env: env) (bindings: binding list) ->
   List.fold_left bindings ~init:env ~fn:(fun extended_env binding -> binding :: extended_env)
@@ -604,6 +699,8 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       (fresh_tyvar state ~level, [])
   | TypAst.Literal literal ->
       (literal_type literal, [])
+  | TypAst.PolyVariant tag ->
+      (TPolyVariant (Upper, { tags = [ tag ] }), [])
   | TypAst.Tuple elements ->
       let element_types, binding_groups = elements
       |> List.map ~fn:(fun child -> infer_pattern state env ~level child)
@@ -715,6 +812,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
             let child_ty = infer_expression state env ~level child in
             unify state ~at:child.origin element_ty child_ty);
         TList element_ty
+    | TypAst.PolyVariant tag ->
+        TPolyVariant (Lower, { tags = [ tag ] })
     | TypAst.Record fields ->
         infer_record state env ~level ~at:expression.origin fields
     | TypAst.FieldAccess { receiver; field } ->
@@ -913,6 +1012,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   match expression.kind with
   | TypAst.Literal _
   | TypAst.Path _
+  | TypAst.PolyVariant _
   | TypAst.Function _ -> true
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression

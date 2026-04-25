@@ -39,6 +39,7 @@ and core_type_kind =
   | Tuple of core_type list
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
+  | PolyVariant of string list
   | Parenthesized of core_type
 
 type type_parameter = string option
@@ -93,6 +94,7 @@ and pattern_kind =
   | Path of path
   | Apply of { callee: pattern; argument: pattern }
   | Literal of literal
+  | PolyVariant of string
   | Tuple of pattern list
   | List of pattern list
   | Cons of { head: pattern; tail: pattern }
@@ -123,6 +125,7 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | PolyVariant of string
   | Record of record_expression_field list
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
@@ -342,6 +345,26 @@ let poly_type_parameters = fun type_expr ->
     ~fn:(fun token -> names := token_text token :: !names);
   List.reverse !names
 
+let poly_variant_tags_from_node = fun node ->
+  let tags = ref [] in
+  let saw_backtick = ref false in
+  SynAst.Node.for_each_token node
+    ~fn:(fun token ->
+      match SynAst.Token.kind token with
+      | Syn.SyntaxKind.BACKTICK ->
+          saw_backtick := true
+      | IDENT when !saw_backtick ->
+          tags := token_text token :: !tags;
+          saw_backtick := false
+      | _ ->
+          saw_backtick := false);
+  List.reverse !tags
+
+let poly_variant_tag_from_node = fun origin node ->
+  match poly_variant_tags_from_node node with
+  | tag :: _ -> tag
+  | [] -> build_failed origin "missing polymorphic variant tag"
+
 let rec build_core_type = fun type_expr ->
   let origin = origin_from_node type_expr in
   (match SynAst.TypeExpr.view type_expr with
@@ -386,9 +409,13 @@ let rec build_core_type = fun type_expr ->
           origin
           (Parenthesized (build_core_type (require_some origin "missing parenthesized type" inner)))
     | SynAst.TypeExpr.Opaque node -> (
-        match SynAst.TypeExpr.inner_without_attribute_suffix type_expr with
-        | Some inner -> build_core_type inner
-        | None -> unsupported_node node (node_summary node)
+        match poly_variant_tags_from_node node with
+        | _ :: _ as tags -> make_core_type origin (PolyVariant tags)
+        | [] -> (
+            match SynAst.TypeExpr.inner_without_attribute_suffix type_expr with
+            | Some inner -> build_core_type inner
+            | None -> unsupported_node node (node_summary node)
+          )
       )
     | SynAst.TypeExpr.Error node ->
         unsupported_node node (node_summary node)
@@ -440,6 +467,9 @@ and build_pattern = fun syntax_pattern ->
     | SynAst.Pattern.Literal { token } -> make_pattern
       origin
       (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
+    | SynAst.Pattern.PolyVariant -> make_pattern
+      origin
+      (PolyVariant (poly_variant_tag_from_node origin syntax_pattern))
     | SynAst.Pattern.Tuple -> make_pattern
       origin
       (Tuple (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
@@ -485,7 +515,6 @@ and build_pattern = fun syntax_pattern ->
     | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | SynAst.Pattern.Array
     | SynAst.Pattern.Record
-    | SynAst.Pattern.PolyVariant
     | SynAst.Pattern.Extension
     | SynAst.Pattern.LocalOpen
     | SynAst.Pattern.LocallyAbstractType
@@ -580,6 +609,10 @@ and build_expression = fun syntax_expression ->
         make_expression
           origin
           (List (child_exprs syntax_expression |> List.map ~fn:build_expression))
+    | SynAst.Expr.PolyVariant { payload=None } ->
+        make_expression origin (PolyVariant (poly_variant_tag_from_node origin syntax_expression))
+    | SynAst.Expr.PolyVariant { payload=Some _ } ->
+        build_failed origin "polymorphic variant payload"
     | SynAst.Expr.Record ->
         let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record expression" in
         (
@@ -696,7 +729,6 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.Lazy _
     | SynAst.Expr.Assign _
     | SynAst.Expr.MethodCall _
-    | SynAst.Expr.PolyVariant _
     | SynAst.Expr.ArrayIndex _
     | SynAst.Expr.StringIndex _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind): expression)

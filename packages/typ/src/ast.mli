@@ -32,6 +32,7 @@ and core_type_kind =
   | Tuple of core_type list
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
+  | PolyVariant of string list
   | Parenthesized of core_type
 type type_parameter = string option
 type type_constructor = {
@@ -80,6 +81,7 @@ and pattern_kind =
   | Path of path
   | Apply of { callee: pattern; argument: pattern }
   | Literal of literal
+  | PolyVariant of string
   | Tuple of pattern list
   | List of pattern list
   | Cons of { head: pattern; tail: pattern }
@@ -110,6 +112,7 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | PolyVariant of string
   | Record of record_expression_field list
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }

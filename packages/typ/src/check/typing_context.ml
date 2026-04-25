@@ -11,6 +11,16 @@ and type_constructor = {
   arguments: type_expr list;
 }
 
+and poly_variant_bound =
+  | Exact
+  | Upper
+  | Lower
+
+and poly_variant = {
+  bound: poly_variant_bound;
+  tags: string list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -23,6 +33,7 @@ and type_expr =
   | Tuple of type_expr list
   | Arrow of function_type
   | TypeConstructor of type_constructor
+  | PolyVariant of poly_variant
   | Var of int
 
 type scheme = {
@@ -105,6 +116,11 @@ let rec type_expr_serializer = {
               match value with
               | TypeConstructor value -> Some value
               | _ -> None);
+          Serde.Ser.Variant.newtype "PolyVariant" poly_variant_serializer
+            (fun value ->
+              match value with
+              | PolyVariant value -> Some value
+              | _ -> None);
           Serde.Ser.Variant.newtype "Var" Serde.Ser.int
             (fun value ->
               match value with
@@ -138,6 +154,36 @@ and type_constructor_serializer = {
               "arguments"
               (Serde.Ser.contramap Array.from_list (Serde.Ser.array type_expr_serializer))
               (fun value -> value.arguments);
+          ]) in
+      serializer.run backend state value);
+}
+
+and poly_variant_bound_serializer = Serde.Ser.variant
+  [ Serde.Ser.Variant.unit "Exact"
+      (fun value ->
+        match value with
+        | Exact -> true
+        | _ -> false); Serde.Ser.Variant.unit "Upper"
+      (fun value ->
+        match value with
+        | Upper -> true
+        | _ -> false); Serde.Ser.Variant.unit "Lower"
+      (fun value ->
+        match value with
+        | Lower -> true
+        | _ -> false); ]
+
+and poly_variant_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "bound" poly_variant_bound_serializer (fun value -> value.bound);
+            Serde.Ser.field
+              "tags"
+              (Serde.Ser.contramap Array.from_list (Serde.Ser.array Serde.Ser.string))
+              (fun value -> value.tags);
           ]) in
       serializer.run backend state value);
 }

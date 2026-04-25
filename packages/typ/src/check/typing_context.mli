@@ -8,6 +8,16 @@ and type_constructor = {
   arguments: type_expr list;
 }
 
+and poly_variant_bound =
+  | Exact
+  | Upper
+  | Lower
+
+and poly_variant = {
+  bound: poly_variant_bound;
+  tags: string list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -20,6 +30,7 @@ and type_expr =
   | Tuple of type_expr list
   | Arrow of function_type
   | TypeConstructor of type_constructor
+  | PolyVariant of poly_variant
   | Var of int
 type scheme = {
   forall: int list;
