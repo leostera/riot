@@ -89,6 +89,12 @@ and pattern = {
   kind: pattern_kind;
 }
 
+and record_pattern_field = {
+  origin: origin;
+  name: path;
+  pattern: pattern option;
+}
+
 and pattern_kind =
   | Wildcard
   | Path of path
@@ -97,6 +103,7 @@ and pattern_kind =
   | PolyVariant of string
   | Tuple of pattern list
   | List of pattern list
+  | Record of record_pattern_field list
   | Cons of { head: pattern; tail: pattern }
   | Constraint of { pattern: pattern; annotation: core_type }
   | Alias of { pattern: pattern; alias: pattern }
@@ -469,65 +476,71 @@ let rec build_parameter = fun parameter ->
 and build_pattern = fun syntax_pattern ->
   let origin = origin_from_node syntax_pattern in
   (match SynAst.Pattern.view syntax_pattern with
-    | SynAst.Pattern.Wildcard -> make_pattern origin Wildcard
-    | SynAst.Pattern.Path { path } -> make_pattern origin (Path (path_from_syn_path path))
-    | SynAst.Pattern.Apply { callee; argument } -> make_pattern
-      origin
-      (Apply {
-        callee = build_pattern (require_some origin "missing pattern callee" callee);
-        argument = build_pattern (require_some origin "missing pattern argument" argument)
-      })
-    | SynAst.Pattern.Literal { token } -> make_pattern
-      origin
-      (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
-    | SynAst.Pattern.PolyVariant -> make_pattern
-      origin
-      (PolyVariant (poly_variant_tag_from_node origin syntax_pattern))
-    | SynAst.Pattern.Tuple -> make_pattern
-      origin
-      (Tuple (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
-    | SynAst.Pattern.List -> make_pattern
-      origin
-      (List (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
-    | SynAst.Pattern.Cons { head; tail } -> make_pattern
-      origin
-      (Cons {
-        head = build_pattern (require_some origin "missing cons head" head);
-        tail = build_pattern (require_some origin "missing cons tail" tail)
-      })
-    | SynAst.Pattern.Parenthesized { inner=Some inner } -> make_pattern
-      origin
-      (Parenthesized (build_pattern inner))
-    | SynAst.Pattern.Parenthesized { inner=None } -> make_pattern origin (Literal Unit)
-    | SynAst.Pattern.Constraint { pattern; annotation } -> make_pattern
-      origin
-      (Constraint {
-        pattern = build_pattern (require_some origin "missing constrained pattern" pattern);
-        annotation = build_core_type
-          (require_some origin "missing pattern type annotation" annotation)
-      })
-    | SynAst.Pattern.Alias { pattern; alias } -> make_pattern
-      origin
-      (Alias {
-        pattern = build_pattern (require_some origin "missing aliased pattern" pattern);
-        alias = build_pattern (require_some origin "missing pattern alias" alias)
-      })
-    | SynAst.Pattern.Attribute { inner } -> make_pattern
-      origin
-      (Attribute (build_pattern (require_some origin "missing attributed pattern" inner)))
-    | SynAst.Pattern.LabeledParam parameter -> make_pattern
-      origin
-      (LabeledParameter (build_parameter parameter))
-    | SynAst.Pattern.OptionalParam parameter -> make_pattern
-      origin
-      (OptionalParameter (build_parameter parameter))
-    | SynAst.Pattern.OptionalParamDefault parameter -> make_pattern
-      origin
-      (OptionalParameterDefault (build_parameter parameter))
-    | SynAst.Pattern.Error node -> unsupported_node node (node_summary node)
-    | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
+    | SynAst.Pattern.Wildcard ->
+        make_pattern origin Wildcard
+    | SynAst.Pattern.Path { path } ->
+        make_pattern origin (Path (path_from_syn_path path))
+    | SynAst.Pattern.Apply { callee; argument } ->
+        make_pattern
+          origin
+          (Apply {
+            callee = build_pattern (require_some origin "missing pattern callee" callee);
+            argument = build_pattern (require_some origin "missing pattern argument" argument)
+          })
+    | SynAst.Pattern.Literal { token } ->
+        make_pattern
+          origin
+          (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
+    | SynAst.Pattern.PolyVariant ->
+        make_pattern origin (PolyVariant (poly_variant_tag_from_node origin syntax_pattern))
+    | SynAst.Pattern.Tuple ->
+        make_pattern origin (Tuple (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
+    | SynAst.Pattern.List ->
+        make_pattern origin (List (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
+    | SynAst.Pattern.Record ->
+        let record = SynAst.RecordPattern.cast syntax_pattern |> require_some origin "invalid record pattern" in
+        make_pattern origin (Record (build_record_pattern_fields record))
+    | SynAst.Pattern.Cons { head; tail } ->
+        make_pattern
+          origin
+          (Cons {
+            head = build_pattern (require_some origin "missing cons head" head);
+            tail = build_pattern (require_some origin "missing cons tail" tail)
+          })
+    | SynAst.Pattern.Parenthesized { inner=Some inner } ->
+        make_pattern origin (Parenthesized (build_pattern inner))
+    | SynAst.Pattern.Parenthesized { inner=None } ->
+        make_pattern origin (Literal Unit)
+    | SynAst.Pattern.Constraint { pattern; annotation } ->
+        make_pattern
+          origin
+          (Constraint {
+            pattern = build_pattern (require_some origin "missing constrained pattern" pattern);
+            annotation = build_core_type
+              (require_some origin "missing pattern type annotation" annotation)
+          })
+    | SynAst.Pattern.Alias { pattern; alias } ->
+        make_pattern
+          origin
+          (Alias {
+            pattern = build_pattern (require_some origin "missing aliased pattern" pattern);
+            alias = build_pattern (require_some origin "missing pattern alias" alias)
+          })
+    | SynAst.Pattern.Attribute { inner } ->
+        make_pattern
+          origin
+          (Attribute (build_pattern (require_some origin "missing attributed pattern" inner)))
+    | SynAst.Pattern.LabeledParam parameter ->
+        make_pattern origin (LabeledParameter (build_parameter parameter))
+    | SynAst.Pattern.OptionalParam parameter ->
+        make_pattern origin (OptionalParameter (build_parameter parameter))
+    | SynAst.Pattern.OptionalParamDefault parameter ->
+        make_pattern origin (OptionalParameterDefault (build_parameter parameter))
+    | SynAst.Pattern.Error node ->
+        unsupported_node node (node_summary node)
+    | SynAst.Pattern.Unknown node ->
+        unsupported_node node (node_summary node)
     | SynAst.Pattern.Array
-    | SynAst.Pattern.Record
     | SynAst.Pattern.Extension
     | SynAst.Pattern.LocalOpen
     | SynAst.Pattern.LocallyAbstractType
@@ -535,7 +548,26 @@ and build_pattern = fun syntax_pattern ->
     | SynAst.Pattern.Interval _
     | SynAst.Pattern.Or _
     | SynAst.Pattern.Lazy _
-    | SynAst.Pattern.Exception _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind): pattern)
+    | SynAst.Pattern.Exception _ ->
+        build_failed origin (Syn.SyntaxKind.to_string origin.kind): pattern)
+
+and build_record_pattern_field = fun (field: SynAst.RecordPattern.field) ->
+  let origin = origin_from_node field.node in
+  (
+    {
+      origin;
+      name = path_from_syn_path (require_some origin "missing record pattern field name" field.path);
+      pattern = Option.map field.pattern ~fn:build_pattern
+    }:
+      record_pattern_field
+  )
+
+and build_record_pattern_fields = fun record ->
+  let fields = ref [] in
+  SynAst.RecordPattern.for_each_field
+    record
+    ~fn:(fun field -> fields := build_record_pattern_field field :: !fields);
+  List.reverse !fields
 
 and build_let_binding = fun binding ->
   let origin = origin_from_node binding in

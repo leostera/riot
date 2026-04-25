@@ -757,6 +757,11 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       let tail_ty, tail_bindings = infer_pattern state env ~level tail in
       unify state ~at:(TypAst.pattern_origin tail) tail_ty (TList head_ty);
       (TList head_ty, List.append head_bindings tail_bindings)
+  | TypAst.Record fields ->
+      let owner_ty = fresh_tyvar state ~level in
+      let bindings = fields
+      |> List.flat_map ~fn:(infer_record_pattern_field state env ~level owner_ty) in
+      (owner_ty, bindings)
   | TypAst.Apply { callee; argument } -> (
       match callee.kind with
       | TypAst.Path path ->
@@ -794,6 +799,31 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
   | TypAst.OptionalParameter parameter
   | TypAst.OptionalParameterDefault parameter ->
       infer_parameter state env ~level parameter
+
+and infer_record_pattern_field = fun state env ~level owner_ty (field: TypAst.record_pattern_field) ->
+  match lookup_record_label state field.name with
+  | None ->
+      add_diagnostic
+        state
+        (unsupported_type field.origin ("unbound record field " ^ SurfacePath.to_string field.name));
+      []
+  | Some label ->
+      let label_owner_ty, label_field_ty = instantiate_pair state ~level label.owner_ty label.field_ty in
+      unify state ~at:field.origin owner_ty label_owner_ty;
+      (
+        match field.pattern with
+        | Some pattern ->
+            let pattern_ty, bindings = infer_pattern state env ~level pattern in
+            unify state ~at:(TypAst.pattern_origin pattern) label_field_ty pattern_ty;
+            bindings
+        | None -> (
+            match simple_path_name field.name with
+            | Some name when not (is_uppercase_name name) -> [
+              make_binding state ~name:(SurfacePath.from_name name) ~ty:label_field_ty
+            ]
+            | _ -> []
+          )
+      )
 
 and infer_parameter = fun state env ~level (parameter: TypAst.parameter) ->
   match parameter.kind with

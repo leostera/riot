@@ -76,6 +76,12 @@ and pattern = {
   kind: pattern_kind;
 }
 
+and record_pattern_field = {
+  origin: origin;
+  name: path;
+  pattern: pattern option;
+}
+
 and pattern_kind =
   | Wildcard
   | Path of path
@@ -84,6 +90,7 @@ and pattern_kind =
   | PolyVariant of string
   | Tuple of pattern list
   | List of pattern list
+  | Record of record_pattern_field list
   | Cons of { head: pattern; tail: pattern }
   | Constraint of { pattern: pattern; annotation: core_type }
   | Alias of { pattern: pattern; alias: pattern }
