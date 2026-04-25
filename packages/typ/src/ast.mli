@@ -91,6 +91,7 @@ and pattern_kind =
   | Tuple of pattern list
   | List of pattern list
   | Record of record_pattern_field list
+  | Or of { left: pattern; right: pattern }
   | Cons of { head: pattern; tail: pattern }
   | Constraint of { pattern: pattern; annotation: core_type }
   | Alias of { pattern: pattern; alias: pattern }

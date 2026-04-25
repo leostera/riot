@@ -762,6 +762,11 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       let bindings = fields
       |> List.flat_map ~fn:(infer_record_pattern_field state env ~level owner_ty) in
       (owner_ty, bindings)
+  | TypAst.Or { left; right } ->
+      let left_ty, left_bindings = infer_pattern state env ~level left in
+      let right_ty, right_bindings = infer_pattern state env ~level right in
+      unify state ~at:pattern.origin left_ty right_ty;
+      (left_ty, merge_or_pattern_bindings state pattern.origin left_bindings right_bindings)
   | TypAst.Apply { callee; argument } -> (
       match callee.kind with
       | TypAst.Path path ->
@@ -824,6 +829,34 @@ and infer_record_pattern_field = fun state env ~level owner_ty (field: TypAst.re
             | _ -> []
           )
       )
+
+and merge_or_pattern_bindings = fun state origin left_bindings right_bindings ->
+  let binding_name binding = EntityId.surface_path binding.entity_id in
+  let find_binding name bindings =
+    List.find bindings
+      ~fn:(fun binding ->
+        SurfacePath.equal (binding_name binding) name)
+  in
+  List.for_each left_bindings
+    ~fn:(fun left ->
+      let name = binding_name left in
+      match find_binding name right_bindings with
+      | Some right -> unify state ~at:origin left.ty right.ty
+      | None -> add_diagnostic
+        state
+        (unsupported_type
+          origin
+          ("or-pattern binding missing on right: " ^ SurfacePath.to_string name)));
+  List.for_each right_bindings
+    ~fn:(fun right ->
+      let name = binding_name right in
+      if Option.is_none (find_binding name left_bindings) then
+        add_diagnostic
+          state
+          (unsupported_type
+            origin
+            ("or-pattern binding missing on left: " ^ SurfacePath.to_string name)));
+  left_bindings
 
 and infer_parameter = fun state env ~level (parameter: TypAst.parameter) ->
   match parameter.kind with

@@ -104,6 +104,7 @@ and pattern_kind =
   | Tuple of pattern list
   | List of pattern list
   | Record of record_pattern_field list
+  | Or of { left: pattern; right: pattern }
   | Cons of { head: pattern; tail: pattern }
   | Constraint of { pattern: pattern; annotation: core_type }
   | Alias of { pattern: pattern; alias: pattern }
@@ -500,6 +501,13 @@ and build_pattern = fun syntax_pattern ->
     | SynAst.Pattern.Record ->
         let record = SynAst.RecordPattern.cast syntax_pattern |> require_some origin "invalid record pattern" in
         make_pattern origin (Record (build_record_pattern_fields record))
+    | SynAst.Pattern.Or { left; right } ->
+        make_pattern
+          origin
+          (Or {
+            left = build_pattern (require_some origin "missing left or-pattern" left);
+            right = build_pattern (require_some origin "missing right or-pattern" right)
+          })
     | SynAst.Pattern.Cons { head; tail } ->
         make_pattern
           origin
@@ -546,7 +554,6 @@ and build_pattern = fun syntax_pattern ->
     | SynAst.Pattern.LocallyAbstractType
     | SynAst.Pattern.FirstClassModule
     | SynAst.Pattern.Interval _
-    | SynAst.Pattern.Or _
     | SynAst.Pattern.Lazy _
     | SynAst.Pattern.Exception _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind): pattern)
