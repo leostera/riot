@@ -7,7 +7,7 @@ type t = {
 
 let resolved = fun ~binding_id ~surface_path -> { binding_id; surface_path }
 
-let of_binding_id = fun binding_id -> { binding_id; surface_path = Binding_id.name binding_id }
+let from_binding_id = fun binding_id -> { binding_id; surface_path = Binding_id.name binding_id }
 
 let binding_id = fun value -> value.binding_id
 

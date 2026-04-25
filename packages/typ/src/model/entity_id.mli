@@ -1,7 +1,7 @@
 type t
 val resolved: binding_id:Binding_id.t -> surface_path:Surface_path.t -> t
 
-val of_binding_id: Binding_id.t -> t
+val from_binding_id: Binding_id.t -> t
 
 val binding_id: t -> Binding_id.t
 

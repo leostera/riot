@@ -144,6 +144,6 @@ type t = {
   origin: origin;
   view: view;
 }
-val of_parse_result: source:Model.Source.t -> Syn.Parser.parse_result -> t
+val from_parse_result: source:Model.Source.t -> Syn.Parser.parse_result -> t
 
 val serializer: t Serde.Ser.t

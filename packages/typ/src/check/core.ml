@@ -210,43 +210,43 @@ let instantiate = fun state ~level ty ->
   in
   loop ty
 
-let path_int = SurfacePath.of_name "int"
+let path_int = SurfacePath.from_name "int"
 
-let path_bool = SurfacePath.of_name "bool"
+let path_bool = SurfacePath.from_name "bool"
 
-let path_char = SurfacePath.of_name "char"
+let path_char = SurfacePath.from_name "char"
 
-let path_string = SurfacePath.of_name "string"
+let path_string = SurfacePath.from_name "string"
 
-let path_float = SurfacePath.of_name "float"
+let path_float = SurfacePath.from_name "float"
 
-let path_unit = SurfacePath.of_name "unit"
+let path_unit = SurfacePath.from_name "unit"
 
-let path_list = SurfacePath.of_name "list"
+let path_list = SurfacePath.from_name "list"
 
-let path_option = SurfacePath.of_name "option"
+let path_option = SurfacePath.from_name "option"
 
-let path_none = SurfacePath.of_name "None"
+let path_none = SurfacePath.from_name "None"
 
-let path_some = SurfacePath.of_name "Some"
+let path_some = SurfacePath.from_name "Some"
 
-let path_not = SurfacePath.of_name "not"
+let path_not = SurfacePath.from_name "not"
 
-let path_plus = SurfacePath.of_name "+"
+let path_plus = SurfacePath.from_name "+"
 
-let path_minus = SurfacePath.of_name "-"
+let path_minus = SurfacePath.from_name "-"
 
-let path_star = SurfacePath.of_name "*"
+let path_star = SurfacePath.from_name "*"
 
-let path_slash = SurfacePath.of_name "/"
+let path_slash = SurfacePath.from_name "/"
 
-let path_plus_dot = SurfacePath.of_name "+."
+let path_plus_dot = SurfacePath.from_name "+."
 
-let path_minus_dot = SurfacePath.of_name "-."
+let path_minus_dot = SurfacePath.from_name "-."
 
-let path_star_dot = SurfacePath.of_name "*."
+let path_star_dot = SurfacePath.from_name "*."
 
-let path_slash_dot = SurfacePath.of_name "/."
+let path_slash_dot = SurfacePath.from_name "/."
 
 type builtin = {
   path: SurfacePath.t;
@@ -455,7 +455,7 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.TypeWildcard ->
       fresh_tyvar state ~level
   | TypAst.TypeVar (Some name) ->
-      let name = SurfacePath.of_name name in
+      let name = SurfacePath.from_name name in
       (
         match lookup_type_var vars name with
         | Some ty -> ty
@@ -519,7 +519,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
           match simple_path_name path with
           | Some name when not (is_uppercase_name name) ->
               let ty = fresh_tyvar state ~level in
-              let binding = make_binding state ~name:(SurfacePath.of_name name) ~ty in
+              let binding = make_binding state ~name:(SurfacePath.from_name name) ~ty in
               (ty, [ binding ])
           | Some name ->
               add_diagnostic
@@ -583,7 +583,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
         | TypAst.PatternPath path -> (
             match simple_path_name path with
             | Some alias_name ->
-                let alias_binding = make_binding state ~name:(SurfacePath.of_name alias_name) ~ty:pattern_ty in
+                let alias_binding = make_binding state ~name:(SurfacePath.from_name alias_name) ~ty:pattern_ty in
                 (pattern_ty, alias_binding :: bindings)
             | None -> (pattern_ty, bindings)
           )
@@ -639,7 +639,7 @@ and infer_labeled_parameter = fun state env ~level label pattern ->
       match label with
       | Some label ->
           let ty = fresh_tyvar state ~level in
-          let binding = make_binding state ~name:(SurfacePath.of_name label) ~ty in
+          let binding = make_binding state ~name:(SurfacePath.from_name label) ~ty in
           (ty, [ binding ])
       | None -> (fresh_tyvar state ~level, [])
     )
@@ -822,7 +822,7 @@ let lower_declaration_annotation = fun state ~level origin annotation ->
 
 let bind_declared_value = fun state env ~level ~origin name annotation ->
   let ty = lower_declaration_annotation state ~level origin annotation in
-  let name = SurfacePath.of_name name in
+  let name = SurfacePath.from_name name in
   let binding = make_binding state ~name ~ty in
   let public_binding = public_binding_of_binding binding in
   let extended_env = { binding with ty = generalize level ty } :: env in

@@ -3,9 +3,9 @@ val empty: t
 
 val is_empty: t -> bool
 
-val of_name: string -> t
+val from_name: string -> t
 
-val of_segments: string list -> t
+val from_segments: string list -> t
 
 val to_segments: t -> string list
 

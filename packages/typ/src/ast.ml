@@ -160,7 +160,7 @@ type t = {
   view: view;
 }
 
-let span_of_token_body = fun token ->
+let span_from_token_body = fun token ->
   let _start, end_ = SynAst.Token.raw_range token in
   let width = SynAst.Token.width token in
   (
@@ -173,33 +173,33 @@ let span_of_token_body = fun token ->
     end_
   )
 
-let span_of_node = fun node ->
+let span_from_node = fun node ->
   match SynAst.Node.first_descendant_token node with
   | None ->
       let start, end_ = SynAst.Node.raw_range node in
       Syn.Ceibo.Span.make ~start ~end_
   | Some first ->
-      let start, _ = span_of_token_body first in
+      let start, _ = span_from_token_body first in
       let last_end = ref start in
       SynAst.Node.for_each_token node
         ~fn:(fun token ->
-          let _, end_ = span_of_token_body token in
+          let _, end_ = span_from_token_body token in
           last_end := end_);
       Syn.Ceibo.Span.make ~start ~end_:!last_end
 
-let origin_of_node = fun node -> { span = span_of_node node; kind = SynAst.Node.kind node }
+let origin_from_node = fun node -> { span = span_from_node node; kind = SynAst.Node.kind node }
 
 let token_text = SynAst.Token.text
 
-let path_of_syn_path = fun path ->
+let path_from_syn_path = fun path ->
   let segments = ref [] in
   SynAst.Path.for_each_ident path ~fn:(fun token -> segments := token_text token :: !segments);
-  SurfacePath.of_segments (List.reverse !segments)
+  SurfacePath.from_segments (List.reverse !segments)
 
-let path_of_tokens = fun tokens ->
-  tokens |> List.map ~fn:token_text |> String.concat "" |> SurfacePath.of_name
+let path_from_tokens = fun tokens ->
+  tokens |> List.map ~fn:token_text |> String.concat "" |> SurfacePath.from_name
 
-let literal_of_token = fun token ->
+let literal_from_token = fun token ->
   match SynAst.Token.kind token with
   | Syn.SyntaxKind.INT -> Int
   | FLOAT -> Float
@@ -222,7 +222,7 @@ let child_exprs = fun expression ->
   List.reverse !children
 
 let rec build_core_type = fun type_expr ->
-  let origin = origin_of_node type_expr in
+  let origin = origin_from_node type_expr in
   let view =
     match SynAst.TypeExpr.view type_expr with
     | SynAst.TypeExpr.Wildcard ->
@@ -230,7 +230,7 @@ let rec build_core_type = fun type_expr ->
     | SynAst.TypeExpr.Var { name } ->
         TypeVar (Option.map name ~fn:token_text)
     | SynAst.TypeExpr.Path { path } ->
-        TypePath (path_of_syn_path path)
+        TypePath (path_from_syn_path path)
     | SynAst.TypeExpr.Apply { argument; constructor } ->
         TypeApply {
           argument = Option.map argument ~fn:build_core_type;
@@ -271,7 +271,7 @@ and child_type_exprs = fun type_expr ->
   List.reverse !children
 
 let rec build_parameter = fun parameter ->
-  let origin = origin_of_node parameter in
+  let origin = origin_from_node parameter in
   let view =
     match SynAst.Parameter.view parameter with
     | SynAst.Parameter.Labeled { label; pattern } -> Labeled {
@@ -292,16 +292,16 @@ let rec build_parameter = fun parameter ->
   ({ origin; view }: parameter)
 
 and build_pattern = fun pattern ->
-  let origin = origin_of_node pattern in
+  let origin = origin_from_node pattern in
   let view =
     match SynAst.Pattern.view pattern with
     | SynAst.Pattern.Wildcard -> PatternWildcard
-    | SynAst.Pattern.Path { path } -> PatternPath (path_of_syn_path path)
+    | SynAst.Pattern.Path { path } -> PatternPath (path_from_syn_path path)
     | SynAst.Pattern.Apply { callee; argument } -> PatternApply {
       callee = Option.map callee ~fn:build_pattern;
       argument = Option.map argument ~fn:build_pattern
     }
-    | SynAst.Pattern.Literal { token } -> PatternLiteral (Option.map token ~fn:literal_of_token
+    | SynAst.Pattern.Literal { token } -> PatternLiteral (Option.map token ~fn:literal_from_token
     |> Option.unwrap_or ~default:Unknown)
     | SynAst.Pattern.Tuple -> PatternTuple (child_patterns pattern |> List.map ~fn:build_pattern)
     | SynAst.Pattern.List -> PatternList (child_patterns pattern |> List.map ~fn:build_pattern)
@@ -347,7 +347,7 @@ and build_let_binding = fun binding ->
     binding
     ~fn:(fun parameter -> parameters := build_pattern parameter :: !parameters);
   ({
-      origin = origin_of_node binding;
+      origin = origin_from_node binding;
       pattern = Option.map (SynAst.LetBinding.pattern binding) ~fn:build_pattern;
       parameters = List.reverse !parameters;
       body = Option.map (SynAst.LetBinding.body binding) ~fn:build_expr;
@@ -355,12 +355,12 @@ and build_let_binding = fun binding ->
     }: let_binding)
 
 and build_expr = fun expression ->
-  let origin = origin_of_node expression in
+  let origin = origin_from_node expression in
   let view =
     match SynAst.Expr.view expression with
-    | SynAst.Expr.Literal { token } -> ExprLiteral (Option.map token ~fn:literal_of_token
+    | SynAst.Expr.Literal { token } -> ExprLiteral (Option.map token ~fn:literal_from_token
     |> Option.unwrap_or ~default:Unknown)
-    | SynAst.Expr.Path { path } -> ExprPath (path_of_syn_path path)
+    | SynAst.Expr.Path { path } -> ExprPath (path_from_syn_path path)
     | SynAst.Expr.Parenthesized { inner } -> ExprParenthesized {
       inner = Option.map inner ~fn:build_expr
     }
@@ -386,11 +386,11 @@ and build_expr = fun expression ->
     }
     | SynAst.Expr.Infix { left; operator; right } -> ExprInfix {
       left = Option.map left ~fn:build_expr;
-      operator = Option.map operator ~fn:(fun token -> SurfacePath.of_name (token_text token));
+      operator = Option.map operator ~fn:(fun token -> SurfacePath.from_name (token_text token));
       right = Option.map right ~fn:build_expr
     }
     | SynAst.Expr.Prefix { operator; operand } -> ExprPrefix {
-      operator = Option.map operator ~fn:(fun token -> SurfacePath.of_name (token_text token));
+      operator = Option.map operator ~fn:(fun token -> SurfacePath.from_name (token_text token));
       operand = Option.map operand ~fn:build_expr
     }
     | SynAst.Expr.Let { first_binding; body } -> ExprLet {
@@ -443,25 +443,25 @@ let build_let_declaration = fun declaration ->
     ~fn:(fun binding -> bindings := build_let_binding binding :: !bindings);
   (
     {
-      origin = origin_of_node declaration;
+      origin = origin_from_node declaration;
       recursive = Option.is_some (SynAst.LetDeclaration.rec_token declaration);
       bindings = List.reverse !bindings
     }:
       let_declaration
   )
 
-let name_of_declaration_tokens = fun for_each_token fallback ->
+let name_from_declaration_tokens = fun for_each_token fallback ->
   let tokens = ref [] in
   for_each_token ~fn:(fun token -> tokens := token :: !tokens);
   match List.reverse !tokens with
   | [] -> Option.map fallback ~fn:token_text
-  | tokens -> Some (path_of_tokens tokens |> SurfacePath.to_string)
+  | tokens -> Some (path_from_tokens tokens |> SurfacePath.to_string)
 
 let build_value_declaration = fun declaration ->
   (
     {
-      origin = origin_of_node declaration;
-      name = name_of_declaration_tokens
+      origin = origin_from_node declaration;
+      name = name_from_declaration_tokens
         (SynAst.ValueDeclaration.for_each_name_token declaration)
         (SynAst.ValueDeclaration.name declaration);
       type_annotation = Option.map (SynAst.ValueDeclaration.type_annotation declaration) ~fn:build_core_type
@@ -472,8 +472,8 @@ let build_value_declaration = fun declaration ->
 let build_external_declaration = fun declaration ->
   (
     {
-      origin = origin_of_node declaration;
-      name = name_of_declaration_tokens
+      origin = origin_from_node declaration;
+      name = name_from_declaration_tokens
         (SynAst.ExternalDeclaration.for_each_name_token declaration)
         (SynAst.ExternalDeclaration.name declaration);
       type_annotation = Option.map (SynAst.ExternalDeclaration.type_annotation declaration) ~fn:build_core_type
@@ -482,7 +482,7 @@ let build_external_declaration = fun declaration ->
   )
 
 let build_structure_item = fun item ->
-  let origin = origin_of_node item in
+  let origin = origin_from_node item in
   let view =
     match SynAst.StructureItem.view item with
     | Let declaration -> StructureLet (build_let_declaration declaration)
@@ -510,7 +510,7 @@ let build_structure_item = fun item ->
   ({ origin; view }: structure_item)
 
 let build_signature_item = fun item ->
-  let origin = origin_of_node item in
+  let origin = origin_from_node item in
   let view =
     match SynAst.SignatureItem.view item with
     | Value declaration -> SignatureValue (build_value_declaration declaration)
@@ -536,7 +536,7 @@ let build_signature_item = fun item ->
   in
   ({ origin; view }: signature_item)
 
-let of_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
+let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
   let source_file = SynAst.SourceFile.make parse_result.tree in
   let kind =
     match parse_result.kind with
@@ -560,7 +560,7 @@ let of_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
     | Empty ->
         Empty
   in
-  ({ kind; origin = origin_of_node source_file; view }: t)
+  ({ kind; origin = origin_from_node source_file; view }: t)
 
 let span_serializer = Serde.Ser.record
   (Serde.Ser.fields

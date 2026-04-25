@@ -12,9 +12,9 @@ let is_empty = fun value ->
   | Bare "" -> true
   | _ -> false
 
-let of_name = fun name -> Bare name
+let from_name = fun name -> Bare name
 
-let of_segments = fun segments ->
+let from_segments = fun segments ->
   let rec loop segments =
     match segments with
     | [] -> empty
