@@ -53,6 +53,7 @@ type type_constructor = {
 type record_field_declaration = {
   origin: origin;
   name: string;
+  mutable_: bool;
   type_annotation: core_type;
 }
 
@@ -137,6 +138,7 @@ and expression_kind =
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
+  | Assign of { target: expression; value: expression }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Match of { scrutinee: expression; cases: match_case list }
@@ -696,6 +698,12 @@ and build_expression = fun syntax_expression ->
           })
     | SynAst.Expr.FieldAccess _ ->
         build_failed origin "incomplete field access"
+    | SynAst.Expr.Assign { target=Some target; value=Some value; _ } ->
+        make_expression
+          origin
+          (Assign { target = build_expression target; value = build_expression value })
+    | SynAst.Expr.Assign _ ->
+        build_failed origin "incomplete assignment"
     | SynAst.Expr.Sequence { left=Some left; right=Some right } ->
         make_expression
           origin
@@ -793,7 +801,6 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.While _
     | SynAst.Expr.For _
     | SynAst.Expr.Lazy _
-    | SynAst.Expr.Assign _
     | SynAst.Expr.MethodCall _
     | SynAst.Expr.ArrayIndex _
     | SynAst.Expr.StringIndex _ ->
@@ -892,6 +899,7 @@ let build_record_field_declaration = fun field ->
     {
       origin;
       name = SynAst.RecordField.name field |> require_some origin "missing record field name" |> token_text;
+      mutable_ = Option.is_some (SynAst.RecordField.mutable_token field);
       type_annotation = SynAst.RecordField.type_annotation field
       |> require_some origin "missing record field type annotation"
       |> build_core_type

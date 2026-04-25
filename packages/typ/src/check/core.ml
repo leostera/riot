@@ -928,6 +928,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         infer_record_update state env ~level ~at:expression.origin base fields
     | TypAst.FieldAccess { receiver; field } ->
         infer_field_access state env ~level ~at:expression.origin receiver field
+    | TypAst.Assign { target; value } ->
+        infer_assignment state env ~level ~at:expression.origin target value
     | TypAst.Sequence { left; right } ->
         let _ = infer_expression state env ~level left in
         infer_expression state env ~level right
@@ -1098,6 +1100,21 @@ and infer_field_access = fun state env ~level ~at receiver field ->
   let receiver_ty = infer_expression state env ~level receiver in
   infer_record_field state ~level ~at receiver_ty field
 
+and infer_assignment = fun state env ~level ~at target value ->
+  let value_ty = infer_expression state env ~level value in
+  (
+    match target.kind with
+    | TypAst.FieldAccess { receiver; field } ->
+        let receiver_ty = infer_expression state env ~level receiver in
+        let field_ty = infer_record_field state ~level ~at:target.origin receiver_ty field in
+        unify state ~at:value.origin field_ty value_ty
+    | _ ->
+        add_diagnostic state (unsupported_syntax target.origin "assignment target");
+        let target_ty = infer_expression state env ~level target in
+        unify state ~at:target.origin target_ty value_ty
+  );
+  TUnit
+
 and infer_match = fun state env ~level scrutinee cases ->
   let scrutinee_ty = infer_expression state env ~level scrutinee in
   let result_ty = fresh_tyvar state ~level in
@@ -1179,6 +1196,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
   | TypAst.FieldAccess { receiver; _ } -> is_nonexpansive_expression receiver
+  | TypAst.Assign _ -> false
   | TypAst.Apply { callee; arguments } -> is_constructor_expression callee
   && List.all arguments ~fn:is_nonexpansive_argument
   | TypAst.Sequence _

@@ -277,7 +277,12 @@ let render_type_constructor = fun (constructor: TypAst.type_constructor) ->
   | Some payload -> constructor.name ^ " of " ^ render_ast_core_type payload
 
 let render_record_field_declaration = fun (field: TypAst.record_field_declaration) ->
-  field.name ^ " : " ^ render_ast_core_type field.type_annotation ^ ";"
+  (
+    if field.mutable_ then
+      "mutable "
+    else
+      ""
+  ) ^ field.name ^ " : " ^ render_ast_core_type field.type_annotation ^ ";"
 
 let render_type_definition = fun (definition: TypAst.type_definition) ->
   match definition.kind with

@@ -43,6 +43,7 @@ type type_constructor = {
 type record_field_declaration = {
   origin: origin;
   name: string;
+  mutable_: bool;
   type_annotation: core_type;
 }
 type type_definition = {
@@ -124,6 +125,7 @@ and expression_kind =
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
+  | Assign of { target: expression; value: expression }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Match of { scrutinee: expression; cases: match_case list }
