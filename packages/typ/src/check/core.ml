@@ -1,17 +1,7 @@
 open Std
 open Std.Collections
 
-let iter_fold = fun fold value ~fn ->
-  fold
-    value
-    ~init:()
-    ~fn:(fun item () ->
-      fn item;
-      Syn.Ast.Continue ())
-
-module Ast = Syn.Ast
-module SyntaxKind = Syn.SyntaxKind
-module SyntaxTree = Syn.SyntaxTree
+module TypAst = Ast
 module SurfacePath = Model.Surface_path
 module BindingId = Model.Binding_id
 module EntityId = Model.Entity_id
@@ -50,115 +40,15 @@ type state = {
   mutable diagnostics: Diagnostics.Diagnostic.t list;
 }
 
-let raw_at = fun tree index -> Vector.get_unchecked tree.SyntaxTree.raw_tokens ~at:index
-
-let span_from_raw = fun (span: Ceibo.Span.t) ->
-  Syn.Ceibo.Span.make
-    ~start:span.Ceibo.Span.start
-    ~end_:span.Ceibo.Span.end_
-
-let span_from_ast = span_from_raw
-
-let span_of_raw_range = fun tree ~raw_lo ~raw_hi ->
-  if Int.(raw_hi <= raw_lo) then
-    Syn.Ceibo.Span.make ~start:0 ~end_:0
-  else
-    let first = raw_at tree raw_lo in
-    let last = raw_at tree (Int.sub raw_hi 1) in
-    Syn.Ceibo.Span.make
-      ~start:first.Syn.RawToken.span.Ceibo.Span.start
-      ~end_:last.Syn.RawToken.span.Ceibo.Span.end_
-
-let span_of_node = fun (node: Ast.Node.t) ->
-  let syntax_node = SyntaxTree.node node.tree node.id in
-  match Ast.Node.first_descendant_token node with
-  | Some first ->
-      let first_leaf = SyntaxTree.token first.tree first.id in
-      let first_raw = raw_at node.tree first_leaf.SyntaxTree.body_raw in
-      let last_raw = raw_at node.tree (Int.sub syntax_node.SyntaxTree.raw_hi 1) in
-      Syn.Ceibo.Span.make
-        ~start:first_raw.Syn.RawToken.span.Ceibo.Span.start
-        ~end_:last_raw.Syn.RawToken.span.Ceibo.Span.end_
-  | None -> span_of_raw_range node.tree ~raw_lo:syntax_node.raw_lo ~raw_hi:syntax_node.raw_hi
-
-let span_start = fun span -> span.Syn.Ceibo.Span.start
-
-let span_end = fun span -> span.Syn.Ceibo.Span.end_
-
-let span_of_children = fun tree ~child_count ~child_at ->
-  let first = ref None in
-  let last = ref None in
-  let remember span =
-    (
-      match !first with
-      | Some _ -> ()
-      | None -> first := Some (span_start span)
-    );
-    last := Some (span_end span)
-  in
-  let span_of_child = function
-    | SyntaxTree.Token id ->
-        let leaf = SyntaxTree.token tree id in
-        let raw = raw_at tree leaf.SyntaxTree.body_raw in
-        remember (span_from_raw raw.Syn.RawToken.span)
-    | SyntaxTree.Node id -> remember (span_of_node { Ast.tree; id })
-    | SyntaxTree.Missing missing ->
-        remember (Syn.Ceibo.Span.make ~start:missing.SyntaxTree.offset ~end_:missing.offset)
-  in
-  let rec loop index =
-    if Int.(index < child_count) then (
-      (
-        match child_at index with
-        | Some child -> span_of_child child
-        | None -> ()
-      );
-      loop (Int.add index 1)
-    )
-  in
-  loop 0;
-  match (!first, !last) with
-  | (Some start, Some end_) -> Syn.Ceibo.Span.make ~start ~end_
-  | _ -> Syn.Ceibo.Span.make ~start:0 ~end_:0
-
-let span_of_type_member = fun member ->
-  let declaration = Ast.TypeDeclaration.Member.declaration member in
-  span_of_children
-    (Ast.TypeDeclaration.as_node declaration).tree
-    ~child_count:(Ast.TypeDeclaration.Member.child_count member)
-    ~child_at:(Ast.TypeDeclaration.Member.child_at member)
-
-let span_of_type_declaration = fun declaration ->
-  let span = ref None in
-  let remember next =
-    span := Some (
-      match !span with
-      | None -> next
-      | Some current ->
-          Syn.Ceibo.Span.make
-            ~start:(Int.min (span_start current) (span_start next))
-            ~end_:(Int.max (span_end current) (span_end next))
-    )
-  in
-  iter_fold
-    Ast.TypeDeclaration.fold_member
-    declaration
-    ~fn:(fun member -> remember (span_of_type_member member));
-  match !span with
-  | Some span -> span
-  | None -> span_from_ast (Ast.TypeDeclaration.span declaration)
-
-let unsupported_syntax = fun node summary ->
+let unsupported_syntax = fun origin summary ->
   Diagnostics.Diagnostic.UnsupportedSyntax {
-    span = span_of_node node;
-    kind = Ast.Node.kind node;
+    span = origin.TypAst.span;
+    kind = origin.kind;
     summary;
   }
 
-let unsupported_syntax_with_span = fun ~span ~kind summary ->
-  Diagnostics.Diagnostic.UnsupportedSyntax { span; kind; summary }
-
-let unsupported_type = fun node summary ->
-  Diagnostics.Diagnostic.UnsupportedType { span = span_of_node node; summary }
+let unsupported_type = fun origin summary ->
+  Diagnostics.Diagnostic.UnsupportedType { span = origin.TypAst.span; summary }
 
 let add_diagnostic = fun state diagnostic -> state.diagnostics <- diagnostic :: state.diagnostics
 
@@ -166,14 +56,12 @@ let make_state = fun ~next_binding_stamp -> { next_tyvar = 0; next_binding_stamp
 
 let fresh_tyvar = fun state ~level ->
   let id = state.next_tyvar in
-  state.next_tyvar <- Int.add state.next_tyvar 1;
-  TVar {
-    var = Unbound (id, level);
-  }
+  state.next_tyvar <- state.next_tyvar + 1;
+  TVar { var = Unbound (id, level) }
 
 let fresh_binding_id = fun state ~name ->
   let stamp = state.next_binding_stamp in
-  state.next_binding_stamp <- Int.add stamp 1;
+  state.next_binding_stamp <- stamp + 1;
   BindingId.local ~stamp ~name
 
 let make_binding = fun state ~name ~ty ->
@@ -181,8 +69,7 @@ let make_binding = fun state ~name ~ty ->
   let entity_id = EntityId.resolved ~binding_id ~surface_path:name in
   { binding_id; entity_id; ty }
 
-let rec prune = fun ty ->
-  match ty with
+let rec prune = function
   | TVar ({ var = Link linked_ty } as cell) ->
       let linked_ty = prune linked_ty in
       cell.var <- Link linked_ty;
@@ -199,10 +86,7 @@ let rec string_of_ty = fun ty ->
   | TUnit -> "unit"
   | TList element -> string_of_ty element ^ " list"
   | TOption element -> string_of_ty element ^ " option"
-  | TTuple elements ->
-      elements
-      |> List.map ~fn:string_of_ty
-      |> String.concat " * "
+  | TTuple elements -> elements |> List.map ~fn:string_of_ty |> String.concat " * "
   | TArrow (parameter, result) -> string_of_ty parameter ^ " -> " ^ string_of_ty result
   | TVar { var = Unbound (id, _) } -> "'_" ^ Int.to_string id
   | TVar { var = Generic id } -> "'a" ^ Int.to_string id
@@ -213,10 +97,8 @@ exception Occurs
 let rec occurs_adjust_levels = fun id level ty ->
   match prune ty with
   | TVar ({ var = Unbound (other_id, other_level) } as cell) ->
-      if Int.equal id other_id then
-        raise Occurs;
-      if other_level > level then
-        cell.var <- Unbound (other_id, level)
+      if Int.equal id other_id then raise Occurs;
+      if other_level > level then cell.var <- Unbound (other_id, level)
   | TVar { var = Generic _ } -> ()
   | TList element -> occurs_adjust_levels id level element
   | TOption element -> occurs_adjust_levels id level element
@@ -224,39 +106,27 @@ let rec occurs_adjust_levels = fun id level ty ->
   | TArrow (parameter, result) ->
       occurs_adjust_levels id level parameter;
       occurs_adjust_levels id level result
-  | TInt
-  | TBool
-  | TChar
-  | TString
-  | TFloat
-  | TUnit -> ()
+  | TInt | TBool | TChar | TString | TFloat | TUnit -> ()
   | TVar { var = Link linked_ty } -> occurs_adjust_levels id level linked_ty
 
 let rec unify = fun state ~at left right ->
-  match (prune left, prune right) with
-  | (TVar left_cell, TVar right_cell) when Ptr.equal left_cell right_cell -> ()
-  | (TInt, TInt)
-  | (TBool, TBool)
-  | (TChar, TChar)
-  | (TString, TString)
-  | (TFloat, TFloat)
+  match prune left, prune right with
+  | TVar left_cell, TVar right_cell when Ptr.equal left_cell right_cell -> ()
+  | (TInt, TInt) | (TBool, TBool) | (TChar, TChar) | (TString, TString) | (TFloat, TFloat)
   | (TUnit, TUnit) -> ()
-  | (TList left, TList right) -> unify state ~at left right
-  | (TOption left, TOption right) -> unify state ~at left right
-  | (TTuple left, TTuple right) ->
+  | TList left, TList right -> unify state ~at left right
+  | TOption left, TOption right -> unify state ~at left right
+  | TTuple left, TTuple right ->
       if Int.equal (List.length left) (List.length right) then
-        List.zip left right
-        |> List.for_each ~fn:(fun (left, right) -> unify state ~at left right)
+        List.zip left right |> List.for_each ~fn:(fun (left, right) -> unify state ~at left right)
       else
-        add_diagnostic
-          state
-          (unsupported_type
-            at
-            ("tuple arity mismatch: expected "
-            ^ Int.to_string (List.length left)
-            ^ " but got "
-            ^ Int.to_string (List.length right)))
-  | (TArrow (left_parameter, left_result), TArrow (right_parameter, right_result)) ->
+        add_diagnostic state
+          (unsupported_type at
+             ("tuple arity mismatch: expected "
+             ^ Int.to_string (List.length left)
+             ^ " but got "
+             ^ Int.to_string (List.length right)))
+  | TArrow (left_parameter, left_result), TArrow (right_parameter, right_result) ->
       unify state ~at left_parameter right_parameter;
       unify state ~at left_result right_result
   | (TVar ({ var = Unbound (id, level) } as cell), ty)
@@ -267,13 +137,10 @@ let rec unify = fun state ~at left right ->
       with
       | Occurs -> add_diagnostic state (unsupported_type at "occurs check failed")
     )
-  | (TVar { var = Generic _ }, _)
-  | (_, TVar { var = Generic _ }) ->
+  | (TVar { var = Generic _ }, _) | (_, TVar { var = Generic _ }) ->
       add_diagnostic state (unsupported_type at "unexpected generic type variable")
-  | (left, right) ->
-      add_diagnostic
-        state
-        (unsupported_type at ("type mismatch: " ^ string_of_ty left ^ " vs " ^ string_of_ty right))
+  | left, right ->
+      add_diagnostic state (unsupported_type at ("type mismatch: " ^ string_of_ty left ^ " vs " ^ string_of_ty right))
 
 let rec generalize = fun level ty ->
   match prune ty with
@@ -305,28 +172,6 @@ let instantiate = fun state ~level ty ->
     | ty -> ty
   in
   loop ty
-
-let path_segments = fun path ->
-  let segments = Vector.with_capacity ~size:(Ast.Ident.segment_count path) in
-  iter_fold
-    Ast.Ident.fold_segment
-    path
-    ~fn:(fun token -> Vector.push segments ~value:(Ast.Token.text token));
-  Vector.to_array segments
-  |> Array.to_list
-
-let surface_path_of_path = fun path ->
-  path
-  |> path_segments
-  |> SurfacePath.of_segments
-
-let surface_path_of_name_tokens = fun for_each_token ->
-  let text = IO.Buffer.create ~size:16 in
-  for_each_token ~fn:(fun token -> IO.Buffer.add_string text (Ast.Token.text token));
-  IO.Buffer.contents text
-  |> SurfacePath.of_name
-
-let token_text_surface_path = fun token -> SurfacePath.of_name (Ast.Token.text token)
 
 let path_int = SurfacePath.of_name "int"
 
@@ -366,58 +211,29 @@ let path_star_dot = SurfacePath.of_name "*."
 
 let path_slash_dot = SurfacePath.of_name "/."
 
-type builtin = {
-  path: SurfacePath.t;
-  ty: ty;
-}
+type builtin = { path: SurfacePath.t; ty: ty }
+
+let generic_var = fun id -> TVar { var = Generic id }
 
 let builtin_bindings = [
-  {
-    path = path_not;
-    ty = TArrow (TBool, TBool);
-  };
-  {
-    path = path_plus;
-    ty = TArrow (TInt, TArrow (TInt, TInt));
-  };
-  {
-    path = path_minus;
-    ty = TArrow (TInt, TArrow (TInt, TInt));
-  };
-  {
-    path = path_star;
-    ty = TArrow (TInt, TArrow (TInt, TInt));
-  };
-  {
-    path = path_slash;
-    ty = TArrow (TInt, TArrow (TInt, TInt));
-  };
-  {
-    path = path_plus_dot;
-    ty = TArrow (TFloat, TArrow (TFloat, TFloat));
-  };
-  {
-    path = path_minus_dot;
-    ty = TArrow (TFloat, TArrow (TFloat, TFloat));
-  };
-  {
-    path = path_star_dot;
-    ty = TArrow (TFloat, TArrow (TFloat, TFloat));
-  };
-  {
-    path = path_slash_dot;
-    ty = TArrow (TFloat, TArrow (TFloat, TFloat));
-  };
+  { path = path_none; ty = TOption (generic_var 0) };
+  { path = path_some; ty = TArrow (generic_var 0, TOption (generic_var 0)) };
+  { path = path_not; ty = TArrow (TBool, TBool) };
+  { path = path_plus; ty = TArrow (TInt, TArrow (TInt, TInt)) };
+  { path = path_minus; ty = TArrow (TInt, TArrow (TInt, TInt)) };
+  { path = path_star; ty = TArrow (TInt, TArrow (TInt, TInt)) };
+  { path = path_slash; ty = TArrow (TInt, TArrow (TInt, TInt)) };
+  { path = path_plus_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
+  { path = path_minus_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
+  { path = path_star_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
+  { path = path_slash_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
 ]
 
 let rec lookup_builtin = fun path builtins ->
   match builtins with
   | [] -> None
   | builtin :: rest ->
-      if SurfacePath.equal builtin.path path then
-        Some builtin.ty
-      else
-        lookup_builtin path rest
+      if SurfacePath.equal builtin.path path then Some builtin.ty else lookup_builtin path rest
 
 let rec public_type_of_ty = fun vars ty ->
   match prune ty with
@@ -450,18 +266,15 @@ and public_tyvar_id = fun vars id ->
 let public_scheme_of_ty = fun ty ->
   let vars = ref [] in
   let body = public_type_of_ty vars ty in
-  let forall =
-    !vars
-    |> List.map ~fn:(fun (_, public_id) -> public_id)
-    |> List.reverse
-  in
+  let forall = !vars |> List.map ~fn:(fun (_, public_id) -> public_id) |> List.reverse in
   { Typing_context.forall; body }
 
-let public_binding_of_binding = fun binding -> {
-  Typing_context.binding_id = binding.binding_id;
-  entity_id = binding.entity_id;
-  scheme = public_scheme_of_ty binding.ty;
-}
+let public_binding_of_binding = fun binding ->
+  {
+    Typing_context.binding_id = binding.binding_id;
+    entity_id = binding.entity_id;
+    scheme = public_scheme_of_ty binding.ty;
+  }
 
 let import_scheme = fun scheme ->
   let rec loop type_expr =
@@ -482,16 +295,15 @@ let import_scheme = fun scheme ->
   loop scheme.body
 
 let env_of_typing_context = fun typing_context ->
-  List.fold_left
-    typing_context.Typing_context.values
-    ~init:[]
-    ~fn:(fun env (value_binding: Typing_context.value_binding) ->
+  List.fold_left typing_context.Typing_context.values ~init:[] ~fn:(
+    fun env (value_binding: Typing_context.value_binding) ->
       {
         binding_id = value_binding.binding_id;
         entity_id = value_binding.entity_id;
         ty = import_scheme value_binding.scheme;
       }
-      :: env)
+      :: env
+  )
 
 let rec lookup_env_binding = fun env surface_path ->
   match env with
@@ -509,771 +321,434 @@ let lookup_surface_path = fun state env ~level ~at surface_path ->
       match lookup_builtin surface_path builtin_bindings with
       | Some ty -> instantiate state ~level ty
       | None ->
-          add_diagnostic
-            state
-            (unsupported_type at ("unbound value " ^ SurfacePath.to_string surface_path));
+          add_diagnostic state (unsupported_type at ("unbound value " ^ SurfacePath.to_string surface_path));
           fresh_tyvar state ~level
     )
 
-let literal_type_of_token = fun token ->
-  match Ast.Token.kind token with
-  | SyntaxKind.INT -> TInt
-  | SyntaxKind.FLOAT -> TFloat
-  | SyntaxKind.CHAR -> TChar
-  | SyntaxKind.STRING -> TString
-  | SyntaxKind.TRUE_KW
-  | SyntaxKind.FALSE_KW -> TBool
-  | _ -> TUnit
-
-let rec collect_parameter_pattern = fun parameters pattern ->
-  match Ast.Pattern.view pattern with
-  | Ast.Pattern.Constraint { pattern = inner; _ } -> collect_parameter_pattern parameters inner
-  | _ -> Vector.push parameters ~value:pattern
-
-let child_exprs = fun expr ->
-  let children = Vector.with_capacity ~size:(Ast.Expr.child_expr_count expr) in
-  iter_fold Ast.Expr.fold_child_expr expr ~fn:(fun child -> Vector.push children ~value:child);
-  Vector.to_array children
-  |> Array.to_list
-
-let child_patterns = fun pattern ->
-  let children = Vector.with_capacity ~size:(Ast.Pattern.child_pattern_count pattern) in
-  iter_fold
-    Ast.Pattern.fold_child_pattern
-    pattern
-    ~fn:(fun child -> Vector.push children ~value:child);
-  Vector.to_array children
-  |> Array.to_list
-
-let let_binding_parameters = fun binding ->
-  let parameters = Vector.with_capacity ~size:(Ast.LetBinding.parameter_count binding) in
-  iter_fold
-    Ast.LetBinding.fold_parameter
-    binding
-    ~fn:(fun parameter -> Vector.push parameters ~value:parameter);
-  Vector.to_array parameters
-  |> Array.to_list
-
-let let_binding_return_annotations = fun binding ->
-  let annotations = Vector.with_capacity ~size:1 in
-  let seen_first_pattern = ref false in
-  iter_fold
-    Ast.Node.fold_child_node
-    (Ast.LetBinding.as_node binding)
-    ~fn:(fun node ->
-      match Ast.cast_result_to_option (Ast.Pattern.cast node) with
-      | Some pattern ->
-          if !seen_first_pattern then
-            (
-              match Ast.Node.kind node with
-              | Syn.SyntaxKind.CONSTRAINT_PATTERN -> (
-                  match Ast.Pattern.view pattern with
-                  | Ast.Pattern.Constraint { annotation; _ } ->
-                      Vector.push annotations ~value:annotation
-                  | _ -> ()
-                )
-              | _ -> ()
-            )
-          else
-            seen_first_pattern := true
-      | None -> ());
-  Vector.to_array annotations
-  |> Array.to_list
-
-let fun_parameters = fun expr ->
-  let parameters = Vector.with_capacity ~size:(Ast.Expr.parameter_count expr) in
-  iter_fold
-    Ast.Expr.fold_parameter
-    expr
-    ~fn:(fun parameter -> Vector.push parameters ~value:parameter);
-  Vector.to_array parameters
-  |> Array.to_list
-
-let path_last_name = fun path ->
-  match Ast.Ident.last_segment path with
-  | Some token -> Some (Ast.Token.text token)
-  | None -> None
-
-let is_uppercase_ascii = fun char ->
-  let code = Char.code char in
-  code >= Char.code 'A' && code <= Char.code 'Z'
-
-let is_constructor_path = fun path ->
-  match path_last_name path with
-  | Some name when String.length name > 0 -> is_uppercase_ascii (String.get_unchecked name ~at:0)
-  | _ -> false
-
-let surface_path_is_qualified = fun path ->
-  match SurfacePath.to_segments path with
-  | _ :: _ :: _ -> true
-  | _ -> false
-
-let unsupported_qualified_path = fun node summary ->
-  Diagnostics.Diagnostic.UnsupportedSyntax {
-    span = span_of_node (Ast.Expr.as_node node);
-    kind = SyntaxKind.FIELD_ACCESS_EXPR;
-    summary;
-  }
+let literal_type = function
+  | TypAst.Int -> TInt
+  | TypAst.Float -> TFloat
+  | TypAst.Char -> TChar
+  | TypAst.String -> TString
+  | TypAst.Bool -> TBool
+  | TypAst.Unit | TypAst.Unknown -> TUnit
 
 let rec lookup_type_var = fun vars name ->
-  match vars with
+  match !vars with
   | [] -> None
   | (other_name, ty) :: rest ->
       if SurfacePath.equal name other_name then
         Some ty
-      else
-        lookup_type_var rest name
-
-let type_expr_is_coercion_marker = fun type_expr ->
-  match Ast.TypeExpr.view type_expr with
-  | Ast.TypeExpr.Unknown node -> String.equal (Ast.Node.text node) ">"
-  | _ -> false
-
-let first_non_coercion_type_arg = fun args ->
-  let rec loop index =
-    if Int.(index >= Vector.length args) then
-      None
-    else
-      let argument = Vector.get_unchecked args ~at:index in
-      if type_expr_is_coercion_marker argument then
-        loop (Int.add index 1)
-      else
-        Some argument
-  in
-  loop 0
-
-let rec lower_core_type = fun state ~level vars type_expr ->
-  match Ast.TypeExpr.view type_expr with
-  | Ast.TypeExpr.Wildcard -> fresh_tyvar state ~level
-  | Ast.TypeExpr.Var { name } -> (
-      let name = token_text_surface_path name in
-      match lookup_type_var vars name with
-      | Some ty -> ty
-      | None -> fresh_tyvar state ~level
-    )
-  | Ast.TypeExpr.Ident { ident } -> (
-      let path = surface_path_of_path ident in
-      match path with
-      | path when SurfacePath.equal path path_int -> TInt
-      | path when SurfacePath.equal path path_bool -> TBool
-      | path when SurfacePath.equal path path_char -> TChar
-      | path when SurfacePath.equal path path_string -> TString
-      | path when SurfacePath.equal path path_float -> TFloat
-      | path when SurfacePath.equal path path_unit -> TUnit
-      | _ ->
-          add_diagnostic
-            state
-            (unsupported_type
-              (Ast.TypeExpr.as_node type_expr)
-              ("unsupported type constructor " ^ SurfacePath.to_string path));
-          fresh_tyvar state ~level
-    )
-  | Ast.TypeExpr.Apply { ident; args } -> (
-      let path = surface_path_of_path ident in
-      if Int.equal (Vector.length args) 0 && SurfacePath.equal path path_unit then
-        TUnit
-      else
-        match first_non_coercion_type_arg args with
-        | Some argument ->
-            let lowered_argument = lower_core_type state ~level vars argument in
-            if SurfacePath.equal path path_list then
-              TList lowered_argument
-            else if SurfacePath.equal path path_option then
-              TOption lowered_argument
-            else (
-              add_diagnostic
-                state
-                (unsupported_type
-                  (Ast.TypeExpr.as_node type_expr)
-                  ("unsupported type constructor " ^ SurfacePath.to_string path));
-              fresh_tyvar state ~level
-            )
-        | None ->
-            add_diagnostic
-              state
-              (unsupported_type
-                (Ast.Ident.as_node ident)
-                ("unsupported type constructor " ^ SurfacePath.to_string path));
-            fresh_tyvar state ~level
-    )
-  | Ast.TypeExpr.Arrow { arg = parameter_type; ret = result_type; _ } ->
-      TArrow (
-        lower_core_type state ~level vars parameter_type,
-        lower_core_type state ~level vars result_type
+      else (
+        vars := rest;
+        let result = lookup_type_var vars name in
+        vars := (other_name, ty) :: rest;
+        result
       )
-  | Ast.TypeExpr.Tuple _ -> TTuple (lower_tuple_type_elements state ~level vars type_expr)
-  | Ast.TypeExpr.Poly _ ->
-      add_diagnostic
-        state
-        (unsupported_type (Ast.TypeExpr.as_node type_expr) "polymorphic annotation");
-      fresh_tyvar state ~level
-  | Ast.TypeExpr.Error node ->
-      add_diagnostic state (unsupported_type node "invalid type");
-      fresh_tyvar state ~level
-  | Ast.TypeExpr.Unknown node ->
-      add_diagnostic state (unsupported_type node "unsupported type");
+
+let bind_type_var = fun vars name ty -> vars := (name, ty) :: !vars
+
+let type_of_constructor = fun state ~level ~at path arguments ->
+  match arguments with
+  | [] when SurfacePath.equal path path_int -> TInt
+  | [] when SurfacePath.equal path path_bool -> TBool
+  | [] when SurfacePath.equal path path_char -> TChar
+  | [] when SurfacePath.equal path path_string -> TString
+  | [] when SurfacePath.equal path path_float -> TFloat
+  | [] when SurfacePath.equal path path_unit -> TUnit
+  | [ element ] when SurfacePath.equal path path_list -> TList element
+  | [ element ] when SurfacePath.equal path path_option -> TOption element
+  | _ ->
+      add_diagnostic state (unsupported_type at ("unsupported type constructor " ^ SurfacePath.to_string path));
       fresh_tyvar state ~level
 
-and child_type_exprs = fun type_expr ->
-  let children = Vector.with_capacity ~size:(Ast.TypeExpr.child_type_count type_expr) in
-  iter_fold
-    Ast.TypeExpr.fold_child_type
-    type_expr
-    ~fn:(fun child -> Vector.push children ~value:child);
-  Vector.to_array children
-  |> Array.to_list
+let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) ->
+  let rec loop arguments (current: TypAst.core_type) =
+    match current.TypAst.view with
+    | TypAst.TypeApply { argument = Some argument; constructor = Some constructor } ->
+        loop (lower_core_type state ~level vars argument :: arguments) constructor
+    | TypAst.TypeApply { argument = None; constructor = Some constructor } ->
+        loop (fresh_tyvar state ~level :: arguments) constructor
+    | TypAst.TypeApply { constructor = None; _ } ->
+        add_diagnostic state (unsupported_type type_expr.origin "type application");
+        fresh_tyvar state ~level
+    | TypAst.TypePath path -> type_of_constructor state ~level ~at:current.origin path (List.reverse arguments)
+    | _ ->
+        add_diagnostic state (unsupported_type current.origin "type application constructor");
+        fresh_tyvar state ~level
+  in
+  loop [] type_expr
 
-and lower_tuple_type_elements = fun state ~level vars type_expr ->
-  match Ast.TypeExpr.view type_expr with
-  | Ast.TypeExpr.Tuple { parts } ->
-      let items = Vector.with_capacity ~size:(Vector.length parts) in
-      Vector.for_each
-        parts
-        ~fn:(fun part ->
-          lower_tuple_type_elements state ~level vars part
-          |> List.for_each ~fn:(fun item -> Vector.push items ~value:item));
-      Vector.to_array items
-      |> Array.to_list
-  | _ -> [ lower_core_type state ~level vars type_expr ]
+and lower_labeled_type = fun state ~level vars (type_expr: TypAst.core_type) ->
+  match type_expr.TypAst.view with
+  | TypAst.TypeLabeled { annotation = Some annotation } -> lower_core_type state ~level vars annotation
+  | TypAst.TypeLabeled { annotation = None } ->
+      add_diagnostic state (unsupported_type type_expr.origin "missing labeled type annotation");
+      fresh_tyvar state ~level
+  | _ -> lower_core_type state ~level vars type_expr
+
+and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
+  match type_expr.TypAst.view with
+  | TypAst.TypeWildcard -> fresh_tyvar state ~level
+  | TypAst.TypeVar (Some name) ->
+      let name = SurfacePath.of_name name in
+      (
+        match lookup_type_var vars name with
+        | Some ty -> ty
+        | None ->
+            let ty = fresh_tyvar state ~level in
+            bind_type_var vars name ty;
+            ty
+      )
+  | TypAst.TypeVar None ->
+      add_diagnostic state (unsupported_type type_expr.origin "missing type variable");
+      fresh_tyvar state ~level
+  | TypAst.TypePath path -> type_of_constructor state ~level ~at:type_expr.origin path []
+  | TypAst.TypeApply _ -> lower_apply_type state ~level vars type_expr
+  | TypAst.TypeArrow { left = Some left; right = Some right } ->
+      TArrow (lower_labeled_type state ~level vars left, lower_core_type state ~level vars right)
+  | TypAst.TypeArrow _ ->
+      add_diagnostic state (unsupported_type type_expr.origin "arrow type");
+      fresh_tyvar state ~level
+  | TypAst.TypeTuple elements -> TTuple (List.map elements ~fn:(lower_core_type state ~level vars))
+  | TypAst.TypeLabeled _ -> lower_labeled_type state ~level vars type_expr
+  | TypAst.TypePoly _ ->
+      add_diagnostic state (unsupported_type type_expr.origin "polymorphic annotation");
+      fresh_tyvar state ~level
+  | TypAst.TypeUnsupported summary ->
+      add_diagnostic state (unsupported_type type_expr.origin summary);
+      fresh_tyvar state ~level
+  | TypAst.TypeError summary ->
+      add_diagnostic state (unsupported_type type_expr.origin summary);
+      fresh_tyvar state ~level
 
 let extend_mono = fun (env: env) (bindings: binding list) ->
-  List.fold_left
-    bindings
-    ~init:env
-    ~fn:(fun extended_env binding -> binding :: extended_env)
+  List.fold_left bindings ~init:env ~fn:(fun extended_env binding -> binding :: extended_env)
 
 let extend_generalized = fun (env: env) ~level (bindings: binding list) ->
-  List.fold_left
-    bindings
-    ~init:env
-    ~fn:(fun extended_env binding ->
-      { binding with ty = generalize level binding.ty } :: extended_env)
+  List.fold_left bindings ~init:env ~fn:(
+    fun extended_env binding -> { binding with ty = generalize level binding.ty } :: extended_env
+  )
 
-let rec infer_pattern = fun state env ~level pattern ->
-  let _ = env in
-  match Ast.Pattern.view pattern with
-  | Ast.Pattern.Unit -> (TUnit, [])
-  | Ast.Pattern.Construct { constructor = path; payload } ->
-      infer_constructor_pattern state env ~level pattern path payload
-  | Ast.Pattern.Ident { ident } when is_constructor_path ident ->
-      infer_constructor_pattern state env ~level pattern ident None
-  | Ast.Pattern.Ident { ident } ->
-      let ty = fresh_tyvar state ~level in
-      let name = surface_path_of_path ident in
-      let binding = make_binding state ~name ~ty in
-      (ty, [ binding ])
-  | Ast.Pattern.Wildcard -> (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Literal { token } -> (literal_type_of_token token, [])
-  | Ast.Pattern.Tuple { parts } ->
-      let (element_types, binding_groups) =
-        (
-          Vector.to_array parts
-          |> Array.to_list
-        )
-        |> List.map ~fn:(fun element -> infer_pattern state env ~level element)
+let is_uppercase_name = fun name ->
+  match String.get name ~at:0 with
+  | Some char -> char >= 'A' && char <= 'Z'
+  | None -> false
+
+let simple_path_name = fun path ->
+  match List.reverse (SurfacePath.to_segments path) with
+  | name :: _ -> Some name
+  | [] -> None
+
+let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
+  match pattern.TypAst.view with
+  | TypAst.PatternPath path ->
+      if SurfacePath.equal path path_none then
+        (TOption (fresh_tyvar state ~level), [])
+      else (
+        match simple_path_name path with
+        | Some name when not (is_uppercase_name name) ->
+            let ty = fresh_tyvar state ~level in
+            let binding = make_binding state ~name:(SurfacePath.of_name name) ~ty in
+            (ty, [ binding ])
+        | Some name ->
+            add_diagnostic state (unsupported_syntax pattern.origin ("unsupported constructor pattern " ^ name));
+            (fresh_tyvar state ~level, [])
+        | None ->
+            add_diagnostic state (unsupported_syntax pattern.origin "path pattern");
+            (fresh_tyvar state ~level, [])
+      )
+  | TypAst.PatternWildcard -> (fresh_tyvar state ~level, [])
+  | TypAst.PatternLiteral literal -> (literal_type literal, [])
+  | TypAst.PatternTuple elements ->
+      let element_types, binding_groups =
+        elements
+        |> List.map ~fn:(fun child -> infer_pattern state env ~level child)
         |> List.unzip
       in
       (TTuple element_types, List.concat binding_groups)
-  | Ast.Pattern.Constraint { pattern = inner; annotation } ->
-      let (pattern_ty, bindings) = infer_pattern state env ~level inner in
-      let annotated = lower_core_type state ~level [] annotation in
-      unify state ~at:(Ast.Pattern.as_node pattern) pattern_ty annotated;
-      (pattern_ty, bindings)
-  | Ast.Pattern.Alias { pattern = inner; alias } ->
-      let (pattern_ty, bindings) = infer_pattern state env ~level inner in
-      let alias_name =
-        match Ast.Pattern.view alias with
-        | Ast.Pattern.Ident { ident } -> surface_path_of_path ident
-        | _ -> SurfacePath.of_name (Ast.Pattern.text alias)
-      in
-      let alias_binding = make_binding state ~name:alias_name ~ty:pattern_ty in
-      (pattern_ty, alias_binding :: bindings)
-  | Ast.Pattern.List { items } ->
+  | TypAst.PatternList elements ->
       let element_ty = fresh_tyvar state ~level in
       let bindings =
-        (
-          Vector.to_array items
-          |> Array.to_list
+        elements
+        |> List.flat_map ~fn:(
+          fun child ->
+            let inferred_ty, bindings = infer_pattern state env ~level child in
+            unify state ~at:child.origin element_ty inferred_ty;
+            bindings
         )
-        |> List.flat_map
-          ~fn:(fun element ->
-            let (inferred_ty, bindings) = infer_pattern state env ~level element in
-            unify state ~at:(Ast.Pattern.as_node element) element_ty inferred_ty;
-            bindings)
       in
       (TList element_ty, bindings)
-  | Ast.Pattern.Cons { head; tail } ->
-      let (head_ty, head_bindings) = infer_pattern state env ~level head in
-      let (tail_ty, tail_bindings) = infer_pattern state env ~level tail in
-      unify state ~at:(Ast.Pattern.as_node pattern) tail_ty (TList head_ty);
+  | TypAst.PatternCons { head = Some head; tail = Some tail } ->
+      let head_ty, head_bindings = infer_pattern state env ~level head in
+      let tail_ty, tail_bindings = infer_pattern state env ~level tail in
+      unify state ~at:tail.origin tail_ty (TList head_ty);
       (TList head_ty, List.append head_bindings tail_bindings)
-  | Ast.Pattern.Lazy { pattern = inner } ->
-      add_diagnostic state (unsupported_syntax (Ast.Pattern.as_node pattern) "lazy pattern");
-      let _ = infer_pattern state env ~level inner in
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Exception { pattern = inner } ->
-      add_diagnostic state (unsupported_syntax (Ast.Pattern.as_node pattern) "exception pattern");
-      let _ = infer_pattern state env ~level inner in
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Interval _
-  | Ast.Pattern.Or _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Pattern.as_node pattern) "operator pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Array _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Pattern.as_node pattern) "array pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Record _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Pattern.as_node pattern) "record pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.PolyVariant _ ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Pattern.as_node pattern) "polymorphic variant pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.FirstClassModule _ ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Pattern.as_node pattern) "first-class module pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Error node ->
-      add_diagnostic state (unsupported_syntax node "invalid pattern");
-      (fresh_tyvar state ~level, [])
-  | Ast.Pattern.Unknown node ->
-      if Syn.SyntaxKind.(Ast.Node.kind node = CONSTRUCT_PATTERN) then
-        add_diagnostic state (unsupported_syntax node "operator pattern")
-      else
-        add_diagnostic state (unsupported_syntax node "unsupported pattern");
-      (fresh_tyvar state ~level, [])
-
-and infer_constructor_pattern = fun state env ~level pattern path argument ->
-  let path = surface_path_of_path path in
-  match (path, argument) with
-  | (path, None) when SurfacePath.equal path path_none -> (TOption (fresh_tyvar state ~level), [])
-  | (path, Some argument) when SurfacePath.equal path path_some ->
-      let (argument_ty, bindings) = infer_pattern state env ~level argument in
-      (TOption argument_ty, bindings)
-  | (path, _) ->
-      add_diagnostic
-        state
-        (unsupported_syntax
-          (Ast.Pattern.as_node pattern)
-          ("unsupported constructor pattern " ^ SurfacePath.to_string path));
-      (fresh_tyvar state ~level, [])
-
-let rec infer_expression = fun state env ~level expression ->
-  match Ast.Expr.view expression with
-  | Ast.Expr.Unit -> TUnit
-  | Ast.Expr.Ident { ident } when is_constructor_path ident ->
-      infer_constructor_expression state env ~level expression ident None
-  | Ast.Expr.Ident { ident } ->
-      let surface_path = surface_path_of_path ident in
-      if surface_path_is_qualified surface_path then (
-        add_diagnostic state (unsupported_qualified_path expression "field access");
-        fresh_tyvar state ~level
-      ) else
-        lookup_surface_path state env ~level ~at:(Ast.Expr.as_node expression) surface_path
-  | Ast.Expr.Literal { token } -> literal_type_of_token token
-  | Ast.Expr.Tuple { items } ->
-      TTuple (
-        List.map
-          (
-            Vector.to_array items
-            |> Array.to_list
-          )
-          ~fn:(infer_expression state env ~level)
-      )
-  | Ast.Expr.List { items } ->
-      let element_ty = fresh_tyvar state ~level in
-      List.for_each
-        (
-          Vector.to_array items
-          |> Array.to_list
-        )
-        ~fn:(fun element ->
-          let inferred = infer_expression state env ~level element in
-          unify state ~at:(Ast.Expr.as_node element) element_ty inferred);
-      TList element_ty
-  | Ast.Expr.If { condition; then_branch; else_branch } ->
-      let condition_ty = infer_expression state env ~level condition in
-      unify state ~at:(Ast.Expr.as_node expression) condition_ty TBool;
-      let then_ty = infer_expression state env ~level then_branch in
-      let else_ty =
-        match else_branch with
-        | Some else_branch -> infer_expression state env ~level else_branch
-        | None -> TUnit
-      in
-      unify state ~at:(Ast.Expr.as_node expression) then_ty else_ty;
-      then_ty
-  | Ast.Expr.Fun { body = Ast.Expr.Body_expr body; _ } ->
-      infer_lambda state env ~level (fun_parameters expression) body
-  | Ast.Expr.Fun { body = Ast.Expr.Body_cases _; _ } ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "function expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.Apply { callee; argument } -> (
-      match Ast.Expr.view callee with
-      | Ast.Expr.Ident { ident } when is_constructor_path ident ->
-          infer_constructor_expression state env ~level expression ident (Some argument)
+  | TypAst.PatternApply { callee = Some callee; argument = Some argument } -> (
+      match callee.view with
+      | TypAst.PatternPath path when SurfacePath.equal path path_some ->
+          let argument_ty, bindings = infer_pattern state env ~level argument in
+          (TOption argument_ty, bindings)
+      | TypAst.PatternPath path ->
+          add_diagnostic state (unsupported_syntax pattern.origin ("unsupported constructor pattern " ^ SurfacePath.to_string path));
+          (fresh_tyvar state ~level, [])
       | _ ->
-          let callee_ty = infer_expression state env ~level callee in
-          let argument_ty = infer_apply_argument state env ~level argument in
-          let result_ty = fresh_tyvar state ~level in
-          unify state ~at:(Ast.Expr.as_node expression) callee_ty (TArrow (argument_ty, result_ty));
-          result_ty
+          add_diagnostic state (unsupported_syntax pattern.origin "constructor pattern");
+          (fresh_tyvar state ~level, [])
     )
-  | Ast.Expr.Let { first_binding; body } ->
-      infer_let_expression state env ~level expression first_binding body
-  | Ast.Expr.Annotated { expr = inner; annotation } ->
-      let inferred = infer_expression state env ~level inner in
-      let annotated = lower_core_type state ~level [] annotation in
-      unify state ~at:(Ast.Expr.as_node expression) inferred annotated;
+  | TypAst.PatternConstraint { pattern = Some inner; annotation = Some annotation } ->
+      let pattern_ty, bindings = infer_pattern state env ~level inner in
+      let annotated = lower_core_type state ~level (ref []) annotation in
+      unify state ~at:pattern.origin pattern_ty annotated;
+      (pattern_ty, bindings)
+  | TypAst.PatternAlias { pattern = Some inner; alias = Some alias } ->
+      let pattern_ty, bindings = infer_pattern state env ~level inner in
+      (
+        match alias.view with
+        | TypAst.PatternPath path -> (
+            match simple_path_name path with
+            | Some alias_name ->
+                let alias_binding = make_binding state ~name:(SurfacePath.of_name alias_name) ~ty:pattern_ty in
+                (pattern_ty, alias_binding :: bindings)
+            | None -> (pattern_ty, bindings)
+          )
+        | _ -> (pattern_ty, bindings)
+      )
+  | TypAst.PatternAttribute { inner = Some inner } -> infer_pattern state env ~level inner
+  | TypAst.PatternAttribute { inner = None } ->
+      add_diagnostic state (unsupported_syntax pattern.origin "attribute pattern");
+      (fresh_tyvar state ~level, [])
+  | TypAst.PatternLabeledParam parameter | TypAst.PatternOptionalParam parameter
+  | TypAst.PatternOptionalParamDefault parameter -> infer_parameter state env ~level parameter
+  | TypAst.PatternApply _ | TypAst.PatternCons _ | TypAst.PatternConstraint _ | TypAst.PatternAlias _ ->
+      add_diagnostic state (unsupported_syntax pattern.origin "incomplete pattern");
+      (fresh_tyvar state ~level, [])
+  | TypAst.PatternUnsupported summary | TypAst.PatternError summary ->
+      add_diagnostic state (unsupported_syntax pattern.origin summary);
+      (fresh_tyvar state ~level, [])
+
+and infer_parameter = fun state env ~level (parameter: TypAst.parameter) ->
+  match parameter.TypAst.view with
+  | TypAst.Labeled { label; pattern } ->
+      add_diagnostic state (unsupported_syntax parameter.origin "labeled parameter");
+      infer_labeled_parameter state env ~level label pattern
+  | TypAst.Optional { label; pattern } ->
+      add_diagnostic state (unsupported_syntax parameter.origin "optional parameter");
+      infer_labeled_parameter state env ~level label pattern
+  | TypAst.OptionalDefault { label; pattern; default } ->
+      add_diagnostic state (unsupported_syntax parameter.origin "optional parameter");
+      let ty, bindings = infer_labeled_parameter state env ~level label pattern in
+      (
+        match default with
+        | Some default ->
+            let default_ty = infer_expression state env ~level default in
+            unify state ~at:parameter.origin ty default_ty
+        | None -> ()
+      );
+      (ty, bindings)
+  | TypAst.UnknownParameter summary ->
+      add_diagnostic state (unsupported_syntax parameter.origin summary);
+      (fresh_tyvar state ~level, [])
+
+and infer_labeled_parameter = fun state env ~level label pattern ->
+  match pattern with
+  | Some pattern -> infer_pattern state env ~level pattern
+  | None -> (
+      match label with
+      | Some label ->
+          let ty = fresh_tyvar state ~level in
+          let binding = make_binding state ~name:(SurfacePath.of_name label) ~ty in
+          (ty, [ binding ])
+      | None -> (fresh_tyvar state ~level, [])
+    )
+
+and infer_expression = fun state env ~level (expression: TypAst.expr) ->
+  match expression.TypAst.view with
+  | TypAst.ExprLiteral literal -> literal_type literal
+  | TypAst.ExprPath path -> lookup_surface_path state env ~level ~at:expression.origin path
+  | TypAst.ExprParenthesized { inner = Some inner } -> infer_expression state env ~level inner
+  | TypAst.ExprParenthesized { inner = None } -> TUnit
+  | TypAst.ExprAttribute { inner = Some inner } -> infer_expression state env ~level inner
+  | TypAst.ExprAttribute { inner = None } ->
+      add_diagnostic state (unsupported_syntax expression.origin "attribute expression");
+      fresh_tyvar state ~level
+  | TypAst.ExprTyped { expr = Some expr; annotation = Some annotation } ->
+      let inferred = infer_expression state env ~level expr in
+      let annotated = lower_core_type state ~level (ref []) annotation in
+      unify state ~at:expression.origin inferred annotated;
       inferred
-  | Ast.Expr.Infix { left; operator; right } ->
-      infer_infix state env ~level expression left operator right
-  | Ast.Expr.Sequence { left; right = Some right } ->
+  | TypAst.ExprTyped { expr = Some expr; annotation = None } -> infer_expression state env ~level expr
+  | TypAst.ExprTuple elements -> TTuple (List.map elements ~fn:(infer_expression state env ~level))
+  | TypAst.ExprList elements ->
+      let element_ty = fresh_tyvar state ~level in
+      elements
+      |> List.for_each ~fn:(
+        fun child ->
+          let child_ty = infer_expression state env ~level child in
+          unify state ~at:child.origin element_ty child_ty
+      );
+      TList element_ty
+  | TypAst.ExprSequence { left = Some left; right = Some right } ->
       let _ = infer_expression state env ~level left in
       infer_expression state env ~level right
-  | Ast.Expr.Sequence { left; right = None } -> infer_expression state env ~level left
-  | Ast.Expr.Prefix { operator; operand } ->
-      infer_prefix state env ~level expression operator operand
-  | Ast.Expr.Match _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "match expression");
+  | TypAst.ExprSequence { left = Some left; right = None } -> infer_expression state env ~level left
+  | TypAst.ExprIf { condition = Some condition; then_branch = Some then_branch; else_branch } ->
+      let condition_ty = infer_expression state env ~level condition in
+      unify state ~at:condition.origin condition_ty TBool;
+      let then_ty = infer_expression state env ~level then_branch in
+      (
+        match else_branch with
+        | Some else_branch ->
+            let else_ty = infer_expression state env ~level else_branch in
+            unify state ~at:expression.origin then_ty else_ty
+        | None -> unify state ~at:expression.origin then_ty TUnit
+      );
+      then_ty
+  | TypAst.ExprApply _ -> infer_apply state env ~level expression
+  | TypAst.ExprInfix { left = Some left; operator = Some operator; right = Some right } ->
+      let callee_ty = lookup_surface_path state env ~level ~at:expression.origin operator in
+      let left_ty = infer_expression state env ~level left in
+      let right_ty = infer_expression state env ~level right in
+      let result_ty = fresh_tyvar state ~level in
+      unify state ~at:expression.origin callee_ty (TArrow (left_ty, TArrow (right_ty, result_ty)));
+      result_ty
+  | TypAst.ExprPrefix { operator = Some operator; operand = Some operand } ->
+      let callee_ty = lookup_surface_path state env ~level ~at:expression.origin operator in
+      let operand_ty = infer_expression state env ~level operand in
+      let result_ty = fresh_tyvar state ~level in
+      unify state ~at:expression.origin callee_ty (TArrow (operand_ty, result_ty));
+      result_ty
+  | TypAst.ExprLet { first_binding = Some binding; body = Some body } ->
+      let extended_env, _ = infer_let_binding state env ~level ~recursive:false binding in
+      infer_expression state extended_env ~level body
+  | TypAst.ExprAssert { argument = Some argument } ->
+      let inferred = infer_expression state env ~level argument in
+      unify state ~at:expression.origin inferred TBool;
+      TUnit
+  | TypAst.ExprLabeledArg _ ->
+      add_diagnostic state (unsupported_syntax expression.origin "labeled argument expression");
       fresh_tyvar state ~level
-  | Ast.Expr.LocalOpen _
-  | Ast.Expr.LetModule _
-  | Ast.Expr.LetException _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "local module binding");
+  | TypAst.ExprOptionalArg _ ->
+      add_diagnostic state (unsupported_syntax expression.origin "optional argument expression");
       fresh_tyvar state ~level
-  | Ast.Expr.Array _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "array expression");
+  | TypAst.ExprUnsupported summary | TypAst.ExprError summary ->
+      add_diagnostic state (unsupported_syntax expression.origin summary);
       fresh_tyvar state ~level
-  | Ast.Expr.Record _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "record expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.PolyVariant _ ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Expr.as_node expression) "polymorphic variant expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.While _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "while expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.For _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "for expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.FieldAccess _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "field access");
-      fresh_tyvar state ~level
-  | Ast.Expr.Assign _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "assignment");
-      fresh_tyvar state ~level
-  | Ast.Expr.Try _ ->
-      add_diagnostic state (unsupported_syntax (Ast.Expr.as_node expression) "try expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.Error node ->
-      add_diagnostic state (unsupported_syntax node "invalid expression");
-      fresh_tyvar state ~level
-  | Ast.Expr.Unknown node ->
-      if
-        Syn.SyntaxKind.(Ast.Node.kind node = ARRAY_INDEX_EXPR)
-        || Syn.SyntaxKind.(Ast.Node.kind node = STRING_INDEX_EXPR)
-      then
-        add_diagnostic state (unsupported_syntax node "index expression")
-      else if
-        Option.is_some (Ast.cast_result_to_option (Ast.FirstClassModuleExpr.cast expression))
-      then
-        add_diagnostic state (unsupported_syntax node "first-class module expression")
-      else
-        add_diagnostic state (unsupported_syntax node "unsupported expression");
+  | TypAst.ExprTyped _ | TypAst.ExprSequence _ | TypAst.ExprIf _ | TypAst.ExprInfix _
+  | TypAst.ExprPrefix _ | TypAst.ExprLet _ | TypAst.ExprAssert _ ->
+      add_diagnostic state (unsupported_syntax expression.origin (Syn.SyntaxKind.to_string expression.origin.kind));
       fresh_tyvar state ~level
 
-and infer_constructor_expression = fun state env ~level expression path payload ->
-  let path = surface_path_of_path path in
-  match (path, payload) with
-  | (path, None) when SurfacePath.equal path path_none -> TOption (fresh_tyvar state ~level)
-  | (path, Some payload) when SurfacePath.equal path path_some ->
-      TOption (infer_expression state env ~level payload)
-  | (path, _) ->
-      let diagnostic =
-        if surface_path_is_qualified path && Option.is_none payload then
-          unsupported_qualified_path
-            expression
-            ("unsupported constructor " ^ SurfacePath.to_string path)
-        else
-          unsupported_syntax
-            (Ast.Expr.as_node expression)
-            ("unsupported constructor " ^ SurfacePath.to_string path)
-      in
-      add_diagnostic state diagnostic;
-      fresh_tyvar state ~level
-
-and infer_infix = fun state env ~level expression left operator right ->
-  let surface_path = token_text_surface_path operator in
-  let callee_ty =
-    lookup_surface_path state env ~level ~at:(Ast.Expr.as_node expression) surface_path
+and infer_apply = fun state env ~level (expression: TypAst.expr) ->
+  let rec collect arguments (current: TypAst.expr) =
+    match current.TypAst.view with
+    | TypAst.ExprApply { callee = Some callee; argument = Some argument } -> collect (argument :: arguments) callee
+    | TypAst.ExprApply { callee = Some callee; argument = None } -> collect arguments callee
+    | _ -> (current, arguments)
   in
-  let left_ty = infer_expression state env ~level left in
-  let right_ty = infer_expression state env ~level right in
-  let result_ty = fresh_tyvar state ~level in
-  unify
-    state
-    ~at:(Ast.Expr.as_node expression)
-    callee_ty
-    (TArrow (left_ty, TArrow (right_ty, result_ty)));
-  result_ty
+  let callee, arguments = collect [] expression in
+  let callee_ty = infer_expression state env ~level callee in
+  List.fold_left arguments ~init:callee_ty ~fn:(
+    fun function_ty argument ->
+      let argument_ty = infer_apply_argument state env ~level argument in
+      let result_ty = fresh_tyvar state ~level in
+      unify state ~at:expression.origin function_ty (TArrow (argument_ty, result_ty));
+      result_ty
+  )
 
-and infer_prefix = fun state env ~level expression operator operand ->
-  let surface_path = token_text_surface_path operator in
-  let callee_ty =
-    lookup_surface_path state env ~level ~at:(Ast.Expr.as_node expression) surface_path
-  in
-  let operand_ty = infer_expression state env ~level operand in
-  let result_ty = fresh_tyvar state ~level in
-  unify state ~at:(Ast.Expr.as_node expression) callee_ty (TArrow (operand_ty, result_ty));
-  result_ty
-
-and infer_apply_argument = fun state env ~level argument ->
-  if Syn.SyntaxKind.(Ast.Expr.kind argument = LABELED_ARG) then (
-    add_diagnostic state (unsupported_syntax (Ast.Expr.as_node argument) "labeled argument");
-    match child_exprs argument with
-    | value :: _ -> infer_expression state env ~level value
-    | [] -> fresh_tyvar state ~level
-  ) else if Syn.SyntaxKind.(Ast.Expr.kind argument = OPTIONAL_ARG) then (
-    add_diagnostic state (unsupported_syntax (Ast.Expr.as_node argument) "optional argument");
-    match child_exprs argument with
-    | value :: _ -> infer_expression state env ~level value
-    | [] -> fresh_tyvar state ~level
-  ) else
-    infer_expression state env ~level argument
+and infer_apply_argument = fun state env ~level (argument: TypAst.expr) ->
+  match argument.TypAst.view with
+  | TypAst.ExprLabeledArg { value = Some value; _ } ->
+      add_diagnostic state (unsupported_syntax argument.origin "labeled argument");
+      infer_expression state env ~level value
+  | TypAst.ExprOptionalArg { value = Some value; _ } ->
+      add_diagnostic state (unsupported_syntax argument.origin "optional argument");
+      infer_expression state env ~level value
+  | TypAst.ExprLabeledArg _ | TypAst.ExprOptionalArg _ ->
+      add_diagnostic state (unsupported_syntax argument.origin "missing argument value");
+      fresh_tyvar state ~level
+  | _ -> infer_expression state env ~level argument
 
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_expression state env ~level body
   | parameter :: rest ->
-      let (parameter_ty, parameter_bindings) = infer_parameter state env ~level parameter in
+      let parameter_ty, parameter_bindings = infer_pattern state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
       let result_ty = infer_lambda state extended_env ~level rest body in
       TArrow (parameter_ty, result_ty)
 
-and infer_parameter = fun state env ~level parameter ->
-  match Ast.Parameter.view parameter with
-  | Ast.Parameter.Param { label = Ast.Parameter.NoLabel; pattern = Some pattern } ->
-      if
-        Option.is_some (Ast.cast_result_to_option (Ast.LocallyAbstractTypePattern.cast pattern))
-      then (
-        add_diagnostic
-          state
-          (unsupported_syntax (Ast.Pattern.as_node pattern) "locally abstract parameter");
-        (fresh_tyvar state ~level, [])
-      ) else
-        infer_pattern state env ~level pattern
-  | Ast.Parameter.Param { label = Ast.Parameter.Labeled _; _ } ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Parameter.as_node parameter) "labeled parameter");
-      infer_labeled_parameter state env ~level parameter
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { default = None; _ }; _ } ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Parameter.as_node parameter) "optional parameter");
-      infer_labeled_parameter state env ~level parameter
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { default = Some _; _ }; _ } ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.Parameter.as_node parameter) "optional parameter");
-      infer_optional_default_parameter state env ~level parameter
-  | Ast.Parameter.Param { label = Ast.Parameter.NoLabel; pattern = None } -> (
-    fresh_tyvar state ~level,
-    []
-  )
-  | Ast.Parameter.Unknown _ -> (fresh_tyvar state ~level, [])
-
-and infer_labeled_parameter = fun state env ~level parameter ->
-  match Ast.Parameter.view parameter with
-  | Ast.Parameter.Param { label = Ast.Parameter.Labeled { name = Some label }; pattern = None }
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { name = Some label; default = None }; pattern = None } ->
-      let ty = fresh_tyvar state ~level in
-      let binding = make_binding state ~name:(token_text_surface_path label) ~ty in
-      (ty, [ binding ])
-  | Ast.Parameter.Param { label = Ast.Parameter.Labeled _; pattern = Some pattern }
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { default = None; _ }; pattern = Some pattern } ->
-      infer_pattern state env ~level pattern
-  | _ -> (fresh_tyvar state ~level, [])
-
-and infer_optional_default_parameter = fun state env ~level parameter ->
-  match Ast.Parameter.view parameter with
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { name = Some label; default }; pattern = None } ->
-      let ty = fresh_tyvar state ~level in
-      let binding = make_binding state ~name:(token_text_surface_path label) ~ty in
-      (
-        match default with
-        | Some default ->
-            let default_ty = infer_expression state env ~level default in
-            unify state ~at:(Ast.Parameter.as_node parameter) ty default_ty
-        | None -> ()
-      );
-      (ty, [ binding ])
-  | Ast.Parameter.Param { label = Ast.Parameter.Optional { default; _ }; pattern = Some pattern } ->
-      let (ty, bindings) = infer_pattern state env ~level pattern in
-      (
-        match default with
-        | Some default ->
-            let default_ty = infer_expression state env ~level default in
-            unify state ~at:(Ast.Parameter.as_node parameter) ty default_ty
-        | None -> ()
-      );
-      (ty, bindings)
-  | _ -> (fresh_tyvar state ~level, [])
-
-and infer_let_expression = fun state env ~level syntax_node first_binding body ->
-  let (extended_env, _) =
-    infer_let_binding_like
-      state
-      env
-      ~level
-      ~syntax_node:(Ast.Expr.as_node syntax_node)
-      first_binding
-  in
-  infer_expression state extended_env ~level body
-
-and infer_let_binding_like = fun state env ~level ~syntax_node binding ->
-  let parameters = let_binding_parameters binding in
-  let return_annotations = let_binding_return_annotations binding in
-  let binding_view = Ast.LetBinding.view binding in
+and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
+  if recursive then add_diagnostic state (unsupported_syntax binding.TypAst.origin "recursive let binding");
   let value_ty =
-    match binding_view with
-    | Ast.LetBinding.Binding { body = bound_value; _ } when List.is_empty parameters ->
-        infer_expression
-          state
-          env
-          ~level:(Int.add level 1)
-          bound_value
-    | Ast.LetBinding.Binding { body = bound_value; _ } ->
-        infer_lambda
-          state
-          env
-          ~level:(Int.add level 1)
-          parameters
-          bound_value
-    | Ast.LetBinding.Unknown _ ->
-        add_diagnostic state (unsupported_syntax (Ast.LetBinding.as_node binding) "let binding");
-        fresh_tyvar state ~level:(Int.add level 1)
+    match binding.body with
+    | Some body when List.is_empty binding.parameters -> infer_expression state env ~level:(level + 1) body
+    | Some body -> infer_lambda state env ~level:(level + 1) binding.parameters body
+    | None -> fresh_tyvar state ~level:(level + 1)
   in
-  List.for_each
-    return_annotations
-    ~fn:(fun annotation ->
-      let _ = lower_core_type state ~level [] annotation in
-      ());
-  let (pattern_ty, bindings) =
-    match binding_view with
-    | Ast.LetBinding.Binding { pattern; _ } -> infer_pattern state env ~level pattern
-    | Ast.LetBinding.Unknown _ -> (fresh_tyvar state ~level, [])
-  in
-  unify state ~at:syntax_node pattern_ty value_ty;
-  let public_bindings = List.map bindings ~fn:public_binding_of_binding in
-  let extended_env = extend_generalized env ~level bindings in
-  (extended_env, public_bindings)
+  match binding.pattern with
+  | Some pattern ->
+      let pattern_ty, bindings = infer_pattern state env ~level pattern in
+      unify state ~at:binding.origin pattern_ty value_ty;
+      let public_bindings = List.map bindings ~fn:public_binding_of_binding in
+      let extended_env = extend_generalized env ~level bindings in
+      (extended_env, public_bindings)
+  | None ->
+      add_diagnostic state (unsupported_syntax binding.origin "let binding pattern");
+      (env, [])
 
-let check_let_declaration = fun state env ~level declaration ->
-  let env_ref = ref env in
-  let public_bindings = Vector.with_capacity ~size:(Ast.LetDeclaration.binding_count declaration) in
-  if Option.is_some (Ast.LetDeclaration.rec_token declaration) then
-    add_diagnostic
-      state
-      (unsupported_syntax (Ast.LetDeclaration.as_node declaration) "recursive let binding");
-  iter_fold
-    Ast.LetDeclaration.fold_binding
-    declaration
-    ~fn:(fun binding ->
-      let (next_env, bindings) =
-        infer_let_binding_like
-          state
-          !env_ref
-          ~level
-          ~syntax_node:(Ast.LetBinding.as_node binding)
-          binding
-      in
-      env_ref := next_env;
-      List.for_each bindings ~fn:(fun binding -> Vector.push public_bindings ~value:binding));
-  (!env_ref, Vector.to_array public_bindings
-  |> Array.to_list)
+let infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
+  List.fold_left declaration.TypAst.bindings ~init:(env, []) ~fn:(
+    fun (env, public_bindings) binding ->
+      let next_env, item_bindings = infer_let_binding state env ~level ~recursive:declaration.recursive binding in
+      (next_env, List.append public_bindings item_bindings)
+  )
 
-let infer_structure_item = fun state env ~level item ->
-  match Ast.StructureItem.view item with
-  | Ast.StructureItem.Let declaration -> check_let_declaration state env ~level declaration
-  | Ast.StructureItem.Expr expr_item -> (
-      match Ast.ExprItem.expr expr_item with
-      | Some expression ->
-          let _ = infer_expression state env ~level expression in
+let lower_declaration_annotation = fun state ~level origin annotation ->
+  match annotation with
+  | Some annotation -> lower_core_type state ~level (ref []) annotation
+  | None ->
+      add_diagnostic state (unsupported_type origin "missing type annotation");
+      fresh_tyvar state ~level
+
+let bind_declared_value = fun state env ~level ~origin name annotation ->
+  let ty = lower_declaration_annotation state ~level origin annotation in
+  let name = SurfacePath.of_name name in
+  let binding = make_binding state ~name ~ty in
+  let public_binding = public_binding_of_binding binding in
+  let extended_env = { binding with ty = generalize level ty } :: env in
+  (extended_env, [ public_binding ])
+
+let infer_structure_item = fun state env ~level (item: TypAst.structure_item) ->
+  match item.TypAst.view with
+  | TypAst.StructureLet declaration -> infer_let_declaration state env ~level declaration
+  | TypAst.StructureExpr expression ->
+      let _ = Option.map expression ~fn:(infer_expression state env ~level) in
+      (env, [])
+  | TypAst.StructureExternal declaration -> (
+      match declaration.name with
+      | Some name -> bind_declared_value state env ~level ~origin:declaration.origin name declaration.type_annotation
+      | None ->
+          add_diagnostic state (unsupported_syntax declaration.origin "external declaration");
           (env, [])
-      | None -> (env, [])
     )
-  | Ast.StructureItem.Type (Ast.TypeDeclarationItem declaration) ->
-      add_diagnostic
-        state
-        (unsupported_syntax_with_span
-          ~span:(span_of_type_declaration declaration)
-          ~kind:(Ast.TypeDeclaration.kind declaration)
-          "type declaration");
-      (env, [])
-  | Ast.StructureItem.Type (Ast.TypeExtensionItem declaration) ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.TypeExtensionDeclaration.as_node declaration) "type extension");
-      (env, [])
-  | Ast.StructureItem.External declaration -> (
-      match Ast.ExternalDeclaration.type_annotation declaration with
-      | Some type_ ->
-          let ty = lower_core_type state ~level [] type_ in
-          let name =
-            surface_path_of_name_tokens
-              (iter_fold Ast.ExternalDeclaration.fold_name_token declaration)
-          in
-          let binding = make_binding state ~name ~ty in
-          let public_binding = public_binding_of_binding binding in
-          let extended_env = { binding with ty = generalize level ty } :: env in
-          (extended_env, [ public_binding ])
-      | None -> (env, [])
-    )
-  | Ast.StructureItem.Exception declaration ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.ExceptionDeclaration.as_node declaration) "exception declaration");
-      (env, [])
-  | Ast.StructureItem.Attribute declaration ->
-      add_diagnostic state (unsupported_syntax (Ast.AttributeItem.as_node declaration) "attribute");
-      (env, [])
-  | Ast.StructureItem.Extension declaration ->
-      add_diagnostic state (unsupported_syntax (Ast.ExtensionItem.as_node declaration) "extension");
-      (env, [])
-  | Ast.StructureItem.Module _
-  | Ast.StructureItem.ModuleType _
-  | Ast.StructureItem.Open _
-  | Ast.StructureItem.Include _ -> (env, [])
-  | Ast.StructureItem.Error node ->
-      add_diagnostic state (unsupported_syntax node "invalid structure item");
-      (env, [])
-  | Ast.StructureItem.Unknown node ->
-      add_diagnostic state (unsupported_syntax node "unsupported structure item");
+  | TypAst.StructureUnsupported summary | TypAst.StructureError summary ->
+      add_diagnostic state (unsupported_syntax item.origin summary);
       (env, [])
 
-let check_implementation = fun ~typing_context implementation ->
+let check_implementation = fun ~ast ~typing_context items ->
   let state = make_state ~next_binding_stamp:typing_context.Typing_context.next_binding_stamp in
   let env = env_of_typing_context typing_context in
-  let env_ref = ref env in
-  let bindings = Vector.with_capacity ~size:(Ast.Implementation.item_count implementation) in
-  iter_fold
-    Ast.Implementation.fold_item
-    implementation
-    ~fn:(fun item ->
-      let (next_env, item_bindings) = infer_structure_item state !env_ref ~level:0 item in
-      env_ref := next_env;
-      List.for_each item_bindings ~fn:(fun binding -> Vector.push bindings ~value:binding));
-  let bindings =
-    Vector.to_array bindings
-    |> Array.to_list
+  let _, bindings =
+    List.fold_left items ~init:(env, []) ~fn:(
+      fun (env, bindings) item ->
+        let next_env, item_bindings = infer_structure_item state env ~level:0 item in
+        (next_env, List.append bindings item_bindings)
+    )
   in
   {
-    File.diagnostics = List.reverse state.diagnostics;
+    File.ast;
+    diagnostics = List.reverse state.diagnostics;
     bindings;
     typing_context = {
       Typing_context.next_binding_stamp = state.next_binding_stamp;
@@ -1281,88 +756,39 @@ let check_implementation = fun ~typing_context implementation ->
     };
   }
 
-let check_signature_item = fun state env ~level item ->
-  match Ast.SignatureItem.view item with
-  | Ast.SignatureItem.Value declaration -> (
-      match Ast.ValueDeclaration.type_annotation declaration with
-      | Some type_ ->
-          let ty = lower_core_type state ~level [] type_ in
-          let name =
-            surface_path_of_name_tokens (iter_fold Ast.ValueDeclaration.fold_name_token declaration)
-          in
-          let binding = make_binding state ~name ~ty in
-          let public_binding = public_binding_of_binding binding in
-          let extended_env = { binding with ty = generalize level ty } :: env in
-          (extended_env, [ public_binding ])
-      | None -> (env, [])
+let check_signature_item = fun state env ~level (item: TypAst.signature_item) ->
+  match item.TypAst.view with
+  | TypAst.SignatureValue declaration -> (
+      match declaration.name with
+      | Some name -> bind_declared_value state env ~level ~origin:declaration.origin name declaration.type_annotation
+      | None ->
+          add_diagnostic state (unsupported_syntax declaration.origin "value declaration");
+          (env, [])
     )
-  | Ast.SignatureItem.External declaration -> (
-      match Ast.ExternalDeclaration.type_annotation declaration with
-      | Some type_ ->
-          let ty = lower_core_type state ~level [] type_ in
-          let name =
-            surface_path_of_name_tokens
-              (iter_fold Ast.ExternalDeclaration.fold_name_token declaration)
-          in
-          let binding = make_binding state ~name ~ty in
-          let public_binding = public_binding_of_binding binding in
-          let extended_env = { binding with ty = generalize level ty } :: env in
-          (extended_env, [ public_binding ])
-      | None -> (env, [])
+  | TypAst.SignatureExternal declaration -> (
+      match declaration.name with
+      | Some name -> bind_declared_value state env ~level ~origin:declaration.origin name declaration.type_annotation
+      | None ->
+          add_diagnostic state (unsupported_syntax declaration.origin "external declaration");
+          (env, [])
     )
-  | Ast.SignatureItem.Type (Ast.TypeDeclarationItem declaration) ->
-      add_diagnostic
-        state
-        (unsupported_syntax_with_span
-          ~span:(span_of_type_declaration declaration)
-          ~kind:(Ast.TypeDeclaration.kind declaration)
-          "type declaration");
-      (env, [])
-  | Ast.SignatureItem.Type (Ast.TypeExtensionItem declaration) ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.TypeExtensionDeclaration.as_node declaration) "type extension");
-      (env, [])
-  | Ast.SignatureItem.Exception declaration ->
-      add_diagnostic
-        state
-        (unsupported_syntax (Ast.ExceptionDeclaration.as_node declaration) "exception declaration");
-      (env, [])
-  | Ast.SignatureItem.Attribute declaration ->
-      add_diagnostic state (unsupported_syntax (Ast.AttributeItem.as_node declaration) "attribute");
-      (env, [])
-  | Ast.SignatureItem.Extension declaration ->
-      add_diagnostic state (unsupported_syntax (Ast.ExtensionItem.as_node declaration) "extension");
-      (env, [])
-  | Ast.SignatureItem.Module _
-  | Ast.SignatureItem.ModuleType _
-  | Ast.SignatureItem.Open _
-  | Ast.SignatureItem.Include _ -> (env, [])
-  | Ast.SignatureItem.Error node ->
-      add_diagnostic state (unsupported_syntax node "invalid signature item");
-      (env, [])
-  | Ast.SignatureItem.Unknown node ->
-      add_diagnostic state (unsupported_syntax node "unsupported signature item");
+  | TypAst.SignatureUnsupported summary | TypAst.SignatureError summary ->
+      add_diagnostic state (unsupported_syntax item.origin summary);
       (env, [])
 
-let check_interface = fun ~typing_context interface ->
+let check_interface = fun ~ast ~typing_context items ->
   let state = make_state ~next_binding_stamp:typing_context.Typing_context.next_binding_stamp in
   let env = env_of_typing_context typing_context in
-  let env_ref = ref env in
-  let bindings = Vector.with_capacity ~size:(Ast.Interface.item_count interface) in
-  iter_fold
-    Ast.Interface.fold_item
-    interface
-    ~fn:(fun item ->
-      let (next_env, item_bindings) = check_signature_item state !env_ref ~level:0 item in
-      env_ref := next_env;
-      List.for_each item_bindings ~fn:(fun binding -> Vector.push bindings ~value:binding));
-  let bindings =
-    Vector.to_array bindings
-    |> Array.to_list
+  let _, bindings =
+    List.fold_left items ~init:(env, []) ~fn:(
+      fun (env, bindings) item ->
+        let next_env, item_bindings = check_signature_item state env ~level:0 item in
+        (next_env, List.append bindings item_bindings)
+    )
   in
   {
-    File.diagnostics = List.reverse state.diagnostics;
+    File.ast;
+    diagnostics = List.reverse state.diagnostics;
     bindings;
     typing_context = {
       Typing_context.next_binding_stamp = state.next_binding_stamp;
@@ -1370,12 +796,11 @@ let check_interface = fun ~typing_context interface ->
     };
   }
 
-let check_source_file = fun ~typing_context (parse_result: Syn.Parser.parse_result) ->
-  let source_file = Ast.SourceFile.make parse_result.tree in
-  match Ast.SourceFile.view source_file with
-  | Ast.SourceFile.Implementation implementation ->
-      check_implementation ~typing_context implementation
-  | Ast.SourceFile.Interface interface -> check_interface ~typing_context interface
+let check_source_file = fun ~typing_context ast ->
+  match ast.TypAst.view with
+  | Implementation items -> check_implementation ~ast ~typing_context items
+  | Interface items -> check_interface ~ast ~typing_context items
+  | Empty -> File.empty ~ast ~typing_context
 
 let check_expression = fun expression ->
   let state = make_state ~next_binding_stamp:0 in
@@ -1389,12 +814,10 @@ let check_pattern = fun pattern ->
 
 let check_let_binding = fun binding ->
   let state = make_state ~next_binding_stamp:0 in
-  let _ =
-    infer_let_binding_like state [] ~level:0 ~syntax_node:(Ast.LetBinding.as_node binding) binding
-  in
+  let _ = infer_let_binding state [] ~level:0 ~recursive:false binding in
   List.reverse state.diagnostics
 
-let check_core_type = fun type_expr ->
+let check_core_type = fun core_type ->
   let state = make_state ~next_binding_stamp:0 in
-  let _ = lower_core_type state ~level:0 [] type_expr in
+  let _ = lower_core_type state ~level:0 (ref []) core_type in
   List.reverse state.diagnostics

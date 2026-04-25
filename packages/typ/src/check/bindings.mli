@@ -1,1 +1,1 @@
-val check_let_binding: Syn.Ast.LetBinding.t -> Diagnostics.Diagnostic.t list
+val check_let_binding: Ast.let_binding -> Diagnostics.Diagnostic.t list

@@ -1,1 +1,1 @@
-module Semtree = Semtree
+module Ast = Ast

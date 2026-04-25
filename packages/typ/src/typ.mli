@@ -8,6 +8,8 @@ open Std
    - `Typ.Model`
      shared semantic ids, paths, module artifacts, and reusable persisted
      typing data
+   - `Typ.Ast`
+     Typ-owned tree built from `Syn.Ast` and used by checking
    - `Typ.Analysis`
      checked-source outputs such as reports and type indexes
    - `Typ.SourceAnalysis`
@@ -22,8 +24,6 @@ open Std
      canonical pairing of interface and implementation analyses
    - `Typ.ModuleSurface`
      module-surface qualification and public-view derivation
-   - `Typ.Lower`
-     CST-to-semantic-tree lowering and origin construction
    - `Typ.Infer`
      solver state, environments, and inference
    - `Typ.Event`
@@ -66,6 +66,8 @@ end
 
 module Model: module type of Model
 
+module Ast: module type of Ast
+
 module Analysis: module type of Analysis
 
 type config = Config.t
@@ -92,8 +94,6 @@ module ImportedWorld: module type of ImportedWorld
 module ModulePairing: module type of ModulePairing
 
 module ModuleSurface: module type of ModuleSurface
-
-module Lower: module type of Lower
 
 module Infer: module type of Infer
 

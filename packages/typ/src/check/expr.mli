@@ -1,5 +1,5 @@
-val check: Syn.Ast.Expr.t -> Diagnostics.Diagnostic.t list
+val check: Ast.expr -> Diagnostics.Diagnostic.t list
 
-val check_parameter: Syn.Ast.Parameter.t -> Diagnostics.Diagnostic.t list
+val check_parameter: Ast.parameter -> Diagnostics.Diagnostic.t list
 
-val check_let_binding: Syn.Ast.LetBinding.t -> Diagnostics.Diagnostic.t list
+val check_let_binding: Ast.let_binding -> Diagnostics.Diagnostic.t list

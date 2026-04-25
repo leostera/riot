@@ -1,1 +1,1 @@
-val check: Syn.Ast.Pattern.t -> Diagnostics.Diagnostic.t list
+val check: Ast.pattern -> Diagnostics.Diagnostic.t list
