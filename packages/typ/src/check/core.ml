@@ -734,6 +734,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
           | None -> unify state ~at:expression.origin then_ty TUnit
         );
         then_ty
+    | TypAst.Match { scrutinee; cases } ->
+        infer_match state env ~level scrutinee cases
     | TypAst.Function { parameters; body } ->
         infer_function state env ~level parameters body
     | TypAst.Apply _ ->
@@ -842,6 +844,25 @@ and infer_field_access = fun state env ~level ~at receiver field ->
   let receiver_ty = infer_expression state env ~level receiver in
   infer_record_field state ~level ~at receiver_ty field
 
+and infer_match = fun state env ~level scrutinee cases ->
+  let scrutinee_ty = infer_expression state env ~level scrutinee in
+  let result_ty = fresh_tyvar state ~level in
+  List.for_each cases
+    ~fn:(fun (case: TypAst.match_case) ->
+      let pattern_ty, bindings = infer_pattern state env ~level case.pattern in
+      unify state ~at:case.pattern.origin scrutinee_ty pattern_ty;
+      let extended_env = extend_mono env bindings in
+      (
+        match case.guard with
+        | Some guard ->
+            let guard_ty = infer_expression state extended_env ~level guard in
+            unify state ~at:guard.origin guard_ty TBool
+        | None -> ()
+      );
+      let body_ty = infer_expression state extended_env ~level case.body in
+      unify state ~at:case.body.origin result_ty body_ty);
+  result_ty
+
 and infer_function = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_function_body state env ~level body
@@ -903,6 +924,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   && List.all arguments ~fn:is_nonexpansive_argument
   | TypAst.Sequence _
   | TypAst.If _
+  | TypAst.Match _
   | TypAst.Infix _
   | TypAst.Let _
   | TypAst.Assert _ -> false

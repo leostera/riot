@@ -127,6 +127,7 @@ and expression_kind =
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Match of { scrutinee: expression; cases: match_case list }
   | Function of { parameters: pattern list; body: function_body }
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
@@ -611,6 +612,15 @@ and build_expression = fun syntax_expression ->
           })
     | SynAst.Expr.If _ ->
         build_failed origin "incomplete if expression"
+    | SynAst.Expr.Match { scrutinee=Some scrutinee; first_case=Some _ } ->
+        make_expression
+          origin
+          (Match {
+            scrutinee = build_expression scrutinee;
+            cases = build_match_cases syntax_expression
+          })
+    | SynAst.Expr.Match _ ->
+        build_failed origin "incomplete match expression"
     | SynAst.Expr.Fun { body=Some body } ->
         make_expression
           origin
@@ -669,8 +679,6 @@ and build_expression = fun syntax_expression ->
         unsupported_node node (node_summary node)
     | SynAst.Expr.Unknown node ->
         unsupported_node node (node_summary node)
-    | SynAst.Expr.Match _ ->
-        build_failed origin "match expression"
     | SynAst.Expr.Array
     | SynAst.Expr.RecordUpdate
     | SynAst.Expr.Extension

@@ -114,6 +114,7 @@ and expression_kind =
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Match of { scrutinee: expression; cases: match_case list }
   | Function of { parameters: pattern list; body: function_body }
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
