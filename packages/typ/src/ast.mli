@@ -106,10 +106,22 @@ and expression_kind =
   | List of expression list
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Function of { parameters: pattern list; body: function_body }
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
   | Let of { first_binding: let_binding; body: expression }
   | Assert of expression
+
+and function_body =
+  | Body of expression
+  | Cases of match_case list
+
+and match_case = {
+  origin: origin;
+  pattern: pattern;
+  guard: expression option;
+  body: expression;
+}
 
 and argument = {
   origin: origin;

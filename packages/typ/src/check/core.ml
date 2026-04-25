@@ -519,6 +519,9 @@ let extend_generalized = fun (env: env) ~level (bindings: binding list) ->
     ~init:env
     ~fn:(fun extended_env binding -> { binding with ty = generalize level binding.ty } :: extended_env)
 
+let generalized_bindings = fun ~level (bindings: binding list) ->
+  List.map bindings ~fn:(fun binding -> { binding with ty = generalize level binding.ty })
+
 let is_uppercase_name = fun name ->
   match String.get name ~at:0 with
   | Some char -> char >= 'A' && char <= 'Z'
@@ -660,6 +663,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
           | None -> unify state ~at:expression.origin then_ty TUnit
         );
         then_ty
+    | TypAst.Function { parameters; body } ->
+        infer_function state env ~level parameters body
     | TypAst.Apply _ ->
         infer_apply state env ~level expression
     | TypAst.Infix { left; operator; right } ->
@@ -716,6 +721,38 @@ and infer_apply_argument = fun state env ~level (argument: TypAst.argument) ->
       add_diagnostic state (unsupported_syntax argument.origin "missing argument value");
       fresh_tyvar state ~level
 
+and infer_function = fun state env ~level parameters body ->
+  match parameters with
+  | [] -> infer_function_body state env ~level body
+  | parameter :: rest ->
+      let parameter_ty, parameter_bindings = infer_pattern state env ~level parameter in
+      let extended_env = extend_mono env parameter_bindings in
+      let result_ty = infer_function state extended_env ~level rest body in
+      TArrow (parameter_ty, result_ty)
+
+and infer_function_body = fun state env ~level body ->
+  match body with
+  | TypAst.Body body -> infer_expression state env ~level body
+  | TypAst.Cases cases -> infer_function_cases state env ~level cases
+
+and infer_function_cases = fun state env ~level cases ->
+  let parameter_ty = fresh_tyvar state ~level in
+  let result_ty = fresh_tyvar state ~level in
+  List.for_each cases
+    ~fn:(fun (case: TypAst.match_case) ->
+      let case_parameter_ty, bindings = infer_pattern state env ~level case.pattern in
+      unify state ~at:case.origin parameter_ty case_parameter_ty;
+      (
+        match case.guard with
+        | Some guard ->
+            let guard_ty = infer_expression state env ~level guard in
+            unify state ~at:guard.origin guard_ty TBool
+        | None -> ()
+      );
+      let body_ty = infer_expression state (extend_mono env bindings) ~level case.body in
+      unify state ~at:case.body.origin result_ty body_ty);
+  TArrow (parameter_ty, result_ty)
+
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_expression state env ~level body
@@ -724,6 +761,42 @@ and infer_lambda = fun state env ~level parameters body ->
       let extended_env = extend_mono env parameter_bindings in
       let result_ty = infer_lambda state extended_env ~level rest body in
       TArrow (parameter_ty, result_ty)
+
+and is_constructor_path = fun path ->
+  match simple_path_name path with
+  | Some name -> is_uppercase_name name
+  | None -> false
+
+and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
+  match expression.kind with
+  | TypAst.Literal _
+  | TypAst.Path _
+  | TypAst.Function _ -> true
+  | TypAst.Tuple elements
+  | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
+  | TypAst.Apply { callee; arguments } -> is_constructor_expression callee
+  && List.all arguments ~fn:is_nonexpansive_argument
+  | TypAst.Sequence _
+  | TypAst.If _
+  | TypAst.Infix _
+  | TypAst.Let _
+  | TypAst.Assert _ -> false
+
+and is_constructor_expression = fun (expression: TypAst.expression) ->
+  match expression.kind with
+  | TypAst.Path path -> is_constructor_path path
+  | _ -> false
+
+and is_nonexpansive_argument = fun (argument: TypAst.argument) ->
+  match argument.kind with
+  | TypAst.Positional expression -> is_nonexpansive_expression expression
+  | TypAst.Labeled { value=Some value; _ }
+  | TypAst.Optional { value=Some value; _ } -> is_nonexpansive_expression value
+  | TypAst.Labeled { value=None; _ }
+  | TypAst.Optional { value=None; _ } -> false
+
+and is_nonexpansive_let_binding = fun (binding: TypAst.let_binding) ->
+  (not (List.is_empty binding.parameters)) || is_nonexpansive_expression binding.body
 
 and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
   if recursive then
@@ -734,11 +807,16 @@ and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_bin
     else
       infer_lambda state env ~level:(level + 1) binding.parameters binding.body
   in
-  let pattern_ty, bindings = infer_pattern state env ~level binding.pattern in
+  let pattern_ty, bindings = infer_pattern state env ~level:(level + 1) binding.pattern in
   unify state ~at:binding.origin pattern_ty value_ty;
-  let public_bindings = List.map bindings ~fn:public_binding_of_binding in
-  let extended_env = extend_generalized env ~level bindings in
-  (extended_env, public_bindings)
+  let exported_bindings =
+    if is_nonexpansive_let_binding binding then
+      generalized_bindings ~level bindings
+    else
+      bindings
+  in
+  let extended_env = extend_mono env exported_bindings in
+  (extended_env, exported_bindings)
 
 let infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
   List.fold_left declaration.bindings ~init:(env, [])
@@ -755,9 +833,9 @@ let bind_declared_value = fun state env ~level name annotation ->
   let ty = lower_core_type state ~level (ref []) annotation in
   let name = SurfacePath.from_name name in
   let binding = make_binding state ~name ~ty in
-  let public_binding = public_binding_of_binding binding in
-  let extended_env = { binding with ty = generalize level ty } :: env in
-  (extended_env, [ public_binding ])
+  let binding = { binding with ty = generalize level ty } in
+  let extended_env = binding :: env in
+  (extended_env, [ binding ])
 
 let type_parameter_name = function
   | Some name -> SurfacePath.from_name name
@@ -838,14 +916,15 @@ let check_implementation = fun ~ast ~typing_context items ->
           List.append type_declarations item_type_declarations
         ))
   in
+  let public_bindings = List.map bindings ~fn:public_binding_of_binding in
   {
     File.ast;
     diagnostics = List.reverse state.diagnostics;
     type_declarations;
-    bindings;
+    bindings = public_bindings;
     typing_context = {
       Typing_context.next_binding_stamp = state.next_binding_stamp;
-      values = List.append typing_context.values bindings
+      values = List.append typing_context.values public_bindings
     };
   }
 
@@ -883,14 +962,15 @@ let check_interface = fun ~ast ~typing_context items ->
           List.append type_declarations item_type_declarations
         ))
   in
+  let public_bindings = List.map bindings ~fn:public_binding_of_binding in
   {
     File.ast;
     diagnostics = List.reverse state.diagnostics;
     type_declarations;
-    bindings;
+    bindings = public_bindings;
     typing_context = {
       Typing_context.next_binding_stamp = state.next_binding_stamp;
-      values = List.append typing_context.values bindings
+      values = List.append typing_context.values public_bindings
     };
   }
 

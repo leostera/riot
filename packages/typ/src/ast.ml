@@ -118,10 +118,22 @@ and expression_kind =
   | List of expression list
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Function of { parameters: pattern list; body: function_body }
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
   | Let of { first_binding: let_binding; body: expression }
   | Assert of expression
+
+and function_body =
+  | Body of expression
+  | Cases of match_case list
+
+and match_case = {
+  origin: origin;
+  pattern: pattern;
+  guard: expression option;
+  body: expression;
+}
 
 and argument = {
   origin: origin;
@@ -190,6 +202,8 @@ let pattern_origin = fun (pattern: pattern) -> pattern.origin
 
 let expression_origin = fun (expression: expression) -> expression.origin
 
+let match_case_origin = fun (match_case: match_case) -> match_case.origin
+
 let structure_item_origin = fun (item: structure_item) -> item.origin
 
 let signature_item_origin = fun (item: signature_item) -> item.origin
@@ -248,6 +262,15 @@ let node_summary = fun node -> Syn.SyntaxKind.to_string (SynAst.Node.kind node)
 let child_patterns = fun pattern ->
   let children = ref [] in
   SynAst.Pattern.for_each_child_pattern pattern ~fn:(fun child -> children := child :: !children);
+  List.reverse !children
+
+let direct_child_patterns = fun node ->
+  let children = ref [] in
+  SynAst.Node.for_each_child_node node
+    ~fn:(fun child ->
+      match SynAst.Pattern.cast child with
+      | Some pattern -> children := pattern :: !children
+      | None -> ());
   List.reverse !children
 
 let child_exprs = fun expression ->
@@ -462,6 +485,26 @@ and build_let_binding = fun binding ->
       type_annotation = Option.map (SynAst.LetBinding.type_annotation binding) ~fn:build_core_type;
     }: let_binding)
 
+and build_match_case = fun match_case ->
+  let origin = origin_from_node match_case in
+  let view = SynAst.MatchCase.view match_case in
+  (
+    {
+      origin;
+      pattern = build_pattern (require_some origin "missing match case pattern" view.pattern);
+      guard = Option.map view.guard ~fn:build_expression;
+      body = build_expression (require_some origin "missing match case body" view.body)
+    }:
+      match_case
+  )
+
+and build_match_cases = fun syntax_expression ->
+  let cases = ref [] in
+  SynAst.Expr.for_each_match_case
+    syntax_expression
+    ~fn:(fun match_case -> cases := build_match_case match_case :: !cases);
+  List.reverse !cases
+
 and build_expression = fun syntax_expression ->
   let origin = origin_from_node syntax_expression in
   (match SynAst.Expr.view syntax_expression with
@@ -509,6 +552,21 @@ and build_expression = fun syntax_expression ->
           })
     | SynAst.Expr.If _ ->
         build_failed origin "incomplete if expression"
+    | SynAst.Expr.Fun { body=Some body } ->
+        make_expression
+          origin
+          (Function {
+            parameters = direct_child_patterns syntax_expression |> List.map ~fn:build_pattern;
+            body = Body (build_expression body)
+          })
+    | SynAst.Expr.Fun { body=None } ->
+        build_failed origin "missing function body"
+    | SynAst.Expr.Function { first_case=Some _ } ->
+        make_expression
+          origin
+          (Function { parameters = []; body = Cases (build_match_cases syntax_expression) })
+    | SynAst.Expr.Function { first_case=None } ->
+        build_failed origin "missing function cases"
     | SynAst.Expr.Apply { callee=Some callee; argument } ->
         let arguments = [
           build_argument (require_some origin "missing application argument" argument)
@@ -556,10 +614,6 @@ and build_expression = fun syntax_expression ->
         build_failed origin "field access"
     | SynAst.Expr.Match _ ->
         build_failed origin "match expression"
-    | SynAst.Expr.Function _ ->
-        build_failed origin "function expression"
-    | SynAst.Expr.Fun _ ->
-        build_failed origin "function expression"
     | SynAst.Expr.Array
     | SynAst.Expr.Record
     | SynAst.Expr.RecordUpdate
