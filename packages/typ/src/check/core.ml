@@ -747,7 +747,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
             match simple_path_name path with
             | Some alias_name ->
                 let alias_binding = make_binding state ~name:(SurfacePath.from_name alias_name) ~ty:pattern_ty in
-                (pattern_ty, alias_binding :: bindings)
+                (pattern_ty, List.append bindings [ alias_binding ])
             | None -> (pattern_ty, bindings)
           )
         | _ -> (pattern_ty, bindings)
