@@ -40,18 +40,6 @@ let type_var_name = fun index ->
   | Some name -> name
   | None -> "'a" ^ Int.to_string index
 
-let scheme_type_var_name = fun (scheme: TypingContext.scheme) id ->
-  let rec loop index vars =
-    match vars with
-    | [] -> type_var_name id
-    | var :: rest ->
-        if Int.equal var id then
-          type_var_name index
-        else
-          loop (index + 1) rest
-  in
-  loop 0 scheme.forall
-
 let is_ident_start = function
   | 'a' .. 'z'
   | '_' -> true
@@ -115,6 +103,54 @@ let render_poly_variant_type = fun bound tags ->
   in
   prefix ^ render_poly_variant_tags tags ^ " ]"
 
+let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
+  let vars = ref [] in
+  let remember id =
+    if not
+        (
+          List.exists
+            (fun other ->
+              Int.equal id other)
+            !vars
+        ) then
+      vars := List.append !vars [ id ]
+  in
+  let rec collect type_ =
+    match type_ with
+    | TypingContext.List element
+    | TypingContext.Option element ->
+        collect element
+    | TypingContext.Tuple elements ->
+        List.for_each elements ~fn:collect
+    | TypingContext.Arrow { parameter; result } ->
+        collect parameter;
+        collect result
+    | TypingContext.TypeConstructor { arguments; _ } ->
+        List.for_each arguments ~fn:collect
+    | TypingContext.Var id ->
+        remember id
+    | TypingContext.Int
+    | TypingContext.Bool
+    | TypingContext.Char
+    | TypingContext.String
+    | TypingContext.Float
+    | TypingContext.Unit
+    | TypingContext.PolyVariant _ ->
+        ()
+  in
+  collect type_;
+  fun id ->
+    let rec loop index vars =
+      match vars with
+      | [] -> type_var_name id
+      | var :: rest ->
+          if Int.equal var id then
+            type_var_name index
+          else
+            loop (index + 1) rest
+    in
+    loop 0 !vars
+
 let rec render_type = fun ~type_var_name type_ ->
   match type_ with
   | TypingContext.Int ->
@@ -175,7 +211,7 @@ and render_arrow_parameter = fun ~type_var_name type_ ->
   | _ -> render_type ~type_var_name type_
 
 let render_scheme = fun (scheme: TypingContext.scheme) ->
-  render_type ~type_var_name:(scheme_type_var_name scheme) scheme.body
+  render_type ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
 
 let render_binding = fun (binding: TypingContext.value_binding) ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
