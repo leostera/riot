@@ -1045,15 +1045,26 @@ and is_nonexpansive_argument = fun (argument: TypAst.argument) ->
 and is_nonexpansive_let_binding = fun (binding: TypAst.let_binding) ->
   (not (List.is_empty binding.parameters)) || is_nonexpansive_expression binding.body
 
-and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
-  if recursive then
-    add_diagnostic state (unsupported_syntax binding.origin "recursive let binding");
+and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding) ->
   let value_ty =
     if List.is_empty binding.parameters then
       infer_expression state env ~level:(level + 1) binding.body
     else
       infer_lambda state env ~level:(level + 1) binding.parameters binding.body
   in
+  (
+    match binding.type_annotation with
+    | Some annotation ->
+        let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
+        unify state ~at:binding.origin value_ty annotated
+    | None -> ()
+  );
+  value_ty
+
+and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
+  if recursive then
+    add_diagnostic state (unsupported_syntax binding.origin "recursive let binding");
+  let value_ty = infer_let_binding_value state env ~level binding in
   let pattern_ty, bindings = infer_pattern state env ~level:(level + 1) binding.pattern in
   unify state ~at:binding.origin pattern_ty value_ty;
   let exported_bindings =
@@ -1065,16 +1076,63 @@ and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_bin
   let extended_env = extend_mono env exported_bindings in
   (extended_env, exported_bindings)
 
+and simple_let_binding_name = fun (binding: TypAst.let_binding) ->
+  match binding.pattern.kind with
+  | TypAst.Path path -> (
+      match simple_path_name path with
+      | Some name when not (is_uppercase_name name) -> Some (SurfacePath.from_name name)
+      | _ -> None
+    )
+  | _ -> None
+
+and make_recursive_placeholder = fun state ~level (binding: TypAst.let_binding) ->
+  match simple_let_binding_name binding with
+  | Some name -> Some (make_binding state ~name ~ty:(fresh_tyvar state ~level:(level + 1)))
+  | None ->
+      add_diagnostic state (unsupported_syntax binding.origin "recursive let pattern");
+      None
+
+and recursive_placeholder_for_binding = fun placeholders (binding: TypAst.let_binding) ->
+  match simple_let_binding_name binding with
+  | None -> None
+  | Some name ->
+      List.find placeholders
+        ~fn:(fun placeholder ->
+          SurfacePath.equal (EntityId.surface_path placeholder.entity_id) name)
+
+and infer_recursive_let_binding = fun state recursive_env ~level placeholders binding ->
+  match recursive_placeholder_for_binding placeholders binding with
+  | None -> ()
+  | Some placeholder ->
+      let value_ty = infer_let_binding_value state recursive_env ~level binding in
+      unify state ~at:binding.origin placeholder.ty value_ty
+
 let infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
-  List.fold_left declaration.bindings ~init:(env, [])
-    ~fn:(fun (env, public_bindings) binding ->
-      let next_env, item_bindings = infer_let_binding
-        state
-        env
-        ~level
-        ~recursive:declaration.recursive
-        binding in
-      (next_env, List.append public_bindings item_bindings))
+  if declaration.recursive then
+    let placeholders =
+      List.fold_left declaration.bindings ~init:[]
+        ~fn:(fun placeholders binding ->
+          match make_recursive_placeholder state ~level binding with
+          | Some placeholder -> placeholder :: placeholders
+          | None -> placeholders)
+      |> List.reverse
+    in
+    let recursive_env = extend_mono env placeholders in
+    List.for_each
+      declaration.bindings
+      ~fn:(infer_recursive_let_binding state recursive_env ~level placeholders);
+    let public_bindings = generalized_bindings ~level placeholders in
+    (extend_mono env public_bindings, public_bindings)
+  else
+    List.fold_left declaration.bindings ~init:(env, [])
+      ~fn:(fun (env, public_bindings) binding ->
+        let next_env, item_bindings = infer_let_binding
+          state
+          env
+          ~level
+          ~recursive:declaration.recursive
+          binding in
+        (next_env, List.append public_bindings item_bindings))
 
 let bind_declared_value = fun state env ~level name annotation ->
   let ty = lower_core_type state ~level (ref []) annotation in
