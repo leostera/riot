@@ -17,10 +17,18 @@ Start with:
 
 Then use the feature slices that match the work you are doing.
 
-The older lowering docs still describe useful normalization principles, but
-the active implementation direction is a single `Typ.Ast`: build `Typ.Ast`
-from `Syn.Ast`, run checking over `Typ.Ast`, and return a checked `Typ.Ast`
-result instead of maintaining a separate semtree/lowering output.
+The active implementation direction is deliberately small while the checker is
+being rebuilt: `Typ.Check.check` receives a `Syn.Parser.parse_result`, builds a
+single `Typ.Ast`, runs checking over that tree, and returns a result that keeps
+the checked `Typ.Ast`. Do not reintroduce a separate semtree/lowering output.
+
+The package currently keeps only the minimum runtime surface needed for that
+path:
+
+- `Typ.Ast`
+- `Typ.Check`
+- `Typ.Diagnostics`
+- `Typ.Model` source/path/id helpers
 
 ## Rules
 
@@ -30,18 +38,10 @@ result instead of maintaining a separate semtree/lowering output.
 4. Prefer snapshot-heavy examples that dump semantic structure, environments, and diagnostics together.
 5. Keep prototype scope narrow and explicit; unsupported syntax should surface as recovery plus diagnostics, not silent drops.
 6. Keep cross-query state explicit. Query-local mutation is fine, but it must not escape the query boundary.
-7. Keep structured diagnostic-shape regressions covered under `packages/typ/tests/diagnostics`, not only in human-readable report snapshots.
-8. Feed imported-module state into `SourceAnalysis` through `ImportedWorld`
-   (`PackageEnv + ScopeView`), not by mutating `TypConfig` ambient payloads on
-   hot paths.
-9. Key rooted snapshot reuse off `ScopeView` visibility plus canonical local
-   module results, not flattened ambient export/type payloads.
-10. Keep snapshot dependency discovery pre-typing: use parse deps, declared
-    modules, top-level include paths, and loaded/local module headers, not
-    nested snapshot forcing.
-11. Keep rooted snapshot closure/order work on the same local-module graph
-    contract as the build path, but do not report generated wrapper-only cycles
-    as explicit local-module cycle diagnostics.
+7. Keep structured diagnostic-shape regressions covered by focused snapshots,
+   not only human-readable reports.
+8. Add checker subsystems back only when a slice needs them, and make their
+   ownership clear from the module name and public interface.
 
 ## Validate
 
@@ -49,21 +49,13 @@ Run the current validation stack in this order:
 
 ```sh
 riot fix ./packages/typ
-riot fix ./packages/riot-check
 riot fmt ./packages/typ
-riot fmt ./packages/riot-check
-riot build typ riot-check
+riot build -p typ
 riot test -p typ
-riot bench -p typ
-riot run riot -- check -p kernel-new
 ```
 
 Interpret the results carefully:
 
-- `riot fix` currently reports an existing lint backlog in both `typ` and
-  `riot-check`; do not treat that as a slice-specific regression unless your
-  batch made it worse.
-- `riot bench -p typ` currently reports `No benchmark suites found in package
-  'typ'`.
-- `riot run riot -- check -p kernel-new` is only a meaningful `typ` signal when
-  planner/source preparation succeeds and actually hands `typ` prepared sources.
+- `riot test -p typ` may fail snapshots while the expected checker output is
+  being rebuilt around `Typ.Ast`; distinguish compile failures from intentional
+  expected-output drift.

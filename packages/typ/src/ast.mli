@@ -4,11 +4,12 @@ type origin = {
   span: Syn.Ceibo.Span.t;
   kind: Syn.SyntaxKind.t;
 }
-
-type file_kind = [`Implementation | `Interface]
-
+type file_kind =
+[
+  `Implementation
+  | `Interface
+]
 type path = Model.Surface_path.t
-
 type literal =
   | Int
   | Float
@@ -17,11 +18,11 @@ type literal =
   | Bool
   | Unit
   | Unknown
-
 type core_type = {
   origin: origin;
   view: core_type_view;
 }
+
 and core_type_view =
   | TypeWildcard
   | TypeVar of string option
@@ -33,20 +34,22 @@ and core_type_view =
   | TypePoly of { body: core_type option }
   | TypeUnsupported of string
   | TypeError of string
-
 type parameter = {
   origin: origin;
   view: parameter_view;
 }
+
 and parameter_view =
   | Labeled of { label: string option; pattern: pattern option }
   | Optional of { label: string option; pattern: pattern option }
   | OptionalDefault of { label: string option; pattern: pattern option; default: expr option }
   | UnknownParameter of string
+
 and pattern = {
   origin: origin;
   view: pattern_view;
 }
+
 and pattern_view =
   | PatternWildcard
   | PatternPath of path
@@ -63,6 +66,7 @@ and pattern_view =
   | PatternOptionalParamDefault of parameter
   | PatternUnsupported of string
   | PatternError of string
+
 and let_binding = {
   origin: origin;
   pattern: pattern option;
@@ -70,10 +74,12 @@ and let_binding = {
   body: expr option;
   type_annotation: core_type option;
 }
+
 and expr = {
   origin: origin;
   view: expr_view;
 }
+
 and expr_view =
   | ExprLiteral of literal
   | ExprPath of path
@@ -93,57 +99,51 @@ and expr_view =
   | ExprOptionalArg of { label: string option; value: expr option }
   | ExprUnsupported of string
   | ExprError of string
-
 type let_declaration = {
   origin: origin;
   recursive: bool;
   bindings: let_binding list;
 }
-
 type value_declaration = {
   origin: origin;
   name: string option;
   type_annotation: core_type option;
 }
-
 type external_declaration = {
   origin: origin;
   name: string option;
   type_annotation: core_type option;
 }
-
 type structure_item = {
   origin: origin;
   view: structure_item_view;
 }
+
 and structure_item_view =
   | StructureLet of let_declaration
   | StructureExpr of expr option
   | StructureExternal of external_declaration
   | StructureUnsupported of string
   | StructureError of string
-
 type signature_item = {
   origin: origin;
   view: signature_item_view;
 }
+
 and signature_item_view =
   | SignatureValue of value_declaration
   | SignatureExternal of external_declaration
   | SignatureUnsupported of string
   | SignatureError of string
-
 type view =
   | Implementation of structure_item list
   | Interface of signature_item list
   | Empty
-
 type t = {
   kind: file_kind;
   origin: origin;
   view: view;
 }
-
 val of_parse_result: source:Model.Source.t -> Syn.Parser.parse_result -> t
 
 val serializer: t Serde.Ser.t

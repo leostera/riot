@@ -1,5 +1,4 @@
 module TypingContext = Typing_context
-
 module Typings = File
 
 type typing_context = TypingContext.t

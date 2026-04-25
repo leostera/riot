@@ -1,4 +1,7 @@
-type function_type = { parameter: type_expr; result: type_expr }
+type function_type = {
+  parameter: type_expr;
+  result: type_expr;
+}
 
 and type_expr =
   | Int
