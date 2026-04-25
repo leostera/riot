@@ -22,11 +22,18 @@ let validate_interface_source = fun source ->
   else
     Error "generated interface did not parse cleanly"
 
+let render_diagnostic = function
+  | Typ.Diagnostics.Diagnostic.UnsupportedSyntax { summary; _ } -> "unsupported syntax: " ^ summary
+  | Typ.Diagnostics.Diagnostic.UnsupportedType { summary; _ } -> "unsupported type: " ^ summary
+
+let render_diagnostics = fun diagnostics ->
+  diagnostics |> List.map ~fn:render_diagnostic |> String.concat "\n"
+
 let checker_test = fun (ctx: Test.FixtureRunner.ctx) ->
   let* file = Fs.read ctx.fixture_path |> Result.map_err ~fn:IO.error_message in
   let parse_result = Syn.parse ~filename:ctx.fixture_path (source_slice file) in
   let source = Typ.Model.Source.make ~text:file in
-  let typings = Typ.Check.check ~source parse_result in
+  let* typings = Typ.Check.check ~source parse_result |> Result.map_err ~fn:render_diagnostics in
   let* actual = Typ.SignatureGenerator.from_typings typings |> validate_interface_source in
   Test.Snapshot.assert_text ~ctx:ctx.test ~actual
 

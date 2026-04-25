@@ -6,6 +6,11 @@ type function_type = {
   result: type_expr;
 }
 
+and type_constructor = {
+  path: Model.Surface_path.t;
+  arguments: type_expr list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -17,6 +22,7 @@ and type_expr =
   | Option of type_expr
   | Tuple of type_expr list
   | Arrow of function_type
+  | TypeConstructor of type_constructor
   | Var of int
 
 type scheme = {
@@ -94,6 +100,11 @@ let rec type_expr_serializer = {
               match value with
               | Arrow value -> Some value
               | _ -> None);
+          Serde.Ser.Variant.newtype "TypeConstructor" type_constructor_serializer
+            (fun value ->
+              match value with
+              | TypeConstructor value -> Some value
+              | _ -> None);
           Serde.Ser.Variant.newtype "Var" Serde.Ser.int
             (fun value ->
               match value with
@@ -112,6 +123,21 @@ and function_type_serializer = {
           [
             Serde.Ser.field "parameter" type_expr_serializer (fun value -> value.parameter);
             Serde.Ser.field "result" type_expr_serializer (fun value -> value.result);
+          ]) in
+      serializer.run backend state value);
+}
+
+and type_constructor_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "path" Model.Surface_path.serializer (fun value -> value.path);
+            Serde.Ser.field
+              "arguments"
+              (Serde.Ser.contramap Array.from_list (Serde.Ser.array type_expr_serializer))
+              (fun value -> value.arguments);
           ]) in
       serializer.run backend state value);
 }

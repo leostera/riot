@@ -1,6 +1,7 @@
 open Std
 module EntityId = Model.Entity_id
 module SurfacePath = Model.Surface_path
+module TypAst = Ast
 module TypingContext = Check.TypingContext
 
 let type_var_name = fun index ->
@@ -84,6 +85,17 @@ let render_value_name = fun name ->
   else
     "( " ^ name ^ " )"
 
+let render_type_parameter = function
+  | Some name -> "'" ^ name
+  | None -> "_"
+
+let render_type_parameters = function
+  | [] -> ""
+  | [ parameter ] -> render_type_parameter parameter ^ " "
+  | parameters -> "(" ^ (parameters |> List.map ~fn:render_type_parameter |> String.concat ", ") ^ ") "
+
+let render_constructor_path = fun path -> SurfacePath.to_string path
+
 let rec render_type = fun ~type_var_name type_ ->
   match type_ with
   | TypingContext.Int ->
@@ -108,6 +120,15 @@ let rec render_type = fun ~type_var_name type_ ->
       let parameter = render_arrow_parameter ~type_var_name parameter in
       let result = render_type ~type_var_name result in
       parameter ^ " -> " ^ result
+  | TypingContext.TypeConstructor { path; arguments=[] } ->
+      render_constructor_path path
+  | TypingContext.TypeConstructor { path; arguments=[ argument ] } ->
+      render_postfix_argument ~type_var_name argument ^ " " ^ render_constructor_path path
+  | TypingContext.TypeConstructor { path; arguments } ->
+      "("
+      ^ (arguments |> List.map ~fn:(render_type ~type_var_name) |> String.concat ", ")
+      ^ ") "
+      ^ render_constructor_path path
   | TypingContext.Var id ->
       type_var_name id
 
@@ -119,7 +140,8 @@ and render_postfix_argument = fun ~type_var_name type_ ->
 
 and render_tuple_element = fun ~type_var_name type_ ->
   match type_ with
-  | TypingContext.Arrow _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
+  | TypingContext.Arrow _
+  | TypingContext.Tuple _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
   | _ -> render_type ~type_var_name type_
 
 and render_arrow_parameter = fun ~type_var_name type_ ->
@@ -134,10 +156,73 @@ let render_binding = fun (binding: TypingContext.value_binding) ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
   "val " ^ render_value_name name ^ " : " ^ render_scheme binding.scheme
 
+let rec render_ast_core_type = fun (type_: TypAst.core_type) ->
+  match type_.kind with
+  | TypAst.Wildcard -> "_"
+  | TypAst.Var (Some name) -> "'" ^ name
+  | TypAst.Var None -> "_"
+  | TypAst.Path path -> SurfacePath.to_string path
+  | TypAst.Apply _ -> render_ast_type_application type_
+  | TypAst.Arrow { left; right } -> render_ast_arrow_parameter left ^ " -> " ^ render_ast_core_type right
+  | TypAst.Tuple elements -> elements |> List.map ~fn:render_ast_tuple_element |> String.concat " * "
+  | TypAst.Labeled annotation -> render_ast_core_type annotation
+  | TypAst.Poly body -> render_ast_core_type body
+  | TypAst.Parenthesized inner -> render_ast_core_type inner
+
+and render_ast_type_application = fun type_ ->
+  let rec collect arguments (current: TypAst.core_type) =
+    match current.kind with
+    | TypAst.Apply { argument; constructor } -> collect (argument :: arguments) constructor
+    | _ -> (current, arguments)
+  in
+  let constructor, arguments = collect [] type_ in
+  match arguments with
+  | [] -> render_ast_core_type constructor
+  | [ argument ] -> render_ast_postfix_argument argument ^ " " ^ render_ast_core_type constructor
+  | arguments -> "("
+  ^ (arguments |> List.map ~fn:render_ast_core_type |> String.concat ", ")
+  ^ ") "
+  ^ render_ast_core_type constructor
+
+and render_ast_postfix_argument = fun type_ ->
+  match type_.kind with
+  | TypAst.Arrow _
+  | TypAst.Tuple _ -> "(" ^ render_ast_core_type type_ ^ ")"
+  | _ -> render_ast_core_type type_
+
+and render_ast_tuple_element = fun type_ ->
+  match type_.kind with
+  | TypAst.Arrow _
+  | TypAst.Tuple _ -> "(" ^ render_ast_core_type type_ ^ ")"
+  | _ -> render_ast_core_type type_
+
+and render_ast_arrow_parameter = fun type_ ->
+  match type_.kind with
+  | TypAst.Arrow _ -> "(" ^ render_ast_core_type type_ ^ ")"
+  | _ -> render_ast_core_type type_
+
+let render_type_constructor = fun (constructor: TypAst.type_constructor) ->
+  match constructor.payload with
+  | None -> constructor.name
+  | Some payload -> constructor.name ^ " of " ^ render_ast_core_type payload
+
+let render_type_definition = fun (definition: TypAst.type_definition) ->
+  match definition.kind with
+  | TypAst.Abstract -> ""
+  | TypAst.Alias type_ -> " = " ^ render_ast_core_type type_
+  | TypAst.Variant constructors -> " = "
+  ^ (constructors |> List.map ~fn:render_type_constructor |> String.concat " | ")
+
+let render_type_declaration = fun (declaration: TypAst.type_declaration) ->
+  "type "
+  ^ render_type_parameters declaration.parameters
+  ^ declaration.name
+  ^ render_type_definition declaration.definition
+
 let from_typings = fun (typings: Check.Typings.t) ->
-  match typings.bindings with
+  let lines = List.append
+    (List.map typings.type_declarations ~fn:render_type_declaration)
+    (List.map typings.bindings ~fn:render_binding) in
+  match lines with
   | [] -> ""
-  | bindings -> bindings
-  |> List.map ~fn:render_binding
-  |> String.concat "\n"
-  |> fun source -> source ^ "\n"
+  | lines -> lines |> String.concat "\n" |> fun source -> source ^ "\n"

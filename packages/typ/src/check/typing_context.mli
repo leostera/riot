@@ -3,6 +3,11 @@ type function_type = {
   result: type_expr;
 }
 
+and type_constructor = {
+  path: Model.Surface_path.t;
+  arguments: type_expr list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -14,6 +19,7 @@ and type_expr =
   | Option of type_expr
   | Tuple of type_expr list
   | Arrow of function_type
+  | TypeConstructor of type_constructor
   | Var of int
 type scheme = {
   forall: int list;

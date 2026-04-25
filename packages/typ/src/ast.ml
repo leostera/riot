@@ -27,86 +27,111 @@ type literal =
 
 type core_type = {
   origin: origin;
-  view: core_type_view;
+  kind: core_type_kind;
 }
 
-and core_type_view =
-  | TypeWildcard
-  | TypeVar of string option
-  | TypePath of path
-  | TypeApply of { argument: core_type option; constructor: core_type option }
-  | TypeArrow of { left: core_type option; right: core_type option }
-  | TypeTuple of core_type list
-  | TypeLabeled of { annotation: core_type option }
-  | TypePoly of { body: core_type option }
-  | TypeUnsupported of string
-  | TypeError of string
+and core_type_kind =
+  | Wildcard
+  | Var of string option
+  | Path of path
+  | Apply of { argument: core_type; constructor: core_type }
+  | Arrow of { left: core_type; right: core_type }
+  | Tuple of core_type list
+  | Labeled of core_type
+  | Poly of core_type
+  | Parenthesized of core_type
+
+type type_parameter = string option
+
+type type_constructor = {
+  origin: origin;
+  name: string;
+  payload: core_type option;
+}
+
+type type_definition = {
+  origin: origin;
+  kind: type_definition_kind;
+}
+
+and type_definition_kind =
+  | Abstract
+  | Alias of core_type
+  | Variant of type_constructor list
+
+type type_declaration = {
+  origin: origin;
+  name: string;
+  parameters: type_parameter list;
+  definition: type_definition;
+}
 
 type parameter = {
   origin: origin;
-  view: parameter_view;
+  kind: parameter_kind;
 }
 
-and parameter_view =
-  | Labeled of { label: string option; pattern: pattern option }
-  | Optional of { label: string option; pattern: pattern option }
-  | OptionalDefault of { label: string option; pattern: pattern option; default: expr option }
-  | UnknownParameter of string
+and parameter_kind =
+  | Labeled of { label: string; pattern: pattern option }
+  | Optional of { label: string; pattern: pattern option }
+  | OptionalDefault of { label: string; pattern: pattern option; default: expression }
 
 and pattern = {
   origin: origin;
-  view: pattern_view;
+  kind: pattern_kind;
 }
 
-and pattern_view =
-  | PatternWildcard
-  | PatternPath of path
-  | PatternApply of { callee: pattern option; argument: pattern option }
-  | PatternLiteral of literal
-  | PatternTuple of pattern list
-  | PatternList of pattern list
-  | PatternCons of { head: pattern option; tail: pattern option }
-  | PatternConstraint of { pattern: pattern option; annotation: core_type option }
-  | PatternAlias of { pattern: pattern option; alias: pattern option }
-  | PatternAttribute of { inner: pattern option }
-  | PatternLabeledParam of parameter
-  | PatternOptionalParam of parameter
-  | PatternOptionalParamDefault of parameter
-  | PatternUnsupported of string
-  | PatternError of string
+and pattern_kind =
+  | Wildcard
+  | Path of path
+  | Apply of { callee: pattern; argument: pattern }
+  | Literal of literal
+  | Tuple of pattern list
+  | List of pattern list
+  | Cons of { head: pattern; tail: pattern }
+  | Constraint of { pattern: pattern; annotation: core_type }
+  | Alias of { pattern: pattern; alias: pattern }
+  | Attribute of pattern
+  | Parenthesized of pattern
+  | LabeledParameter of parameter
+  | OptionalParameter of parameter
+  | OptionalParameterDefault of parameter
 
 and let_binding = {
   origin: origin;
-  pattern: pattern option;
+  pattern: pattern;
   parameters: pattern list;
-  body: expr option;
+  body: expression;
   type_annotation: core_type option;
 }
 
-and expr = {
+and expression = {
   origin: origin;
-  view: expr_view;
+  type_hint: core_type option;
+  kind: expression_kind;
 }
 
-and expr_view =
-  | ExprLiteral of literal
-  | ExprPath of path
-  | ExprParenthesized of { inner: expr option }
-  | ExprAttribute of { inner: expr option }
-  | ExprTyped of { expr: expr option; annotation: core_type option }
-  | ExprTuple of expr list
-  | ExprList of expr list
-  | ExprSequence of { left: expr option; right: expr option }
-  | ExprIf of { condition: expr option; then_branch: expr option; else_branch: expr option }
-  | ExprApply of { callee: expr option; argument: expr option }
-  | ExprInfix of { left: expr option; operator: path option; right: expr option }
-  | ExprPrefix of { operator: path option; operand: expr option }
-  | ExprLet of { first_binding: let_binding option; body: expr option }
-  | ExprAssert of { argument: expr option }
-  | ExprLabeledArg of { label: string option; value: expr option }
-  | ExprOptionalArg of { label: string option; value: expr option }
-  | ExprUnsupported of string
-  | ExprError of string
+and expression_kind =
+  | Literal of literal
+  | Path of path
+  | Tuple of expression list
+  | List of expression list
+  | Sequence of { left: expression; right: expression }
+  | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Apply of { callee: expression; arguments: argument list }
+  | Infix of { left: expression; operator: path; right: expression }
+  | Let of { first_binding: let_binding; body: expression }
+  | Assert of expression
+
+and argument = {
+  origin: origin;
+  kind: argument_kind;
+}
+
+and argument_kind =
+  | Positional of expression
+  | Labeled of { label: string; value: expression option }
+  | Optional of { label: string; value: expression option }
 
 type let_declaration = {
   origin: origin;
@@ -116,49 +141,58 @@ type let_declaration = {
 
 type value_declaration = {
   origin: origin;
-  name: string option;
-  type_annotation: core_type option;
+  name: string;
+  type_annotation: core_type;
 }
 
 type external_declaration = {
   origin: origin;
-  name: string option;
-  type_annotation: core_type option;
+  name: string;
+  type_annotation: core_type;
 }
 
 type structure_item = {
   origin: origin;
-  view: structure_item_view;
+  kind: structure_item_kind;
 }
 
-and structure_item_view =
-  | StructureLet of let_declaration
-  | StructureExpr of expr option
-  | StructureExternal of external_declaration
-  | StructureUnsupported of string
-  | StructureError of string
+and structure_item_kind =
+  | Let of let_declaration
+  | Type of type_declaration list
+  | Expression of expression
+  | External of external_declaration
 
 type signature_item = {
   origin: origin;
-  view: signature_item_view;
+  kind: signature_item_kind;
 }
 
-and signature_item_view =
-  | SignatureValue of value_declaration
-  | SignatureExternal of external_declaration
-  | SignatureUnsupported of string
-  | SignatureError of string
-
-type view =
-  | Implementation of structure_item list
-  | Interface of signature_item list
-  | Empty
+and signature_item_kind =
+  | Value of value_declaration
+  | Type of type_declaration list
+  | External of external_declaration
 
 type t = {
-  kind: file_kind;
   origin: origin;
-  view: view;
+  kind: source_file_kind;
 }
+
+and source_file_kind =
+  | Implementation of structure_item list
+  | Interface of signature_item list
+  | Empty of file_kind
+
+let core_type_origin = fun (type_: core_type) -> type_.origin
+
+let parameter_origin = fun (parameter: parameter) -> parameter.origin
+
+let pattern_origin = fun (pattern: pattern) -> pattern.origin
+
+let expression_origin = fun (expression: expression) -> expression.origin
+
+let structure_item_origin = fun (item: structure_item) -> item.origin
+
+let signature_item_origin = fun (item: signature_item) -> item.origin
 
 let span_from_token_body = fun token ->
   let _start, end_ = SynAst.Token.raw_range token in
@@ -221,47 +255,96 @@ let child_exprs = fun expression ->
   SynAst.Expr.for_each_child_expr expression ~fn:(fun child -> children := child :: !children);
   List.reverse !children
 
+let make_core_type = fun origin (kind: core_type_kind) -> ({ origin; kind }: core_type)
+
+let make_type_definition = fun origin (kind: type_definition_kind) ->
+  ({ origin; kind }: type_definition)
+
+let make_parameter = fun origin (kind: parameter_kind) -> ({ origin; kind }: parameter)
+
+let make_pattern = fun origin (kind: pattern_kind) -> ({ origin; kind }: pattern)
+
+let make_expression = fun origin (kind: expression_kind) -> { origin; type_hint = None; kind }
+
+let make_argument = fun origin (kind: argument_kind) -> ({ origin; kind }: argument)
+
+let make_structure_item = fun origin (kind: structure_item_kind) ->
+  ({ origin; kind }: structure_item)
+
+let make_signature_item = fun origin (kind: signature_item_kind) ->
+  ({ origin; kind }: signature_item)
+
+let make_source_file = fun origin (kind: source_file_kind) -> ({ origin; kind }: t)
+
+let with_expression_type_hint = fun type_hint (expression: expression) ->
+  { expression with type_hint = Some type_hint }
+
+exception Build_failed of Diagnostics.Diagnostic.t
+
+let build_failed = fun origin summary ->
+  raise
+    (Build_failed (Diagnostics.Diagnostic.UnsupportedSyntax {
+      span = origin.span;
+      kind = origin.kind;
+      summary
+    }))
+
+let require_some = fun origin summary value ->
+  match value with
+  | Some value -> value
+  | None -> build_failed origin summary
+
+let unsupported_node = fun node summary -> build_failed (origin_from_node node) summary
+
 let rec build_core_type = fun type_expr ->
   let origin = origin_from_node type_expr in
-  let view =
-    match SynAst.TypeExpr.view type_expr with
+  (match SynAst.TypeExpr.view type_expr with
     | SynAst.TypeExpr.Wildcard ->
-        TypeWildcard
+        make_core_type origin Wildcard
     | SynAst.TypeExpr.Var { name } ->
-        TypeVar (Option.map name ~fn:token_text)
+        make_core_type origin (Var (Option.map name ~fn:token_text))
     | SynAst.TypeExpr.Path { path } ->
-        TypePath (path_from_syn_path path)
+        make_core_type origin (Path (path_from_syn_path path))
     | SynAst.TypeExpr.Apply { argument; constructor } ->
-        TypeApply {
-          argument = Option.map argument ~fn:build_core_type;
-          constructor = Option.map constructor ~fn:build_core_type
-        }
+        make_core_type
+          origin
+          (Apply {
+            argument = build_core_type
+              (require_some origin "missing type application argument" argument);
+            constructor = build_core_type
+              (require_some origin "missing type application constructor" constructor)
+          })
     | SynAst.TypeExpr.Arrow { left; right } ->
-        TypeArrow {
-          left = Option.map left ~fn:build_core_type;
-          right = Option.map right ~fn:build_core_type
-        }
+        make_core_type
+          origin
+          (Arrow {
+            left = build_core_type (require_some origin "missing arrow parameter type" left);
+            right = build_core_type (require_some origin "missing arrow result type" right)
+          })
     | SynAst.TypeExpr.Tuple _ ->
-        TypeTuple (child_type_exprs type_expr)
+        make_core_type origin (Tuple (child_type_exprs type_expr))
     | SynAst.TypeExpr.Labeled { annotation; _ } ->
-        TypeLabeled { annotation = Option.map annotation ~fn:build_core_type }
+        make_core_type
+          origin
+          (Labeled (build_core_type
+            (require_some origin "missing labeled type annotation" annotation)))
     | SynAst.TypeExpr.Poly { body } ->
-        TypePoly { body = Option.map body ~fn:build_core_type }
-    | SynAst.TypeExpr.Parenthesized { inner=Some inner } ->
-        (build_core_type inner).view
-    | SynAst.TypeExpr.Parenthesized { inner=None } ->
-        TypeError "missing parenthesized type"
+        make_core_type
+          origin
+          (Poly (build_core_type (require_some origin "missing polymorphic type body" body)))
+    | SynAst.TypeExpr.Parenthesized { inner } ->
+        make_core_type
+          origin
+          (Parenthesized (build_core_type (require_some origin "missing parenthesized type" inner)))
     | SynAst.TypeExpr.Opaque node -> (
         match SynAst.TypeExpr.inner_without_attribute_suffix type_expr with
-        | Some inner -> (build_core_type inner).view
-        | None -> TypeUnsupported (node_summary node)
+        | Some inner -> build_core_type inner
+        | None -> unsupported_node node (node_summary node)
       )
     | SynAst.TypeExpr.Error node ->
-        TypeError (node_summary node)
+        unsupported_node node (node_summary node)
     | SynAst.TypeExpr.Unknown node ->
-        TypeUnsupported (node_summary node)
-  in
-  ({ origin; view }: core_type)
+        unsupported_node node (node_summary node): core_type)
 
 and child_type_exprs = fun type_expr ->
   let children = ref [] in
@@ -272,61 +355,84 @@ and child_type_exprs = fun type_expr ->
 
 let rec build_parameter = fun parameter ->
   let origin = origin_from_node parameter in
-  let view =
-    match SynAst.Parameter.view parameter with
-    | SynAst.Parameter.Labeled { label; pattern } -> Labeled {
-      label = Option.map label ~fn:token_text;
-      pattern = Option.map pattern ~fn:build_pattern
-    }
-    | SynAst.Parameter.Optional { label; pattern } -> Optional {
-      label = Option.map label ~fn:token_text;
-      pattern = Option.map pattern ~fn:build_pattern
-    }
-    | SynAst.Parameter.OptionalDefault { label; pattern; default } -> OptionalDefault {
-      label = Option.map label ~fn:token_text;
-      pattern = Option.map pattern ~fn:build_pattern;
-      default = Option.map default ~fn:build_expr
-    }
-    | SynAst.Parameter.Unknown node -> UnknownParameter (node_summary node)
-  in
-  ({ origin; view }: parameter)
+  (match SynAst.Parameter.view parameter with
+    | SynAst.Parameter.Labeled { label; pattern } -> make_parameter
+      origin
+      (Labeled {
+        label = token_text (require_some origin "missing labeled parameter label" label);
+        pattern = Option.map pattern ~fn:build_pattern
+      })
+    | SynAst.Parameter.Optional { label; pattern } -> make_parameter
+      origin
+      (Optional {
+        label = token_text (require_some origin "missing optional parameter label" label);
+        pattern = Option.map pattern ~fn:build_pattern
+      })
+    | SynAst.Parameter.OptionalDefault { label; pattern; default } -> make_parameter
+      origin
+      (OptionalDefault {
+        label = token_text (require_some origin "missing optional parameter label" label);
+        pattern = Option.map pattern ~fn:build_pattern;
+        default = build_expression (require_some origin "missing optional parameter default" default)
+      })
+    | SynAst.Parameter.Unknown node -> unsupported_node node (node_summary node): parameter)
 
-and build_pattern = fun pattern ->
-  let origin = origin_from_node pattern in
-  let view =
-    match SynAst.Pattern.view pattern with
-    | SynAst.Pattern.Wildcard -> PatternWildcard
-    | SynAst.Pattern.Path { path } -> PatternPath (path_from_syn_path path)
-    | SynAst.Pattern.Apply { callee; argument } -> PatternApply {
-      callee = Option.map callee ~fn:build_pattern;
-      argument = Option.map argument ~fn:build_pattern
-    }
-    | SynAst.Pattern.Literal { token } -> PatternLiteral (Option.map token ~fn:literal_from_token
-    |> Option.unwrap_or ~default:Unknown)
-    | SynAst.Pattern.Tuple -> PatternTuple (child_patterns pattern |> List.map ~fn:build_pattern)
-    | SynAst.Pattern.List -> PatternList (child_patterns pattern |> List.map ~fn:build_pattern)
-    | SynAst.Pattern.Cons { head; tail } -> PatternCons {
-      head = Option.map head ~fn:build_pattern;
-      tail = Option.map tail ~fn:build_pattern
-    }
-    | SynAst.Pattern.Parenthesized { inner=Some inner } -> (build_pattern inner).view
-    | SynAst.Pattern.Parenthesized { inner=None } -> PatternError "missing parenthesized pattern"
-    | SynAst.Pattern.Constraint { pattern; annotation } -> PatternConstraint {
-      pattern = Option.map pattern ~fn:build_pattern;
-      annotation = Option.map annotation ~fn:build_core_type
-    }
-    | SynAst.Pattern.Alias { pattern; alias } -> PatternAlias {
-      pattern = Option.map pattern ~fn:build_pattern;
-      alias = Option.map alias ~fn:build_pattern
-    }
-    | SynAst.Pattern.Attribute { inner } -> PatternAttribute {
-      inner = Option.map inner ~fn:build_pattern
-    }
-    | SynAst.Pattern.LabeledParam parameter -> PatternLabeledParam (build_parameter parameter)
-    | SynAst.Pattern.OptionalParam parameter -> PatternOptionalParam (build_parameter parameter)
-    | SynAst.Pattern.OptionalParamDefault parameter -> PatternOptionalParamDefault (build_parameter parameter)
-    | SynAst.Pattern.Error node -> PatternError (node_summary node)
-    | SynAst.Pattern.Unknown node -> PatternUnsupported (node_summary node)
+and build_pattern = fun syntax_pattern ->
+  let origin = origin_from_node syntax_pattern in
+  (match SynAst.Pattern.view syntax_pattern with
+    | SynAst.Pattern.Wildcard -> make_pattern origin Wildcard
+    | SynAst.Pattern.Path { path } -> make_pattern origin (Path (path_from_syn_path path))
+    | SynAst.Pattern.Apply { callee; argument } -> make_pattern
+      origin
+      (Apply {
+        callee = build_pattern (require_some origin "missing pattern callee" callee);
+        argument = build_pattern (require_some origin "missing pattern argument" argument)
+      })
+    | SynAst.Pattern.Literal { token } -> make_pattern
+      origin
+      (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
+    | SynAst.Pattern.Tuple -> make_pattern
+      origin
+      (Tuple (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
+    | SynAst.Pattern.List -> make_pattern
+      origin
+      (List (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
+    | SynAst.Pattern.Cons { head; tail } -> make_pattern
+      origin
+      (Cons {
+        head = build_pattern (require_some origin "missing cons head" head);
+        tail = build_pattern (require_some origin "missing cons tail" tail)
+      })
+    | SynAst.Pattern.Parenthesized { inner } -> make_pattern
+      origin
+      (Parenthesized (build_pattern (require_some origin "missing parenthesized pattern" inner)))
+    | SynAst.Pattern.Constraint { pattern; annotation } -> make_pattern
+      origin
+      (Constraint {
+        pattern = build_pattern (require_some origin "missing constrained pattern" pattern);
+        annotation = build_core_type
+          (require_some origin "missing pattern type annotation" annotation)
+      })
+    | SynAst.Pattern.Alias { pattern; alias } -> make_pattern
+      origin
+      (Alias {
+        pattern = build_pattern (require_some origin "missing aliased pattern" pattern);
+        alias = build_pattern (require_some origin "missing pattern alias" alias)
+      })
+    | SynAst.Pattern.Attribute { inner } -> make_pattern
+      origin
+      (Attribute (build_pattern (require_some origin "missing attributed pattern" inner)))
+    | SynAst.Pattern.LabeledParam parameter -> make_pattern
+      origin
+      (LabeledParameter (build_parameter parameter))
+    | SynAst.Pattern.OptionalParam parameter -> make_pattern
+      origin
+      (OptionalParameter (build_parameter parameter))
+    | SynAst.Pattern.OptionalParamDefault parameter -> make_pattern
+      origin
+      (OptionalParameterDefault (build_parameter parameter))
+    | SynAst.Pattern.Error node -> unsupported_node node (node_summary node)
+    | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | SynAst.Pattern.Array
     | SynAst.Pattern.Record
     | SynAst.Pattern.PolyVariant
@@ -337,81 +443,122 @@ and build_pattern = fun pattern ->
     | SynAst.Pattern.Interval _
     | SynAst.Pattern.Or _
     | SynAst.Pattern.Lazy _
-    | SynAst.Pattern.Exception _ -> PatternUnsupported (Syn.SyntaxKind.to_string origin.kind)
-  in
-  ({ origin; view }: pattern)
+    | SynAst.Pattern.Exception _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind): pattern)
 
 and build_let_binding = fun binding ->
+  let origin = origin_from_node binding in
   let parameters = ref [] in
   SynAst.LetBinding.for_each_parameter
     binding
     ~fn:(fun parameter -> parameters := build_pattern parameter :: !parameters);
   ({
-      origin = origin_from_node binding;
-      pattern = Option.map (SynAst.LetBinding.pattern binding) ~fn:build_pattern;
+      origin;
+      pattern = build_pattern
+        (require_some origin "missing let binding pattern" (SynAst.LetBinding.pattern binding));
       parameters = List.reverse !parameters;
-      body = Option.map (SynAst.LetBinding.body binding) ~fn:build_expr;
+      body = build_expression
+        (require_some origin "missing let binding body" (SynAst.LetBinding.body binding));
       type_annotation = Option.map (SynAst.LetBinding.type_annotation binding) ~fn:build_core_type;
     }: let_binding)
 
-and build_expr = fun expression ->
-  let origin = origin_from_node expression in
-  let view =
-    match SynAst.Expr.view expression with
-    | SynAst.Expr.Literal { token } -> ExprLiteral (Option.map token ~fn:literal_from_token
-    |> Option.unwrap_or ~default:Unknown)
-    | SynAst.Expr.Path { path } -> ExprPath (path_from_syn_path path)
-    | SynAst.Expr.Parenthesized { inner } -> ExprParenthesized {
-      inner = Option.map inner ~fn:build_expr
-    }
-    | SynAst.Expr.Attribute { inner } -> ExprAttribute { inner = Option.map inner ~fn:build_expr }
-    | SynAst.Expr.Typed { expr; annotation } -> ExprTyped {
-      expr = Option.map expr ~fn:build_expr;
-      annotation = Option.map annotation ~fn:build_core_type
-    }
-    | SynAst.Expr.Tuple -> ExprTuple (child_exprs expression |> List.map ~fn:build_expr)
-    | SynAst.Expr.List -> ExprList (child_exprs expression |> List.map ~fn:build_expr)
-    | SynAst.Expr.Sequence { left; right } -> ExprSequence {
-      left = Option.map left ~fn:build_expr;
-      right = Option.map right ~fn:build_expr
-    }
-    | SynAst.Expr.If { condition; then_branch; else_branch } -> ExprIf {
-      condition = Option.map condition ~fn:build_expr;
-      then_branch = Option.map then_branch ~fn:build_expr;
-      else_branch = Option.map else_branch ~fn:build_expr
-    }
-    | SynAst.Expr.Apply { callee; argument } -> ExprApply {
-      callee = Option.map callee ~fn:build_expr;
-      argument = Option.map argument ~fn:build_expr
-    }
-    | SynAst.Expr.Infix { left; operator; right } -> ExprInfix {
-      left = Option.map left ~fn:build_expr;
-      operator = Option.map operator ~fn:(fun token -> SurfacePath.from_name (token_text token));
-      right = Option.map right ~fn:build_expr
-    }
-    | SynAst.Expr.Prefix { operator; operand } -> ExprPrefix {
-      operator = Option.map operator ~fn:(fun token -> SurfacePath.from_name (token_text token));
-      operand = Option.map operand ~fn:build_expr
-    }
-    | SynAst.Expr.Let { first_binding; body } -> ExprLet {
-      first_binding = Option.map first_binding ~fn:build_let_binding;
-      body = Option.map body ~fn:build_expr
-    }
-    | SynAst.Expr.Assert { argument } -> ExprAssert { argument = Option.map argument ~fn:build_expr }
-    | SynAst.Expr.LabeledArg { label; value } -> ExprLabeledArg {
-      label = Option.map label ~fn:token_text;
-      value = Option.map value ~fn:build_expr
-    }
-    | SynAst.Expr.OptionalArg { label; value } -> ExprOptionalArg {
-      label = Option.map label ~fn:token_text;
-      value = Option.map value ~fn:build_expr
-    }
-    | SynAst.Expr.Error node -> ExprError (node_summary node)
-    | SynAst.Expr.Unknown node -> ExprUnsupported (node_summary node)
-    | SynAst.Expr.FieldAccess _ -> ExprUnsupported "field access"
-    | SynAst.Expr.Match _ -> ExprUnsupported "match expression"
-    | SynAst.Expr.Function _ -> ExprUnsupported "function expression"
-    | SynAst.Expr.Fun _ -> ExprUnsupported "function expression"
+and build_expression = fun syntax_expression ->
+  let origin = origin_from_node syntax_expression in
+  (match SynAst.Expr.view syntax_expression with
+    | SynAst.Expr.Literal { token } ->
+        make_expression
+          origin
+          (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
+    | SynAst.Expr.Path { path } ->
+        make_expression origin (Path (path_from_syn_path path))
+    | SynAst.Expr.Parenthesized { inner=Some inner } ->
+        build_expression inner
+    | SynAst.Expr.Parenthesized { inner=None } ->
+        build_failed origin "missing parenthesized expression"
+    | SynAst.Expr.Attribute { inner=Some inner } ->
+        build_expression inner
+    | SynAst.Expr.Attribute { inner=None } ->
+        build_failed origin "missing attributed expression"
+    | SynAst.Expr.Typed { expr=Some expr; annotation=Some annotation } ->
+        with_expression_type_hint (build_core_type annotation) (build_expression expr)
+    | SynAst.Expr.Typed { expr=Some expr; annotation=None } ->
+        build_expression expr
+    | SynAst.Expr.Typed { expr=None; _ } ->
+        build_failed origin "missing typed expression"
+    | SynAst.Expr.Tuple ->
+        make_expression
+          origin
+          (Tuple (child_exprs syntax_expression |> List.map ~fn:build_expression))
+    | SynAst.Expr.List ->
+        make_expression
+          origin
+          (List (child_exprs syntax_expression |> List.map ~fn:build_expression))
+    | SynAst.Expr.Sequence { left=Some left; right=Some right } ->
+        make_expression
+          origin
+          (Sequence { left = build_expression left; right = build_expression right })
+    | SynAst.Expr.Sequence _ ->
+        build_failed origin "incomplete sequence expression"
+    | SynAst.Expr.If { condition=Some condition; then_branch=Some then_branch; else_branch } ->
+        make_expression
+          origin
+          (If {
+            condition = build_expression condition;
+            then_branch = build_expression then_branch;
+            else_branch = Option.map else_branch ~fn:build_expression
+          })
+    | SynAst.Expr.If _ ->
+        build_failed origin "incomplete if expression"
+    | SynAst.Expr.Apply { callee=Some callee; argument } ->
+        let arguments = [
+          build_argument (require_some origin "missing application argument" argument)
+        ] in
+        make_expression origin (Apply { callee = build_expression callee; arguments })
+    | SynAst.Expr.Apply { callee=None; _ } ->
+        build_failed origin "missing application callee"
+    | SynAst.Expr.Infix { left=Some left; operator=Some operator; right=Some right } ->
+        make_expression
+          origin
+          (Infix {
+            left = build_expression left;
+            operator = SurfacePath.from_name (token_text operator);
+            right = build_expression right
+          })
+    | SynAst.Expr.Infix _ ->
+        build_failed origin "incomplete infix expression"
+    | SynAst.Expr.Prefix { operator=Some operator; operand=Some operand } ->
+        let callee = make_expression origin (Path (SurfacePath.from_name (token_text operator))) in
+        let argument = build_expression operand in
+        make_expression
+          origin
+          (Apply { callee; arguments = [ make_argument argument.origin (Positional argument) ] })
+    | SynAst.Expr.Prefix _ ->
+        build_failed origin "incomplete prefix expression"
+    | SynAst.Expr.Let { first_binding=Some first_binding; body=Some body } ->
+        make_expression
+          origin
+          (Let { first_binding = build_let_binding first_binding; body = build_expression body })
+    | SynAst.Expr.Let _ ->
+        build_failed origin "incomplete let expression"
+    | SynAst.Expr.Assert { argument=Some argument } ->
+        make_expression origin (Assert (build_expression argument))
+    | SynAst.Expr.Assert { argument=None } ->
+        build_failed origin "missing assert argument"
+    | SynAst.Expr.LabeledArg _ ->
+        build_failed origin "labeled argument outside application"
+    | SynAst.Expr.OptionalArg _ ->
+        build_failed origin "optional argument outside application"
+    | SynAst.Expr.Error node ->
+        unsupported_node node (node_summary node)
+    | SynAst.Expr.Unknown node ->
+        unsupported_node node (node_summary node)
+    | SynAst.Expr.FieldAccess _ ->
+        build_failed origin "field access"
+    | SynAst.Expr.Match _ ->
+        build_failed origin "match expression"
+    | SynAst.Expr.Function _ ->
+        build_failed origin "function expression"
+    | SynAst.Expr.Fun _ ->
+        build_failed origin "function expression"
     | SynAst.Expr.Array
     | SynAst.Expr.Record
     | SynAst.Expr.RecordUpdate
@@ -432,9 +579,25 @@ and build_expr = fun expression ->
     | SynAst.Expr.MethodCall _
     | SynAst.Expr.PolyVariant _
     | SynAst.Expr.ArrayIndex _
-    | SynAst.Expr.StringIndex _ -> ExprUnsupported (Syn.SyntaxKind.to_string origin.kind)
-  in
-  ({ origin; view }: expr)
+    | SynAst.Expr.StringIndex _ ->
+        build_failed origin (Syn.SyntaxKind.to_string origin.kind): expression)
+
+and build_argument = fun syntax_expression ->
+  let origin = origin_from_node syntax_expression in
+  (match SynAst.Expr.view syntax_expression with
+    | SynAst.Expr.LabeledArg { label; value } -> make_argument
+      origin
+      (Labeled {
+        label = token_text (require_some origin "missing labeled argument label" label);
+        value = Option.map value ~fn:build_expression
+      })
+    | SynAst.Expr.OptionalArg { label; value } -> make_argument
+      origin
+      (Optional {
+        label = token_text (require_some origin "missing optional argument label" label);
+        value = Option.map value ~fn:build_expression
+      })
+    | _ -> make_argument origin (Positional (build_expression syntax_expression)): argument)
 
 let build_let_declaration = fun declaration ->
   let bindings = ref [] in
@@ -458,109 +621,197 @@ let name_from_declaration_tokens = fun for_each_token fallback ->
   | tokens -> Some (path_from_tokens tokens |> SurfacePath.to_string)
 
 let build_value_declaration = fun declaration ->
+  let origin = origin_from_node declaration in
   (
     {
-      origin = origin_from_node declaration;
+      origin;
       name = name_from_declaration_tokens
         (SynAst.ValueDeclaration.for_each_name_token declaration)
-        (SynAst.ValueDeclaration.name declaration);
-      type_annotation = Option.map (SynAst.ValueDeclaration.type_annotation declaration) ~fn:build_core_type
+        (SynAst.ValueDeclaration.name declaration)
+      |> require_some origin "missing value declaration name";
+      type_annotation = SynAst.ValueDeclaration.type_annotation declaration
+      |> require_some origin "missing value declaration type annotation"
+      |> build_core_type
     }:
       value_declaration
   )
 
 let build_external_declaration = fun declaration ->
+  let origin = origin_from_node declaration in
   (
     {
-      origin = origin_from_node declaration;
+      origin;
       name = name_from_declaration_tokens
         (SynAst.ExternalDeclaration.for_each_name_token declaration)
-        (SynAst.ExternalDeclaration.name declaration);
-      type_annotation = Option.map (SynAst.ExternalDeclaration.type_annotation declaration) ~fn:build_core_type
+        (SynAst.ExternalDeclaration.name declaration)
+      |> require_some origin "missing external declaration name";
+      type_annotation = SynAst.ExternalDeclaration.type_annotation declaration
+      |> require_some origin "missing external declaration type annotation"
+      |> build_core_type
     }:
       external_declaration
   )
 
+let build_type_parameter = function
+  | SynAst.TypeDeclaration.Named { name; _ } -> Some (token_text name)
+  | SynAst.TypeDeclaration.Wildcard _ -> None
+
+let build_type_constructor = fun constructor ->
+  let origin = origin_from_node constructor in
+  (
+    {
+      origin;
+      name = SynAst.VariantConstructor.name constructor
+      |> require_some origin "missing variant constructor name"
+      |> token_text;
+      payload = Option.map (SynAst.VariantConstructor.payload_type constructor) ~fn:build_core_type
+    }:
+      type_constructor
+  )
+
+let build_type_declaration_member = fun member ->
+  let origin = origin_from_node (SynAst.TypeDeclaration.Member.declaration member) in
+  let parameters = ref [] in
+  SynAst.TypeDeclaration.Member.for_each_parameter
+    member
+    ~fn:(fun parameter -> parameters := build_type_parameter parameter :: !parameters);
+  let definition: type_definition =
+    match SynAst.TypeDeclaration.Member.manifest member, SynAst.TypeDeclaration.Member.variant_type member, SynAst.TypeDeclaration.Member.record_type
+      member with
+    | Some manifest, _, _ ->
+        make_type_definition origin (Alias (build_core_type manifest))
+    | None, Some variant, _ ->
+        let constructors = ref [] in
+        SynAst.VariantType.for_each_constructor
+          variant
+          ~fn:(fun constructor -> constructors := build_type_constructor constructor :: !constructors);
+        make_type_definition origin (Variant (List.reverse !constructors))
+    | None, None, Some record ->
+        build_failed (origin_from_node record) (Syn.SyntaxKind.to_string (SynAst.Node.kind record))
+    | None, None, None ->
+        make_type_definition origin Abstract
+  in
+  (
+    {
+      origin;
+      name = SynAst.TypeDeclaration.Member.name member
+      |> require_some origin "missing type declaration name"
+      |> token_text;
+      parameters = List.reverse !parameters;
+      definition
+    }:
+      type_declaration
+  )
+
+let build_type_declarations = fun declaration ->
+  let declarations = ref [] in
+  SynAst.TypeDeclaration.for_each_member
+    declaration
+    ~fn:(fun member -> declarations := build_type_declaration_member member :: !declarations);
+  List.reverse !declarations
+
 let build_structure_item = fun item ->
   let origin = origin_from_node item in
-  let view =
-    match SynAst.StructureItem.view item with
-    | Let declaration -> StructureLet (build_let_declaration declaration)
-    | Expr expr_item -> StructureExpr (Option.map (SynAst.ExprItem.expr expr_item) ~fn:build_expr)
-    | External declaration -> StructureExternal (build_external_declaration declaration)
-    | Type declaration -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | TypeExtension declaration -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Exception declaration -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Class declaration -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Attribute attribute -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind attribute))
-    | Extension extension -> StructureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind extension))
+  (match SynAst.StructureItem.view item with
+    | Let declaration ->
+        make_structure_item origin (Let (build_let_declaration declaration))
+    | Expr expr_item -> (
+        match SynAst.ExprItem.expr expr_item with
+        | Some expression -> make_structure_item origin (Expression (build_expression expression))
+        | None -> build_failed origin "missing structure expression"
+      )
+    | External declaration ->
+        make_structure_item origin (External (build_external_declaration declaration))
+    | Type declaration ->
+        make_structure_item origin (Type (build_type_declarations declaration))
+    | TypeExtension declaration ->
+        build_failed
+          (origin_from_node declaration)
+          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Exception declaration ->
+        build_failed
+          (origin_from_node declaration)
+          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Class declaration ->
+        build_failed
+          (origin_from_node declaration)
+          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Attribute attribute ->
+        build_failed
+          (origin_from_node attribute)
+          (Syn.SyntaxKind.to_string (SynAst.Node.kind attribute))
+    | Extension extension ->
+        build_failed
+          (origin_from_node extension)
+          (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
     | Module _
     | ModuleType _
     | Open _
-    | Include _ -> StructureUnsupported (Syn.SyntaxKind.to_string origin.kind)
-    | Error node -> StructureError (node_summary node)
-    | Unknown node -> StructureUnsupported (node_summary node)
-  in
-  ({ origin; view }: structure_item)
+    | Include _ ->
+        build_failed origin (Syn.SyntaxKind.to_string origin.kind)
+    | Error node ->
+        unsupported_node node (node_summary node)
+    | Unknown node ->
+        unsupported_node node (node_summary node): structure_item)
 
 let build_signature_item = fun item ->
   let origin = origin_from_node item in
-  let view =
-    match SynAst.SignatureItem.view item with
-    | Value declaration -> SignatureValue (build_value_declaration declaration)
-    | External declaration -> SignatureExternal (build_external_declaration declaration)
-    | Type declaration -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | TypeExtension declaration -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Exception declaration -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Class declaration -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind declaration))
-    | Attribute attribute -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind attribute))
-    | Extension extension -> SignatureUnsupported (Syn.SyntaxKind.to_string
-      (SynAst.Node.kind extension))
+  (match SynAst.SignatureItem.view item with
+    | Value declaration -> make_signature_item origin (Value (build_value_declaration declaration))
+    | External declaration -> make_signature_item
+      origin
+      (External (build_external_declaration declaration))
+    | Type declaration -> make_signature_item origin (Type (build_type_declarations declaration))
+    | TypeExtension declaration -> build_failed
+      (origin_from_node declaration)
+      (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Exception declaration -> build_failed
+      (origin_from_node declaration)
+      (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Class declaration -> build_failed
+      (origin_from_node declaration)
+      (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | Attribute attribute -> build_failed
+      (origin_from_node attribute)
+      (Syn.SyntaxKind.to_string (SynAst.Node.kind attribute))
+    | Extension extension -> build_failed
+      (origin_from_node extension)
+      (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
     | Module _
     | ModuleType _
     | Open _
-    | Include _ -> SignatureUnsupported (Syn.SyntaxKind.to_string origin.kind)
-    | Error node -> SignatureError (node_summary node)
-    | Unknown node -> SignatureUnsupported (node_summary node)
-  in
-  ({ origin; view }: signature_item)
+    | Include _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind)
+    | Error node -> unsupported_node node (node_summary node)
+    | Unknown node -> unsupported_node node (node_summary node): signature_item)
 
 let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
-  let source_file = SynAst.SourceFile.make parse_result.tree in
-  let kind =
-    match parse_result.kind with
-    | `Implementation -> `Implementation
-    | `Interface -> `Interface
-  in
-  let view =
-    match SynAst.SourceFile.view source_file with
-    | Implementation implementation ->
-        let items = ref [] in
-        SynAst.Implementation.for_each_item
-          implementation
-          ~fn:(fun item -> items := build_structure_item item :: !items);
-        Implementation (List.reverse !items)
-    | Interface interface ->
-        let items = ref [] in
-        SynAst.Interface.for_each_item
-          interface
-          ~fn:(fun item -> items := build_signature_item item :: !items);
-        Interface (List.reverse !items)
-    | Empty ->
-        Empty
-  in
-  ({ kind; origin = origin_from_node source_file; view }: t)
+  try
+    let source_file = SynAst.SourceFile.make parse_result.tree in
+    let kind =
+      match parse_result.kind with
+      | `Implementation -> `Implementation
+      | `Interface -> `Interface
+    in
+    let ast =
+      match SynAst.SourceFile.view source_file with
+      | Implementation implementation ->
+          let items = ref [] in
+          SynAst.Implementation.for_each_item
+            implementation
+            ~fn:(fun item -> items := build_structure_item item :: !items);
+          make_source_file (origin_from_node source_file) (Implementation (List.reverse !items))
+      | Interface interface ->
+          let items = ref [] in
+          SynAst.Interface.for_each_item
+            interface
+            ~fn:(fun item -> items := build_signature_item item :: !items);
+          make_source_file (origin_from_node source_file) (Interface (List.reverse !items))
+      | Empty ->
+          make_source_file (origin_from_node source_file) (Empty kind)
+    in
+    Ok ast
+  with
+  | Build_failed diagnostic -> Error [ diagnostic ]
 
 let span_serializer = Serde.Ser.record
   (Serde.Ser.fields
@@ -592,21 +843,28 @@ let file_kind_serializer = Serde.Ser.variant
         | `Interface -> true
       ); ]
 
+let file_kind = function
+  | { kind=Implementation _; _ } -> `Implementation
+  | { kind=Interface _; _ } -> `Interface
+  | { kind=Empty kind; _ } -> kind
+
+let file_origin = fun file -> file.origin
+
 let view_name = function
-  | Implementation _ -> "Implementation"
-  | Interface _ -> "Interface"
-  | Empty -> "Empty"
+  | { kind=Implementation _; _ } -> "Implementation"
+  | { kind=Interface _; _ } -> "Interface"
+  | { kind=Empty _; _ } -> "Empty"
 
 let item_count = function
-  | Implementation items -> List.length items
-  | Interface items -> List.length items
-  | Empty -> 0
+  | { kind=Implementation items; _ } -> List.length items
+  | { kind=Interface items; _ } -> List.length items
+  | { kind=Empty _; _ } -> 0
 
 let serializer = Serde.Ser.record
   (Serde.Ser.fields
     [
-      Serde.Ser.field "kind" file_kind_serializer (fun (file: t) -> file.kind);
-      Serde.Ser.field "origin" origin_serializer (fun (file: t) -> file.origin);
-      Serde.Ser.field "view" Serde.Ser.string (fun (file: t) -> view_name file.view);
-      Serde.Ser.field "item_count" Serde.Ser.int (fun (file: t) -> item_count file.view);
+      Serde.Ser.field "kind" file_kind_serializer (fun (file: t) -> file_kind file);
+      Serde.Ser.field "origin" origin_serializer (fun (file: t) -> file_origin file);
+      Serde.Ser.field "view" Serde.Ser.string (fun (file: t) -> view_name file);
+      Serde.Ser.field "item_count" Serde.Ser.int (fun (file: t) -> item_count file);
     ])

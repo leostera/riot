@@ -20,85 +20,106 @@ type literal =
   | Unknown
 type core_type = {
   origin: origin;
-  view: core_type_view;
+  kind: core_type_kind;
 }
 
-and core_type_view =
-  | TypeWildcard
-  | TypeVar of string option
-  | TypePath of path
-  | TypeApply of { argument: core_type option; constructor: core_type option }
-  | TypeArrow of { left: core_type option; right: core_type option }
-  | TypeTuple of core_type list
-  | TypeLabeled of { annotation: core_type option }
-  | TypePoly of { body: core_type option }
-  | TypeUnsupported of string
-  | TypeError of string
+and core_type_kind =
+  | Wildcard
+  | Var of string option
+  | Path of path
+  | Apply of { argument: core_type; constructor: core_type }
+  | Arrow of { left: core_type; right: core_type }
+  | Tuple of core_type list
+  | Labeled of core_type
+  | Poly of core_type
+  | Parenthesized of core_type
+type type_parameter = string option
+type type_constructor = {
+  origin: origin;
+  name: string;
+  payload: core_type option;
+}
+type type_definition = {
+  origin: origin;
+  kind: type_definition_kind;
+}
+
+and type_definition_kind =
+  | Abstract
+  | Alias of core_type
+  | Variant of type_constructor list
+type type_declaration = {
+  origin: origin;
+  name: string;
+  parameters: type_parameter list;
+  definition: type_definition;
+}
 type parameter = {
   origin: origin;
-  view: parameter_view;
+  kind: parameter_kind;
 }
 
-and parameter_view =
-  | Labeled of { label: string option; pattern: pattern option }
-  | Optional of { label: string option; pattern: pattern option }
-  | OptionalDefault of { label: string option; pattern: pattern option; default: expr option }
-  | UnknownParameter of string
+and parameter_kind =
+  | Labeled of { label: string; pattern: pattern option }
+  | Optional of { label: string; pattern: pattern option }
+  | OptionalDefault of { label: string; pattern: pattern option; default: expression }
 
 and pattern = {
   origin: origin;
-  view: pattern_view;
+  kind: pattern_kind;
 }
 
-and pattern_view =
-  | PatternWildcard
-  | PatternPath of path
-  | PatternApply of { callee: pattern option; argument: pattern option }
-  | PatternLiteral of literal
-  | PatternTuple of pattern list
-  | PatternList of pattern list
-  | PatternCons of { head: pattern option; tail: pattern option }
-  | PatternConstraint of { pattern: pattern option; annotation: core_type option }
-  | PatternAlias of { pattern: pattern option; alias: pattern option }
-  | PatternAttribute of { inner: pattern option }
-  | PatternLabeledParam of parameter
-  | PatternOptionalParam of parameter
-  | PatternOptionalParamDefault of parameter
-  | PatternUnsupported of string
-  | PatternError of string
+and pattern_kind =
+  | Wildcard
+  | Path of path
+  | Apply of { callee: pattern; argument: pattern }
+  | Literal of literal
+  | Tuple of pattern list
+  | List of pattern list
+  | Cons of { head: pattern; tail: pattern }
+  | Constraint of { pattern: pattern; annotation: core_type }
+  | Alias of { pattern: pattern; alias: pattern }
+  | Attribute of pattern
+  | Parenthesized of pattern
+  | LabeledParameter of parameter
+  | OptionalParameter of parameter
+  | OptionalParameterDefault of parameter
 
 and let_binding = {
   origin: origin;
-  pattern: pattern option;
+  pattern: pattern;
   parameters: pattern list;
-  body: expr option;
+  body: expression;
   type_annotation: core_type option;
 }
 
-and expr = {
+and expression = {
   origin: origin;
-  view: expr_view;
+  type_hint: core_type option;
+  kind: expression_kind;
 }
 
-and expr_view =
-  | ExprLiteral of literal
-  | ExprPath of path
-  | ExprParenthesized of { inner: expr option }
-  | ExprAttribute of { inner: expr option }
-  | ExprTyped of { expr: expr option; annotation: core_type option }
-  | ExprTuple of expr list
-  | ExprList of expr list
-  | ExprSequence of { left: expr option; right: expr option }
-  | ExprIf of { condition: expr option; then_branch: expr option; else_branch: expr option }
-  | ExprApply of { callee: expr option; argument: expr option }
-  | ExprInfix of { left: expr option; operator: path option; right: expr option }
-  | ExprPrefix of { operator: path option; operand: expr option }
-  | ExprLet of { first_binding: let_binding option; body: expr option }
-  | ExprAssert of { argument: expr option }
-  | ExprLabeledArg of { label: string option; value: expr option }
-  | ExprOptionalArg of { label: string option; value: expr option }
-  | ExprUnsupported of string
-  | ExprError of string
+and expression_kind =
+  | Literal of literal
+  | Path of path
+  | Tuple of expression list
+  | List of expression list
+  | Sequence of { left: expression; right: expression }
+  | If of { condition: expression; then_branch: expression; else_branch: expression option }
+  | Apply of { callee: expression; arguments: argument list }
+  | Infix of { left: expression; operator: path; right: expression }
+  | Let of { first_binding: let_binding; body: expression }
+  | Assert of expression
+
+and argument = {
+  origin: origin;
+  kind: argument_kind;
+}
+
+and argument_kind =
+  | Positional of expression
+  | Labeled of { label: string; value: expression option }
+  | Optional of { label: string; value: expression option }
 type let_declaration = {
   origin: origin;
   recursive: bool;
@@ -106,44 +127,55 @@ type let_declaration = {
 }
 type value_declaration = {
   origin: origin;
-  name: string option;
-  type_annotation: core_type option;
+  name: string;
+  type_annotation: core_type;
 }
 type external_declaration = {
   origin: origin;
-  name: string option;
-  type_annotation: core_type option;
+  name: string;
+  type_annotation: core_type;
 }
 type structure_item = {
   origin: origin;
-  view: structure_item_view;
+  kind: structure_item_kind;
 }
 
-and structure_item_view =
-  | StructureLet of let_declaration
-  | StructureExpr of expr option
-  | StructureExternal of external_declaration
-  | StructureUnsupported of string
-  | StructureError of string
+and structure_item_kind =
+  | Let of let_declaration
+  | Type of type_declaration list
+  | Expression of expression
+  | External of external_declaration
 type signature_item = {
   origin: origin;
-  view: signature_item_view;
+  kind: signature_item_kind;
 }
 
-and signature_item_view =
-  | SignatureValue of value_declaration
-  | SignatureExternal of external_declaration
-  | SignatureUnsupported of string
-  | SignatureError of string
-type view =
+and signature_item_kind =
+  | Value of value_declaration
+  | Type of type_declaration list
+  | External of external_declaration
+type t = {
+  origin: origin;
+  kind: source_file_kind;
+}
+
+and source_file_kind =
   | Implementation of structure_item list
   | Interface of signature_item list
-  | Empty
-type t = {
-  kind: file_kind;
-  origin: origin;
-  view: view;
-}
-val from_parse_result: source:Model.Source.t -> Syn.Parser.parse_result -> t
+  | Empty of file_kind
+val core_type_origin: core_type -> origin
+
+val parameter_origin: parameter -> origin
+
+val pattern_origin: pattern -> origin
+
+val expression_origin: expression -> origin
+
+val structure_item_origin: structure_item -> origin
+
+val signature_item_origin: signature_item -> origin
+
+val from_parse_result:
+  source:Model.Source.t -> Syn.Parser.parse_result -> (t, Diagnostics.Diagnostic.t list) Result.t
 
 val serializer: t Serde.Ser.t
