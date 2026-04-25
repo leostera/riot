@@ -403,9 +403,10 @@ and build_pattern = fun syntax_pattern ->
         head = build_pattern (require_some origin "missing cons head" head);
         tail = build_pattern (require_some origin "missing cons tail" tail)
       })
-    | SynAst.Pattern.Parenthesized { inner } -> make_pattern
+    | SynAst.Pattern.Parenthesized { inner=Some inner } -> make_pattern
       origin
-      (Parenthesized (build_pattern (require_some origin "missing parenthesized pattern" inner)))
+      (Parenthesized (build_pattern inner))
+    | SynAst.Pattern.Parenthesized { inner=None } -> make_pattern origin (Literal Unit)
     | SynAst.Pattern.Constraint { pattern; annotation } -> make_pattern
       origin
       (Constraint {
@@ -473,7 +474,7 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.Parenthesized { inner=Some inner } ->
         build_expression inner
     | SynAst.Expr.Parenthesized { inner=None } ->
-        build_failed origin "missing parenthesized expression"
+        make_expression origin (Literal Unit)
     | SynAst.Expr.Attribute { inner=Some inner } ->
         build_expression inner
     | SynAst.Expr.Attribute { inner=None } ->
