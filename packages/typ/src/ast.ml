@@ -135,6 +135,7 @@ and expression_kind =
   | List of expression list
   | PolyVariant of string
   | Record of record_expression_field list
+  | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
@@ -669,9 +670,23 @@ and build_expression = fun syntax_expression ->
         let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record expression" in
         (
           match SynAst.RecordExpr.base record with
-          | Some _ -> build_failed origin "record update"
+          | Some base -> make_expression
+            origin
+            (RecordUpdate {
+              base = build_expression base;
+              fields = build_record_expression_fields record
+            })
           | None -> make_expression origin (Record (build_record_expression_fields record))
         )
+    | SynAst.Expr.RecordUpdate ->
+        let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record update" in
+        make_expression
+          origin
+          (RecordUpdate {
+            base = build_expression
+              (require_some origin "missing record update base" (SynAst.RecordExpr.base record));
+            fields = build_record_expression_fields record
+          })
     | SynAst.Expr.FieldAccess { target=Some target; field=Some field } ->
         make_expression
           origin
@@ -765,7 +780,6 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.Unknown node ->
         unsupported_node node (node_summary node)
     | SynAst.Expr.Array
-    | SynAst.Expr.RecordUpdate
     | SynAst.Expr.Extension
     | SynAst.Expr.FirstClassModule
     | SynAst.Expr.LocalOpen _

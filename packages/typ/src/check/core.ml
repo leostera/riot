@@ -924,6 +924,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         TPolyVariant (Lower, { tags = [ tag ] })
     | TypAst.Record fields ->
         infer_record state env ~level ~at:expression.origin fields
+    | TypAst.RecordUpdate { base; fields } ->
+        infer_record_update state env ~level ~at:expression.origin base fields
     | TypAst.FieldAccess { receiver; field } ->
         infer_field_access state env ~level ~at:expression.origin receiver field
     | TypAst.Sequence { left; right } ->
@@ -1063,6 +1065,23 @@ and infer_record = fun state env ~level ~at fields ->
         | None -> fresh_tyvar state ~level
       )
 
+and infer_record_update = fun state env ~level ~at base fields ->
+  let base_ty = infer_expression state env ~level base in
+  List.for_each fields
+    ~fn:(fun (field: TypAst.record_expression_field) ->
+      let value_ty = infer_expression state env ~level field.value in
+      match lookup_record_label state field.name with
+      | None -> add_diagnostic
+        state
+        (unsupported_type field.origin ("unbound record field " ^ SurfacePath.to_string field.name))
+      | Some label ->
+          let owner_ty, field_ty = instantiate_pair state ~level label.owner_ty label.field_ty in
+          unify state ~at:field.origin base_ty owner_ty;
+          unify state ~at:field.origin field_ty value_ty);
+  if List.is_empty fields then
+    add_diagnostic state (unsupported_syntax at "empty record update");
+  base_ty
+
 and infer_record_field = fun state ~level ~at receiver_ty field ->
   match lookup_record_label state field with
   | None ->
@@ -1153,6 +1172,10 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
   | TypAst.Record fields -> List.all
+    fields
+    ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
+  | TypAst.RecordUpdate { base; fields } -> is_nonexpansive_expression base
+  && List.all
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
   | TypAst.FieldAccess { receiver; _ } -> is_nonexpansive_expression receiver

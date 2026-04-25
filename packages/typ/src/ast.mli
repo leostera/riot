@@ -122,6 +122,7 @@ and expression_kind =
   | List of expression list
   | PolyVariant of string
   | Record of record_expression_field list
+  | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
