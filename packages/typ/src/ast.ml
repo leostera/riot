@@ -390,8 +390,8 @@ let rec build_core_type = fun type_expr ->
             left = build_core_type (require_some origin "missing arrow parameter type" left);
             right = build_core_type (require_some origin "missing arrow result type" right)
           })
-    | SynAst.TypeExpr.Tuple _ ->
-        make_core_type origin (Tuple (child_type_exprs type_expr))
+    | SynAst.TypeExpr.Tuple { left; right; _ } ->
+        make_core_type origin (Tuple (tuple_type_elements origin left right))
     | SynAst.TypeExpr.Labeled { annotation; _ } ->
         make_core_type
           origin
@@ -421,6 +421,19 @@ let rec build_core_type = fun type_expr ->
         unsupported_node node (node_summary node)
     | SynAst.TypeExpr.Unknown node ->
         unsupported_node node (node_summary node): core_type)
+
+and tuple_type_elements = fun origin left right ->
+  let rec flatten type_expr =
+    match SynAst.TypeExpr.view type_expr with
+    | SynAst.TypeExpr.Tuple { left; right; _ } -> tuple_type_elements
+      (origin_from_node type_expr)
+      left
+      right
+    | _ -> [ build_core_type type_expr ]
+  in
+  List.append
+    (flatten (require_some origin "missing tuple type left" left))
+    (flatten (require_some origin "missing tuple type right" right))
 
 and child_type_exprs = fun type_expr ->
   let children = ref [] in
