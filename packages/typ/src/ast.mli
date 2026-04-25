@@ -39,8 +39,10 @@ type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+  inline_record: record_field_declaration list option;
 }
-type record_field_declaration = {
+
+and record_field_declaration = {
   origin: origin;
   name: string;
   mutable_: bool;

@@ -48,9 +48,10 @@ type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+  inline_record: record_field_declaration list option;
 }
 
-type record_field_declaration = {
+and record_field_declaration = {
   origin: origin;
   name: string;
   mutable_: bool;
@@ -880,7 +881,7 @@ let build_type_parameter = function
   | SynAst.TypeDeclaration.Named { name; _ } -> Some (token_text name)
   | SynAst.TypeDeclaration.Wildcard _ -> None
 
-let build_type_constructor = fun constructor ->
+let rec build_type_constructor = fun constructor ->
   let origin = origin_from_node constructor in
   (
     {
@@ -888,12 +889,13 @@ let build_type_constructor = fun constructor ->
       name = SynAst.VariantConstructor.name constructor
       |> require_some origin "missing variant constructor name"
       |> token_text;
-      payload = Option.map (SynAst.VariantConstructor.payload_type constructor) ~fn:build_core_type
+      payload = Option.map (SynAst.VariantConstructor.payload_type constructor) ~fn:build_core_type;
+      inline_record = Option.map (SynAst.VariantConstructor.record_payload constructor) ~fn:build_record_field_declarations
     }:
       type_constructor
   )
 
-let build_record_field_declaration = fun field ->
+and build_record_field_declaration = fun field ->
   let origin = origin_from_node field in
   (
     {
@@ -907,7 +909,7 @@ let build_record_field_declaration = fun field ->
       record_field_declaration
   )
 
-let build_record_field_declarations = fun record ->
+and build_record_field_declarations = fun record ->
   let fields = ref [] in
   SynAst.RecordType.for_each_field
     record

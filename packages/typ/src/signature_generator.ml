@@ -271,11 +271,6 @@ and render_ast_arrow_parameter = fun type_ ->
   | TypAst.Arrow _ -> "(" ^ render_ast_core_type type_ ^ ")"
   | _ -> render_ast_core_type type_
 
-let render_type_constructor = fun (constructor: TypAst.type_constructor) ->
-  match constructor.payload with
-  | None -> constructor.name
-  | Some payload -> constructor.name ^ " of " ^ render_ast_core_type payload
-
 let render_record_field_declaration = fun (field: TypAst.record_field_declaration) ->
   (
     if field.mutable_ then
@@ -283,6 +278,15 @@ let render_record_field_declaration = fun (field: TypAst.record_field_declaratio
     else
       ""
   ) ^ field.name ^ " : " ^ render_ast_core_type field.type_annotation ^ ";"
+
+let render_type_constructor = fun (constructor: TypAst.type_constructor) ->
+  match constructor.inline_record, constructor.payload with
+  | Some fields, _ -> constructor.name
+  ^ " of { "
+  ^ (fields |> List.map ~fn:render_record_field_declaration |> String.concat " ")
+  ^ " }"
+  | None, None -> constructor.name
+  | None, Some payload -> constructor.name ^ " of " ^ render_ast_core_type payload
 
 let render_type_definition = fun (definition: TypAst.type_definition) ->
   match definition.kind with

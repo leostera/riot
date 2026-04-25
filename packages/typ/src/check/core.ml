@@ -1335,23 +1335,37 @@ let type_parameter_bindings = fun parameters ->
       index := !index + 1);
   (!vars, List.reverse !arguments)
 
-let constructor_binding_of_declaration = fun state ~level ~result_ty vars (
-  constructor: TypAst.type_constructor
-) ->
-  let ty =
-    match constructor.payload with
-    | None -> result_ty
-    | Some payload ->
-        let payload_ty = lower_core_type state ~level (ref vars) payload in
-        arrow payload_ty result_ty
-  in
-  make_binding state ~name:(SurfacePath.from_name constructor.name) ~ty
-
 let bind_record_field_declaration = fun state ~level ~owner_ty vars (
   field: TypAst.record_field_declaration
 ) ->
   let field_ty = lower_core_type state ~level (ref vars) field.type_annotation in
   state.record_labels <- { label = SurfacePath.from_name field.name; owner_ty; field_ty } :: state.record_labels
+
+let inline_record_owner_ty = fun type_name constructor_name arguments ->
+  TCon (SurfacePath.from_segments [ type_name; constructor_name ], arguments)
+
+let constructor_payload_ty = fun state ~level ~type_name ~result_arguments vars (
+  constructor: TypAst.type_constructor
+) ->
+  match constructor.inline_record, constructor.payload with
+  | Some fields, _ ->
+      let owner_ty = inline_record_owner_ty type_name constructor.name result_arguments in
+      fields |> List.for_each ~fn:(bind_record_field_declaration state ~level ~owner_ty vars);
+      Some owner_ty
+  | None, Some payload ->
+      Some (lower_core_type state ~level (ref vars) payload)
+  | None, None ->
+      None
+
+let constructor_binding_of_declaration = fun state ~level ~type_name ~result_ty ~result_arguments vars (
+  constructor: TypAst.type_constructor
+) ->
+  let ty =
+    match constructor_payload_ty state ~level ~type_name ~result_arguments vars constructor with
+    | None -> result_ty
+    | Some payload_ty -> arrow payload_ty result_ty
+  in
+  make_binding state ~name:(SurfacePath.from_name constructor.name) ~ty
 
 let bind_type_declaration = fun state env ~level (declaration: TypAst.type_declaration) ->
   let vars, arguments = type_parameter_bindings declaration.parameters in
@@ -1359,7 +1373,14 @@ let bind_type_declaration = fun state env ~level (declaration: TypAst.type_decla
   match declaration.definition.kind with
   | TypAst.Variant constructors ->
       constructors
-      |> List.map ~fn:(constructor_binding_of_declaration state ~level ~result_ty vars)
+      |> List.map
+        ~fn:(constructor_binding_of_declaration
+          state
+          ~level
+          ~type_name:declaration.name
+          ~result_ty
+          ~result_arguments:arguments
+          vars)
       |> extend_generalized env ~level
   | TypAst.Alias type_ ->
       let _ = lower_core_type state ~level (ref vars) type_ in
