@@ -1,4 +1,5 @@
 open Std
+open Std.Collections
 
 let ( let* ) = fun result fn -> Result.and_then result ~fn
 
@@ -14,22 +15,27 @@ let fixture_filter = fun path ->
 
 let source_slice = fun source -> IO.IoVec.IoSlice.from_string source |> Result.expect ~msg:"failed to create checker test source slice"
 
+let validate_interface_source = fun source ->
+  let parse_result = source |> source_slice |> Syn.parse_interface in
+  if Vector.is_empty parse_result.diagnostics then
+    Ok source
+  else
+    Error "generated interface did not parse cleanly"
+
 let checker_test = fun (ctx: Test.FixtureRunner.ctx) ->
   let* file = Fs.read ctx.fixture_path |> Result.map_err ~fn:IO.error_message in
   let parse_result = Syn.parse ~filename:ctx.fixture_path (source_slice file) in
   let source = Typ.Model.Source.make ~text:file in
   let typings = Typ.Check.check ~source parse_result in
-  let* json_text = Serde_json.to_string Typ.Check.Typings.serializer typings
-  |> Result.map_err ~fn:Serde.Error.to_string in
-  let* json = Data.Json.of_string json_text |> Result.map_err ~fn:Data.Json.error_to_string in
-  Test.Snapshot.assert_json ~ctx:ctx.test ~actual:json
+  let* actual = Typ.SignatureGenerator.from_typings typings |> validate_interface_source in
+  Test.Snapshot.assert_text ~ctx:ctx.test ~actual
 
 let tests =
   Test.FixtureRunner.cases
     ()
     ~dir:fixtures_dir
     ~filter:fixture_filter
-    ~snapshot_path:(fun path -> Some (Path.add_extension path ~ext:"checker.expected"))
+    ~snapshot_path:(fun path -> Some (Path.add_extension path ~ext:"expected"))
     ~run:checker_test
 
 let main ~args = Test.Cli.main ~name ~tests ~args ()

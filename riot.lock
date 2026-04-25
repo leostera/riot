@@ -320,7 +320,7 @@ root = "packages/typ"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "ceibo", package = { name = "ceibo" } }, { name = "contentstore", package = { name = "contentstore" } }, { name = "serde", package = { name = "serde" } }, { name = "std", package = { name = "std" } }, { name = "syn", package = { name = "syn" } }]
 build_dependencies = []
-dev_dependencies = [{ name = "serde-json", package = { name = "serde-json" } }]
+dev_dependencies = []
 
 [[packages]]
 name = "riot-cli"

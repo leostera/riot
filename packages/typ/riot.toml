@@ -14,6 +14,3 @@ ceibo = { path = "../ceibo", version = "*" }
 syn = { path = "../syn", version = "*" }
 contentstore = { path = "../contentstore", version = "*" }
 serde = { path = "../serde", version = "*" }
-
-[dev-dependencies]
-serde-json = { path = "../serde-json", version = "*" }
