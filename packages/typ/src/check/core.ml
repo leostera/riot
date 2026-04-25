@@ -15,10 +15,15 @@ type ty =
   | TList of ty
   | TOption of ty
   | TTuple of ty list
-  | TArrow of ty * ty
+  | TArrow of arg_label * ty * ty
   | TCon of SurfacePath.t * ty list
   | TPolyVariant of poly_variant_bound * poly_variant_tags
   | TVar of tyvar_cell
+
+and arg_label =
+  | Nolabel
+  | Labelled of string
+  | Optional of string
 
 and poly_variant_bound =
   | Exact
@@ -115,7 +120,7 @@ let rec string_of_ty = fun ty ->
   | TList element -> string_of_ty element ^ " list"
   | TOption element -> string_of_ty element ^ " option"
   | TTuple elements -> elements |> List.map ~fn:string_of_ty |> String.concat " * "
-  | TArrow (parameter, result) -> string_of_ty parameter ^ " -> " ^ string_of_ty result
+  | TArrow (_, parameter, result) -> string_of_ty parameter ^ " -> " ^ string_of_ty result
   | TCon (path, []) -> SurfacePath.to_string path
   | TCon (path, [ argument ]) -> string_of_ty argument ^ " " ^ SurfacePath.to_string path
   | TCon (path, arguments) -> "("
@@ -142,6 +147,13 @@ let poly_variant_tags_subset = fun left right ->
 let same_poly_variant_tags = fun left right ->
   poly_variant_tags_subset left right && poly_variant_tags_subset right left
 
+let arg_label_equal = fun left right ->
+  match left, right with
+  | Nolabel, Nolabel -> true
+  | (Labelled left, Labelled right)
+  | (Optional left, Optional right) -> String.equal left right
+  | _ -> false
+
 let rec occurs_adjust_levels = fun id level ty ->
   match prune ty with
   | TVar ({ var=Unbound (other_id, other_level) } as cell) ->
@@ -157,7 +169,7 @@ let rec occurs_adjust_levels = fun id level ty ->
       occurs_adjust_levels id level element
   | TTuple elements ->
       List.for_each elements ~fn:(occurs_adjust_levels id level)
-  | TArrow (parameter, result) ->
+  | TArrow (_, parameter, result) ->
       occurs_adjust_levels id level parameter;
       occurs_adjust_levels id level result
   | TCon (_, arguments) ->
@@ -201,7 +213,9 @@ let rec unify = fun state ~at left right ->
             ^ Int.to_string (List.length left)
             ^ " but got "
             ^ Int.to_string (List.length right)))
-  | TArrow (left_parameter, left_result), TArrow (right_parameter, right_result) ->
+  | TArrow (left_label, left_parameter, left_result), TArrow (right_label, right_parameter, right_result) when arg_label_equal
+    left_label
+    right_label ->
       unify state ~at left_parameter right_parameter;
       unify state ~at left_result right_result
   | TCon (left_path, left_arguments), TCon (right_path, right_arguments) when SurfacePath.equal
@@ -281,8 +295,8 @@ let rec generalize = fun level ty ->
       TOption (generalize level element)
   | TTuple elements ->
       TTuple (List.map elements ~fn:(generalize level))
-  | TArrow (parameter, result) ->
-      TArrow (generalize level parameter, generalize level result)
+  | TArrow (label, parameter, result) ->
+      TArrow (label, generalize level parameter, generalize level result)
   | TCon (path, arguments) ->
       TCon (path, List.map arguments ~fn:(generalize level))
   | TPolyVariant (bound, tags) ->
@@ -312,8 +326,8 @@ let instantiate = fun state ~level ty ->
         TOption (loop element)
     | TTuple elements ->
         TTuple (List.map elements ~fn:loop)
-    | TArrow (parameter, result) ->
-        TArrow (loop parameter, loop result)
+    | TArrow (label, parameter, result) ->
+        TArrow (label, loop parameter, loop result)
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
@@ -345,8 +359,8 @@ let instantiate_pair = fun state ~level left right ->
         TOption (loop element)
     | TTuple elements ->
         TTuple (List.map elements ~fn:loop)
-    | TArrow (parameter, result) ->
-        TArrow (loop parameter, loop result)
+    | TArrow (label, parameter, result) ->
+        TArrow (label, loop parameter, loop result)
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
@@ -401,18 +415,20 @@ type builtin = {
 
 let generic_var = fun id -> TVar { var = Generic id }
 
+let arrow = fun parameter result -> TArrow (Nolabel, parameter, result)
+
 let builtin_bindings = [
   { path = path_none; ty = TOption (generic_var 0) };
-  { path = path_some; ty = TArrow (generic_var 0, TOption (generic_var 0)) };
-  { path = path_not; ty = TArrow (TBool, TBool) };
-  { path = path_plus; ty = TArrow (TInt, TArrow (TInt, TInt)) };
-  { path = path_minus; ty = TArrow (TInt, TArrow (TInt, TInt)) };
-  { path = path_star; ty = TArrow (TInt, TArrow (TInt, TInt)) };
-  { path = path_slash; ty = TArrow (TInt, TArrow (TInt, TInt)) };
-  { path = path_plus_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
-  { path = path_minus_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
-  { path = path_star_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
-  { path = path_slash_dot; ty = TArrow (TFloat, TArrow (TFloat, TFloat)) };
+  { path = path_some; ty = arrow (generic_var 0) (TOption (generic_var 0)) };
+  { path = path_not; ty = arrow TBool TBool };
+  { path = path_plus; ty = arrow TInt (arrow TInt TInt) };
+  { path = path_minus; ty = arrow TInt (arrow TInt TInt) };
+  { path = path_star; ty = arrow TInt (arrow TInt TInt) };
+  { path = path_slash; ty = arrow TInt (arrow TInt TInt) };
+  { path = path_plus_dot; ty = arrow TFloat (arrow TFloat TFloat) };
+  { path = path_minus_dot; ty = arrow TFloat (arrow TFloat TFloat) };
+  { path = path_star_dot; ty = arrow TFloat (arrow TFloat TFloat) };
+  { path = path_slash_dot; ty = arrow TFloat (arrow TFloat TFloat) };
 ]
 
 let rec lookup_builtin = fun path builtins ->
@@ -435,7 +451,8 @@ let rec public_type_of_ty = fun vars ty ->
   | TList element -> Typing_context.List (public_type_of_ty vars element)
   | TOption element -> Typing_context.Option (public_type_of_ty vars element)
   | TTuple elements -> Typing_context.Tuple (List.map elements ~fn:(public_type_of_ty vars))
-  | TArrow (parameter, result) -> Typing_context.Arrow {
+  | TArrow (label, parameter, result) -> Typing_context.Arrow {
+    label = public_arg_label label;
     parameter = public_type_of_ty vars parameter;
     result = public_type_of_ty vars result
   }
@@ -468,6 +485,11 @@ and public_poly_variant_bound = function
   | Upper -> Typing_context.Upper
   | Lower -> Typing_context.Lower
 
+and public_arg_label = function
+  | Nolabel -> Typing_context.Nolabel
+  | Labelled label -> Typing_context.Labelled label
+  | Optional label -> Typing_context.Optional label
+
 let public_scheme_of_ty = fun ty ->
   let vars = ref [] in
   let body = public_type_of_ty vars ty in
@@ -493,7 +515,11 @@ let rec import_scheme = fun scheme ->
     | Typing_context.List element -> TList (loop element)
     | Typing_context.Option element -> TOption (loop element)
     | Typing_context.Tuple elements -> TTuple (List.map elements ~fn:loop)
-    | Typing_context.Arrow { parameter; result } -> TArrow (loop parameter, loop result)
+    | Typing_context.Arrow { label; parameter; result } -> TArrow (
+      import_arg_label label,
+      loop parameter,
+      loop result
+    )
     | Typing_context.TypeConstructor { path; arguments } -> TCon (path, List.map arguments ~fn:loop)
     | Typing_context.PolyVariant { bound; tags } -> TPolyVariant (
       import_poly_variant_bound bound,
@@ -508,6 +534,11 @@ and import_poly_variant_bound = function
   | Typing_context.Exact -> Exact
   | Typing_context.Upper -> Upper
   | Typing_context.Lower -> Lower
+
+and import_arg_label = function
+  | Typing_context.Nolabel -> Nolabel
+  | Typing_context.Labelled label -> Labelled label
+  | Typing_context.Optional label -> Optional label
 
 let env_of_typing_context = fun typing_context ->
   List.fold_left
@@ -638,7 +669,11 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.Apply _ ->
       lower_apply_type state ~level vars type_expr
   | TypAst.Arrow { left; right } ->
-      TArrow (lower_labeled_type state ~level vars left, lower_core_type state ~level vars right)
+      TArrow (
+        Nolabel,
+        lower_labeled_type state ~level vars left,
+        lower_core_type state ~level vars right
+      )
   | TypAst.Tuple elements ->
       TTuple (List.map elements ~fn:(lower_core_type state ~level vars))
   | TypAst.Labeled _ ->
@@ -728,7 +763,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
           let constructor_ty = lookup_surface_path state env ~level ~at:callee.origin path in
           let argument_ty, bindings = infer_pattern state env ~level argument in
           let result_ty = fresh_tyvar state ~level in
-          unify state ~at:pattern.origin constructor_ty (TArrow (argument_ty, result_ty));
+          unify state ~at:pattern.origin constructor_ty (arrow argument_ty result_ty);
           (result_ty, bindings)
       | _ ->
           add_diagnostic state (unsupported_syntax pattern.origin "constructor pattern");
@@ -763,17 +798,27 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
 and infer_parameter = fun state env ~level (parameter: TypAst.parameter) ->
   match parameter.kind with
   | TypAst.Labeled { label; pattern } ->
-      add_diagnostic state (unsupported_syntax parameter.origin "labeled parameter");
       infer_labeled_parameter state env ~level label pattern
   | TypAst.Optional { label; pattern } ->
-      add_diagnostic state (unsupported_syntax parameter.origin "optional parameter");
       infer_labeled_parameter state env ~level label pattern
   | TypAst.OptionalDefault { label; pattern; default } ->
-      add_diagnostic state (unsupported_syntax parameter.origin "optional parameter");
       let ty, bindings = infer_labeled_parameter state env ~level label pattern in
       let default_ty = infer_expression state env ~level default in
       unify state ~at:parameter.origin ty default_ty;
       (ty, bindings)
+
+and infer_function_parameter = fun state env ~level (pattern: TypAst.pattern) ->
+  match pattern.kind with
+  | TypAst.LabeledParameter ({ kind=TypAst.Labeled { label; _ }; _ } as parameter) ->
+      let ty, bindings = infer_parameter state env ~level parameter in
+      (Labelled label, ty, bindings)
+  | TypAst.OptionalParameter ({ kind=TypAst.Optional { label; _ }; _ } as parameter)
+  | TypAst.OptionalParameterDefault ({ kind=TypAst.OptionalDefault { label; _ }; _ } as parameter) ->
+      let ty, bindings = infer_parameter state env ~level parameter in
+      (Optional label, ty, bindings)
+  | _ ->
+      let ty, bindings = infer_pattern state env ~level pattern in
+      (Nolabel, ty, bindings)
 
 and infer_labeled_parameter = fun state env ~level label pattern ->
   match pattern with
@@ -844,7 +889,7 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         let left_ty = infer_expression state env ~level left in
         let right_ty = infer_expression state env ~level right in
         let result_ty = fresh_tyvar state ~level in
-        unify state ~at:expression.origin callee_ty (TArrow (left_ty, TArrow (right_ty, result_ty)));
+        unify state ~at:expression.origin callee_ty (arrow left_ty (arrow right_ty result_ty));
         result_ty
     | TypAst.Let { first_binding; body } ->
         let extended_env, _ = infer_let_binding state env ~level ~recursive:false first_binding in
@@ -873,25 +918,53 @@ and infer_apply = fun state env ~level (expression: TypAst.expression) ->
   let callee_ty = infer_expression state env ~level callee in
   List.fold_left arguments ~init:callee_ty
     ~fn:(fun function_ty argument ->
-      let argument_ty = infer_apply_argument state env ~level argument in
-      let result_ty = fresh_tyvar state ~level in
-      unify state ~at:expression.origin function_ty (TArrow (argument_ty, result_ty));
-      result_ty)
+      let argument_label, argument_ty = infer_apply_argument state env ~level argument in
+      apply_argument_to_function state ~level ~at:expression.origin function_ty argument_label argument_ty)
 
 and infer_apply_argument = fun state env ~level (argument: TypAst.argument) ->
   match argument.kind with
   | TypAst.Positional expression ->
-      infer_expression state env ~level expression
-  | TypAst.Labeled { value=Some value; _ } ->
-      add_diagnostic state (unsupported_syntax argument.origin "labeled argument");
-      infer_expression state env ~level value
-  | TypAst.Optional { value=Some value; _ } ->
-      add_diagnostic state (unsupported_syntax argument.origin "optional argument");
-      infer_expression state env ~level value
+      (Nolabel, infer_expression state env ~level expression)
+  | TypAst.Labeled { label; value=Some value } ->
+      (Labelled label, infer_expression state env ~level value)
+  | TypAst.Optional { label; value=Some value } ->
+      (Optional label, infer_expression state env ~level value)
   | TypAst.Labeled { value=None; _ }
   | TypAst.Optional { value=None; _ } ->
       add_diagnostic state (unsupported_syntax argument.origin "missing argument value");
-      fresh_tyvar state ~level
+      (Nolabel, fresh_tyvar state ~level)
+
+and apply_label_matches = fun parameter_label argument_label ->
+  match parameter_label, argument_label with
+  | Nolabel, Nolabel -> true
+  | (Labelled left, Labelled right)
+  | (Optional left, Optional right)
+  | (Optional left, Labelled right) -> String.equal left right
+  | _ -> false
+
+and is_labeled_argument = function
+  | Labelled _
+  | Optional _ -> true
+  | Nolabel -> false
+
+and apply_argument_to_function = fun state ~level ~at function_ty argument_label argument_ty ->
+  match prune function_ty with
+  | TArrow (parameter_label, parameter_ty, result_ty) when apply_label_matches parameter_label argument_label ->
+      unify state ~at parameter_ty argument_ty;
+      result_ty
+  | TArrow (Optional _, _, result_ty) when arg_label_equal argument_label Nolabel ->
+      apply_argument_to_function state ~level ~at result_ty argument_label argument_ty
+  | TArrow (parameter_label, parameter_ty, result_ty) when is_labeled_argument argument_label ->
+      let result_ty = apply_argument_to_function state ~level ~at result_ty argument_label argument_ty in
+      TArrow (parameter_label, parameter_ty, result_ty)
+  | TVar { var=Unbound _ } ->
+      let result_ty = fresh_tyvar state ~level in
+      unify state ~at function_ty (TArrow (argument_label, argument_ty, result_ty));
+      result_ty
+  | _ ->
+      let result_ty = fresh_tyvar state ~level in
+      unify state ~at function_ty (TArrow (argument_label, argument_ty, result_ty));
+      result_ty
 
 and infer_record = fun state env ~level ~at fields ->
   match fields with
@@ -966,10 +1039,10 @@ and infer_function = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_function_body state env ~level body
   | parameter :: rest ->
-      let parameter_ty, parameter_bindings = infer_pattern state env ~level parameter in
+      let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
       let result_ty = infer_function state extended_env ~level rest body in
-      TArrow (parameter_ty, result_ty)
+      TArrow (label, parameter_ty, result_ty)
 
 and infer_function_body = fun state env ~level body ->
   match body with
@@ -992,16 +1065,16 @@ and infer_function_cases = fun state env ~level cases ->
       );
       let body_ty = infer_expression state (extend_mono env bindings) ~level case.body in
       unify state ~at:case.body.origin result_ty body_ty);
-  TArrow (parameter_ty, result_ty)
+  TArrow (Nolabel, parameter_ty, result_ty)
 
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with
   | [] -> infer_expression state env ~level body
   | parameter :: rest ->
-      let parameter_ty, parameter_bindings = infer_pattern state env ~level parameter in
+      let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
       let result_ty = infer_lambda state extended_env ~level rest body in
-      TArrow (parameter_ty, result_ty)
+      TArrow (label, parameter_ty, result_ty)
 
 and is_constructor_path = fun path ->
   match simple_path_name path with
@@ -1166,7 +1239,7 @@ let constructor_binding_of_declaration = fun state ~level ~result_ty vars (
     | None -> result_ty
     | Some payload ->
         let payload_ty = lower_core_type state ~level (ref vars) payload in
-        TArrow (payload_ty, result_ty)
+        arrow payload_ty result_ty
   in
   make_binding state ~name:(SurfacePath.from_name constructor.name) ~ty
 

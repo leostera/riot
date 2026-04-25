@@ -1,7 +1,13 @@
 open Std
 open Std.Collections
 
+type arg_label =
+  | Nolabel
+  | Labelled of string
+  | Optional of string
+
 type function_type = {
+  label: arg_label;
   parameter: type_expr;
   result: type_expr;
 }
@@ -131,12 +137,31 @@ let rec type_expr_serializer = {
       serializer.run backend state value);
 }
 
+and arg_label_serializer = Serde.Ser.variant
+  [ Serde.Ser.Variant.unit "Nolabel"
+      (
+        function
+        | Nolabel -> true
+        | _ -> false
+      ); Serde.Ser.Variant.newtype "Labelled" Serde.Ser.string
+      (
+        function
+        | Labelled label -> Some label
+        | _ -> None
+      ); Serde.Ser.Variant.newtype "Optional" Serde.Ser.string
+      (
+        function
+        | Optional label -> Some label
+        | _ -> None
+      ); ]
+
 and function_type_serializer = {
   Serde.Ser.run =
     (fun backend state value ->
       let serializer = Serde.Ser.record
         (Serde.Ser.fields
           [
+            Serde.Ser.field "label" arg_label_serializer (fun value -> value.label);
             Serde.Ser.field "parameter" type_expr_serializer (fun value -> value.parameter);
             Serde.Ser.field "result" type_expr_serializer (fun value -> value.result);
           ]) in

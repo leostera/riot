@@ -1,4 +1,9 @@
+type arg_label =
+  | Nolabel
+  | Labelled of string
+  | Optional of string
 type function_type = {
+  label: arg_label;
   parameter: type_expr;
   result: type_expr;
 }

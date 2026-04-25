@@ -122,7 +122,7 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
         collect element
     | TypingContext.Tuple elements ->
         List.for_each elements ~fn:collect
-    | TypingContext.Arrow { parameter; result } ->
+    | TypingContext.Arrow { parameter; result; _ } ->
         collect parameter;
         collect result
     | TypingContext.TypeConstructor { arguments; _ } ->
@@ -171,8 +171,9 @@ let rec render_type = fun ~type_var_name type_ ->
       render_postfix_argument ~type_var_name element ^ " option"
   | TypingContext.Tuple elements ->
       elements |> List.map ~fn:(render_tuple_element ~type_var_name) |> String.concat " * "
-  | TypingContext.Arrow { parameter; result } ->
+  | TypingContext.Arrow { label; parameter; result } ->
       let parameter = render_arrow_parameter ~type_var_name parameter in
+      let parameter = render_arg_label label parameter in
       let result = render_type ~type_var_name result in
       parameter ^ " -> " ^ result
   | TypingContext.TypeConstructor { path; arguments=[] } ->
@@ -209,6 +210,12 @@ and render_arrow_parameter = fun ~type_var_name type_ ->
   match type_ with
   | TypingContext.Arrow _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
   | _ -> render_type ~type_var_name type_
+
+and render_arg_label = fun label parameter ->
+  match label with
+  | TypingContext.Nolabel -> parameter
+  | TypingContext.Labelled label -> label ^ ":" ^ parameter
+  | TypingContext.Optional label -> "?" ^ label ^ ":" ^ parameter
 
 let render_scheme = fun (scheme: TypingContext.scheme) ->
   render_type ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
