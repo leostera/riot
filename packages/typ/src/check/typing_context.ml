@@ -2,7 +2,7 @@ open Std
 open Std.Collections
 
 type arg_label =
-  | Nolabel
+  | NoLabel
   | Labelled of string
   | Optional of string
 
@@ -176,10 +176,10 @@ let rec type_expr_serializer = {
 }
 
 and arg_label_serializer = Serde.Ser.variant
-  [ Serde.Ser.Variant.unit "Nolabel"
+  [ Serde.Ser.Variant.unit "NoLabel"
       (
         function
-        | Nolabel -> true
+        | NoLabel -> true
         | _ -> false
       ); Serde.Ser.Variant.newtype "Labelled" Serde.Ser.string
       (

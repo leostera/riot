@@ -84,8 +84,9 @@ let literal_type = function
   | TypAst.Char -> TChar
   | TypAst.String -> TString
   | TypAst.Bool -> TBool
-  | TypAst.Unit
-  | TypAst.Unknown -> TUnit
+
+let is_builtin_nullary_constructor_path = fun path ->
+  SurfacePath.equal path path_unit_constructor
 
 let rec lookup_type_var = fun vars name ->
   match !vars with
@@ -122,6 +123,13 @@ let bind_locally_abstract_type = fun state ~level name ->
   | Some _ -> ()
   | None -> state.locally_abstract_types <- (path, fresh_tyvar state ~level) :: state.locally_abstract_types
 
+let with_type_binders = fun state ~level names fn ->
+  let previous = state.locally_abstract_types in
+  names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+  let result = fn () in
+  state.locally_abstract_types <- previous;
+  result
+
 let resolve_type_path = fun state path ->
   match
     List.find state.type_aliases
@@ -155,13 +163,13 @@ let type_of_constructor = fun state ~level ~at path arguments ->
       TCon (resolved_path, arguments)
 
 let lower_arrow_label = function
-  | TypAst.Nolabel -> Nolabel
+  | TypAst.NoLabel -> NoLabel
   | TypAst.Labelled label -> Labelled label
   | TypAst.Optional label -> Optional label
 
 let rec type_application_constructor_path = fun (type_expr: TypAst.core_type) ->
   match type_expr.kind with
-  | TypAst.Path path -> Some path
+  | TypAst.TypeIdent path -> Some path
   | TypAst.Parenthesized inner -> type_application_constructor_path inner
   | _ -> None
 
@@ -182,7 +190,7 @@ let rec lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.Var None ->
       add_diagnostic state (unsupported_type type_expr.origin "missing type variable");
       fresh_tyvar state ~level
-  | TypAst.Path path -> (
+  | TypAst.TypeIdent path -> (
       match lookup_lower_type_var state vars path with
       | Some ty -> ty
       | None -> type_of_constructor state ~level ~at:type_expr.origin path []
@@ -213,7 +221,7 @@ let rec lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
         lower_core_type state ~level vars parameter,
         lower_core_type state ~level vars result
       )
-  | TypAst.Tuple { elements; _ } ->
+  | TypAst.Tuple elements ->
       TTuple (List.map elements ~fn:(lower_core_type state ~level vars))
   | TypAst.Parenthesized inner ->
       lower_core_type state ~level vars inner
@@ -300,17 +308,20 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
      monomorphic bindings introduced by that pattern. The caller decides whether
      those bindings are generalized based on the binding form/value restriction. *)
   match pattern.kind with
-  | TypAst.Path path -> (
-      match simple_path_name path with
-      | Some name when not (is_uppercase_name name) ->
-          let ty = fresh_tyvar state ~level in
-          let binding = make_binding state ~name:(SurfacePath.from_name name) ~ty in
-          (ty, [ binding ])
-      | Some _ ->
-          (lookup_surface_path state env ~level ~at:pattern.origin path, [])
-      | None ->
-          add_diagnostic state (unsupported_syntax pattern.origin "path pattern");
-          (fresh_tyvar state ~level, [])
+  | TypAst.Bind path -> (
+      if is_builtin_nullary_constructor_path path then
+        (lookup_surface_path state env ~level ~at:pattern.origin path, [])
+      else
+        match simple_path_name path with
+        | Some name when not (is_uppercase_name name) ->
+            let ty = fresh_tyvar state ~level in
+            let binding = make_binding state ~name:(SurfacePath.from_name name) ~ty in
+            (ty, [ binding ])
+        | Some _ ->
+            (lookup_surface_path state env ~level ~at:pattern.origin path, [])
+        | None ->
+            add_diagnostic state (unsupported_syntax pattern.origin "path pattern");
+            (fresh_tyvar state ~level, [])
     )
   | TypAst.Wildcard ->
       (fresh_tyvar state ~level, [])
@@ -367,7 +378,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       let pattern_ty, bindings = infer_pattern state env ~level inner in
       (
         match alias.kind with
-        | TypAst.Path path -> (
+        | TypAst.Bind path -> (
             match simple_path_name path with
             | Some alias_name ->
                 let alias_binding = make_binding state ~name:(SurfacePath.from_name alias_name) ~ty:pattern_ty in
@@ -379,13 +390,6 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
   | TypAst.Attribute inner
   | TypAst.Parenthesized inner ->
       infer_pattern state env ~level inner
-  | TypAst.LabeledParameter parameter
-  | TypAst.OptionalParameter parameter
-  | TypAst.OptionalParameterDefault parameter ->
-      infer_parameter state env ~level parameter
-  | TypAst.LocallyAbstractType names ->
-      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
-      (TUnit, [])
   | TypAst.FirstClassModule { binder; package_type } ->
       let package_ty =
         match package_type with
@@ -410,7 +414,7 @@ and infer_constructor_pattern_application = fun state env ~level (pattern: TypAs
      tuple. *)
   let callee, arguments = flatten_pattern_application pattern in
   match callee.kind with
-  | TypAst.Path path ->
+  | TypAst.Bind path ->
       let constructor_ty = lookup_surface_path state env ~level ~at:callee.origin path in
       let runtime_arguments = constructor_runtime_pattern_arguments state ~level arguments in
       (
@@ -437,14 +441,7 @@ and infer_constructor_pattern_application = fun state env ~level (pattern: TypAs
       add_diagnostic state (unsupported_syntax pattern.origin "constructor pattern");
       (fresh_tyvar state ~level, [])
 
-and constructor_runtime_pattern_arguments = fun state ~level arguments ->
-  arguments |> List.filter
-    ~fn:(fun (argument: TypAst.pattern) ->
-      match argument.kind with
-      | TypAst.LocallyAbstractType names ->
-          names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
-          false
-      | _ -> true)
+and constructor_runtime_pattern_arguments = fun _state ~level:_ arguments -> arguments
 
 and qualify_path = fun path_prefix path ->
   SurfacePath.from_segments (List.append path_prefix (SurfacePath.to_segments path))
@@ -514,37 +511,31 @@ and merge_or_pattern_bindings = fun state origin left_bindings right_bindings ->
   left_bindings
 
 and infer_parameter = fun state env ~level (parameter: TypAst.parameter) ->
-  match parameter.kind with
-  | TypAst.Labeled { label; pattern } ->
-      infer_labeled_parameter state env ~level label pattern
-  | TypAst.Optional { label; pattern } ->
-      infer_labeled_parameter state env ~level label pattern
-  | TypAst.OptionalDefault { label; pattern; default } ->
-      let ty, bindings = infer_labeled_parameter state env ~level label pattern in
-      let default_ty = infer_expression state env ~level default in
-      unify state ~at:parameter.origin ty default_ty;
-      (ty, bindings)
+  let ty, bindings = infer_pattern state env ~level parameter.pattern in
+  (
+    match parameter.annotation with
+    | Some annotation ->
+        let annotation_ty = lower_core_type state ~level (ref []) annotation in
+        unify state ~at:annotation.origin ty annotation_ty
+    | None -> ()
+  );
+  (
+    match parameter.default with
+    | Some default ->
+        let default_ty = infer_expression state env ~level default in
+        unify state ~at:default.origin ty default_ty
+    | None -> ()
+  );
+  (ty, bindings)
 
-and infer_function_parameter = fun state env ~level (pattern: TypAst.pattern) ->
-  match pattern.kind with
-  | TypAst.LabeledParameter ({ kind=TypAst.Labeled { label; _ }; _ } as parameter) ->
-      let ty, bindings = infer_parameter state env ~level parameter in
-      (Labelled label, ty, bindings)
-  | TypAst.OptionalParameter ({ kind=TypAst.Optional { label; _ }; _ } as parameter)
-  | TypAst.OptionalParameterDefault ({ kind=TypAst.OptionalDefault { label; _ }; _ } as parameter) ->
-      let ty, bindings = infer_parameter state env ~level parameter in
-      (Optional label, ty, bindings)
-  | _ ->
-      let ty, bindings = infer_pattern state env ~level pattern in
-      (Nolabel, ty, bindings)
+and parameter_label_name = fun label -> SurfacePath.to_string label
 
-and infer_labeled_parameter = fun state env ~level label pattern ->
-  match pattern with
-  | Some pattern -> infer_pattern state env ~level pattern
-  | None ->
-      let ty = fresh_tyvar state ~level in
-      let binding = make_binding state ~name:(SurfacePath.from_name label) ~ty in
-      (ty, [ binding ])
+and infer_function_parameter = fun state env ~level (parameter: TypAst.parameter) ->
+  let ty, bindings = infer_parameter state env ~level parameter in
+  match parameter.label with
+  | TypAst.Unlabeled -> (NoLabel, ty, bindings)
+  | TypAst.Labeled label -> (Labelled (parameter_label_name label), ty, bindings)
+  | TypAst.Optional label -> (Optional (parameter_label_name label), ty, bindings)
 
 and infer_path_expression = fun state env ~level ~at path ->
   match lookup_value_type env path with
@@ -568,7 +559,7 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
     match expression.kind with
     | TypAst.Literal literal ->
         literal_type literal
-    | TypAst.Path path ->
+    | TypAst.Ident path ->
         infer_path_expression state env ~level ~at:expression.origin path
     | TypAst.Tuple elements ->
         TTuple (List.map elements ~fn:(infer_expression state env ~level))
@@ -589,14 +580,12 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
     | TypAst.PolyVariant { tag; payload } ->
         let payload = Option.map payload ~fn:(infer_expression state env ~level) in
         TPolyVariant (Lower, { tags = [ { tag; payload } ] })
-    | TypAst.Record fields ->
+    | TypAst.Record { update=None; fields } ->
         infer_record state env ~level ~at:expression.origin fields
-    | TypAst.RecordUpdate { base; fields } ->
+    | TypAst.Record { update=Some base; fields } ->
         infer_record_update state env ~level ~at:expression.origin base fields
     | TypAst.FieldAccess { receiver; field } ->
         infer_field_access state env ~level ~at:expression.origin receiver field
-    | TypAst.ArrayIndex { receiver; index } ->
-        infer_array_index state env ~level ~at:expression.origin receiver index
     | TypAst.Assign { target; value } ->
         infer_assignment state env ~level ~at:expression.origin target value
     | TypAst.Sequence { left; right } ->
@@ -622,8 +611,12 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         infer_while state env ~level ~at:expression.origin condition body
     | TypAst.For { pattern; start_; stop; body } ->
         infer_for state env ~level ~at:expression.origin pattern start_ stop body
-    | TypAst.Function { parameters; body } ->
-        infer_function state env ~level parameters body
+    | TypAst.Function { type_binders; parameters; body } ->
+        with_type_binders
+          state
+          ~level
+          type_binders
+          (fun () -> infer_function state env ~level parameters body)
     | TypAst.Apply _ ->
         infer_apply state env ~level expression
     | TypAst.Infix { left; operator; right } ->
@@ -644,12 +637,12 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
       body
     } ->
         infer_local_module state env ~level ~name ~items ~alias ~unpack body
-    | TypAst.LocalOpen { module_path; body } ->
-        infer_local_open state env ~level ~at:expression.origin module_path body
-    | TypAst.FirstClassModule { module_path; package_type } -> (
+    | TypAst.LocalOpen { module_; body } ->
+        infer_local_open state env ~level ~at:expression.origin module_ body
+    | TypAst.FirstClassModule { module_; package_type } -> (
         match package_type with
         | Some package -> lower_package_type state ~level (ref []) package
-        | None -> TPackage { binder = None; module_type = module_path; constraints = [] }
+        | None -> TPackage { binder = None; module_type = module_; constraints = [] }
       )
     | TypAst.Assert argument ->
         let inferred = infer_expression state env ~level argument in
@@ -810,7 +803,7 @@ and infer_apply = fun state env ~level (expression: TypAst.expression) ->
 and infer_apply_argument = fun state env ~level (argument: TypAst.argument) ->
   match argument.kind with
   | TypAst.Positional expression ->
-      (Nolabel, infer_expression state env ~level expression)
+      (NoLabel, infer_expression state env ~level expression)
   | TypAst.Labeled { label; value=Some value } ->
       (Labelled label, infer_expression state env ~level value)
   | TypAst.Optional { label; value=Some value } ->
@@ -818,11 +811,11 @@ and infer_apply_argument = fun state env ~level (argument: TypAst.argument) ->
   | TypAst.Labeled { value=None; _ }
   | TypAst.Optional { value=None; _ } ->
       add_diagnostic state (unsupported_syntax argument.origin "missing argument value");
-      (Nolabel, fresh_tyvar state ~level)
+      (NoLabel, fresh_tyvar state ~level)
 
 and apply_label_matches = fun parameter_label argument_label ->
   match parameter_label, argument_label with
-  | Nolabel, Nolabel -> true
+  | NoLabel, NoLabel -> true
   | (Labelled left, Labelled right)
   | (Optional left, Optional right)
   | (Optional left, Labelled right) -> String.equal left right
@@ -831,7 +824,7 @@ and apply_label_matches = fun parameter_label argument_label ->
 and is_labeled_argument = function
   | Labelled _
   | Optional _ -> true
-  | Nolabel -> false
+  | NoLabel -> false
 
 and replace_type_path = fun ~source ~replacement ty ->
   let rec loop ty =
@@ -905,7 +898,7 @@ and apply_argument_to_function = fun state ~level ~at function_ty argument_label
         prefer_argument_alias_result state ~at result_ty argument_ty
       else
         result_ty
-  | TArrow (Optional _, _, result_ty) when arg_label_equal argument_label Nolabel ->
+  | TArrow (Optional _, _, result_ty) when arg_label_equal argument_label NoLabel ->
       apply_argument_to_function state ~level ~at result_ty argument_label argument_ty
   | TArrow (parameter_label, parameter_ty, result_ty) when is_labeled_argument argument_label ->
       let result_ty = apply_argument_to_function state ~level ~at result_ty argument_label argument_ty in
@@ -1011,9 +1004,6 @@ and infer_assignment = fun state env ~level ~at target value ->
         let receiver_ty = infer_expression state env ~level receiver in
         let field_ty = infer_record_field state ~level ~at:target.origin receiver_ty field in
         unify state ~at:value.origin field_ty value_ty
-    | TypAst.ArrayIndex { receiver; index } ->
-        let element_ty = infer_array_index state env ~level ~at:target.origin receiver index in
-        unify state ~at:value.origin element_ty value_ty
     | _ ->
         add_diagnostic state (unsupported_syntax target.origin "assignment target");
         let target_ty = infer_expression state env ~level target in
@@ -1079,17 +1069,8 @@ and infer_for = fun state env ~level ~at pattern start_ stop body ->
   TUnit
 
 and infer_function = fun state env ~level parameters body ->
-  (* Locally abstract types are scoped to the function tail that follows them.
-     Save/restore keeps pseudo-parameters from escaping into sibling terms. *)
   match parameters with
-  | [] ->
-      infer_function_body state env ~level body
-  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
-      let previous = state.locally_abstract_types in
-      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
-      let result = infer_function state env ~level rest body in
-      state.locally_abstract_types <- previous;
-      result
+  | [] -> infer_function_body state env ~level body
   | parameter :: rest ->
       let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
@@ -1103,7 +1084,7 @@ and infer_function_body = fun state env ~level body ->
 
 and simple_pattern_identifier = fun (pattern: TypAst.pattern) ->
   match pattern.kind with
-  | TypAst.Path path -> (
+  | TypAst.Bind path -> (
       match simple_path_name path with
       | Some name when not (is_uppercase_name name) -> Some name
       | _ -> None
@@ -1116,7 +1097,7 @@ and simple_pattern_identifier = fun (pattern: TypAst.pattern) ->
 
 and simple_expression_identifier = fun (expression: TypAst.expression) ->
   match expression.kind with
-  | TypAst.Path path -> (
+  | TypAst.Ident path -> (
       match simple_path_name path with
       | Some name when not (is_uppercase_name name) -> Some name
       | _ -> None
@@ -1162,7 +1143,7 @@ and infer_row_identity_function_cases = fun cases ->
       tags = !tags |> List.map ~fn:(fun tag -> { tag; payload = None }) |> normalized_poly_variant_tags
     } in
     let row = TPolyVariant (Lower, row_tags) in
-    Some (TArrow (Nolabel, row, row))
+    Some (TArrow (NoLabel, row, row))
   else
     None
 
@@ -1185,18 +1166,11 @@ and infer_function_cases = fun state env ~level cases ->
           );
           let body_ty = infer_expression state (extend_mono env bindings) ~level case.body in
           unify state ~at:case.body.origin result_ty body_ty);
-      TArrow (Nolabel, parameter_ty, result_ty)
+      TArrow (NoLabel, parameter_ty, result_ty)
 
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with
-  | [] ->
-      infer_expression state env ~level body
-  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
-      let previous = state.locally_abstract_types in
-      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
-      let result = infer_lambda state env ~level rest body in
-      state.locally_abstract_types <- previous;
-      result
+  | [] -> infer_expression state env ~level body
   | parameter :: rest ->
       let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
@@ -1210,12 +1184,6 @@ and infer_annotated_lambda = fun state env ~level parameters body annotation ->
       let annotated = lower_core_type state ~level (ref []) annotation in
       unify state ~at:annotation.origin body_ty annotated;
       annotated
-  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
-      let previous = state.locally_abstract_types in
-      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
-      let result = infer_annotated_lambda state env ~level rest body annotation in
-      state.locally_abstract_types <- previous;
-      result
   | parameter :: rest ->
       let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
@@ -1232,22 +1200,21 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
      generalized; expansive ones keep their inferred variables monomorphic. *)
   match expression.kind with
   | TypAst.Literal _
-  | TypAst.Path _
+  | TypAst.Ident _
   | TypAst.PolyVariant _
   | TypAst.FirstClassModule _
   | TypAst.Function _ -> true
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
   | TypAst.Array _ -> false
-  | TypAst.Record fields -> List.all
+  | TypAst.Record { update=None; fields } -> List.all
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
-  | TypAst.RecordUpdate { base; fields } -> is_nonexpansive_expression base
+  | TypAst.Record { update=Some base; fields } -> is_nonexpansive_expression base
   && List.all
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
   | TypAst.FieldAccess { receiver; _ } -> is_nonexpansive_expression receiver
-  | TypAst.ArrayIndex _ -> false
   | TypAst.Assign _ -> false
   | TypAst.Apply { callee; arguments } -> is_constructor_expression callee
   && List.all arguments ~fn:is_nonexpansive_argument
@@ -1265,7 +1232,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
 
 and is_constructor_expression = fun (expression: TypAst.expression) ->
   match expression.kind with
-  | TypAst.Path path -> is_constructor_path path
+  | TypAst.Ident path -> is_constructor_path path
   | _ -> false
 
 and is_nonexpansive_argument = fun (argument: TypAst.argument) ->
@@ -1284,31 +1251,28 @@ and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding)
      variables introduced by the value without capturing variables from [env].
      For full-value annotations, return the lowered annotation after checking so
      exported signatures preserve the user's explicit shape. *)
-  let value_ty =
-    match binding.parameters, binding.type_annotation with
-    | [], _ -> infer_expression state env ~level:(level + 1) binding.body
-    | _, Some annotation -> infer_annotated_lambda
-      state
-      env
-      ~level:(level + 1)
-      binding.parameters
-      binding.body
-      annotation
-    | _, None -> infer_lambda state env ~level:(level + 1) binding.parameters binding.body
-  in
-  match binding.parameters, binding.type_annotation with
-  | [], Some annotation ->
-      let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
-      unify state ~at:binding.origin value_ty annotated;
-      lower_core_type state ~level:(level + 1) (ref []) annotation
-  | _ -> value_ty
+  with_type_binders state ~level:(level + 1) binding.type_binders
+    (fun () ->
+      let value_ty =
+        match binding.parameters, binding.type_annotation with
+        | [], _ -> infer_expression state env ~level:(level + 1) binding.body
+        | _, Some annotation -> infer_annotated_lambda
+          state
+          env
+          ~level:(level + 1)
+          binding.parameters
+          binding.body
+          annotation
+        | _, None -> infer_lambda state env ~level:(level + 1) binding.parameters binding.body
+      in
+      match binding.parameters, binding.type_annotation with
+      | [], Some annotation ->
+          let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
+          unify state ~at:binding.origin value_ty annotated;
+          lower_core_type state ~level:(level + 1) (ref []) annotation
+      | _ -> value_ty)
 
-and runtime_parameter_count = fun parameters ->
-  parameters |> List.filter
-    ~fn:(fun (parameter: TypAst.pattern) ->
-      match parameter.kind with
-      | TypAst.LocallyAbstractType _ -> false
-      | _ -> true) |> List.length
+and runtime_parameter_count = fun parameters -> List.length parameters
 
 and unify_function_result_annotation = fun state ~at ~arity function_ty annotation ->
   match arity, prune function_ty with
@@ -1338,7 +1302,7 @@ and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_bin
 and simple_let_binding_name = fun (binding: TypAst.let_binding) ->
   let rec loop (pattern: TypAst.pattern) =
     match pattern.kind with
-    | TypAst.Path path -> (
+    | TypAst.Bind path -> (
         match simple_path_name path with
         | Some name when not (is_uppercase_name name) -> Some (SurfacePath.from_name name)
         | _ -> None
@@ -2213,7 +2177,6 @@ let check_source_file = fun ~typing_context ast ->
   match ast.TypAst.kind with
   | TypAst.Implementation items -> check_implementation ~ast ~typing_context items
   | TypAst.Interface items -> check_interface ~ast ~typing_context items
-  | TypAst.Empty _ -> Module_typings_file.empty ~ast ~typing_context
 
 let check_expression = fun expression ->
   let state = make_state ~next_binding_stamp:0 in

@@ -345,7 +345,7 @@ and render_arrow_result = fun ~path_prefix ~type_var_name type_ ->
 
 and render_arg_label = fun label parameter ->
   match label with
-  | TypingContext.Nolabel -> parameter
+  | TypingContext.NoLabel -> parameter
   | TypingContext.Labelled label -> label ^ ":" ^ parameter
   | TypingContext.Optional label -> "?" ^ label ^ ":" ^ parameter
 
@@ -405,7 +405,7 @@ let substitute_path = fun substitutions path ->
   loop substitutions
 
 let render_ast_arrow_label = function
-  | TypAst.Nolabel -> ""
+  | TypAst.NoLabel -> ""
   | TypAst.Labelled label -> label ^ ":"
   | TypAst.Optional label -> "?" ^ label ^ ":"
 
@@ -417,8 +417,8 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       "'" ^ name
   | TypAst.Var None ->
       "_"
-  | TypAst.Path path ->
-      SurfacePath.to_string (substitute_path substitutions path)
+  | TypAst.TypeIdent ident ->
+      SurfacePath.to_string (substitute_path substitutions ident)
   | TypAst.Apply { constructor; arguments } ->
       render_ast_type_application substitutions constructor arguments
   | TypAst.Arrow { label; parameter; result } ->
@@ -426,14 +426,8 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       ^ render_ast_arrow_parameter substitutions parameter
       ^ " -> "
       ^ render_ast_core_type_with_substitutions substitutions result
-  | TypAst.Tuple { separator; elements } ->
-      let separator =
-        match separator with
-        | `Comma -> ", "
-        | `Star
-        | `Unknown -> " * "
-      in
-      elements |> List.map ~fn:(render_ast_tuple_element substitutions) |> String.concat separator
+  | TypAst.Tuple elements ->
+      elements |> List.map ~fn:(render_ast_tuple_element substitutions) |> String.concat " * "
   | TypAst.ForAll { parameters; body } ->
       render_poly_type_parameters parameters
       ^ render_ast_core_type_with_substitutions substitutions body
@@ -686,8 +680,8 @@ let find_value_binding = fun (typing_context: TypingContext.t) path ->
 
 let rec pattern_bound_name = fun (pattern: TypAst.pattern) ->
   match pattern.kind with
-  | TypAst.Path path -> (
-      match List.reverse (SurfacePath.to_segments path) with
+  | TypAst.Bind ident -> (
+      match List.reverse (SurfacePath.to_segments ident) with
       | name :: _ -> Some name
       | [] -> None
     )
@@ -923,7 +917,6 @@ let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
       ~path_prefix:[])
   | TypAst.Interface items -> items
   |> List.filter_map ~fn:(fun (item: TypAst.signature_item) -> render_signature_item item)
-  | TypAst.Empty _ -> []
 
 let from_typings = fun (typings: Check.Typings.t) ->
   let declaration_lines =

@@ -5,11 +5,11 @@ module SurfacePath = Typ.Model.Surface_path
 
 let mk_path name = SurfacePath.from_name name
 
-let int_type = Type.Constructor { path = mk_path "int"; arguments = [] }
+let int_type = Type.Constructor { ident = mk_path "int"; arguments = [] }
 
-let bool_type = Type.Constructor { path = mk_path "bool"; arguments = [] }
+let bool_type = Type.Constructor { ident = mk_path "bool"; arguments = [] }
 
-let list_type argument = Type.Constructor { path = mk_path "list"; arguments = [ argument ] }
+let list_type argument = Type.Constructor { ident = mk_path "list"; arguments = [ argument ] }
 
 let arrow ?(label = Type.Label.NoLabel) parameter result = Type.Arrow { label; parameter; result }
 

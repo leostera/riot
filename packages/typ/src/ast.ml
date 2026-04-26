@@ -8,13 +8,7 @@ type origin = {
   kind: Syn.SyntaxKind.t;
 }
 
-type file_kind =
-[
-  `Implementation
-  | `Interface
-]
-
-type path = SurfacePath.t
+type ident = SurfacePath.t
 
 module TypeVar = struct
   type t = int
@@ -62,7 +56,7 @@ module Type = struct
   }
 
   and constructor = {
-    path: path;
+    ident: ident;
     arguments: t list;
   }
 
@@ -83,14 +77,14 @@ module Type = struct
     ^ arrow_parameter_to_string parameter
     ^ " -> "
     ^ to_string result
-    | Constructor { path; arguments=[] } -> SurfacePath.to_string path
-    | Constructor { path; arguments=[ argument ] } -> constructor_argument_to_string argument
+    | Constructor { ident; arguments=[] } -> SurfacePath.to_string ident
+    | Constructor { ident; arguments=[ argument ] } -> constructor_argument_to_string argument
     ^ " "
-    ^ SurfacePath.to_string path
-    | Constructor { path; arguments } -> "("
+    ^ SurfacePath.to_string ident
+    | Constructor { ident; arguments } -> "("
     ^ (arguments |> List.map ~fn:to_string |> String.concat ", ")
     ^ ") "
-    ^ SurfacePath.to_string path
+    ^ SurfacePath.to_string ident
 
   and arrow_parameter_to_string type_ =
     match type_ with
@@ -128,7 +122,7 @@ module Type = struct
     && equal left.result right.result
 
   and equal_constructor left right =
-    SurfacePath.equal left.path right.path && equal_many left.arguments right.arguments
+    SurfacePath.equal left.ident right.ident && equal_many left.arguments right.arguments
 end
 
 type literal =
@@ -137,15 +131,6 @@ type literal =
   | Char
   | String
   | Bool
-  | Unit
-  | Unknown
-
-type type_tuple_separator =
-[
-  `Star
-  | `Comma
-  | `Unknown
-]
 
 type core_type = {
   origin: origin;
@@ -161,14 +146,30 @@ and arrow_label =
 and core_type_kind =
   | Wildcard
   | Var of string option
-  | Path of path
-  | Apply of { constructor: core_type; arguments: core_type list }
-  | Arrow of { label: arrow_label; parameter: core_type; result: core_type }
-  | Tuple of { separator: type_tuple_separator; elements: core_type list }
-  | ForAll of { parameters: string list; body: core_type }
+  | TypeIdent of ident
+  | Apply of type_application
+  | Arrow of arrow_type
+  | Tuple of core_type list
+  | ForAll of forall_type
   | PolyVariant of poly_variant_type_field list
   | Package of package_type
   | Parenthesized of core_type
+
+and type_application = {
+  constructor: core_type;
+  arguments: core_type list;
+}
+
+and arrow_type = {
+  label: arrow_label;
+  parameter: core_type;
+  result: core_type;
+}
+
+and forall_type = {
+  parameters: string list;
+  body: core_type;
+}
 
 and poly_variant_type_field = {
   origin: origin;
@@ -179,13 +180,13 @@ and poly_variant_type_field = {
 and package_type = {
   origin: origin;
   binder: string option;
-  module_type: path;
+  module_type: ident;
   constraints: package_type_constraint list;
 }
 
 and package_type_constraint = {
   origin: origin;
-  type_name: path;
+  type_name: ident;
   manifest: core_type;
 }
 
@@ -227,13 +228,16 @@ type type_declaration = {
 
 type parameter = {
   origin: origin;
-  kind: parameter_kind;
+  label: parameter_label;
+  pattern: pattern;
+  annotation: core_type option;
+  default: expression option;
 }
 
-and parameter_kind =
-  | Labeled of { label: string; pattern: pattern option }
-  | Optional of { label: string; pattern: pattern option }
-  | OptionalDefault of { label: string; pattern: pattern option; default: expression }
+and parameter_label =
+  | Unlabeled
+  | Labeled of ident
+  | Optional of ident
 
 and pattern = {
   origin: origin;
@@ -243,30 +247,56 @@ and pattern = {
 
 and record_pattern_field = {
   origin: origin;
-  name: path;
+  name: ident;
   pattern: pattern option;
 }
 
 and pattern_kind =
   | Wildcard
-  | Path of path
-  | Apply of { callee: pattern; argument: pattern }
+  | Bind of ident
+  | Apply of pattern_application
   | Literal of literal
   | PolyVariant of poly_variant_pattern
   | Tuple of pattern list
   | List of pattern list
   | Record of record_pattern_field list
-  | Or of { left: pattern; right: pattern }
-  | Cons of { head: pattern; tail: pattern }
-  | Constraint of { pattern: pattern; annotation: core_type }
-  | Alias of { pattern: pattern; alias: pattern }
+  | Or of or_pattern
+  | Cons of cons_pattern
+  | Constraint of constrained_pattern
+  | Alias of alias_pattern
   | Attribute of pattern
   | Parenthesized of pattern
-  | LabeledParameter of parameter
-  | OptionalParameter of parameter
-  | OptionalParameterDefault of parameter
-  | LocallyAbstractType of string list
-  | FirstClassModule of { binder: string option; package_type: package_type option }
+  | FirstClassModule of first_class_module_pattern
+
+and pattern_application = {
+  callee: pattern;
+  argument: pattern;
+}
+
+and or_pattern = {
+  left: pattern;
+  right: pattern;
+}
+
+and cons_pattern = {
+  head: pattern;
+  tail: pattern;
+}
+
+and constrained_pattern = {
+  pattern: pattern;
+  annotation: core_type;
+}
+
+and alias_pattern = {
+  pattern: pattern;
+  alias: pattern;
+}
+
+and first_class_module_pattern = {
+  binder: string option;
+  package_type: package_type option;
+}
 
 and poly_variant_pattern = {
   tag: string;
@@ -276,7 +306,8 @@ and poly_variant_pattern = {
 and let_binding = {
   origin: origin;
   pattern: pattern;
-  parameters: pattern list;
+  type_binders: string list;
+  parameters: parameter list;
   body: expression;
   type_annotation: core_type option;
 }
@@ -303,37 +334,40 @@ and module_unpack = {
   package_type: package_type option;
 }
 
+and record_expression = {
+  update: expression option;
+  fields: record_expression_field list;
+}
+
+and fun_decl = {
+  type_binders: string list;
+  parameters: parameter list;
+  body: function_body;
+}
+
 and expression_kind =
   | Literal of literal
-  | Path of path
+  | Ident of ident
   | Tuple of expression list
   | List of expression list
   | Array of expression list
   | PolyVariant of poly_variant_expression
-  | Record of record_expression_field list
-  | RecordUpdate of { base: expression; fields: record_expression_field list }
-  | FieldAccess of { receiver: expression; field: path }
-  | ArrayIndex of { receiver: expression; index: expression }
-  | Assign of { target: expression; value: expression }
-  | Sequence of { left: expression; right: expression }
-  | If of { condition: expression; then_branch: expression; else_branch: expression option }
-  | Match of { scrutinee: expression; cases: match_case list }
-  | Try of { body: expression; cases: match_case list }
-  | While of { condition: expression; body: expression }
-  | For of { pattern: pattern; start_: expression; stop: expression; body: expression }
-  | Function of { parameters: pattern list; body: function_body }
-  | Apply of { callee: expression; arguments: argument list }
-  | Infix of { left: expression; operator: path; right: expression }
-  | Let of { first_binding: let_binding; body: expression }
-  | LetModule of {
-      name: string;
-      items: structure_item list;
-      alias: path option;
-      unpack: module_unpack option;
-      body: expression
-    }
-  | LocalOpen of { module_path: path; body: expression }
-  | FirstClassModule of { module_path: path; package_type: package_type option }
+  | Record of record_expression
+  | FieldAccess of field_access
+  | Assign of assignment
+  | Sequence of sequence
+  | If of conditional
+  | Match of match_expression
+  | Try of try_expression
+  | While of while_loop
+  | For of for_loop
+  | Function of fun_decl
+  | Apply of application
+  | Infix of infix_operation
+  | Let of let_expression
+  | LetModule of let_module
+  | LocalOpen of local_open
+  | FirstClassModule of first_class_module
   | Assert of expression
 
 and poly_variant_expression = {
@@ -354,8 +388,85 @@ and match_case = {
 
 and record_expression_field = {
   origin: origin;
-  name: path;
+  name: ident;
   value: expression;
+}
+
+and field_access = {
+  receiver: expression;
+  field: ident;
+}
+
+and assignment = {
+  target: expression;
+  value: expression;
+}
+
+and sequence = {
+  left: expression;
+  right: expression;
+}
+
+and conditional = {
+  condition: expression;
+  then_branch: expression;
+  else_branch: expression option;
+}
+
+and match_expression = {
+  scrutinee: expression;
+  cases: match_case list;
+}
+
+and try_expression = {
+  body: expression;
+  cases: match_case list;
+}
+
+and while_loop = {
+  condition: expression;
+  body: expression;
+}
+
+and for_loop = {
+  pattern: pattern;
+  start_: expression;
+  stop: expression;
+  body: expression;
+}
+
+and application = {
+  callee: expression;
+  arguments: argument list;
+}
+
+and infix_operation = {
+  left: expression;
+  operator: ident;
+  right: expression;
+}
+
+and let_expression = {
+  first_binding: let_binding;
+  body: expression;
+}
+
+and let_module = {
+  name: string;
+  items: structure_item list;
+  alias: ident option;
+  unpack: module_unpack option;
+  body: expression;
+}
+
+and local_open = {
+  module_: ident;
+  body: expression;
+}
+
+and first_class_module = {
+  module_: ident;
+  package_type: package_type option;
 }
 
 and argument = {
@@ -365,8 +476,13 @@ and argument = {
 
 and argument_kind =
   | Positional of expression
-  | Labeled of { label: string; value: expression option }
-  | Optional of { label: string; value: expression option }
+  | Labeled of labeled_argument
+  | Optional of labeled_argument
+
+and labeled_argument = {
+  label: string;
+  value: expression option;
+}
 
 and let_declaration = {
   origin: origin;
@@ -389,7 +505,7 @@ and external_declaration = {
 
 and type_extension_declaration = {
   origin: origin;
-  name: path;
+  name: ident;
   constructors: type_constructor list;
 }
 
@@ -405,20 +521,20 @@ and module_declaration = {
   recursive: bool;
   parameters: functor_parameter list;
   items: structure_item list;
-  alias: path option;
-  module_type: path option;
+  alias: ident option;
+  module_type: ident option;
   application: module_application option;
 }
 
 and functor_parameter = {
   origin: origin;
   name: string;
-  module_type: path option;
+  module_type: ident option;
 }
 
 and module_application = {
-  callee: path;
-  argument: path;
+  callee: ident;
+  argument: ident;
 }
 
 and module_type_declaration = {
@@ -441,7 +557,7 @@ and structure_item_kind =
   | Exception of exception_declaration
   | Module of module_declaration list
   | ModuleType of module_type_declaration
-  | Include of path
+  | Include of ident
 
 and signature_item = {
   origin: origin;
@@ -463,7 +579,6 @@ type t = {
 and source_file_kind =
   | Implementation of structure_item list
   | Interface of signature_item list
-  | Empty of file_kind
 
 let core_type_origin = fun (type_: core_type) -> type_.origin
 
@@ -516,31 +631,31 @@ let origin_from_node = fun node -> { span = span_from_node node; kind = SynAst.N
 
 let token_text = SynAst.Token.text
 
-let path_from_syn_path = fun path ->
+let ident_from_syn_path = fun syntax_path ->
   let segments = ref [] in
-  SynAst.Path.for_each_ident path ~fn:(fun token -> segments := token_text token :: !segments);
+  SynAst.Path.for_each_ident syntax_path ~fn:(fun token -> segments := token_text token :: !segments);
   SurfacePath.from_segments (List.reverse !segments)
 
-let path_from_tokens = fun tokens ->
+let ident_from_tokens = fun tokens ->
   tokens |> List.map ~fn:token_text |> String.concat "" |> SurfacePath.from_name
 
-let path_from_ident_tokens = fun tokens -> tokens |> List.map ~fn:token_text |> SurfacePath.from_segments
+let ident_from_tokens_as_segments = fun tokens -> tokens |> List.map ~fn:token_text |> SurfacePath.from_segments
 
 let ident_tokens = fun tokens ->
   tokens |> List.filter ~fn:(fun token -> Syn.SyntaxKind.(SynAst.Token.kind token = IDENT))
 
-let path_from_ident_tokens_in_tokens = fun tokens -> tokens |> ident_tokens |> path_from_ident_tokens
+let ident_from_tokens_in_tokens = fun tokens -> tokens |> ident_tokens |> ident_from_tokens_as_segments
 
-let path_from_ident_tokens_in_node = fun node ->
+let ident_from_node = fun node ->
   let tokens = ref [] in
   SynAst.Node.for_each_token node
     ~fn:(fun token ->
       match SynAst.Token.kind token with
       | Syn.SyntaxKind.IDENT -> tokens := token :: !tokens
       | _ -> ());
-  path_from_ident_tokens (List.reverse !tokens)
+  ident_from_tokens_as_segments (List.reverse !tokens)
 
-let path_from_module_type_node = fun node ->
+let module_type_ident_from_node = fun node ->
   let tokens = ref [] in
   let stop = ref false in
   SynAst.Node.for_each_token node
@@ -551,7 +666,7 @@ let path_from_module_type_node = fun node ->
       | _ -> ());
   match List.reverse !tokens with
   | [] -> None
-  | tokens -> Some (path_from_ident_tokens tokens)
+  | tokens -> Some (ident_from_tokens_as_segments tokens)
 
 let direct_child_tokens = fun node ->
   let tokens = ref [] in
@@ -591,13 +706,13 @@ let drop_final_rparen = fun tokens ->
 
 let type_source_from_tokens = fun tokens -> tokens |> List.map ~fn:token_text |> String.concat " "
 
-let path_from_module_expr_node = fun node ->
+let module_expr_ident_from_node = fun node ->
   match SynAst.Node.kind node with
   | Syn.SyntaxKind.PATH_MODULE_EXPR ->
-      Some (path_from_ident_tokens_in_node node)
+      Some (ident_from_node node)
   | Syn.SyntaxKind.MODULE_EXPR -> (
       match SynAst.Node.first_child_node node ~kind:Syn.SyntaxKind.PATH_MODULE_EXPR with
-      | Some path -> Some (path_from_ident_tokens_in_node path)
+      | Some syntax_path -> Some (ident_from_node syntax_path)
       | None -> None
     )
   | _ ->
@@ -606,15 +721,15 @@ let path_from_module_expr_node = fun node ->
 let module_application_from_module_expr = fun node ->
   match SynAst.Node.kind node with
   | Syn.SyntaxKind.APPLY_MODULE_EXPR ->
-      let paths = ref [] in
+      let idents = ref [] in
       SynAst.Node.for_each_child_node node
         ~fn:(fun child ->
-          match path_from_module_expr_node child with
-          | Some path -> paths := path :: !paths
+          match module_expr_ident_from_node child with
+          | Some ident -> idents := ident :: !idents
           | None -> ());
       (
-        match List.reverse !paths with
-        | callee :: argument :: _ -> Some { callee; argument }
+        match List.reverse !idents with
+        | callee :: argument :: _ -> Some ({ callee; argument }: module_application)
         | _ -> None
       )
   | _ -> None
@@ -659,7 +774,7 @@ let functor_parameters_from_member = fun origin member ->
           let module_type =
             match member_ident_tokens_between member ~start:(index + 3) ~stop:close_index with
             | [] -> None
-            | tokens -> Some (path_from_ident_tokens tokens)
+            | tokens -> Some (ident_from_tokens_as_segments tokens)
           in
           let parameter = { origin; name = token_text name; module_type } in
           loop (close_index + 1) (parameter :: parameters)
@@ -667,7 +782,19 @@ let functor_parameters_from_member = fun origin member ->
   in
   loop 0 []
 
-let literal_from_token = fun token ->
+exception Build_failed of Diagnostics.Diagnostic.t
+
+let build_failed = fun origin summary ->
+  raise
+    (Build_failed (Diagnostics.Diagnostic.UnsupportedSyntax {
+      span = origin.span;
+      kind = origin.kind;
+      summary
+    }))
+
+let unit_constructor_ident = SurfacePath.from_name "()"
+
+let literal_from_token = fun origin token ->
   match SynAst.Token.kind token with
   | Syn.SyntaxKind.INT -> Int
   | FLOAT -> Float
@@ -675,12 +802,7 @@ let literal_from_token = fun token ->
   | STRING -> String
   | TRUE_KW
   | FALSE_KW -> Bool
-  | _ -> Unit
-
-let type_tuple_separator_from_syn = function
-  | SynAst.TypeExpr.Star -> `Star
-  | SynAst.TypeExpr.Comma -> `Comma
-  | SynAst.TypeExpr.UnknownSeparator -> `Unknown
+  | kind -> build_failed origin ("unsupported literal " ^ Syn.SyntaxKind.to_string kind)
 
 let node_summary = fun node -> Syn.SyntaxKind.to_string (SynAst.Node.kind node)
 
@@ -708,7 +830,14 @@ let make_core_type = fun origin (kind: core_type_kind) -> ({ origin; type_ = Non
 let make_type_definition = fun origin (kind: type_definition_kind) ->
   ({ origin; kind }: type_definition)
 
-let make_parameter = fun origin (kind: parameter_kind) -> ({ origin; kind }: parameter)
+let make_parameter = fun ?annotation ?default origin label pattern ->
+  ({
+      origin;
+      label;
+      pattern;
+      annotation;
+      default;
+    }: parameter)
 
 let make_pattern = fun origin (kind: pattern_kind) -> ({ origin; type_ = None; kind }: pattern)
 
@@ -727,16 +856,6 @@ let make_source_file = fun origin (kind: source_file_kind) -> ({ origin; kind }:
 
 let with_expression_type_hint = fun kind type_ (expression: expression) ->
   { expression with type_hint = Some { kind; type_ } }
-
-exception Build_failed of Diagnostics.Diagnostic.t
-
-let build_failed = fun origin summary ->
-  raise
-    (Build_failed (Diagnostics.Diagnostic.UnsupportedSyntax {
-      span = origin.span;
-      kind = origin.kind;
-      summary
-    }))
 
 let require_some = fun origin summary value ->
   match value with
@@ -845,8 +964,8 @@ let rec build_core_type = fun context type_expr ->
         make_core_type origin Wildcard
     | SynAst.TypeExpr.Var { name } ->
         make_core_type origin (Var (Option.map name ~fn:token_text))
-    | SynAst.TypeExpr.Path { path } ->
-        make_core_type origin (Path (path_from_syn_path path))
+    | SynAst.TypeExpr.Path { path=syntax_path } ->
+        make_core_type origin (TypeIdent (ident_from_syn_path syntax_path))
     | SynAst.TypeExpr.Apply { argument=Some argument; constructor=Some constructor } when opaque_type_is_token
       Syn.SyntaxKind.GT
       argument ->
@@ -865,11 +984,8 @@ let rec build_core_type = fun context type_expr ->
             parameter;
             result = build_core_type context (require_some origin "missing arrow result type" right)
           })
-    | SynAst.TypeExpr.Tuple { left; right; separator } ->
-        let separator = type_tuple_separator_from_syn separator in
-        make_core_type
-          origin
-          (Tuple { separator; elements = tuple_type_elements context origin separator left right })
+    | SynAst.TypeExpr.Tuple { left; right; _ } ->
+        make_core_type origin (Tuple (tuple_type_elements context origin left right))
     | SynAst.TypeExpr.Labeled { annotation; _ } ->
         build_core_type context (require_some origin "missing labeled type annotation" annotation)
     | SynAst.TypeExpr.Poly { body } ->
@@ -928,15 +1044,17 @@ and build_arrow_parameter = fun context origin type_expr ->
 and core_type_application_arguments = fun (type_: core_type) ->
   match type_.kind with
   | Parenthesized inner -> core_type_application_arguments inner
-  | Tuple { separator=`Comma; elements } -> elements
+  | Tuple elements -> elements
   | _ -> [ type_ ]
 
-and tuple_type_elements = fun context origin separator left right ->
+and tuple_type_elements = fun context origin left right ->
   let rec flatten type_expr =
     match SynAst.TypeExpr.view type_expr with
-    | SynAst.TypeExpr.Tuple { left; right; separator=child_separator } when type_tuple_separator_from_syn
-      child_separator
-    = separator -> tuple_type_elements context (origin_from_node type_expr) separator left right
+    | SynAst.TypeExpr.Tuple { left; right; _ } -> tuple_type_elements
+      context
+      (origin_from_node type_expr)
+      left
+      right
     | _ -> [ build_core_type context type_expr ]
   in
   List.append
@@ -1006,7 +1124,7 @@ and build_package_constraints = fun context origin tokens ->
         in
         let constraint_: package_type_constraint = {
           origin;
-          type_name = path_from_ident_tokens_in_tokens name_tokens;
+          type_name = ident_from_tokens_in_tokens name_tokens;
           manifest = build_core_type_from_tokens context origin manifest_tokens
         } in
         loop (constraint_ :: constraints) rest
@@ -1017,7 +1135,7 @@ and build_package_constraints = fun context origin tokens ->
 
 and build_package_type_from_ascription_tokens = fun context origin ?binder tokens ->
   let module_type_tokens, constraint_tokens = split_at_token_kind Syn.SyntaxKind.WITH_KW tokens in
-  let module_type = path_from_ident_tokens_in_tokens module_type_tokens in
+  let module_type = ident_from_tokens_in_tokens module_type_tokens in
   let constraints =
     match constraint_tokens with
     | Some tokens -> build_package_constraints context origin tokens
@@ -1025,9 +1143,9 @@ and build_package_type_from_ascription_tokens = fun context origin ?binder token
   in
   ({ origin; binder; module_type; constraints }: package_type)
 
-and first_class_module_path_from_tokens = fun origin tokens ->
+and first_class_module_ident_from_tokens = fun origin tokens ->
   let after_module = tokens_after_token_kind Syn.SyntaxKind.MODULE_KW tokens |> require_some origin "missing first-class module keyword" in
-  after_module |> tokens_until_any [ Syn.SyntaxKind.COLON; Syn.SyntaxKind.RPAREN ] |> path_from_ident_tokens_in_tokens
+  after_module |> tokens_until_any [ Syn.SyntaxKind.COLON; Syn.SyntaxKind.RPAREN ] |> ident_from_tokens_in_tokens
 
 and first_class_package_type_from_tokens = fun context origin ?binder tokens ->
   match tokens_after_token_kind Syn.SyntaxKind.COLON tokens with
@@ -1041,7 +1159,7 @@ and first_class_module_unpack_expression_from_tokens = fun origin tokens ->
   let expression_tokens = tokens_until_any [ Syn.SyntaxKind.COLON; Syn.SyntaxKind.RPAREN ] after_val in
   match ident_tokens expression_tokens with
   | [] -> build_failed origin "missing first-class module unpack expression"
-  | identifiers -> make_expression origin (Path (path_from_ident_tokens identifiers))
+  | identifiers -> make_expression origin (Ident (ident_from_tokens_as_segments identifiers))
 
 and first_class_module_unpack_from_tokens = fun context origin tokens ->
   (
@@ -1063,36 +1181,79 @@ and module_body_unpack = fun context node ->
 let rec build_parameter = fun context parameter ->
   let origin = origin_from_node parameter in
   (match SynAst.Parameter.view parameter with
-    | SynAst.Parameter.Labeled { label; pattern } -> make_parameter
-      origin
-      (Labeled {
-        label = token_text (require_some origin "missing labeled parameter label" label);
-        pattern = Option.map pattern ~fn:(build_pattern context)
-      })
-    | SynAst.Parameter.Optional { label; pattern } -> make_parameter
-      origin
-      (Optional {
-        label = token_text (require_some origin "missing optional parameter label" label);
-        pattern = Option.map pattern ~fn:(build_pattern context)
-      })
-    | SynAst.Parameter.OptionalDefault { label; pattern; default } -> make_parameter
-      origin
-      (OptionalDefault {
-        label = token_text (require_some origin "missing optional parameter label" label);
-        pattern = Option.map pattern ~fn:(build_pattern context);
-        default = build_expression
-          context
-          (require_some origin "missing optional parameter default" default)
-      })
-    | SynAst.Parameter.Unknown node -> unsupported_node node (node_summary node): parameter)
+    | SynAst.Parameter.Labeled { label; pattern } ->
+        let label_token = require_some origin "missing labeled parameter label" label in
+        let label_text = token_text label_token in
+        let pattern = build_parameter_pattern context origin label_text pattern in
+        let pattern, annotation = extract_parameter_annotation pattern in
+        make_parameter ?annotation origin (Labeled (SurfacePath.from_name label_text)) pattern
+    | SynAst.Parameter.Optional { label; pattern } ->
+        let label_token = require_some origin "missing optional parameter label" label in
+        let label_text = token_text label_token in
+        let pattern = build_parameter_pattern context origin label_text pattern in
+        let pattern, annotation = extract_parameter_annotation pattern in
+        make_parameter ?annotation origin (Optional (SurfacePath.from_name label_text)) pattern
+    | SynAst.Parameter.OptionalDefault { label; pattern; default } ->
+        let label_token = require_some origin "missing optional parameter label" label in
+        let label_text = token_text label_token in
+        let pattern = build_parameter_pattern context origin label_text pattern in
+        let pattern, annotation = extract_parameter_annotation pattern in
+        make_parameter
+          ?annotation
+          ~default:(build_expression
+            context
+            (require_some origin "missing optional parameter default" default))
+          origin
+          (Optional (SurfacePath.from_name label_text))
+          pattern
+    | SynAst.Parameter.Unknown node ->
+        unsupported_node node (node_summary node): parameter)
 
-and build_locally_abstract_type_pattern = fun origin syntax_pattern ->
+and build_parameter_pattern = fun context origin label_text pattern ->
+  match pattern with
+  | Some pattern -> build_pattern context pattern
+  | None -> make_pattern origin (Bind (SurfacePath.from_name label_text))
+
+and extract_parameter_annotation = fun (pattern: pattern) ->
+  match pattern.kind with
+  | Constraint { pattern; annotation } -> (pattern, Some annotation)
+  | _ -> (pattern, None)
+
+and locally_abstract_type_names = fun origin syntax_pattern ->
   let pattern = SynAst.LocallyAbstractTypePattern.cast syntax_pattern |> require_some origin "invalid locally abstract type pattern" in
   let names = ref [] in
   SynAst.LocallyAbstractTypePattern.for_each_type_name
     pattern
     ~fn:(fun token -> names := token_text token :: !names);
-  make_pattern origin (LocallyAbstractType (List.reverse !names))
+  List.reverse !names
+
+and build_parameter_from_pattern = fun context syntax_pattern ->
+  let origin = origin_from_node syntax_pattern in
+  match SynAst.Pattern.view syntax_pattern with
+  | SynAst.Pattern.LabeledParam parameter
+  | SynAst.Pattern.OptionalParam parameter
+  | SynAst.Pattern.OptionalParamDefault parameter ->
+      build_parameter context parameter
+  | SynAst.Pattern.LocallyAbstractType ->
+      build_failed origin "locally abstract type binder outside function parameter list"
+  | _ ->
+      let pattern = build_pattern context syntax_pattern in
+      let pattern, annotation = extract_parameter_annotation pattern in
+      make_parameter ?annotation origin Unlabeled pattern
+
+and build_function_parameters = fun context syntax_parameters ->
+  let type_binders = ref [] in
+  let parameters = ref [] in
+  syntax_parameters |> List.for_each
+    ~fn:(fun syntax_parameter ->
+      let origin = origin_from_node syntax_parameter in
+      match SynAst.Pattern.view syntax_parameter with
+      | SynAst.Pattern.LocallyAbstractType ->
+          type_binders := List.append
+            (locally_abstract_type_names origin syntax_parameter |> List.reverse)
+            !type_binders
+      | _ -> parameters := build_parameter_from_pattern context syntax_parameter :: !parameters);
+  (List.reverse !type_binders, List.reverse !parameters)
 
 and build_first_class_module_pattern = fun context origin syntax_pattern ->
   let pattern = SynAst.FirstClassModulePattern.cast syntax_pattern |> require_some origin "invalid first-class module pattern" in
@@ -1114,8 +1275,8 @@ and build_pattern = fun context syntax_pattern ->
   (match SynAst.Pattern.view syntax_pattern with
     | SynAst.Pattern.Wildcard ->
         make_pattern origin Wildcard
-    | SynAst.Pattern.Path { path } ->
-        make_pattern origin (Path (path_from_syn_path path))
+    | SynAst.Pattern.Path { path=syntax_path } ->
+        make_pattern origin (Bind (ident_from_syn_path syntax_path))
     | SynAst.Pattern.Apply { callee; argument } ->
         make_pattern
           origin
@@ -1126,9 +1287,8 @@ and build_pattern = fun context syntax_pattern ->
               (require_some origin "missing pattern argument" argument)
           })
     | SynAst.Pattern.Literal { token } ->
-        make_pattern
-          origin
-          (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
+        let token = require_some origin "missing literal pattern token" token in
+        make_pattern origin (Literal (literal_from_token origin token))
     | SynAst.Pattern.PolyVariant ->
         make_pattern
           origin
@@ -1166,7 +1326,7 @@ and build_pattern = fun context syntax_pattern ->
     | SynAst.Pattern.Parenthesized { inner=Some inner } ->
         make_pattern origin (Parenthesized (build_pattern context inner))
     | SynAst.Pattern.Parenthesized { inner=None } ->
-        make_pattern origin (Literal Unit)
+        make_pattern origin (Bind unit_constructor_ident)
     | SynAst.Pattern.Constraint { pattern; annotation } ->
         make_pattern
           origin
@@ -1189,14 +1349,6 @@ and build_pattern = fun context syntax_pattern ->
         make_pattern
           origin
           (Attribute (build_pattern context (require_some origin "missing attributed pattern" inner)))
-    | SynAst.Pattern.LabeledParam parameter ->
-        make_pattern origin (LabeledParameter (build_parameter context parameter))
-    | SynAst.Pattern.OptionalParam parameter ->
-        make_pattern origin (OptionalParameter (build_parameter context parameter))
-    | SynAst.Pattern.OptionalParamDefault parameter ->
-        make_pattern origin (OptionalParameterDefault (build_parameter context parameter))
-    | SynAst.Pattern.LocallyAbstractType ->
-        build_locally_abstract_type_pattern origin syntax_pattern
     | SynAst.Pattern.FirstClassModule ->
         build_first_class_module_pattern context origin syntax_pattern
     | SynAst.Pattern.Error node ->
@@ -1205,7 +1357,11 @@ and build_pattern = fun context syntax_pattern ->
         unsupported_node node (node_summary node)
     | SynAst.Pattern.Array
     | SynAst.Pattern.Extension
+    | SynAst.Pattern.LabeledParam _
+    | SynAst.Pattern.OptionalParam _
+    | SynAst.Pattern.OptionalParamDefault _
     | SynAst.Pattern.LocalOpen
+    | SynAst.Pattern.LocallyAbstractType
     | SynAst.Pattern.Interval _
     | SynAst.Pattern.Lazy _
     | SynAst.Pattern.Exception _ ->
@@ -1216,7 +1372,7 @@ and build_record_pattern_field = fun context (field: SynAst.RecordPattern.field)
   (
     {
       origin;
-      name = path_from_syn_path (require_some origin "missing record pattern field name" field.path);
+      name = ident_from_syn_path (require_some origin "missing record pattern field name" field.path);
       pattern = Option.map field.pattern ~fn:(build_pattern context)
     }:
       record_pattern_field
@@ -1237,67 +1393,22 @@ and flatten_pattern_application = fun pattern ->
   in
   loop [] pattern
 
-and is_special_function_parameter = fun (pattern: pattern) ->
-  match pattern.kind with
-  | LocallyAbstractType _
-  | FirstClassModule _ -> true
-  | _ -> false
-
-and split_special_function_parameter_group = fun pattern ->
-  let parameters = flatten_pattern_application pattern in
-  if List.exists is_special_function_parameter parameters then
-    Some parameters
-  else
-    None
-
-and normalize_let_binding_parameters = fun (parameters: pattern list) (
-  type_annotation: core_type option
-) ->
-  let push_parameters acc parameters =
-    List.fold_left parameters ~init:acc ~fn:(fun acc parameter -> parameter :: acc)
-  in
-  let rec loop acc type_annotation parameters =
-    match parameters with
-    | [] ->
-        (List.reverse acc, type_annotation)
-    | (({ kind=Constraint { pattern=inner; annotation }; _ }: pattern) as parameter) :: rest -> (
-        match split_special_function_parameter_group inner with
-        | Some parameters ->
-            let type_annotation =
-              match type_annotation with
-              | Some _ -> type_annotation
-              | None -> Some annotation
-            in
-            loop (push_parameters acc parameters) type_annotation rest
-        | None ->
-            if List.is_empty rest && Option.is_none type_annotation then
-              loop (inner :: acc) (Some annotation) rest
-            else
-              loop (parameter :: acc) type_annotation rest
-      )
-    | parameter :: rest -> (
-        match split_special_function_parameter_group parameter with
-        | Some parameters -> loop (push_parameters acc parameters) type_annotation rest
-        | None -> loop (parameter :: acc) type_annotation rest
-      )
-  in
-  loop [] type_annotation parameters
-
 and build_let_binding = fun context binding ->
   let origin = origin_from_node binding in
-  let parameters = ref [] in
+  let syntax_parameters = ref [] in
   SynAst.LetBinding.for_each_parameter
     binding
-    ~fn:(fun parameter -> parameters := build_pattern context parameter :: !parameters);
+    ~fn:(fun parameter -> syntax_parameters := parameter :: !syntax_parameters);
   let type_annotation = Option.map
     (SynAst.LetBinding.type_annotation binding)
     ~fn:(build_core_type context) in
-  let parameters, type_annotation = normalize_let_binding_parameters (List.reverse !parameters) type_annotation in
+  let type_binders, parameters = build_function_parameters context (List.reverse !syntax_parameters) in
   ({
       origin;
       pattern = build_pattern
         context
         (require_some origin "missing let binding pattern" (SynAst.LetBinding.pattern binding));
+      type_binders;
       parameters;
       body = build_expression
         context
@@ -1330,7 +1441,7 @@ and build_record_expression_field = fun context (field: SynAst.RecordExpr.field)
   (
     {
       origin;
-      name = path_from_syn_path (require_some origin "missing record field name" field.path);
+      name = ident_from_syn_path (require_some origin "missing record field name" field.path);
       value = build_expression context (require_some origin "missing record field value" field.value)
     }:
       record_expression_field
@@ -1347,15 +1458,14 @@ and build_expression = fun context syntax_expression ->
   let origin = origin_from_node syntax_expression in
   (match SynAst.Expr.view syntax_expression with
     | SynAst.Expr.Literal { token } ->
-        make_expression
-          origin
-          (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
-    | SynAst.Expr.Path { path } ->
-        make_expression origin (Path (path_from_syn_path path))
+        let token = require_some origin "missing literal expression token" token in
+        make_expression origin (Literal (literal_from_token origin token))
+    | SynAst.Expr.Path { path=syntax_path } ->
+        make_expression origin (Ident (ident_from_syn_path syntax_path))
     | SynAst.Expr.Parenthesized { inner=Some inner } ->
         build_expression context inner
     | SynAst.Expr.Parenthesized { inner=None } ->
-        make_expression origin (Literal Unit)
+        make_expression origin (Ident unit_constructor_ident)
     | SynAst.Expr.Attribute { inner=Some inner } ->
         build_expression context inner
     | SynAst.Expr.Attribute { inner=None } ->
@@ -1400,20 +1510,22 @@ and build_expression = fun context syntax_expression ->
           match SynAst.RecordExpr.base record with
           | Some base -> make_expression
             origin
-            (RecordUpdate {
-              base = build_expression context base;
+            (Record {
+              update = Some (build_expression context base);
               fields = build_record_expression_fields context record
             })
-          | None -> make_expression origin (Record (build_record_expression_fields context record))
+          | None -> make_expression
+            origin
+            (Record { update = None; fields = build_record_expression_fields context record })
         )
     | SynAst.Expr.RecordUpdate ->
         let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record update" in
         make_expression
           origin
-          (RecordUpdate {
-            base = build_expression
+          (Record {
+            update = Some (build_expression
               context
-              (require_some origin "missing record update base" (SynAst.RecordExpr.base record));
+              (require_some origin "missing record update base" (SynAst.RecordExpr.base record)));
             fields = build_record_expression_fields context record
           })
     | SynAst.Expr.FieldAccess { target=Some target; field=Some field } ->
@@ -1428,18 +1540,20 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.ArrayIndex { target=Some target; index=Some index } ->
         make_expression
           origin
-          (ArrayIndex {
-            receiver = build_expression context target;
-            index = build_expression context index
+          (Infix {
+            left = build_expression context target;
+            operator = SurfacePath.from_name ".()";
+            right = build_expression context index
           })
     | SynAst.Expr.ArrayIndex _ ->
         build_failed origin "incomplete array index"
     | SynAst.Expr.StringIndex { target=Some target; index=Some index } ->
         make_expression
           origin
-          (ArrayIndex {
-            receiver = build_expression context target;
-            index = build_expression context index
+          (Infix {
+            left = build_expression context target;
+            operator = SurfacePath.from_name ".[]";
+            right = build_expression context index
           })
     | SynAst.Expr.StringIndex _ ->
         build_failed origin "incomplete string index"
@@ -1507,19 +1621,22 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.For _ ->
         build_failed origin "incomplete for expression"
     | SynAst.Expr.Fun { body=Some body } ->
+        let type_binders, parameters = build_function_parameters
+          context
+          (direct_child_patterns syntax_expression) in
         make_expression
           origin
-          (Function {
-            parameters = direct_child_patterns syntax_expression
-            |> List.map ~fn:(build_pattern context);
-            body = Body (build_expression context body)
-          })
+          (Function { type_binders; parameters; body = Body (build_expression context body) })
     | SynAst.Expr.Fun { body=None } ->
         build_failed origin "missing function body"
     | SynAst.Expr.Function { first_case=Some _ } ->
         make_expression
           origin
-          (Function { parameters = []; body = Cases (build_match_cases context syntax_expression) })
+          (Function {
+            type_binders = [];
+            parameters = [];
+            body = Cases (build_match_cases context syntax_expression)
+          })
     | SynAst.Expr.Function { first_case=None } ->
         build_failed origin "missing function cases"
     | SynAst.Expr.Apply { callee=Some callee; argument } ->
@@ -1540,7 +1657,7 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.Infix _ ->
         build_failed origin "incomplete infix expression"
     | SynAst.Expr.Prefix { operator=Some operator; operand=Some operand } ->
-        let callee = make_expression origin (Path (SurfacePath.from_name (token_text operator))) in
+        let callee = make_expression origin (Ident (SurfacePath.from_name (token_text operator))) in
         let argument = build_expression context operand in
         make_expression
           origin
@@ -1589,7 +1706,7 @@ and build_first_class_module_expression = fun context origin syntax_expression -
   make_expression
     origin
     (FirstClassModule {
-      module_path = first_class_module_path_from_tokens origin tokens;
+      module_ = first_class_module_ident_from_tokens origin tokens;
       package_type = first_class_package_type_from_tokens context origin tokens
     })
 
@@ -1619,7 +1736,7 @@ and build_let_module_expression = fun context origin syntax_expression ->
   let module_body_node = SynAst.LetModuleExpr.module_body_node let_module in
   let alias =
     match module_body_node with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (path_from_ident_tokens_in_node
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (ident_from_node
       node)
     | _ -> None
   in
@@ -1650,16 +1767,16 @@ and build_let_module_expression = fun context origin syntax_expression ->
 
 and build_local_open_expression = fun context origin syntax_expression ->
   let local_open = SynAst.LocalOpenExpr.cast syntax_expression |> require_some origin "invalid local open expression" in
-  let module_path, body =
+  let module_syntax_path, body =
     match SynAst.LocalOpenExpr.view local_open with
-    | LetOpen { module_path; body; _ }
-    | Delimited { module_path; body; _ } -> (module_path, body)
+    | LetOpen { module_path=module_syntax_path; body; _ }
+    | Delimited { module_path=module_syntax_path; body; _ } -> (module_syntax_path, body)
   in
   make_expression
     origin
     (LocalOpen {
-      module_path = path_from_syn_path
-        (require_some origin "missing local open module path" module_path);
+      module_ = ident_from_syn_path
+        (require_some origin "missing local open module path" module_syntax_path);
       body = build_expression context (require_some origin "missing local open body" body)
     })
 
@@ -1682,7 +1799,7 @@ and name_from_declaration_tokens = fun for_each_token fallback ->
   for_each_token ~fn:(fun token -> tokens := token :: !tokens);
   match List.reverse !tokens with
   | [] -> Option.map fallback ~fn:token_text
-  | tokens -> Some (path_from_tokens tokens |> SurfacePath.to_string)
+  | tokens -> Some (ident_from_tokens tokens |> SurfacePath.to_string)
 
 and build_value_declaration = fun context declaration ->
   let origin = origin_from_node declaration in
@@ -1823,7 +1940,7 @@ and build_type_extension_declaration = fun context declaration ->
   (
     {
       origin;
-      name = path_from_ident_tokens (List.reverse !name_tokens);
+      name = ident_from_tokens_as_segments (List.reverse !name_tokens);
       constructors = List.reverse !constructors
     }:
       type_extension_declaration
@@ -1868,12 +1985,12 @@ and build_module_declaration_member = fun context member ->
   let parameters = functor_parameters_from_member origin member in
   let module_type =
     match SynAst.ModuleDeclaration.Member.module_type member with
-    | Some node -> path_from_module_type_node node
+    | Some node -> module_type_ident_from_node node
     | None -> None
   in
   let alias =
     match module_expr with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (path_from_ident_tokens_in_node
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (ident_from_node
       node)
     | _ -> None
   in
@@ -1962,7 +2079,7 @@ and build_structure_item = fun context item ->
         SynAst.IncludeDeclaration.for_each_path_ident
           declaration
           ~fn:(fun token -> tokens := token :: !tokens);
-        make_structure_item origin (Include (path_from_ident_tokens (List.reverse !tokens)))
+        make_structure_item origin (Include (ident_from_tokens_as_segments (List.reverse !tokens)))
     | Class declaration ->
         build_failed
           (origin_from_node declaration)
@@ -2020,11 +2137,6 @@ let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
   try
     let context = make_build_context () in
     let source_file = SynAst.SourceFile.make parse_result.tree in
-    let kind =
-      match parse_result.kind with
-      | `Implementation -> `Implementation
-      | `Interface -> `Interface
-    in
     let ast =
       match SynAst.SourceFile.view source_file with
       | Implementation implementation ->
@@ -2040,7 +2152,12 @@ let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
             ~fn:(fun item -> items := build_signature_item context item :: !items);
           make_source_file (origin_from_node source_file) (Interface (List.reverse !items))
       | Empty ->
-          make_source_file (origin_from_node source_file) (Empty kind)
+          let kind =
+            match parse_result.kind with
+            | `Implementation -> Implementation []
+            | `Interface -> Interface []
+          in
+          make_source_file (origin_from_node source_file) kind
     in
     Ok ast
   with
@@ -2079,19 +2196,16 @@ let file_kind_serializer = Serde.Ser.variant
 let file_kind = function
   | { kind=Implementation _; _ } -> `Implementation
   | { kind=Interface _; _ } -> `Interface
-  | { kind=Empty kind; _ } -> kind
 
 let file_origin = fun file -> file.origin
 
 let view_name = function
   | { kind=Implementation _; _ } -> "Implementation"
   | { kind=Interface _; _ } -> "Interface"
-  | { kind=Empty _; _ } -> "Empty"
 
 let item_count = function
   | { kind=Implementation items; _ } -> List.length items
   | { kind=Interface items; _ } -> List.length items
-  | { kind=Empty _; _ } -> 0
 
 let serializer = Serde.Ser.record
   (Serde.Ser.fields

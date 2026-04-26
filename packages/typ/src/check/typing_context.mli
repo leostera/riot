@@ -1,16 +1,16 @@
 (** Public, serializable type information.
 
     This module defines the stable type language that leaves the checker. The
-    inference engine in [Core] uses a richer mutable representation internally;
+    inference engine in `Core` uses a richer mutable representation internally;
     successful bindings are converted into these immutable values before they
     are returned to callers or reused as input to another one-shot check. *)
 (** Function argument labels in public arrow types. *)
 type arg_label =
   (** Ordinary positional argument. *)
-  | Nolabel
-  (** Required labelled argument, for example [~name:int -> ...]. *)
+  | NoLabel
+  (** Required labelled argument, for example `~name:int -> ...`. *)
   | Labelled of string
-  (** Optional labelled argument, for example [?name:int -> ...]. *)
+  (** Optional labelled argument, for example `?name:int -> ...`. *)
   | Optional of string
 (** Public function-arrow payload. *)
 type function_type = {
@@ -24,9 +24,9 @@ type function_type = {
 
 (** Public nominal type constructor application. *)
 and type_constructor = {
-  (** Nominal type path, such as [list], [M.t], or [Derived.t]. *)
+  (** Nominal type path, such as `list`, `M.t`, or `Derived.t`. *)
   path: Model.Surface_path.t;
-  (** Type arguments applied to [path]. *)
+  (** Type arguments applied to `path`. *)
   arguments: type_expr list;
 }
 
@@ -34,7 +34,7 @@ and type_constructor = {
 and alias_type = {
   (** Type being named by the alias variable. *)
   type_: type_expr;
-  (** Public type-variable id used by renderers to print ['a], ['b], and so on. *)
+  (** Public type-variable id used by renderers to print `'a`, `'b`, and so on. *)
   id: int;
 }
 
@@ -42,9 +42,9 @@ and alias_type = {
 and poly_variant_bound =
   (** Closed row with exactly the listed tags. *)
   | Exact
-  (** Upper-bounded row, rendered as [[< ... ]]. *)
+  (** Upper-bounded row, rendered as `[< ... ]`. *)
   | Upper
-  (** Lower-bounded row, rendered as [[> ... ]]. *)
+  (** Lower-bounded row, rendered as `[> ... ]`. *)
   | Lower
 
 (** Public polymorphic-variant row field. *)
@@ -63,11 +63,11 @@ and poly_variant = {
   fields: poly_variant_field list;
 }
 
-(** Public first-class module package [with type] constraint. *)
+(** Public first-class module package `with type` constraint. *)
 and package_type_constraint = {
   (** Type member constrained inside a first-class module package. *)
   type_name: Model.Surface_path.t;
-  (** Manifest type for [type_name]. *)
+  (** Manifest type for `type_name`. *)
   manifest: type_expr;
 }
 
@@ -76,29 +76,29 @@ and package_type = {
   (** Optional local module binder used when package result types depend on the
       unpacked module path. *)
   binder: string option;
-  (** Module type path, such as [S] in [(module S)]. *)
+  (** Module type path, such as `S` in `(module S)`. *)
   module_type: Model.Surface_path.t;
-  (** [with type] constraints attached to the package. *)
+  (** `with type` constraints attached to the package. *)
   constraints: package_type_constraint list;
 }
 
 (** Public type-expression language returned by the checker. *)
 and type_expr =
-  (** Built-in [int]. *)
+  (** Built-in `int`. *)
   | Int
-  (** Built-in [bool]. *)
+  (** Built-in `bool`. *)
   | Bool
-  (** Built-in [char]. *)
+  (** Built-in `char`. *)
   | Char
-  (** Built-in [string]. *)
+  (** Built-in `string`. *)
   | String
-  (** Built-in [float]. *)
+  (** Built-in `float`. *)
   | Float
-  (** Built-in [unit]. *)
+  (** Built-in `unit`. *)
   | Unit
-  (** ['a list]. *)
+  (** `'a list`. *)
   | List of type_expr
-  (** ['a option]. *)
+  (** `'a option`. *)
   | Option of type_expr
   (** Tuple type. The list is expected to contain at least two elements. *)
   | Tuple of type_expr list

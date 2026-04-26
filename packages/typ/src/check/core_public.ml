@@ -173,7 +173,7 @@ and public_poly_variant_bound = function
   | Lower -> Typing_context.Lower
 
 and public_arg_label = function
-  | Nolabel -> Typing_context.Nolabel
+  | NoLabel -> Typing_context.NoLabel
   | Labelled label -> Typing_context.Labelled label
   | Optional label -> Typing_context.Optional label
 
@@ -242,7 +242,7 @@ and import_poly_variant_bound = function
   | Typing_context.Lower -> Lower
 
 and import_arg_label = function
-  | Typing_context.Nolabel -> Nolabel
+  | Typing_context.NoLabel -> NoLabel
   | Typing_context.Labelled label -> Labelled label
   | Typing_context.Optional label -> Optional label
 

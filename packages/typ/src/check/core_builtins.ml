@@ -14,6 +14,8 @@ let path_float = SurfacePath.from_name "float"
 
 let path_unit = SurfacePath.from_name "unit"
 
+let path_unit_constructor = SurfacePath.from_name "()"
+
 let path_list = SurfacePath.from_name "list"
 
 let path_array = SurfacePath.from_name "array"
@@ -51,9 +53,10 @@ type builtin = {
 
 let generic_var = fun id -> TVar { var = Generic id }
 
-let arrow = fun parameter result -> TArrow (Nolabel, parameter, result)
+let arrow = fun parameter result -> TArrow (NoLabel, parameter, result)
 
 let builtin_bindings = [
+  { path = path_unit_constructor; ty = TUnit };
   { path = path_none; ty = TOption (generic_var 0) };
   { path = path_some; ty = arrow (generic_var 0) (TOption (generic_var 0)) };
   { path = path_not; ty = arrow TBool TBool };

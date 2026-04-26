@@ -29,7 +29,7 @@ type ty =
   | TVar of tyvar_cell
 
 and arg_label =
-  | Nolabel
+  | NoLabel
   | Labelled of string
   | Optional of string
 
@@ -285,7 +285,7 @@ exception Occurs
 
 let arg_label_equal = fun left right ->
   match left, right with
-  | Nolabel, Nolabel -> true
+  | NoLabel, NoLabel -> true
   | (Labelled left, Labelled right)
   | (Optional left, Optional right) -> String.equal left right
   | _ -> false
