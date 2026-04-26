@@ -1,0 +1,2 @@
+module M : sig type t = Wrap of string val value : t end
+val answer : M.t

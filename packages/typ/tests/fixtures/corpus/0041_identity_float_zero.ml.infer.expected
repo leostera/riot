@@ -1,0 +1,3 @@
+val value : float
+val id : 'a -> 'a
+val answer : float

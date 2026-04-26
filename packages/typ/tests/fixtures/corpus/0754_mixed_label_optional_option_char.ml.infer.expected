@@ -1,0 +1,2 @@
+val build : left:'a -> ?right:char option -> unit -> 'a * char option
+val answer : 'a option * char option

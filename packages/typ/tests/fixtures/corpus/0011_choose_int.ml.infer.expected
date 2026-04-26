@@ -1,0 +1,2 @@
+val choose : bool -> 'a -> 'a -> 'a
+val answer : int

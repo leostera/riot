@@ -1,0 +1,4 @@
+val left : string
+val right : char
+val both : string * char
+val answer : string * char * (string * char)

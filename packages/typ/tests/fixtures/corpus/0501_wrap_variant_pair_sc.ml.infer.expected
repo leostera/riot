@@ -1,0 +1,3 @@
+type t = Wrap of string * char
+val unwrap : t -> string * char
+val answer : string * char

@@ -1,0 +1,3 @@
+type t = { value : string; }
+val get : t -> string
+val answer : string

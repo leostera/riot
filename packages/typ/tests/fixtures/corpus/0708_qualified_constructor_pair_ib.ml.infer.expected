@@ -1,0 +1,2 @@
+module M : sig type t = Wrap of int * bool val value : t end
+val answer : M.t

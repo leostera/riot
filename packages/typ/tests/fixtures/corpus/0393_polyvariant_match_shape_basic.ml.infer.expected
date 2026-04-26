@@ -1,0 +1,3 @@
+type t = [ `Dot | `Line ]
+val id : [< `Dot | `Line ] -> [> `Dot | `Line ]
+val answer : [> `Dot | `Line ]

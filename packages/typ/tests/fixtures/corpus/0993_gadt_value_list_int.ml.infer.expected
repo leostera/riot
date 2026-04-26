@@ -1,0 +1,2 @@
+module M : sig type _ t = Value : 'a -> 'a t val unwrap : 'a t -> 'a end
+val answer : int list

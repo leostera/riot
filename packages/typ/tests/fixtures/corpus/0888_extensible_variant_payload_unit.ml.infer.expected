@@ -1,0 +1,4 @@
+type t = ..
+type t += Payload of unit
+val id : t -> t
+val answer : t

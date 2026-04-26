@@ -1,0 +1,2 @@
+val describe : 'a * 'b -> 'a * 'b * ('a * 'b)
+val answer : bool * int * (bool * int)

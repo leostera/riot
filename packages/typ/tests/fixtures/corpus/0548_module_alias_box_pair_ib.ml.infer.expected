@@ -1,0 +1,3 @@
+module Source : sig type t = int * bool val value : t end
+module Alias = Source
+val answer : Alias.t

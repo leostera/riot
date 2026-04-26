@@ -1,0 +1,3 @@
+module Outer :
+  sig module Inner : sig type t = string * char val value : t end end
+val answer : Outer.Inner.t

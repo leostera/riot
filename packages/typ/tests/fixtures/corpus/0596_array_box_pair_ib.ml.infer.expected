@@ -1,0 +1,2 @@
+val touch : (int * bool) array -> (int * bool) * (int * bool)
+val answer : (int * bool) * (int * bool)

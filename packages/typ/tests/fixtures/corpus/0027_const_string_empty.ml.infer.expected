@@ -1,0 +1,3 @@
+val value : string
+val const : 'a -> 'b -> 'a
+val answer : string

@@ -1,0 +1,3 @@
+val twice : ('a -> 'a) -> 'a -> 'a
+val id : 'a -> 'a
+val answer : int * bool

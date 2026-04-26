@@ -1,0 +1,3 @@
+type t = Wrap of char option
+val unwrap : t -> char option
+val answer : char option

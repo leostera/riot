@@ -1,0 +1,2 @@
+val project : string * 'a -> string
+val answer : string

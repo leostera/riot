@@ -1,0 +1,2 @@
+val build : ?value:int option -> unit -> int option
+val answer : int option

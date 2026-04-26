@@ -1,0 +1,3 @@
+val value : int option
+val const : 'a -> 'b -> 'a
+val answer : int option

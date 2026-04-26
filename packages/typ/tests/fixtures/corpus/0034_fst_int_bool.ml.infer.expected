@@ -1,0 +1,2 @@
+val fst : 'a * 'b -> 'a
+val answer : int

@@ -1,0 +1,5 @@
+module A : sig type t = { value : string; } end
+module B : sig type t = { value : char; } end
+val get_a : A.t -> string
+val get_b : B.t -> char
+val answer : string * char

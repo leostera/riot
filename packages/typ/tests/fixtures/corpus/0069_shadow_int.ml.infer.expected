@@ -1,0 +1,2 @@
+val seed : int
+val answer : int * int

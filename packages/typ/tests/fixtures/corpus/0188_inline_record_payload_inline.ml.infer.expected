@@ -1,0 +1,4 @@
+type t = Payload of { flag : bool; code : int; }
+val make : unit -> t
+val view : t -> bool * int
+val answer : bool * int

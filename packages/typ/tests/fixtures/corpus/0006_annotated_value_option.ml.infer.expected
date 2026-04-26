@@ -1,0 +1,2 @@
+val value : char option
+val answer : char option

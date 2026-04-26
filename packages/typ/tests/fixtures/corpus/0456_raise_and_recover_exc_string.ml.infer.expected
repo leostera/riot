@@ -1,0 +1,11 @@
+module Prim :
+  sig
+    external add_int : int -> int -> int = "%addint"
+    external sub_int : int -> int -> int = "%subint"
+    external eq : 'a -> 'a -> bool = "%equal"
+    external lt : 'a -> 'a -> bool = "%lessthan"
+    external raise_ : exn -> 'a = "%raise"
+  end
+exception E of string
+val run : bool -> string
+val answer : string

@@ -1,0 +1,2 @@
+val build : ?value:char -> unit -> char
+val answer : char

@@ -1,0 +1,5 @@
+module A : sig type t = { value : float; } end
+module B : sig type t = { value : unit; } end
+val get_a : A.t -> float
+val get_b : B.t -> unit
+val answer : float * unit

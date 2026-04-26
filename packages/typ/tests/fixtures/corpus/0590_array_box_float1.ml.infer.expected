@@ -1,0 +1,2 @@
+val touch : float array -> float * float
+val answer : float * float

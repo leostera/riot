@@ -1,0 +1,2 @@
+val touch : char array -> char * char
+val answer : char * char

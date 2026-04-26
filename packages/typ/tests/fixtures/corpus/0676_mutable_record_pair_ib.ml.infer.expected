@@ -1,0 +1,3 @@
+type t = { mutable value : int * bool; }
+val touch : t -> (int * bool) * (int * bool)
+val answer : (int * bool) * (int * bool)

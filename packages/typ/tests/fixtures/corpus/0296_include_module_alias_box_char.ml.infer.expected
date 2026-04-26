@@ -1,0 +1,4 @@
+module Base : sig type t = char val value : t end
+module Derived :
+  sig type t = char val value : t val duplicate : 'a -> 'a * 'a end
+val answer : Derived.t * Derived.t

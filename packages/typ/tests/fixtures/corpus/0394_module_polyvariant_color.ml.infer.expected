@@ -1,0 +1,6 @@
+module M :
+  sig
+    type t = [ `Blue | `Red ]
+    val flip : [< `Blue | `Red ] -> [> `Blue | `Red ]
+  end
+val answer : [> `Blue | `Red ]

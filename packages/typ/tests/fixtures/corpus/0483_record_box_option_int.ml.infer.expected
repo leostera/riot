@@ -1,0 +1,3 @@
+type t = { value : int option; }
+val get : t -> int option
+val answer : int option

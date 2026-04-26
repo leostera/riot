@@ -1,0 +1,3 @@
+type t = [ `Dot | `Line ]
+val swap : [< `Dot | `Line ] -> [> `Dot | `Line ]
+val answer : [> `Dot | `Line ]

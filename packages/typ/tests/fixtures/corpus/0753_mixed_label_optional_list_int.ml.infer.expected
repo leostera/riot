@@ -1,0 +1,2 @@
+val build : left:'a -> ?right:int list -> unit -> 'a * int list
+val answer : 'a list * int list

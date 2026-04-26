@@ -1,0 +1,3 @@
+val seed : int option
+val make : unit -> 'a -> int option * 'a
+val answer : int option * unit

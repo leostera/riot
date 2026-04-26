@@ -1,0 +1,4 @@
+type point = { x : int; y : int; }
+type wrapper = { point : point; flag : bool; }
+val view : wrapper -> int * int * bool
+val answer : int * int * bool

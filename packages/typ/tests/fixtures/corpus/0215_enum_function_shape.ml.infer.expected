@@ -1,0 +1,3 @@
+type shape = Dot | Line | Area
+val choose : shape -> shape
+val answer : shape

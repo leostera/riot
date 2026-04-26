@@ -1,0 +1,3 @@
+val use : (left:bool -> right:bool -> bool -> 'a) -> 'a
+val choose : left:'a -> right:'a -> bool -> 'a
+val answer : bool

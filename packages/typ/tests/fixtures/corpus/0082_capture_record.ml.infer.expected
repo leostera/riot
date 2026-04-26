@@ -1,0 +1,4 @@
+type box = { value : int; }
+val seed : box
+val make : unit -> 'a -> box * 'a
+val answer : box * unit

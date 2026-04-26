@@ -1,0 +1,5 @@
+type left = [ `Red | `Yellow ]
+type right = [ `Blue | `Green ]
+type both = [ `Blue | `Green | `Red | `Yellow ]
+val id : both -> both
+val answer : both

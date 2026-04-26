@@ -1,0 +1,3 @@
+val value : char
+val const : 'a -> 'b -> 'a
+val answer : char

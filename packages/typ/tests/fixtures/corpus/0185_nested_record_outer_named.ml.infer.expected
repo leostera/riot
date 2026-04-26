@@ -1,0 +1,3 @@
+type inner = { name : string; mark : char; }
+type wrapper = { inner : inner; keep : bool; }
+val answer : wrapper

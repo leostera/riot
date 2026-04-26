@@ -1,0 +1,3 @@
+module type BOX = sig type t val value : t end
+module M : sig type t = int * bool val value : t end
+val answer : M.t

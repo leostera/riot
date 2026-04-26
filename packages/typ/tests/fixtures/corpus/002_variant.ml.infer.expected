@@ -1,0 +1,2 @@
+type color = Red | Blue
+val pick : bool -> color

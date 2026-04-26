@@ -1,0 +1,3 @@
+val value : (int * int) * bool
+val const : 'a -> 'b -> 'a
+val answer : (int * int) * bool

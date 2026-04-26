@@ -1,0 +1,3 @@
+val value : int
+val id : 'a -> 'a
+val answer : int

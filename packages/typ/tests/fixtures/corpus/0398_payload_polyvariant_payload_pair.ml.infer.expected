@@ -1,0 +1,2 @@
+val keep : [< `Pair of 'a | `Unit of 'b ] -> [> `Pair of 'a | `Unit of 'b ]
+val answer : [> `Pair of int * bool | `Unit of 'a ]

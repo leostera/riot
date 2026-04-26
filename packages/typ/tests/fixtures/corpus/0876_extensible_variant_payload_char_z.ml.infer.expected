@@ -1,0 +1,4 @@
+type t = ..
+type t += Payload of char
+val id : t -> t
+val answer : t

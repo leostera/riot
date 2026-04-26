@@ -1,0 +1,3 @@
+type t = Wrap of int * bool
+val unwrap : t -> int * bool
+val answer : int * bool

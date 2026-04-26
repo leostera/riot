@@ -1,0 +1,2 @@
+val view : bool list -> bool * bool list
+val answer : bool * bool list

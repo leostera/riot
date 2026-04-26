@@ -1,0 +1,3 @@
+type box = Box of int
+val id : box -> box
+val answer : box

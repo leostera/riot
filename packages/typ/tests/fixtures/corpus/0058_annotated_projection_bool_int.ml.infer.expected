@@ -1,0 +1,2 @@
+val project : bool * 'a -> bool
+val answer : bool

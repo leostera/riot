@@ -1,0 +1,2 @@
+val view : char list -> char * char list
+val answer : char * char list

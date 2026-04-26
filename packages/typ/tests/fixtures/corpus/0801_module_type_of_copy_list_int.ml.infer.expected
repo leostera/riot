@@ -1,0 +1,3 @@
+module Original : sig val value : int list val id : 'a -> 'a end
+module Copy : sig val value : int list val id : 'a -> 'a end
+val answer : int list

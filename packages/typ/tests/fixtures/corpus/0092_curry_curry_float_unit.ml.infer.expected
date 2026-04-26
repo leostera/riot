@@ -1,0 +1,3 @@
+val uncurry : ('a -> 'b -> 'c) -> 'a * 'b -> 'c
+val pair : 'a -> 'b -> 'a * 'b
+val answer : float * unit

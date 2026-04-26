@@ -1,0 +1,3 @@
+module rec A : sig type t = Wrap of B.t val make : B.t -> t end
+and B : sig type t = Empty | More of A.t val empty : t end
+val answer : A.t

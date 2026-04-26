@@ -1,0 +1,2 @@
+module M : sig type t = int list val value : t val id : t -> t end
+val answer : M.t

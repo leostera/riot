@@ -1,0 +1,5 @@
+type left = [ `Center | `Left ]
+type right = [ `Far | `Right ]
+type both = [ `Center | `Far | `Left | `Right ]
+val id : both -> both
+val answer : both

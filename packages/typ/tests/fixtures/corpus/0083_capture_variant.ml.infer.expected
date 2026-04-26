@@ -1,0 +1,4 @@
+type color = Red | Blue
+val seed : color
+val make : unit -> 'a -> color * 'a
+val answer : color * unit

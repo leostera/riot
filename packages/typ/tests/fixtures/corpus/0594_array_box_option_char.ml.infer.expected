@@ -1,0 +1,2 @@
+val touch : 'a option array -> 'a option * 'a option
+val answer : char option * char option

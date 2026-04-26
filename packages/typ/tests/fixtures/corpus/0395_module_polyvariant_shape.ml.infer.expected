@@ -1,0 +1,6 @@
+module M :
+  sig
+    type t = [ `Dot | `Line ]
+    val flip : [< `Dot | `Line ] -> [> `Dot | `Line ]
+  end
+val answer : [> `Dot | `Line ]

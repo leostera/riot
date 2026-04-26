@@ -1,0 +1,3 @@
+val value : unit
+val const : 'a -> 'b -> 'a
+val answer : unit

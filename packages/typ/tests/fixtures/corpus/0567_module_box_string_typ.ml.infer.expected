@@ -1,0 +1,2 @@
+module M : sig type t = string val value : t val id : t -> t end
+val answer : M.t

@@ -1,0 +1,2 @@
+module Outer : sig module Inner : sig type t = bool val value : t end end
+val answer : Outer.Inner.t

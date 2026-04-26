@@ -1,0 +1,4 @@
+module Base : sig type t = float val value : t end
+module Derived :
+  sig type t = float val value : t val pair : 'a -> 'a * 'a end
+val answer : Derived.t * Derived.t

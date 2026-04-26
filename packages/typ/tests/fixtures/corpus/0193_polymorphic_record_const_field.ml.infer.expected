@@ -1,0 +1,3 @@
+type poly = { f : 'a. 'a -> unit; }
+val value : poly
+val answer : unit * unit

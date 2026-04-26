@@ -1,0 +1,3 @@
+type box = Box of bool
+val unwrap : box -> bool
+val answer : bool

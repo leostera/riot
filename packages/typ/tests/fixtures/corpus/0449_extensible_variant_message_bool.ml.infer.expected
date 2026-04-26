@@ -1,0 +1,5 @@
+type message = ..
+type message += Payload of bool
+type message += Empty
+val id : message -> message
+val answer : message

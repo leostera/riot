@@ -1,0 +1,3 @@
+type ('a, 'b) resultish = Ok of 'a | Error of 'b
+val unwrap : (float, 'a) resultish -> float
+val answer : float

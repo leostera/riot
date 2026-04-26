@@ -1,0 +1,2 @@
+val duplicate : 'a -> 'a * 'a
+val answer : (int * bool) * (int * bool)

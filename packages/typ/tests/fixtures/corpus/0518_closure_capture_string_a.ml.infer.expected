@@ -1,0 +1,2 @@
+val make : 'a -> 'b -> 'a * 'b
+val answer : string * string

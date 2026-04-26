@@ -1,0 +1,2 @@
+val seed : bool
+val answer : bool

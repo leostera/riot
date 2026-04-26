@@ -1,0 +1,2 @@
+val id : [< `Payload of 'a ] -> [> `Payload of 'a ]
+val answer : [> `Payload of int list ]

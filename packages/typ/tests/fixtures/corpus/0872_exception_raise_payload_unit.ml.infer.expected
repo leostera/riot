@@ -1,0 +1,4 @@
+module Prim : sig external raise_ : exn -> 'a = "%raise" end
+exception E of unit
+val run : bool -> unit
+val answer : unit

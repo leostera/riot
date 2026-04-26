@@ -1,0 +1,4 @@
+type small = [ `Blue | `Red ]
+type large = [ `Blue | `Green | `Red ]
+val widen : small -> large
+val answer : large

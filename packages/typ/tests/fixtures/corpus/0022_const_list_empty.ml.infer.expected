@@ -1,0 +1,3 @@
+val value : 'a list
+val const : 'a -> 'b -> 'a
+val answer : 'a list

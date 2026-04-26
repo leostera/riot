@@ -1,0 +1,4 @@
+val left : float
+val right : unit
+val both : float * unit
+val answer : float * unit * (float * unit)

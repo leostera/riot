@@ -1,0 +1,3 @@
+type even = Zero | Succ of odd
+and odd = Step of even
+val answer : even

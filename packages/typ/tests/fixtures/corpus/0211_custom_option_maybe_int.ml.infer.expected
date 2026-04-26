@@ -1,0 +1,3 @@
+type 'a maybe = Nothing | Just of 'a
+val map_just : ('a -> 'b) -> 'a maybe -> 'b maybe
+val answer : int maybe
