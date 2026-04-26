@@ -1,8 +1,10 @@
-(** Riot's type-checker engine.
+(**
+   Riot's type-checker engine.
 
-    `Typ` is the public facade for the package. It exposes the typed tree, the
-    existing one-shot checker path, the new inference prototype, diagnostics,
-    and small model types shared by those pieces. *)
+   `Typ` is the public facade for the package. It exposes the typed tree, the
+   existing one-shot checker path, the new inference prototype, diagnostics,
+   and small model types shared by those pieces.
+*)
 
 (** Shared model helpers for sources, surface paths, and semantic identities. *)
 module Model: module type of Model

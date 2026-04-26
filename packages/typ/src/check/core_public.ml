@@ -11,60 +11,49 @@ type row_alias = {
 let shared_poly_variant_row_aliases = fun ty ->
   (* Public rendering needs to preserve shared row identity. If the same row
      object appears more than once in a type, expose the first occurrence as an
-     alias and later occurrences as the alias variable. *)
+     alias and later occurrences as the alias variable.
+  *)
   let rows = ref [] in
   let visited_rows = ref [] in
   let remember tags =
-    match
-      List.find !rows
-        ~fn:(fun (other_tags, _) ->
-          Ptr.equal other_tags tags)
-    with
+    match List.find !rows ~fn:(fun (other_tags, _) -> Ptr.equal other_tags tags) with
     | Some (_, count) -> count := !count + 1
     | None -> rows := (tags, ref 1) :: !rows
   in
-  let already_visited tags =
-    List.exists
-      (fun other_tags ->
-        Ptr.equal other_tags tags)
-      !visited_rows
-  in
+  let already_visited tags = List.exists (fun other_tags -> Ptr.equal other_tags tags) !visited_rows in
   let rec collect ty =
     match prune ty with
     | TList element
-    | TOption element ->
-        collect element
-    | TTuple elements ->
-        List.for_each elements ~fn:collect
+    | TOption element -> collect element
+    | TTuple elements -> List.for_each elements ~fn:collect
     | TArrow (_, parameter, result) ->
         collect parameter;
         collect result
-    | TCon (_, arguments) ->
-        List.for_each arguments ~fn:collect
+    | TCon (_, arguments) -> List.for_each arguments ~fn:collect
     | TPolyVariant (_, tags) ->
         remember tags;
-        if not (already_visited tags) then
-          (
-            visited_rows := tags :: !visited_rows;
-            tags.tags |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:collect)
-          )
+        if not (already_visited tags) then (
+          visited_rows := tags :: !visited_rows;
+          tags.tags
+          |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:collect)
+        )
     | TPackage package ->
-        package.constraints |> List.for_each ~fn:(fun constraint_ -> collect constraint_.manifest)
-    | TVar { var=Link linked_ty } ->
-        collect linked_ty
+        package.constraints
+        |> List.for_each ~fn:(fun constraint_ -> collect constraint_.manifest)
+    | TVar { var = Link linked_ty } -> collect linked_ty
     | TInt
     | TBool
     | TChar
     | TString
     | TFloat
     | TUnit
-    | TVar { var=Unbound _ }
-    | TVar { var=Generic _ } ->
-        ()
+    | TVar { var = Unbound _ }
+    | TVar { var = Generic _ } -> ()
   in
   collect ty;
   let next_alias_id = ref (-1) in
-  !rows |> List.filter_map
+  !rows
+  |> List.filter_map
     ~fn:(fun (row_tags, count) ->
       if !count > 1 then
         (
@@ -76,31 +65,24 @@ let shared_poly_variant_row_aliases = fun ty ->
         None)
 
 let find_row_alias = fun row_aliases tags ->
-  List.find row_aliases
-    ~fn:(fun alias ->
-      Ptr.equal alias.row_tags tags)
+  List.find
+    row_aliases
+    ~fn:(fun alias -> Ptr.equal alias.row_tags tags)
 
 let rec public_type_of_ty = fun vars row_aliases ty ->
   (* Convert internal mutable types into the immutable public type language.
      [vars] assigns stable, dense public ids in occurrence order; those ids are
-     local to the returned scheme. *)
+     local to the returned scheme.
+  *)
   match prune ty with
-  | TInt ->
-      Typing_context.Int
-  | TBool ->
-      Typing_context.Bool
-  | TChar ->
-      Typing_context.Char
-  | TString ->
-      Typing_context.String
-  | TFloat ->
-      Typing_context.Float
-  | TUnit ->
-      Typing_context.Unit
-  | TList element ->
-      Typing_context.List (public_type_of_ty vars row_aliases element)
-  | TOption element ->
-      Typing_context.Option (public_type_of_ty vars row_aliases element)
+  | TInt -> Typing_context.Int
+  | TBool -> Typing_context.Bool
+  | TChar -> Typing_context.Char
+  | TString -> Typing_context.String
+  | TFloat -> Typing_context.Float
+  | TUnit -> Typing_context.Unit
+  | TList element -> Typing_context.List (public_type_of_ty vars row_aliases element)
+  | TOption element -> Typing_context.Option (public_type_of_ty vars row_aliases element)
   | TTuple elements ->
       Typing_context.Tuple (List.map elements ~fn:(public_type_of_ty vars row_aliases))
   | TArrow (label, parameter, result) ->
@@ -111,19 +93,20 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
   | TCon (path, arguments) ->
       Typing_context.TypeConstructor {
         path;
-        arguments = List.map arguments ~fn:(public_type_of_ty vars row_aliases)
+        arguments = List.map arguments ~fn:(public_type_of_ty vars row_aliases);
       }
   | TPolyVariant (bound, tags) ->
       let public_poly_variant () = Typing_context.PolyVariant {
         bound = public_poly_variant_bound bound;
-        fields = normalized_poly_variant_tags tags.tags
-        |> List.map
-          ~fn:(fun field ->
-            {
+        fields =
+          normalized_poly_variant_tags tags.tags
+          |> List.map
+            ~fn:(fun field -> {
               Typing_context.tag = field.tag;
-              payload = Option.map field.payload ~fn:(public_type_of_ty vars row_aliases)
-            })
-      } in
+              payload = Option.map field.payload ~fn:(public_type_of_ty vars row_aliases);
+            });
+      }
+      in
       (
         match find_row_alias row_aliases tags with
         | Some alias ->
@@ -140,27 +123,20 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
       Typing_context.Package {
         binder = package.binder;
         module_type = package.module_type;
-        constraints = package.constraints
-        |> List.map
-          ~fn:(fun constraint_ ->
-            {
+        constraints =
+          package.constraints
+          |> List.map
+            ~fn:(fun constraint_ -> {
               Typing_context.type_name = constraint_.type_name;
-              manifest = public_type_of_ty vars row_aliases constraint_.manifest
-            })
+              manifest = public_type_of_ty vars row_aliases constraint_.manifest;
+            });
       }
-  | TVar { var=Generic id } ->
-      Typing_context.Var (public_tyvar_id vars id)
-  | TVar { var=Unbound (id, _) } ->
-      Typing_context.Var (public_tyvar_id vars id)
-  | TVar { var=Link linked_ty } ->
-      public_type_of_ty vars row_aliases linked_ty
+  | TVar { var = Generic id } -> Typing_context.Var (public_tyvar_id vars id)
+  | TVar { var = Unbound (id, _) } -> Typing_context.Var (public_tyvar_id vars id)
+  | TVar { var = Link linked_ty } -> public_type_of_ty vars row_aliases linked_ty
 
 and public_tyvar_id = fun vars id ->
-  match
-    List.find !vars
-      ~fn:(fun (other_id, _) ->
-        Int.equal id other_id)
-  with
+  match List.find !vars ~fn:(fun (other_id, _) -> Int.equal id other_id) with
   | Some (_, public_id) -> public_id
   | None ->
       let public_id = List.length !vars in
@@ -181,20 +157,24 @@ let public_scheme_of_ty = fun ty ->
   let vars = ref [] in
   let row_aliases = shared_poly_variant_row_aliases ty in
   let body = public_type_of_ty vars row_aliases ty in
-  let forall = !vars |> List.map ~fn:(fun (_, public_id) -> public_id) |> List.reverse in
+  let forall =
+    !vars
+    |> List.map ~fn:(fun (_, public_id) -> public_id)
+    |> List.reverse
+  in
   { Typing_context.forall; body }
 
-let public_binding_of_binding = fun binding ->
-  {
-    Typing_context.binding_id = binding.binding_id;
-    entity_id = binding.entity_id;
-    scheme = public_scheme_of_ty binding.ty
-  }
+let public_binding_of_binding = fun binding -> {
+  Typing_context.binding_id = binding.binding_id;
+  entity_id = binding.entity_id;
+  scheme = public_scheme_of_ty binding.ty;
+}
 
 let rec import_scheme = fun scheme ->
   (* Importing a caller-provided public context goes through [Generic] variables.
      Later lookup instantiates those generics, so values from previous checks
-     keep normal HM polymorphism. *)
+     keep normal HM polymorphism.
+  *)
   let rec loop type_expr =
     match type_expr with
     | Typing_context.Int -> TInt
@@ -206,31 +186,36 @@ let rec import_scheme = fun scheme ->
     | Typing_context.List element -> TList (loop element)
     | Typing_context.Option element -> TOption (loop element)
     | Typing_context.Tuple elements -> TTuple (List.map elements ~fn:loop)
-    | Typing_context.Arrow { label; parameter; result } -> TArrow (
-      import_arg_label label,
-      loop parameter,
-      loop result
-    )
+    | Typing_context.Arrow { label; parameter; result } ->
+        TArrow (import_arg_label label, loop parameter, loop result)
     | Typing_context.TypeConstructor { path; arguments } -> TCon (path, List.map arguments ~fn:loop)
     | Typing_context.Alias { type_; _ } -> loop type_
-    | Typing_context.PolyVariant { bound; fields } -> TPolyVariant (
-      import_poly_variant_bound bound,
-      {
-        tags = fields
-        |> List.map
-          ~fn:(fun field ->
-            { tag = field.Typing_context.tag; payload = Option.map field.payload ~fn:loop })
-        |> normalized_poly_variant_tags
-      }
-    )
-    | Typing_context.Package package -> TPackage {
-      binder = package.binder;
-      module_type = package.module_type;
-      constraints = package.constraints
-      |> List.map
-        ~fn:(fun constraint_ ->
-          { type_name = constraint_.Typing_context.type_name; manifest = loop constraint_.manifest })
-    }
+    | Typing_context.PolyVariant { bound; fields } ->
+        TPolyVariant (
+          import_poly_variant_bound bound,
+          {
+            tags =
+              fields
+              |> List.map
+                ~fn:(fun field -> {
+                  tag = field.Typing_context.tag;
+                  payload = Option.map field.payload ~fn:loop;
+                })
+              |> normalized_poly_variant_tags;
+          }
+        )
+    | Typing_context.Package package ->
+        TPackage {
+          binder = package.binder;
+          module_type = package.module_type;
+          constraints =
+            package.constraints
+            |> List.map
+              ~fn:(fun constraint_ -> {
+                type_name = constraint_.Typing_context.type_name;
+                manifest = loop constraint_.manifest;
+              });
+        }
     | Typing_context.Var id -> TVar { var = Generic id }
   in
   let _ = scheme.Typing_context.forall in
@@ -254,6 +239,6 @@ let env_of_typing_context = fun typing_context ->
       {
         binding_id = value_binding.binding_id;
         entity_id = value_binding.entity_id;
-        ty = import_scheme value_binding.scheme
+        ty = import_scheme value_binding.scheme;
       }
       :: env)

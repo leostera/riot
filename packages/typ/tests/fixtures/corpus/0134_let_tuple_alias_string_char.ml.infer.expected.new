@@ -1,0 +1,2 @@
+val both : string * char
+val answer : '0 * '1 * string * char

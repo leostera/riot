@@ -1,42 +1,41 @@
 open Std
+
 module EntityId = Model.Entity_id
 module SurfacePath = Model.Surface_path
 module TypAst = Ast
 module TypingContext = Check.TypingContext
 
 let type_var_name = fun index ->
-  match
-    List.get
-      [
-        "'a";
-        "'b";
-        "'c";
-        "'d";
-        "'e";
-        "'f";
-        "'g";
-        "'h";
-        "'i";
-        "'j";
-        "'k";
-        "'l";
-        "'m";
-        "'n";
-        "'o";
-        "'p";
-        "'q";
-        "'r";
-        "'s";
-        "'t";
-        "'u";
-        "'v";
-        "'w";
-        "'x";
-        "'y";
-        "'z";
-      ]
-      ~at:index
-  with
+  match List.get
+    [
+      "'a";
+      "'b";
+      "'c";
+      "'d";
+      "'e";
+      "'f";
+      "'g";
+      "'h";
+      "'i";
+      "'j";
+      "'k";
+      "'l";
+      "'m";
+      "'n";
+      "'o";
+      "'p";
+      "'q";
+      "'r";
+      "'s";
+      "'t";
+      "'u";
+      "'v";
+      "'w";
+      "'x";
+      "'y";
+      "'z";
+    ]
+    ~at:index with
   | Some name -> name
   | None -> "'a" ^ Int.to_string index
 
@@ -80,18 +79,29 @@ let render_type_parameter = function
 let render_type_parameters = function
   | [] -> ""
   | [ parameter ] -> render_type_parameter parameter ^ " "
-  | parameters -> "(" ^ (parameters |> List.map ~fn:render_type_parameter |> String.concat ", ") ^ ") "
+  | parameters ->
+      "(" ^ (
+        parameters
+        |> List.map ~fn:render_type_parameter
+        |> String.concat ", "
+      ) ^ ") "
 
 let render_poly_type_parameters = function
   | [] -> ""
-  | parameters -> (parameters |> List.map ~fn:(fun name -> "'" ^ name) |> String.concat " ") ^ ". "
+  | parameters ->
+      (
+        parameters
+        |> List.map ~fn:(fun name -> "'" ^ name)
+        |> String.concat " "
+      ) ^ ". "
 
 let render_constructor_path = fun ~path_prefix path ->
   let segments = SurfacePath.to_segments path in
   let rec strip prefix segments =
-    match prefix, segments with
-    | [], rest -> Some rest
-    | prefix :: prefixes, segment :: segments when String.equal prefix segment -> strip prefixes segments
+    match (prefix, segments) with
+    | ([], rest) -> Some rest
+    | (prefix :: prefixes, segment :: segments) when String.equal prefix segment ->
+        strip prefixes segments
     | _ -> None
   in
   let segments =
@@ -107,21 +117,27 @@ let render_constructor_path = fun ~path_prefix path ->
   String.concat "." segments
 
 let normalized_poly_variant_fields = fun fields ->
-  fields |> List.sort
-    ~compare:(fun left right ->
-      String.compare left.TypingContext.tag right.TypingContext.tag) |> List.fold_left ~init:[]
+  fields
+  |> List.sort
+    ~compare:(fun left right -> String.compare left.TypingContext.tag right.TypingContext.tag)
+  |> List.fold_left
+    ~init:[]
     ~fn:(fun fields field ->
       match fields with
-      | previous :: rest when String.equal previous.TypingContext.tag field.TypingContext.tag -> previous
-      :: rest
-      | _ -> field :: fields) |> List.reverse
+      | previous :: rest when String.equal previous.TypingContext.tag field.TypingContext.tag ->
+          previous :: rest
+      | _ -> field :: fields)
+  |> List.reverse
 
 let render_poly_variant_fields = fun ~render_payload fields ->
-  fields |> normalized_poly_variant_fields |> List.map
+  fields
+  |> normalized_poly_variant_fields
+  |> List.map
     ~fn:(fun field ->
       match field.TypingContext.payload with
       | None -> "`" ^ field.tag
-      | Some payload -> "`" ^ field.tag ^ " of " ^ render_payload payload) |> String.concat " | "
+      | Some payload -> "`" ^ field.tag ^ " of " ^ render_payload payload)
+  |> String.concat " | "
 
 let render_poly_variant_type = fun bound ~render_payload fields ->
   let prefix =
@@ -135,32 +151,22 @@ let render_poly_variant_type = fun bound ~render_payload fields ->
 let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
   let vars = ref [] in
   let remember id =
-    if not
-        (
-          List.exists
-            (fun other ->
-              Int.equal id other)
-            !vars
-        ) then
+    if not (List.exists (fun other -> Int.equal id other) !vars) then
       vars := List.append !vars [ id ]
   in
   let rec collect type_ =
     match type_ with
     | TypingContext.List element
-    | TypingContext.Option element ->
-        collect element
-    | TypingContext.Tuple elements ->
-        List.for_each elements ~fn:collect
+    | TypingContext.Option element -> collect element
+    | TypingContext.Tuple elements -> List.for_each elements ~fn:collect
     | TypingContext.Arrow { parameter; result; _ } ->
         collect parameter;
         collect result
-    | TypingContext.TypeConstructor { arguments; _ } ->
-        List.for_each arguments ~fn:collect
+    | TypingContext.TypeConstructor { arguments; _ } -> List.for_each arguments ~fn:collect
     | TypingContext.Alias { type_; id } ->
         remember id;
         collect type_
-    | TypingContext.Var id ->
-        remember id
+    | TypingContext.Var id -> remember id
     | TypingContext.PolyVariant { fields; _ } ->
         fields
         |> List.for_each ~fn:(fun field -> Option.for_each field.TypingContext.payload ~fn:collect)
@@ -169,8 +175,7 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
     | TypingContext.Char
     | TypingContext.String
     | TypingContext.Float
-    | TypingContext.Unit ->
-        ()
+    | TypingContext.Unit -> ()
     | TypingContext.Package package ->
         package.constraints
         |> List.for_each ~fn:(fun constraint_ -> collect constraint_.TypingContext.manifest)
@@ -190,66 +195,69 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
 
 let rec render_type = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
-  | TypingContext.Int ->
-      "int"
-  | TypingContext.Bool ->
-      "bool"
-  | TypingContext.Char ->
-      "char"
-  | TypingContext.String ->
-      "string"
-  | TypingContext.Float ->
-      "float"
-  | TypingContext.Unit ->
-      "unit"
+  | TypingContext.Int -> "int"
+  | TypingContext.Bool -> "bool"
+  | TypingContext.Char -> "char"
+  | TypingContext.String -> "string"
+  | TypingContext.Float -> "float"
+  | TypingContext.Unit -> "unit"
   | TypingContext.List element ->
       render_postfix_argument ~path_prefix ~type_var_name element ^ " list"
   | TypingContext.Option element ->
       render_postfix_argument ~path_prefix ~type_var_name element ^ " option"
   | TypingContext.Tuple elements ->
-      elements |> List.map ~fn:(render_tuple_element ~path_prefix ~type_var_name) |> String.concat " * "
+      elements
+      |> List.map ~fn:(render_tuple_element ~path_prefix ~type_var_name)
+      |> String.concat " * "
   | TypingContext.Arrow { label; parameter; result } ->
       let parameter =
         match parameter with
-        | TypingContext.Package package -> render_package_type
-          ~path_prefix
-          ~type_var_name
-          ~include_binder:(package_binder_referenced_in_result package result)
-          package
+        | TypingContext.Package package ->
+            render_package_type
+              ~path_prefix
+              ~type_var_name
+              ~include_binder:(package_binder_referenced_in_result package result)
+              package
         | _ -> render_arrow_parameter ~path_prefix ~type_var_name parameter
       in
       let parameter = render_arg_label label parameter in
       let result = render_arrow_result ~path_prefix ~type_var_name result in
       parameter ^ " -> " ^ result
-  | TypingContext.TypeConstructor { path; arguments=[] } ->
+  | TypingContext.TypeConstructor { path; arguments = [] } ->
       render_constructor_path ~path_prefix path
-  | TypingContext.TypeConstructor { path; arguments=[ argument ] } ->
+  | TypingContext.TypeConstructor { path; arguments = [ argument ] } ->
       render_postfix_argument ~path_prefix ~type_var_name argument
       ^ " "
       ^ render_constructor_path ~path_prefix path
   | TypingContext.TypeConstructor { path; arguments } ->
       "("
-      ^ (arguments |> List.map ~fn:(render_type ~path_prefix ~type_var_name) |> String.concat ", ")
+      ^ (
+        arguments
+        |> List.map ~fn:(render_type ~path_prefix ~type_var_name)
+        |> String.concat ", "
+      )
       ^ ") "
       ^ render_constructor_path ~path_prefix path
   | TypingContext.Alias { type_; id } ->
       render_type ~path_prefix ~type_var_name type_ ^ " as " ^ type_var_name id
-  | TypingContext.Var id ->
-      type_var_name id
+  | TypingContext.Var id -> type_var_name id
   | TypingContext.PolyVariant { bound; fields } -> (
       match bound with
-      | TypingContext.Exact -> render_poly_variant_type
-        ""
-        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
-        fields
-      | TypingContext.Upper -> render_poly_variant_type
-        "< "
-        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
-        fields
-      | TypingContext.Lower -> render_poly_variant_type
-        "> "
-        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
-        fields
+      | TypingContext.Exact ->
+          render_poly_variant_type
+            ""
+            ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+            fields
+      | TypingContext.Upper ->
+          render_poly_variant_type
+            "< "
+            ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+            fields
+      | TypingContext.Lower ->
+          render_poly_variant_type
+            "> "
+            ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+            fields
     )
   | TypingContext.Package package ->
       render_package_type ~path_prefix ~type_var_name ~include_binder:false package
@@ -274,9 +282,10 @@ and package_binder_referenced_in_result = fun package result ->
 and type_references_prefix = fun prefix type_ ->
   let path_has_prefix path =
     let rec strip prefix segments =
-      match prefix, segments with
-      | [], _ -> true
-      | expected :: prefix, segment :: segments when String.equal expected segment -> strip prefix segments
+      match (prefix, segments) with
+      | ([], _) -> true
+      | (expected :: prefix, segment :: segments) when String.equal expected segment ->
+          strip prefix segments
       | _ -> false
     in
     strip prefix (SurfacePath.to_segments path)
@@ -285,17 +294,18 @@ and type_references_prefix = fun prefix type_ ->
   | TypingContext.List element
   | TypingContext.Option element -> type_references_prefix prefix element
   | TypingContext.Tuple elements -> List.exists (type_references_prefix prefix) elements
-  | TypingContext.Arrow { parameter; result; _ } -> type_references_prefix prefix parameter
-  || type_references_prefix prefix result
-  | TypingContext.TypeConstructor { path; arguments } -> path_has_prefix path
-  || List.exists (type_references_prefix prefix) arguments
+  | TypingContext.Arrow { parameter; result; _ } ->
+      type_references_prefix prefix parameter || type_references_prefix prefix result
+  | TypingContext.TypeConstructor { path; arguments } ->
+      path_has_prefix path || List.exists (type_references_prefix prefix) arguments
   | TypingContext.Alias { type_; _ } -> type_references_prefix prefix type_
-  | TypingContext.Package package -> path_has_prefix package.module_type
-  || List.exists
-    (fun constraint_ ->
-      path_has_prefix constraint_.TypingContext.type_name
-      || type_references_prefix prefix constraint_.TypingContext.manifest)
-    package.constraints
+  | TypingContext.Package package ->
+      path_has_prefix package.module_type
+      || List.exists
+        (fun constraint_ ->
+          path_has_prefix constraint_.TypingContext.type_name
+          || type_references_prefix prefix constraint_.TypingContext.manifest)
+        package.constraints
   | TypingContext.Int
   | TypingContext.Bool
   | TypingContext.Char
@@ -303,26 +313,29 @@ and type_references_prefix = fun prefix type_ ->
   | TypingContext.Float
   | TypingContext.Unit
   | TypingContext.Var _ -> false
-  | TypingContext.PolyVariant { fields; _ } -> List.exists
-    (fun field ->
-      Option.map field.TypingContext.payload ~fn:(type_references_prefix prefix)
-      |> Option.unwrap_or ~default:false)
-    fields
+  | TypingContext.PolyVariant { fields; _ } ->
+      List.exists
+        (fun field ->
+          Option.map field.TypingContext.payload ~fn:(type_references_prefix prefix)
+          |> Option.unwrap_or ~default:false)
+        fields
 
 and render_package_type = fun ~path_prefix ~type_var_name ~include_binder package ->
   let binder =
-    match include_binder, package.TypingContext.binder with
-    | true, Some binder -> binder ^ " : "
+    match (include_binder, package.TypingContext.binder) with
+    | (true, Some binder) -> binder ^ " : "
     | _ -> ""
   in
-  let constraints = package.constraints
-  |> List.map
-    ~fn:(fun constraint_ ->
-      " with type "
-      ^ render_constructor_path ~path_prefix constraint_.TypingContext.type_name
-      ^ " = "
-      ^ render_type ~path_prefix ~type_var_name constraint_.TypingContext.manifest)
-  |> String.concat "" in
+  let constraints =
+    package.constraints
+    |> List.map
+      ~fn:(fun constraint_ ->
+        " with type "
+        ^ render_constructor_path ~path_prefix constraint_.TypingContext.type_name
+        ^ " = "
+        ^ render_type ~path_prefix ~type_var_name constraint_.TypingContext.manifest)
+    |> String.concat ""
+  in
   "(module " ^ binder ^ render_constructor_path ~path_prefix package.module_type ^ constraints ^ ")"
 
 and render_tuple_element = fun ~path_prefix ~type_var_name type_ ->
@@ -350,7 +363,10 @@ and render_arg_label = fun label parameter ->
   | TypingContext.Optional label -> "?" ^ label ^ ":" ^ parameter
 
 let render_scheme = fun ~path_prefix (scheme: TypingContext.scheme) ->
-  render_type ~path_prefix ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
+  render_type
+    ~path_prefix
+    ~type_var_name:(type_var_names_by_occurrence scheme.body)
+    scheme.body
 
 let is_arrow_type = function
   | TypingContext.Arrow _ -> true
@@ -365,25 +381,34 @@ let render_multiline_arrow_scheme = fun ~path_prefix (scheme: TypingContext.sche
         ("  " ^ render_arg_label label parameter ^ " ->") :: loop result
     | type_ -> [ "  " ^ render_arrow_result ~path_prefix ~type_var_name type_ ]
   in
-  loop scheme.body |> String.concat "\n"
+  loop scheme.body
+  |> String.concat "\n"
 
 let render_named_binding = fun ~path_prefix ~name (binding: TypingContext.value_binding) ->
   let prefix = "val " ^ render_value_name name ^ " : " in
   let rendered = render_scheme ~path_prefix binding.scheme in
   if String.length (prefix ^ rendered) > 80 && is_arrow_type binding.scheme.body then
-    "val " ^ render_value_name name ^ " :\n" ^ render_multiline_arrow_scheme ~path_prefix binding.scheme
+    "val "
+    ^ render_value_name name
+    ^ " :\n"
+    ^ render_multiline_arrow_scheme ~path_prefix binding.scheme
   else
     prefix ^ rendered
 
 let render_binding = fun (binding: TypingContext.value_binding) ->
-  let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
+  let name =
+    EntityId.surface_path binding.entity_id
+    |> SurfacePath.to_string
+  in
   render_named_binding ~path_prefix:[] ~name binding
 
 let render_inferred_value = fun (name, type_) ->
   "val " ^ render_value_name (SurfacePath.to_string name) ^ " : " ^ TypAst.Type.to_string type_
 
 let from_values = fun values ->
-  match values |> Iter.Iterator.to_list |> List.map ~fn:render_inferred_value with
+  match values
+  |> Iter.Iterator.to_list
+  |> List.map ~fn:render_inferred_value with
   | [] -> ""
   | lines -> String.concat "\n" lines ^ "\n"
 
@@ -395,9 +420,10 @@ type path_substitution = {
 let substitute_path = fun substitutions path ->
   let segments = SurfacePath.to_segments path in
   let rec strip prefix segments =
-    match prefix, segments with
-    | [], rest -> Some rest
-    | prefix :: prefixes, segment :: segments when String.equal prefix segment -> strip prefixes segments
+    match (prefix, segments) with
+    | ([], rest) -> Some rest
+    | (prefix :: prefixes, segment :: segments) when String.equal prefix segment ->
+        strip prefixes segments
     | _ -> None
   in
   let rec loop substitutions =
@@ -405,8 +431,9 @@ let substitute_path = fun substitutions path ->
     | [] -> path
     | substitution :: substitutions -> (
         match strip (SurfacePath.to_segments substitution.source) segments with
-        | Some rest -> SurfacePath.from_segments
-          (List.append (SurfacePath.to_segments substitution.target) rest)
+        | Some rest ->
+            SurfacePath.from_segments
+              (List.append (SurfacePath.to_segments substitution.target) rest)
         | None -> loop substitutions
       )
   in
@@ -419,14 +446,10 @@ let render_ast_arrow_label = function
 
 let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypAst.core_type) ->
   match type_.kind with
-  | TypAst.Wildcard ->
-      "_"
-  | TypAst.Var (Some name) ->
-      "'" ^ name
-  | TypAst.Var None ->
-      "_"
-  | TypAst.TypeIdent ident ->
-      SurfacePath.to_string (substitute_path substitutions ident)
+  | TypAst.Wildcard -> "_"
+  | TypAst.Var (Some name) -> "'" ^ name
+  | TypAst.Var None -> "_"
+  | TypAst.TypeIdent ident -> SurfacePath.to_string (substitute_path substitutions ident)
   | TypAst.Apply { constructor; arguments } ->
       render_ast_type_application substitutions constructor arguments
   | TypAst.Arrow { label; parameter; result } ->
@@ -435,7 +458,9 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       ^ " -> "
       ^ render_ast_core_type_with_substitutions substitutions result
   | TypAst.Tuple elements ->
-      elements |> List.map ~fn:(render_ast_tuple_element substitutions) |> String.concat " * "
+      elements
+      |> List.map ~fn:(render_ast_tuple_element substitutions)
+      |> String.concat " * "
   | TypAst.ForAll { parameters; body } ->
       render_poly_type_parameters parameters
       ^ render_ast_core_type_with_substitutions substitutions body
@@ -443,15 +468,16 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       let normalized_fields =
         fields
         |> List.sort
-          ~compare:(fun (left: TypAst.poly_variant_type_field) (
-            right: TypAst.poly_variant_type_field
-          ) ->
+          ~compare:(fun
+            (left: TypAst.poly_variant_type_field)
+            (right: TypAst.poly_variant_type_field) ->
             String.compare left.tag right.tag)
-        |> List.fold_left ~init:(([]: TypAst.poly_variant_type_field list))
+        |> List.fold_left
+          ~init:([]: TypAst.poly_variant_type_field list)
           ~fn:(fun fields (field: TypAst.poly_variant_type_field) ->
             match fields with
-            | previous :: rest when String.equal previous.TypAst.tag field.TypAst.tag -> previous
-            :: rest
+            | previous :: rest when String.equal previous.TypAst.tag field.TypAst.tag ->
+                previous :: rest
             | _ -> field :: fields)
         |> List.reverse
       in
@@ -461,17 +487,16 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
           ~fn:(fun (field: TypAst.poly_variant_type_field) ->
             match field.payload with
             | None -> "`" ^ field.tag
-            | Some payload -> "`"
-            ^ field.tag
-            ^ " of "
-            ^ render_ast_core_type_with_substitutions substitutions payload)
+            | Some payload ->
+                "`"
+                ^ field.tag
+                ^ " of "
+                ^ render_ast_core_type_with_substitutions substitutions payload)
         |> String.concat " | "
       in
       "[ " ^ rendered_fields ^ " ]"
-  | TypAst.Package package ->
-      render_ast_package_type substitutions package
-  | TypAst.Parenthesized inner ->
-      render_ast_core_type_with_substitutions substitutions inner
+  | TypAst.Package package -> render_ast_package_type substitutions package
+  | TypAst.Parenthesized inner -> render_ast_core_type_with_substitutions substitutions inner
 
 and render_ast_package_type = fun substitutions (package: TypAst.package_type) ->
   let binder =
@@ -479,14 +504,16 @@ and render_ast_package_type = fun substitutions (package: TypAst.package_type) -
     | Some binder -> binder ^ " : "
     | None -> ""
   in
-  let constraints = package.constraints
-  |> List.map
-    ~fn:(fun (constraint_: TypAst.package_type_constraint) ->
-      " with type "
-      ^ SurfacePath.to_string (substitute_path substitutions constraint_.type_name)
-      ^ " = "
-      ^ render_ast_core_type_with_substitutions substitutions constraint_.manifest)
-  |> String.concat "" in
+  let constraints =
+    package.constraints
+    |> List.map
+      ~fn:(fun (constraint_: TypAst.package_type_constraint) ->
+        " with type "
+        ^ SurfacePath.to_string (substitute_path substitutions constraint_.type_name)
+        ^ " = "
+        ^ render_ast_core_type_with_substitutions substitutions constraint_.manifest)
+    |> String.concat ""
+  in
   "(module "
   ^ binder
   ^ SurfacePath.to_string (substitute_path substitutions package.module_type)
@@ -498,12 +525,15 @@ and render_ast_type_application = fun substitutions constructor arguments ->
   match arguments with
   | [] -> constructor
   | [ argument ] -> render_ast_postfix_argument substitutions argument ^ " " ^ constructor
-  | arguments -> "("
-  ^ (arguments
-  |> List.map ~fn:(render_ast_core_type_with_substitutions substitutions)
-  |> String.concat ", ")
-  ^ ") "
-  ^ constructor
+  | arguments ->
+      "("
+      ^ (
+        arguments
+        |> List.map ~fn:(render_ast_core_type_with_substitutions substitutions)
+        |> String.concat ", "
+      )
+      ^ ") "
+      ^ constructor
 
 and render_ast_postfix_argument = fun substitutions type_ ->
   match type_.kind with
@@ -513,9 +543,8 @@ and render_ast_postfix_argument = fun substitutions type_ ->
 
 and render_ast_tuple_element = fun substitutions type_ ->
   match type_.kind with
-  | TypAst.Parenthesized inner -> "("
-  ^ render_ast_core_type_with_substitutions substitutions inner
-  ^ ")"
+  | TypAst.Parenthesized inner ->
+      "(" ^ render_ast_core_type_with_substitutions substitutions inner ^ ")"
   | TypAst.Arrow _
   | TypAst.Tuple _ -> "(" ^ render_ast_core_type_with_substitutions substitutions type_ ^ ")"
   | _ -> render_ast_core_type_with_substitutions substitutions type_
@@ -527,70 +556,83 @@ and render_ast_arrow_parameter = fun substitutions type_ ->
 
 let render_ast_core_type = render_ast_core_type_with_substitutions []
 
-let render_record_field_declaration_with_substitutions = fun substitutions (
-  field: TypAst.record_field_declaration
-) ->
+let render_record_field_declaration_with_substitutions = fun
+  substitutions
+  (field: TypAst.record_field_declaration) ->
   (
     if field.mutable_ then
       "mutable "
     else
       ""
-  ) ^ field.name ^ " : " ^ render_ast_core_type_with_substitutions substitutions field.type_annotation ^ ";"
+  ) ^ field.name ^ " : " ^ render_ast_core_type_with_substitutions
+    substitutions
+    field.type_annotation ^ ";"
 
 let render_record_field_declaration = render_record_field_declaration_with_substitutions []
 
-let render_type_constructor_with_substitutions = fun substitutions (
-  constructor: TypAst.type_constructor
-) ->
-  match constructor.inline_record, constructor.payload, constructor.result with
-  | _, None, Some result -> constructor.name
-  ^ " : "
-  ^ render_ast_core_type_with_substitutions substitutions result
-  | _, Some payload, Some result -> constructor.name
-  ^ " : "
-  ^ render_ast_arrow_parameter substitutions payload
-  ^ " -> "
-  ^ render_ast_core_type_with_substitutions substitutions result
-  | Some fields, _, None -> constructor.name
-  ^ " of { "
-  ^ (fields
-  |> List.map ~fn:(render_record_field_declaration_with_substitutions substitutions)
-  |> String.concat " ")
-  ^ " }"
-  | None, None, None -> constructor.name
-  | None, Some payload, None -> constructor.name
-  ^ " of "
-  ^ render_ast_core_type_with_substitutions substitutions payload
+let render_type_constructor_with_substitutions = fun
+  substitutions
+  (constructor: TypAst.type_constructor) ->
+  match (constructor.inline_record, constructor.payload, constructor.result) with
+  | (_, None, Some result) ->
+      constructor.name ^ " : " ^ render_ast_core_type_with_substitutions substitutions result
+  | (_, Some payload, Some result) ->
+      constructor.name
+      ^ " : "
+      ^ render_ast_arrow_parameter substitutions payload
+      ^ " -> "
+      ^ render_ast_core_type_with_substitutions substitutions result
+  | (Some fields, _, None) ->
+      constructor.name
+      ^ " of { "
+      ^ (
+        fields
+        |> List.map ~fn:(render_record_field_declaration_with_substitutions substitutions)
+        |> String.concat " "
+      )
+      ^ " }"
+  | (None, None, None) -> constructor.name
+  | (None, Some payload, None) ->
+      constructor.name ^ " of " ^ render_ast_core_type_with_substitutions substitutions payload
 
 let render_type_constructor = render_type_constructor_with_substitutions []
 
-let render_type_definition_with_substitutions = fun substitutions (
-  definition: TypAst.type_definition
-) ->
+let render_type_definition_with_substitutions = fun
+  substitutions
+  (definition: TypAst.type_definition) ->
   match definition.kind with
   | TypAst.Abstract -> ""
   | TypAst.Extensible -> " = .."
   | TypAst.Alias type_ -> " = " ^ render_ast_core_type_with_substitutions substitutions type_
-  | TypAst.Variant constructors -> " = "
-  ^ (constructors
-  |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
-  |> String.concat " | ")
-  | TypAst.Record fields -> " = { "
-  ^ (fields
-  |> List.map ~fn:(render_record_field_declaration_with_substitutions substitutions)
-  |> String.concat " ")
-  ^ " }"
+  | TypAst.Variant constructors ->
+      " = "
+      ^ (
+        constructors
+        |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
+        |> String.concat " | "
+      )
+  | TypAst.Record fields ->
+      " = { "
+      ^ (
+        fields
+        |> List.map ~fn:(render_record_field_declaration_with_substitutions substitutions)
+        |> String.concat " "
+      )
+      ^ " }"
 
 let render_type_definition = render_type_definition_with_substitutions []
 
-let render_type_declaration_with_keyword_and_substitutions = fun substitutions keyword (
-  declaration: TypAst.type_declaration
-) ->
+let render_type_declaration_with_keyword_and_substitutions = fun
+  substitutions
+  keyword
+  (declaration: TypAst.type_declaration) ->
   let prefix = keyword ^ " " ^ render_type_parameters declaration.parameters ^ declaration.name in
   match declaration.definition.kind with
   | TypAst.Variant constructors ->
-      let constructors = constructors
-      |> List.map ~fn:(render_type_constructor_with_substitutions substitutions) in
+      let constructors =
+        constructors
+        |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
+      in
       let inline = prefix ^ " = " ^ String.concat " | " constructors in
       if String.length inline <= 77 then
         inline
@@ -598,12 +640,15 @@ let render_type_declaration_with_keyword_and_substitutions = fun substitutions k
         (
           match constructors with
           | [] -> prefix ^ " ="
-          | constructor :: constructors -> prefix
-          ^ " =\n    "
-          ^ constructor
-          ^ (constructors
-          |> List.map ~fn:(fun constructor -> "\n  | " ^ constructor)
-          |> String.concat "")
+          | constructor :: constructors ->
+              prefix
+              ^ " =\n    "
+              ^ constructor
+              ^ (
+                constructors
+                |> List.map ~fn:(fun constructor -> "\n  | " ^ constructor)
+                |> String.concat ""
+              )
         )
   | _ -> prefix ^ render_type_definition_with_substitutions substitutions declaration.definition
 
@@ -615,44 +660,52 @@ let render_type_declaration_group_with_substitutions = fun substitutions ->
   function
   | [] -> ""
   | declaration :: declarations ->
-      let lines = render_type_declaration_with_keyword_and_substitutions substitutions "type" declaration
-      :: List.map
-        declarations
-        ~fn:(render_type_declaration_with_keyword_and_substitutions substitutions "and") in
+      let lines =
+        render_type_declaration_with_keyword_and_substitutions substitutions "type" declaration
+        :: List.map
+          declarations
+          ~fn:(render_type_declaration_with_keyword_and_substitutions substitutions "and")
+      in
       String.concat "\n" lines
 
 let render_type_declaration_group = render_type_declaration_group_with_substitutions []
 
-let render_type_extension_declaration_with_substitutions = fun substitutions (
-  declaration: TypAst.type_extension_declaration
-) ->
+let render_type_extension_declaration_with_substitutions = fun
+  substitutions
+  (declaration: TypAst.type_extension_declaration) ->
   "type "
   ^ SurfacePath.to_string (substitute_path substitutions declaration.name)
   ^ " += "
-  ^ (declaration.constructors
-  |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
-  |> String.concat " | ")
+  ^ (
+    declaration.constructors
+    |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
+    |> String.concat " | "
+  )
 
 let render_type_extension_declaration = render_type_extension_declaration_with_substitutions []
 
-let render_exception_declaration_with_substitutions = fun substitutions (
-  declaration: TypAst.exception_declaration
-) ->
+let render_exception_declaration_with_substitutions = fun
+  substitutions
+  (declaration: TypAst.exception_declaration) ->
   match declaration.payload with
-  | Some payload -> "exception "
-  ^ declaration.name
-  ^ " of "
-  ^ render_ast_core_type_with_substitutions substitutions payload
+  | Some payload ->
+      "exception "
+      ^ declaration.name
+      ^ " of "
+      ^ render_ast_core_type_with_substitutions substitutions payload
   | None -> "exception " ^ declaration.name
 
 let render_exception_declaration = render_exception_declaration_with_substitutions []
 
 let render_value_declaration = fun (declaration: TypAst.value_declaration) ->
-  "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
+  "val "
+  ^ render_value_name declaration.name
+  ^ " : "
+  ^ render_ast_core_type declaration.type_annotation
 
-let render_external_declaration_with_substitutions = fun substitutions (
-  declaration: TypAst.external_declaration
-) ->
+let render_external_declaration_with_substitutions = fun
+  substitutions
+  (declaration: TypAst.external_declaration) ->
   "external "
   ^ render_value_name declaration.name
   ^ " : "
@@ -671,9 +724,11 @@ let rec render_signature_item = fun (item: TypAst.signature_item) ->
   | TypAst.Exception declaration -> Some (render_exception_declaration declaration)
 
 let render_module_type_declaration = fun (declaration: TypAst.module_type_declaration) ->
-  let signature_items = declaration.items
-  |> List.filter_map ~fn:render_signature_item
-  |> String.concat " " in
+  let signature_items =
+    declaration.items
+    |> List.filter_map ~fn:render_signature_item
+    |> String.concat " "
+  in
   "module type " ^ declaration.name ^ " = sig " ^ signature_items ^ " end"
 
 let path_from_prefix = fun path_prefix name ->
@@ -682,9 +737,9 @@ let path_from_prefix = fun path_prefix name ->
   | prefix -> SurfacePath.from_segments (List.append prefix [ name ])
 
 let find_value_binding = fun (typing_context: TypingContext.t) path ->
-  List.find typing_context.values
-    ~fn:(fun binding ->
-      SurfacePath.equal (EntityId.surface_path binding.entity_id) path)
+  List.find
+    typing_context.values
+    ~fn:(fun binding -> SurfacePath.equal (EntityId.surface_path binding.entity_id) path)
 
 let rec pattern_bound_name = fun (pattern: TypAst.pattern) ->
   match pattern.kind with
@@ -694,30 +749,33 @@ let rec pattern_bound_name = fun (pattern: TypAst.pattern) ->
       | [] -> None
     )
   | TypAst.Constraint { pattern; _ }
-  | TypAst.Attribute pattern ->
-      pattern_bound_name pattern
+  | TypAst.Attribute pattern -> pattern_bound_name pattern
   | TypAst.Alias { alias; pattern } -> (
       match pattern_bound_name alias with
       | Some name -> Some name
       | None -> pattern_bound_name pattern
     )
-  | _ ->
-      None
+  | _ -> None
 
 let let_declaration_names = fun (declaration: TypAst.let_declaration) ->
   declaration.bindings
   |> List.filter_map ~fn:(fun (binding: TypAst.let_binding) -> pattern_bound_name binding.pattern)
 
 let render_let_declaration = fun ~typing_context ~path_prefix declaration ->
-  declaration |> let_declaration_names |> List.filter_map
+  declaration
+  |> let_declaration_names
+  |> List.filter_map
     ~fn:(fun name ->
       let path = path_from_prefix path_prefix name in
       Option.map
         (find_value_binding typing_context path)
-        ~fn:(render_named_binding ~path_prefix ~name)) |> String.concat " "
+        ~fn:(render_named_binding ~path_prefix ~name))
+  |> String.concat " "
 
 let rec find_module_declaration = fun (items: TypAst.structure_item list) path ->
-  find_module_declaration_segments items (SurfacePath.to_segments path)
+  find_module_declaration_segments
+    items
+    (SurfacePath.to_segments path)
 
 and find_module_declaration_segments = fun (items: TypAst.structure_item list) segments ->
   match segments with
@@ -750,13 +808,14 @@ and find_in_declarations = fun (declarations: TypAst.module_declaration list) na
       else
         find_in_declarations declarations name rest
 
-let rec resolve_module_declaration_alias = fun ~root_items (declaration: TypAst.module_declaration) ->
+let rec resolve_module_declaration_alias = fun
+  ~root_items
+  (declaration: TypAst.module_declaration) ->
   match declaration.alias with
   | Some alias -> (
       match find_module_declaration root_items alias with
-      | Some target when not (String.equal target.name declaration.name) -> resolve_module_declaration_alias
-        ~root_items
-        target
+      | Some target when not (String.equal target.name declaration.name) ->
+          resolve_module_declaration_alias ~root_items target
       | _ -> declaration
     )
   | None -> declaration
@@ -770,7 +829,9 @@ let render_functor_parameter = fun (parameter: TypAst.functor_parameter) ->
   "(" ^ parameter.name ^ " : " ^ module_type ^ ") -> "
 
 let render_functor_parameters = fun parameters ->
-  parameters |> List.map ~fn:render_functor_parameter |> String.concat ""
+  parameters
+  |> List.map ~fn:render_functor_parameter
+  |> String.concat ""
 
 let application_items_and_substitutions = fun ~root_items ~path_prefix ~module_prefix application ->
   match find_module_declaration root_items application.TypAst.callee with
@@ -790,31 +851,34 @@ let application_items_and_substitutions = fun ~root_items ~path_prefix ~module_p
     )
   | None -> ([], [])
 
-let rec render_module_declaration_with_keyword = fun ~root_items ~typing_context ~substitutions ~path_prefix ~keyword (
-  declaration: TypAst.module_declaration
-) ->
+let rec render_module_declaration_with_keyword = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  ~keyword
+  (declaration: TypAst.module_declaration) ->
   let module_head = keyword ^ " " ^ declaration.name in
   let module_prefix = List.append path_prefix [ declaration.name ] in
   match declaration.alias with
   | Some alias -> module_head ^ " = " ^ SurfacePath.to_string alias
   | None ->
-      let items, local_substitutions =
+      let (items, local_substitutions) =
         match declaration.application with
-        | Some application -> application_items_and_substitutions
-          ~root_items
-          ~path_prefix
-          ~module_prefix
-          application
+        | Some application ->
+            application_items_and_substitutions ~root_items ~path_prefix ~module_prefix application
         | None -> (declaration.items, [])
       in
       let substitutions = List.append local_substitutions substitutions in
       let functor_parameters = render_functor_parameters declaration.parameters in
-      let signature_item_lines = render_module_signature_item_lines
-        ~root_items
-        ~typing_context
-        ~substitutions
-        ~path_prefix:module_prefix
-        items in
+      let signature_item_lines =
+        render_module_signature_item_lines
+          ~root_items
+          ~typing_context
+          ~substitutions
+          ~path_prefix:module_prefix
+          items
+      in
       let signature_items = String.concat " " signature_item_lines in
       let inline = module_head ^ " : " ^ functor_parameters ^ "sig " ^ signature_items ^ " end" in
       if String.length inline > 77 then
@@ -823,13 +887,21 @@ let rec render_module_declaration_with_keyword = fun ~root_items ~typing_context
           if String.length ("  " ^ signature_line) <= 77 then
             module_head ^ " :\n  " ^ signature_line
           else
-            module_head ^ " :\n  sig\n    " ^ String.concat "\n    " signature_item_lines ^ "\n  end"
+            module_head
+            ^ " :\n  sig\n    "
+            ^ String.concat "\n    " signature_item_lines
+            ^ "\n  end"
         else
           module_head ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
       else
         inline
 
-and render_module_declaration = fun ~root_items ~typing_context ~substitutions ~path_prefix declaration ->
+and render_module_declaration = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  declaration ->
   render_module_declaration_with_keyword
     ~root_items
     ~typing_context
@@ -838,26 +910,34 @@ and render_module_declaration = fun ~root_items ~typing_context ~substitutions ~
     ~keyword:"module"
     declaration
 
-and render_module_declaration_group = fun ~root_items ~typing_context ~substitutions ~path_prefix declarations ->
+and render_module_declaration_group = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  declarations ->
   match declarations with
-  | [] ->
-      ""
+  | [] -> ""
   | first :: rest when first.TypAst.recursive ->
-      let first = render_module_declaration_with_keyword
-        ~root_items
-        ~typing_context
-        ~substitutions
-        ~path_prefix
-        ~keyword:"module rec"
-        first in
-      let rest = rest
-      |> List.map
-        ~fn:(render_module_declaration_with_keyword
+      let first =
+        render_module_declaration_with_keyword
           ~root_items
           ~typing_context
           ~substitutions
           ~path_prefix
-          ~keyword:"and") in
+          ~keyword:"module rec"
+          first
+      in
+      let rest =
+        rest
+        |> List.map
+          ~fn:(render_module_declaration_with_keyword
+            ~root_items
+            ~typing_context
+            ~substitutions
+            ~path_prefix
+            ~keyword:"and")
+      in
       String.concat "\n" (first :: rest)
   | _ ->
       declarations
@@ -865,25 +945,43 @@ and render_module_declaration_group = fun ~root_items ~typing_context ~substitut
         ~fn:(render_module_declaration ~root_items ~typing_context ~substitutions ~path_prefix)
       |> String.concat " "
 
-and render_module_signature_item_lines = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
+and render_module_signature_item_lines = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  items ->
   items
   |> List.filter_map
     ~fn:(render_structure_signature_item ~root_items ~typing_context ~substitutions ~path_prefix)
 
-and render_module_signature_items = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
+and render_module_signature_items = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  items ->
   render_module_signature_item_lines ~root_items ~typing_context ~substitutions ~path_prefix items
   |> String.concat " "
 
-and render_structure_signature_item = fun ~root_items ~typing_context ~substitutions ~path_prefix (
-  item: TypAst.structure_item
-) ->
+and render_structure_signature_item = fun
+  ~root_items
+  ~typing_context
+  ~substitutions
+  ~path_prefix
+  (item: TypAst.structure_item) ->
   match item.kind with
   | TypAst.Type declarations ->
       Some (render_type_declaration_group_with_substitutions substitutions declarations)
   | TypAst.TypeExtension declaration ->
       Some (render_type_extension_declaration_with_substitutions substitutions declaration)
   | TypAst.Module declarations ->
-      Some (render_module_declaration_group ~root_items ~typing_context ~substitutions ~path_prefix declarations)
+      Some (render_module_declaration_group
+        ~root_items
+        ~typing_context
+        ~substitutions
+        ~path_prefix
+        declarations)
   | TypAst.ModuleType declaration ->
       if List.is_empty path_prefix then
         Some (render_module_type_declaration declaration)
@@ -910,29 +1008,34 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
       Some (render_external_declaration_with_substitutions substitutions declaration)
   | TypAst.Exception declaration ->
       Some (render_exception_declaration_with_substitutions substitutions declaration)
-  | TypAst.Expression _ ->
-      None
+  | TypAst.Expression _ -> None
 
 let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
   match ast.kind with
-  | TypAst.Implementation items -> items
-  |> List.filter_map
-    ~fn:(render_structure_signature_item
-      ~root_items:items
-      ~typing_context
-      ~substitutions:[]
-      ~path_prefix:[])
-  | TypAst.Interface items -> items
-  |> List.filter_map ~fn:(fun (item: TypAst.signature_item) -> render_signature_item item)
+  | TypAst.Implementation items ->
+      items
+      |> List.filter_map
+        ~fn:(render_structure_signature_item
+          ~root_items:items
+          ~typing_context
+          ~substitutions:[]
+          ~path_prefix:[])
+  | TypAst.Interface items ->
+      items
+      |> List.filter_map ~fn:(fun (item: TypAst.signature_item) -> render_signature_item item)
 
 let from_typings = fun (typings: Check.Typings.t) ->
   let declaration_lines =
     match ast_signature_declarations typings.typing_context typings.ast with
-    | [] -> List.map typings.type_declarations ~fn:(fun declaration -> [ declaration ])
-    |> List.map ~fn:render_type_declaration_group
+    | [] ->
+        List.map typings.type_declarations ~fn:(fun declaration -> [ declaration ])
+        |> List.map ~fn:render_type_declaration_group
     | declarations -> declarations
   in
   let lines = List.append declaration_lines (List.map typings.bindings ~fn:render_binding) in
   match lines with
   | [] -> ""
-  | lines -> lines |> String.concat "\n" |> fun source -> source ^ "\n"
+  | lines ->
+      lines
+      |> String.concat "\n"
+      |> fun source -> source ^ "\n"

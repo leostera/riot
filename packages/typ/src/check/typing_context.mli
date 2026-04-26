@@ -1,9 +1,12 @@
-(** Public, serializable type information.
+(**
+   Public, serializable type information.
 
-    This module defines the stable type language that leaves the checker. The
-    inference engine in `Core` uses a richer mutable representation internally;
-    successful bindings are converted into these immutable values before they
-    are returned to callers or reused as input to another one-shot check. *)
+   This module defines the stable type language that leaves the checker. The
+   inference engine in `Core` uses a richer mutable representation internally;
+   successful bindings are converted into these immutable values before they
+   are returned to callers or reused as input to another one-shot check.
+*)
+
 (** Function argument labels in public arrow types. *)
 type arg_label =
   (** Ordinary positional argument. *)
@@ -73,8 +76,10 @@ and package_type_constraint = {
 
 (** Public first-class module package type. *)
 and package_type = {
-  (** Optional local module binder used when package result types depend on the
-      unpacked module path. *)
+  (**
+     Optional local module binder used when package result types depend on the
+     unpacked module path.
+  *)
   binder: string option;
   (** Module type path, such as `S` in `(module S)`. *)
   module_type: Model.Surface_path.t;
@@ -106,8 +111,10 @@ and type_expr =
   | Arrow of function_type
   (** Nominal type constructor application. *)
   | TypeConstructor of type_constructor
-  (** Named alias for a type expression. Used mainly to preserve shared
-      polymorphic-variant rows while rendering. *)
+  (**
+     Named alias for a type expression. Used mainly to preserve shared
+     polymorphic-variant rows while rendering.
+  *)
   | Alias of alias_type
   (** Polymorphic variant row. *)
   | PolyVariant of poly_variant

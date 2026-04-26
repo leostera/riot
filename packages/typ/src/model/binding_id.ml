@@ -21,9 +21,12 @@ let compare = fun left right ->
 
 let to_string = fun value -> Surface_path.to_string value.name ^ "#" ^ Int.to_string value.stamp
 
-let serializer = Serde.Ser.record
-  (Serde.Ser.fields
-    [
-      Serde.Ser.field "stamp" Serde.Ser.int (fun (value: t) -> value.stamp);
-      Serde.Ser.field "name" Surface_path.serializer (fun (value: t) -> value.name);
-    ])
+let serializer =
+  Serde.Ser.record
+    (
+      Serde.Ser.fields
+        [
+          Serde.Ser.field "stamp" Serde.Ser.int (fun (value: t) -> value.stamp);
+          Serde.Ser.field "name" Surface_path.serializer (fun (value: t) -> value.name);
+        ]
+    )

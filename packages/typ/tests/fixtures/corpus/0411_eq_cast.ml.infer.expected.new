@@ -1,0 +1,2 @@
+val cast : (a, b) eq -> a -> b
+val answer : '1

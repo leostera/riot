@@ -1,0 +1,3 @@
+val value : string
+val const : '0
+val answer : '1

@@ -1,4 +1,5 @@
 open Std
+
 module Type = Typ.Ast.Type
 module TypeVar = Typ.Ast.TypeVar
 module SurfacePath = Typ.Model.Surface_path
@@ -65,8 +66,12 @@ let tests =
     case "type equal follows linked variables" test_equal_follows_linked_variables;
     case "type equal compares unlinked variable ids" test_equal_compares_unlinked_variable_ids;
     case "type equal tuple arity mismatch is false" test_equal_tuple_arity_mismatch_is_false;
-    case "type equal constructor arguments are structural" test_equal_constructor_arguments_are_structural;
-    case "type equal arrows compare labels and children" test_equal_arrows_compare_labels_and_children;
+    case
+      "type equal constructor arguments are structural"
+      test_equal_constructor_arguments_are_structural;
+    case
+      "type equal arrows compare labels and children"
+      test_equal_arrows_compare_labels_and_children;
   ]
 
 let main ~args = Test.Cli.main ~name:"typ:ast" ~tests ~args ()

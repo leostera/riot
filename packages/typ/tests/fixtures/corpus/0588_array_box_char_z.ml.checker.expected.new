@@ -1,0 +1,2 @@
+val touch : 'a -> 'b * 'c
+val answer : 'a * 'b

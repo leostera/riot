@@ -13,10 +13,16 @@ let fixture_filter = fun path ->
   | Some ".mli" -> Test.FixtureRunner.Keep
   | _ -> Test.FixtureRunner.Skip
 
-let source_slice = fun source -> IO.IoVec.IoSlice.from_string source |> Result.expect ~msg:"failed to create checker test source slice"
+let source_slice = fun source ->
+  IO.IoVec.IoSlice.from_string source
+  |> Result.expect ~msg:"failed to create checker test source slice"
 
 let validate_interface_source = fun source ->
-  let parse_result = source |> source_slice |> Syn.parse_interface in
+  let parse_result =
+    source
+    |> source_slice
+    |> Syn.parse_interface
+  in
   if Vector.is_empty parse_result.diagnostics then
     Ok source
   else
@@ -25,16 +31,28 @@ let validate_interface_source = fun source ->
 let render_diagnostic = function
   | Typ.Diagnostics.Diagnostic.UnsupportedSyntax { summary; _ } -> "unsupported syntax: " ^ summary
   | Typ.Diagnostics.Diagnostic.UnsupportedType { summary; _ } -> "unsupported type: " ^ summary
+  | diagnostic -> Typ.Diagnostics.Diagnostic.to_string diagnostic
 
 let render_diagnostics = fun diagnostics ->
-  diagnostics |> List.map ~fn:render_diagnostic |> String.concat "\n"
+  diagnostics
+  |> List.map ~fn:render_diagnostic
+  |> String.concat "\n"
 
 let checker_test = fun (ctx: Test.FixtureRunner.ctx) ->
-  let* file = Fs.read ctx.fixture_path |> Result.map_err ~fn:IO.error_message in
+  let* file =
+    Fs.read ctx.fixture_path
+    |> Result.map_err ~fn:IO.error_message
+  in
   let parse_result = Syn.parse ~filename:ctx.fixture_path (source_slice file) in
   let source = Typ.Model.Source.make ~text:file in
-  let* typings = Typ.Check.check ~source parse_result |> Result.map_err ~fn:render_diagnostics in
-  let* actual = Typ.SignatureGenerator.from_typings typings |> validate_interface_source in
+  let* typings =
+    Typ.Check.check ~source parse_result
+    |> Result.map_err ~fn:render_diagnostics
+  in
+  let* actual =
+    Typ.SignatureGenerator.from_typings typings
+    |> validate_interface_source
+  in
   Test.Snapshot.assert_text ~ctx:ctx.test ~actual
 
 let tests =

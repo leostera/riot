@@ -1,0 +1,4 @@
+val to_pair : '0 * bool
+val first : '1
+val compose : '2
+val answer : '3

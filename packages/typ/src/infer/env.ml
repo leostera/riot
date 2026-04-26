@@ -10,7 +10,7 @@ type t = {
 
 let create () = {
   value_order = Vector.with_capacity ~size:16;
-  values = HashMap.with_capacity ~size:16
+  values = HashMap.with_capacity ~size:16;
 }
 
 let add_value t ~name ~type_ =
@@ -27,5 +27,8 @@ let values t =
   Vector.iter t.value_order
   |> Iter.Iterator.map
     ~fn:(fun name ->
-      let type_ = HashMap.get t.values ~key:name |> Option.expect ~msg:"Env.value_order contains a name missing from Env.values" in
+      let type_ =
+        HashMap.get t.values ~key:name
+        |> Option.expect ~msg:"Env.value_order contains a name missing from Env.values"
+      in
       (name, type_))

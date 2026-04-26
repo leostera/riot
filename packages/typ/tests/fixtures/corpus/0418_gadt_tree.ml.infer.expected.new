@@ -1,0 +1,2 @@
+val left_size : a tree -> int
+val answer : '1

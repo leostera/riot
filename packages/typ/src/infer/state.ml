@@ -7,8 +7,12 @@ type t = {
 let create () = {
   next_var = Ast.TypeVar.first;
   diagnostics = Diagnostics.create ();
-  env = Env.create ()
+  env = Env.create ();
 }
+
+let env state = state.env
+
+let diagnostics state = state.diagnostics
 
 (** Instantiates a new fresh type variable in the current typing environment. *)
 let fresh_var state =

@@ -1,0 +1,3 @@
+val make : '0
+val view : '1 * '2
+val answer : '3

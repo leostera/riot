@@ -1,5 +1,6 @@
 open Std
 open Std.Collections
+
 module TypAst = Ast
 module SurfacePath = Model.Surface_path
 module BindingId = Model.Binding_id
@@ -10,7 +11,8 @@ module EntityId = Model.Entity_id
    This deliberately does not reuse [Typing_context.type_expr]. The checker
    needs mutable union-find variables, level tracking, shared row objects, and
    manifest expansion while solving. Only exported bindings are converted to the
-   immutable public type language. *)
+   immutable public type language.
+*)
 
 type ty =
   | TInt
@@ -58,9 +60,7 @@ and package_ty = {
   constraints: package_constraint list;
 }
 
-and tyvar_cell = {
-  mutable var: tvar;
-}
+and tyvar_cell = { mutable var: tvar }
 
 and tvar =
   | Unbound of int * int
@@ -105,7 +105,8 @@ type functor_summary = {
 
    The one-shot checker keeps mutation query-local: each file check allocates a
    fresh [state], imports any caller-provided [Typing_context.t], and exports a
-   new public context at the end. Nothing here is shared across checks. *)
+   new public context at the end. Nothing here is shared across checks.
+*)
 
 type state = {
   mutable next_tyvar: int;
@@ -125,7 +126,7 @@ let unsupported_syntax = fun origin summary ->
   Diagnostics.Diagnostic.UnsupportedSyntax {
     span = origin.TypAst.span;
     kind = origin.TypAst.kind;
-    summary
+    summary;
   }
 
 let unsupported_type = fun origin summary ->
@@ -151,7 +152,9 @@ let make_state = fun ~next_binding_stamp ->
 let fresh_tyvar = fun state ~level ->
   let id = state.next_tyvar in
   state.next_tyvar <- state.next_tyvar + 1;
-  TVar { var = Unbound (id, level) }
+  TVar {
+    var = Unbound (id, level);
+  }
 
 let fresh_binding_id = fun state ~name ->
   let stamp = state.next_binding_stamp in
@@ -164,46 +167,43 @@ let make_binding = fun state ~name ~ty ->
   { binding_id; entity_id; ty }
 
 let rec prune = function
-  | TVar ({ var=Link linked_ty } as cell) ->
+  | TVar ({ var = Link linked_ty } as cell) ->
       let linked_ty = prune linked_ty in
       cell.var <- Link linked_ty;
       linked_ty
   | ty -> ty
 
 let normalized_poly_variant_tags = fun tags ->
-  tags |> List.sort
-    ~compare:(fun left right ->
-      String.compare left.tag right.tag) |> List.fold_left ~init:[]
+  tags
+  |> List.sort ~compare:(fun left right -> String.compare left.tag right.tag)
+  |> List.fold_left
+    ~init:[]
     ~fn:(fun fields field ->
       match fields with
       | previous :: rest when String.equal previous.tag field.tag -> previous :: rest
-      | _ -> field :: fields) |> List.reverse
+      | _ -> field :: fields)
+  |> List.reverse
 
 let find_poly_variant_field = fun tag fields ->
-  List.find fields
-    ~fn:(fun field ->
-      String.equal field.tag tag)
+  List.find
+    fields
+    ~fn:(fun field -> String.equal field.tag tag)
 
-let poly_variant_tag_names = fun tags -> tags |> List.map ~fn:(fun field -> field.tag)
+let poly_variant_tag_names = fun tags ->
+  tags
+  |> List.map ~fn:(fun field -> field.tag)
 
 let poly_variant_tags_subset = fun left right ->
   let right_names = poly_variant_tag_names right in
-  List.all (poly_variant_tag_names left)
-    ~fn:(fun tag ->
-      List.exists
-        (fun other ->
-          String.equal tag other)
-        right_names)
+  List.all
+    (poly_variant_tag_names left)
+    ~fn:(fun tag -> List.exists (fun other -> String.equal tag other) right_names)
 
 let same_poly_variant_tags = fun left right ->
   poly_variant_tags_subset left right && poly_variant_tags_subset right left
 
 let copy_poly_variant_tags = fun copies ~map_payload tags ->
-  match
-    List.find !copies
-      ~fn:(fun (source, _) ->
-        Ptr.equal source tags)
-  with
+  match List.find !copies ~fn:(fun (source, _) -> Ptr.equal source tags) with
   | Some (_, copy) -> copy
   | None ->
       let copy = { tags = [] } in
@@ -216,57 +216,48 @@ let copy_poly_variant_tags = fun copies ~map_payload tags ->
 
 let rec string_of_ty = fun ty ->
   match prune ty with
-  | TInt ->
-      "int"
-  | TBool ->
-      "bool"
-  | TChar ->
-      "char"
-  | TString ->
-      "string"
-  | TFloat ->
-      "float"
-  | TUnit ->
-      "unit"
-  | TList element ->
-      string_of_ty element ^ " list"
-  | TOption element ->
-      string_of_ty element ^ " option"
+  | TInt -> "int"
+  | TBool -> "bool"
+  | TChar -> "char"
+  | TString -> "string"
+  | TFloat -> "float"
+  | TUnit -> "unit"
+  | TList element -> string_of_ty element ^ " list"
+  | TOption element -> string_of_ty element ^ " option"
   | TTuple elements ->
-      elements |> List.map ~fn:string_of_ty |> String.concat " * "
-  | TArrow (_, parameter, result) ->
-      string_of_ty parameter ^ " -> " ^ string_of_ty result
-  | TCon (path, []) ->
-      SurfacePath.to_string path
-  | TCon (path, [ argument ]) ->
-      string_of_ty argument ^ " " ^ SurfacePath.to_string path
+      elements
+      |> List.map ~fn:string_of_ty
+      |> String.concat " * "
+  | TArrow (_, parameter, result) -> string_of_ty parameter ^ " -> " ^ string_of_ty result
+  | TCon (path, []) -> SurfacePath.to_string path
+  | TCon (path, [ argument ]) -> string_of_ty argument ^ " " ^ SurfacePath.to_string path
   | TCon (path, arguments) ->
       "("
-      ^ (arguments |> List.map ~fn:string_of_ty |> String.concat ", ")
+      ^ (
+        arguments
+        |> List.map ~fn:string_of_ty
+        |> String.concat ", "
+      )
       ^ ") "
       ^ SurfacePath.to_string path
-  | TPolyVariant (Exact, tags) ->
-      "[ " ^ render_poly_variant_tags tags.tags ^ " ]"
-  | TPolyVariant (Upper, tags) ->
-      "[< " ^ render_poly_variant_tags tags.tags ^ " ]"
-  | TPolyVariant (Lower, tags) ->
-      "[> " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Exact, tags) -> "[ " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Upper, tags) -> "[< " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Lower, tags) -> "[> " ^ render_poly_variant_tags tags.tags ^ " ]"
   | TPackage package ->
-      let constraints = package.constraints
-      |> List.map
-        ~fn:(fun constraint_ ->
-          " with type "
-          ^ SurfacePath.to_string constraint_.type_name
-          ^ " = "
-          ^ string_of_ty constraint_.manifest)
-      |> String.concat "" in
+      let constraints =
+        package.constraints
+        |> List.map
+          ~fn:(fun constraint_ ->
+            " with type "
+            ^ SurfacePath.to_string constraint_.type_name
+            ^ " = "
+            ^ string_of_ty constraint_.manifest)
+        |> String.concat ""
+      in
       "(module " ^ SurfacePath.to_string package.module_type ^ constraints ^ ")"
-  | TVar { var=Unbound (id, _) } ->
-      "'_" ^ Int.to_string id
-  | TVar { var=Generic id } ->
-      "'a" ^ Int.to_string id
-  | TVar { var=Link linked_ty } ->
-      string_of_ty linked_ty
+  | TVar { var = Unbound (id, _) } -> "'_" ^ Int.to_string id
+  | TVar { var = Generic id } -> "'a" ^ Int.to_string id
+  | TVar { var = Link linked_ty } -> string_of_ty linked_ty
 
 and render_poly_variant_payload = fun ty ->
   match prune ty with
@@ -279,19 +270,18 @@ and render_poly_variant_field = fun field ->
   | Some payload -> "`" ^ field.tag ^ " of " ^ render_poly_variant_payload payload
 
 and render_poly_variant_tags = fun tags ->
-  tags |> normalized_poly_variant_tags |> List.map ~fn:render_poly_variant_field |> String.concat " | "
+  tags
+  |> normalized_poly_variant_tags
+  |> List.map ~fn:render_poly_variant_field
+  |> String.concat " | "
 
 exception Occurs
 
 let arg_label_equal = fun left right ->
-  match left, right with
-  | NoLabel, NoLabel -> true
+  match (left, right) with
+  | (NoLabel, NoLabel) -> true
   | (Labelled left, Labelled right)
   | (Optional left, Optional right) -> String.equal left right
   | _ -> false
 
-let row_tags_seen = fun seen tags ->
-  List.exists
-    (fun other_tags ->
-      Ptr.equal other_tags tags)
-    !seen
+let row_tags_seen = fun seen tags -> List.exists (fun other_tags -> Ptr.equal other_tags tags) !seen

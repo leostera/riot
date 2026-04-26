@@ -1,0 +1,3 @@
+val value : string * char
+val id : '0
+val answer : '1

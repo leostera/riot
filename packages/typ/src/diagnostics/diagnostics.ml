@@ -7,3 +7,6 @@ type t = {
 }
 
 let create () = { items = Vector.create () }
+
+let add t diagnostic =
+  Vector.push t.items ~value:diagnostic

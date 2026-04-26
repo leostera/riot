@@ -1,39 +1,47 @@
-(** Riot's typed syntax tree.
+(**
+   Riot's typed syntax tree.
 
-    `Typ.Ast` is the semantic tree owned by the type checker. It is built from
-    `Syn.Ast`, keeps source origins for diagnostics and editor features, and is
-    then annotated in-place as inference/checking discovers types.
+   `Typ.Ast` is the semantic tree owned by the type checker. It is built from
+   `Syn.Ast`, keeps source origins for diagnostics and editor features, and is
+   then annotated in-place as inference/checking discovers types.
 
-    This tree is intentionally not a second concrete syntax tree:
+   This tree is intentionally not a second concrete syntax tree:
 
-    - It does not preserve comments or formatting trivia.
-    - It keeps only syntax that matters to typing and later compiler stages.
-    - Nodes either have enough structure to be checked, or AST construction
-      fails with diagnostics. *)
+   - It does not preserve comments or formatting trivia.
+   - It keeps only syntax that matters to typing and later compiler stages.
+   - Nodes either have enough structure to be checked, or AST construction
+     fails with diagnostics.
+*)
 open Std
 
-(** Source origin attached to every typed-tree node.
+(**
+   Source origin attached to every typed-tree node.
 
-    `span` identifies the source range. `kind` records the syntax kind that
-    produced the typed node, which keeps diagnostics useful even after lowering
-    from `Syn.Ast`. *)
+   `span` identifies the source range. `kind` records the syntax kind that
+   produced the typed node, which keeps diagnostics useful even after lowering
+   from `Syn.Ast`.
+*)
 type origin = {
   (** Source byte span for the node. *)
   span: Syn.Ceibo.Span.t;
   (** Original syntax kind that produced this semantic node. *)
   kind: Syn.SyntaxKind.t;
 }
-(** Source-level identifier as written by the program.
+(**
+   Source-level identifier as written by the program.
 
-    This includes both single names, such as `value`, and qualified names, such
-    as `Module.value`. It is the key used for surface lookup before a name has
-    been resolved to a binding/entity id. *)
+   This includes both single names, such as `value`, and qualified names, such
+   as `Module.value`. It is the key used for surface lookup before a name has
+   been resolved to a binding/entity id.
+*)
 type ident = Model.Surface_path.t
 
-(** Opaque identity for solver and generalized type variables.
+(**
+   Opaque identity for solver and generalized type variables.
 
-    Values are allocated monotonically by the inference state, but callers should
-    treat them as tokens rather than depending on their representation. *)
+   Values are allocated monotonically by the inference state, but callers should
+   treat them as tokens rather than depending on their representation.
+*)
 module TypeVar: sig
   (** Type-variable identity. *)
   type t
@@ -54,11 +62,13 @@ module TypeVar: sig
   val to_string: t -> string
 end
 
-(** Inference type algebra.
+(**
+   Inference type algebra.
 
-    This is the type representation manipulated by the unifier. Source type
-    annotations still live as `core_type`; `Type.t` is the solved/inferred
-    semantic type attached to expressions, patterns, and core-type nodes. *)
+   This is the type representation manipulated by the unifier. Source type
+   annotations still live as `core_type`; `Type.t` is the solved/inferred
+   semantic type attached to expressions, patterns, and core-type nodes.
+*)
 module Type: sig
   (** Function argument labels inside inferred arrow types. *)
   module Label: sig
@@ -70,16 +80,16 @@ module Type: sig
       | Labelled of string
       (** Optional labeled argument, for example `?x:int -> ...`. *)
       | Optional of string
-
-    (** Structural equality over labels. *)
     val equal: t -> t -> bool
   end
 
-  (** Unification variable.
+  (**
+     Unification variable.
 
-      `link` is `None` while the variable is unsolved. Once solved, it points to
-      the representative type. The unifier may rewrite links during pruning to
-      compress chains. *)
+     `link` is `None` while the variable is unsolved. Once solved, it points to
+     the representative type. The unifier may rewrite links during pruning to
+     compress chains.
+  *)
   type variable = {
     (** Stable id for this solver variable. *)
     id: TypeVar.t;
@@ -97,10 +107,12 @@ module Type: sig
     result: t;
   }
 
-  (** Nominal type application.
+  (**
+     Nominal type application.
 
-      `ident` names the type constructor, such as `int`, `list`, or `Result.t`.
-      `arguments` are the applied type arguments. *)
+     `ident` names the type constructor, such as `int`, `list`, or `Result.t`.
+     `arguments` are the applied type arguments.
+  *)
   and constructor = {
     (** Nominal type identifier. *)
     ident: ident;
@@ -120,8 +132,6 @@ module Type: sig
     | Arrow of arrow
     (** Nominal type constructor application. *)
     | Constructor of constructor
-
-  (** True when both values are the same solver variable id. *)
   val same_var: variable -> variable -> bool
 
   (** Structural equality after following solved variable links. *)
@@ -131,11 +141,13 @@ module Type: sig
   val to_string: t -> string
 end
 
-(** Literal category.
+(**
+   Literal category.
 
-    The AST stores only the category needed by the current checker slices, not
-    the exact literal text. Use the `origin` span when exact source text is
-    needed. *)
+   The AST stores only the category needed by the current checker slices, not
+   the exact literal text. Use the `origin` span when exact source text is
+   needed.
+*)
 type literal =
   | Int
   | Float
@@ -241,10 +253,12 @@ and package_type_constraint = {
   (** Replacement/manifest type. *)
   manifest: core_type;
 }
-(** Type declaration parameter.
+(**
+   Type declaration parameter.
 
-    `Some name` represents a named parameter such as `'a`; `None` represents a
-    parameter whose name could not be recovered. *)
+   `Some name` represents a named parameter such as `'a`; `None` represents a
+   parameter whose name could not be recovered.
+*)
 type type_parameter = string option
 (** Variant constructor declaration. *)
 type type_constructor = {
@@ -302,11 +316,13 @@ type type_declaration = {
   (** Type body. *)
   definition: type_definition;
 }
-(** Runtime function parameter.
+(**
+   Runtime function parameter.
 
-    A parameter always binds or destructures a runtime value. Non-runtime
-    binders such as `(type a)` are stored on the enclosing function-shaped node
-    as `type_binders`. *)
+   A parameter always binds or destructures a runtime value. Non-runtime
+   binders such as `(type a)` are stored on the enclosing function-shaped node
+   as `type_binders`.
+*)
 type parameter = {
   (** Source origin for the parameter. *)
   origin: origin;
@@ -935,12 +951,16 @@ val structure_item_origin: structure_item -> origin
 (** Return the source origin of a signature item. *)
 val signature_item_origin: signature_item -> origin
 
-(** Build `Typ.Ast` from a Syn parser result.
+(**
+   Build `Typ.Ast` from a Syn parser result.
 
-    The build is all-or-nothing: unsupported source syntax returns structured
-    diagnostics instead of placing error nodes in `Typ.Ast`. *)
+   The build is all-or-nothing: unsupported source syntax returns structured
+   diagnostics instead of placing error nodes in `Typ.Ast`.
+*)
 val from_parse_result:
-  source:Model.Source.t -> Syn.Parser.parse_result -> (t, Diagnostics.Diagnostic.t list) Result.t
+  source:Model.Source.t ->
+  Syn.Parser.parse_result ->
+  (t, Diagnostics.Diagnostic.t list) Result.t
 
 (** Serializer used by snapshot tests and future cache payloads. *)
 val serializer: t Serde.Ser.t

@@ -1,0 +1,2 @@
+val pair : bool * int
+val answer : '0

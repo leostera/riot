@@ -1,5 +1,3 @@
-type t = {
-  text: string;
-}
+type t = { text: string }
 
 let make = fun ~text -> { text }

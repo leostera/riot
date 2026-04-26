@@ -1,0 +1,2 @@
+val both : int * bool
+val answer : '0 * '1 * int * bool
