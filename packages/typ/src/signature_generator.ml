@@ -541,12 +541,13 @@ let rec render_module_declaration = fun ~root_items ~typing_context ~substitutio
       in
       let substitutions = List.append local_substitutions substitutions in
       let functor_parameters = render_functor_parameters declaration.parameters in
-      let signature_items = render_module_signature_items
+      let signature_item_lines = render_module_signature_item_lines
         ~root_items
         ~typing_context
         ~substitutions
         ~path_prefix:module_prefix
         items in
+      let signature_items = String.concat " " signature_item_lines in
       let inline = "module "
       ^ declaration.name
       ^ " : "
@@ -555,14 +556,26 @@ let rec render_module_declaration = fun ~root_items ~typing_context ~substitutio
       ^ signature_items
       ^ " end" in
       if String.length inline > 77 then
-        "module " ^ declaration.name ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
+        if String.equal functor_parameters "" then
+          match signature_item_lines with
+          | [ line ] -> "module " ^ declaration.name ^ " :\n  sig " ^ line ^ " end"
+          | _ -> "module "
+          ^ declaration.name
+          ^ " :\n  sig\n    "
+          ^ String.concat "\n    " signature_item_lines
+          ^ "\n  end"
+        else
+          "module " ^ declaration.name ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
       else
         inline
 
-and render_module_signature_items = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
+and render_module_signature_item_lines = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
   items
   |> List.filter_map
     ~fn:(render_structure_signature_item ~root_items ~typing_context ~substitutions ~path_prefix)
+
+and render_module_signature_items = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
+  render_module_signature_item_lines ~root_items ~typing_context ~substitutions ~path_prefix items
   |> String.concat " "
 
 and render_structure_signature_item = fun ~root_items ~typing_context ~substitutions ~path_prefix (
