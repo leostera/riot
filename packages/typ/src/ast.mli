@@ -82,6 +82,7 @@ type type_definition = {
 
 and type_definition_kind =
   | Abstract
+  | Extensible
   | Alias of core_type
   | Variant of type_constructor list
   | Record of record_field_declaration list
@@ -182,6 +183,7 @@ and expression_kind =
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Match of { scrutinee: expression; cases: match_case list }
+  | Try of { body: expression; cases: match_case list }
   | While of { condition: expression; body: expression }
   | For of { pattern: pattern; start_: expression; stop: expression; body: expression }
   | Function of { parameters: pattern list; body: function_body }
@@ -250,6 +252,18 @@ and external_declaration = {
   primitives: string list;
 }
 
+and type_extension_declaration = {
+  origin: origin;
+  name: path;
+  constructors: type_constructor list;
+}
+
+and exception_declaration = {
+  origin: origin;
+  name: string;
+  payload: core_type option;
+}
+
 and module_declaration = {
   origin: origin;
   name: string;
@@ -285,8 +299,10 @@ and structure_item = {
 and structure_item_kind =
   | Let of let_declaration
   | Type of type_declaration list
+  | TypeExtension of type_extension_declaration
   | Expression of expression
   | External of external_declaration
+  | Exception of exception_declaration
   | Module of module_declaration list
   | ModuleType of module_type_declaration
   | Include of path
@@ -299,7 +315,9 @@ and signature_item = {
 and signature_item_kind =
   | Value of value_declaration
   | Type of type_declaration list
+  | TypeExtension of type_extension_declaration
   | External of external_declaration
+  | Exception of exception_declaration
 type t = {
   origin: origin;
   kind: source_file_kind;

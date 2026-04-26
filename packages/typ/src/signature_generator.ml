@@ -578,6 +578,7 @@ let render_type_definition_with_substitutions = fun substitutions (
 ) ->
   match definition.kind with
   | TypAst.Abstract -> ""
+  | TypAst.Extensible -> " = .."
   | TypAst.Alias type_ -> " = " ^ render_ast_core_type_with_substitutions substitutions type_
   | TypAst.Variant constructors -> " = "
   ^ (constructors
@@ -631,6 +632,30 @@ let render_type_declaration_group_with_substitutions = fun substitutions ->
 
 let render_type_declaration_group = render_type_declaration_group_with_substitutions []
 
+let render_type_extension_declaration_with_substitutions = fun substitutions (
+  declaration: TypAst.type_extension_declaration
+) ->
+  "type "
+  ^ SurfacePath.to_string (substitute_path substitutions declaration.name)
+  ^ " += "
+  ^ (declaration.constructors
+  |> List.map ~fn:(render_type_constructor_with_substitutions substitutions)
+  |> String.concat " | ")
+
+let render_type_extension_declaration = render_type_extension_declaration_with_substitutions []
+
+let render_exception_declaration_with_substitutions = fun substitutions (
+  declaration: TypAst.exception_declaration
+) ->
+  match declaration.payload with
+  | Some payload -> "exception "
+  ^ declaration.name
+  ^ " of "
+  ^ render_ast_core_type_with_substitutions substitutions payload
+  | None -> "exception " ^ declaration.name
+
+let render_exception_declaration = render_exception_declaration_with_substitutions []
+
 let render_value_declaration = fun (declaration: TypAst.value_declaration) ->
   "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
 
@@ -650,7 +675,9 @@ let rec render_signature_item = fun (item: TypAst.signature_item) ->
   match item.kind with
   | TypAst.Value declaration -> Some (render_value_declaration declaration)
   | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
+  | TypAst.TypeExtension declaration -> Some (render_type_extension_declaration declaration)
   | TypAst.External declaration -> Some (render_external_declaration declaration)
+  | TypAst.Exception declaration -> Some (render_exception_declaration declaration)
 
 let render_module_type_declaration = fun (declaration: TypAst.module_type_declaration) ->
   let signature_items = declaration.items
@@ -825,6 +852,8 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
   match item.kind with
   | TypAst.Type declarations ->
       Some (render_type_declaration_group_with_substitutions substitutions declarations)
+  | TypAst.TypeExtension declaration ->
+      Some (render_type_extension_declaration_with_substitutions substitutions declaration)
   | TypAst.Module declarations ->
       Some (declarations
       |> List.map
@@ -852,6 +881,8 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
     )
   | TypAst.External declaration ->
       Some (render_external_declaration_with_substitutions substitutions declaration)
+  | TypAst.Exception declaration ->
+      Some (render_exception_declaration_with_substitutions substitutions declaration)
   | TypAst.Expression _ ->
       None
 

@@ -753,6 +753,8 @@ let path_array = SurfacePath.from_name "array"
 
 let path_option = SurfacePath.from_name "option"
 
+let path_exn = SurfacePath.from_name "exn"
+
 let path_none = SurfacePath.from_name "None"
 
 let path_some = SurfacePath.from_name "Some"
@@ -1648,6 +1650,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         then_ty
     | TypAst.Match { scrutinee; cases } ->
         infer_match state env ~level scrutinee cases
+    | TypAst.Try { body; cases } ->
+        infer_try state env ~level body cases
     | TypAst.While { condition; body } ->
         infer_while state env ~level ~at:expression.origin condition body
     | TypAst.For { pattern; start_; stop; body } ->
@@ -2060,6 +2064,24 @@ and infer_match = fun state env ~level scrutinee cases ->
       unify state ~at:case.body.origin result_ty body_ty);
   result_ty
 
+and infer_try = fun state env ~level body cases ->
+  let result_ty = infer_expression state env ~level body in
+  List.for_each cases
+    ~fn:(fun (case: TypAst.match_case) ->
+      let pattern_ty, bindings = infer_pattern state env ~level case.pattern in
+      unify state ~at:case.pattern.origin pattern_ty (TCon (path_exn, []));
+      let extended_env = extend_mono env bindings in
+      (
+        match case.guard with
+        | Some guard ->
+            let guard_ty = infer_expression state extended_env ~level guard in
+            unify state ~at:guard.origin guard_ty TBool
+        | None -> ()
+      );
+      let body_ty = infer_expression state extended_env ~level case.body in
+      unify state ~at:case.body.origin result_ty body_ty);
+  result_ty
+
 and infer_while = fun state env ~level ~at condition body ->
   let condition_ty = infer_expression state env ~level condition in
   unify state ~at:condition.origin condition_ty TBool;
@@ -2248,6 +2270,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Sequence _
   | TypAst.If _
   | TypAst.Match _
+  | TypAst.Try _
   | TypAst.While _
   | TypAst.For _
   | TypAst.Infix _
@@ -2659,8 +2682,39 @@ and bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_pr
           ~owner_ty:result_ty
           vars);
       env
+  | TypAst.Extensible ->
+      env
   | TypAst.Abstract ->
       env
+
+and bind_type_extension_declaration = fun state env ~level ~path_prefix (
+  declaration: TypAst.type_extension_declaration
+) ->
+  let type_path = resolve_type_path state declaration.name in
+  let result_ty = TCon (type_path, []) in
+  declaration.constructors
+  |> List.map
+    ~fn:(constructor_binding_of_declaration
+      state
+      ~level
+      ~path_prefix
+      ~type_path
+      ~result_ty
+      ~result_arguments:[]
+      [])
+  |> extend_generalized env ~level
+
+and bind_exception_declaration = fun state env ~level ~path_prefix (
+  declaration: TypAst.exception_declaration
+) ->
+  let result_ty = TCon (path_exn, []) in
+  let ty =
+    match declaration.payload with
+    | Some payload -> arrow (lower_core_type state ~level (ref []) payload) result_ty
+    | None -> result_ty
+  in
+  let binding = make_binding state ~name:(qualify_name path_prefix declaration.name) ~ty in
+  extend_generalized env ~level [ binding ]
 
 and bind_module_type_item_aliases = fun state ~module_prefix (item: TypAst.signature_item) ->
   match item.kind with
@@ -2672,6 +2726,8 @@ and bind_module_type_item_aliases = fun state ~module_prefix (item: TypAst.signa
         ~name_path:(SurfacePath.from_name declaration.name)
         ~type_path:(qualify_name module_prefix declaration.name))
   | TypAst.Value _
+  | TypAst.TypeExtension _
+  | TypAst.Exception _
   | TypAst.External _ -> ()
 
 and ascribed_binding_for_value_declaration = fun state ~level ~module_prefix name type_annotation ->
@@ -2692,7 +2748,9 @@ and ascribed_bindings_for_signature_item = fun state ~level ~module_prefix (
   | TypAst.External declaration -> [
     ascribed_binding_for_value_declaration state ~level ~module_prefix declaration.name declaration.type_annotation
   ]
-  | TypAst.Type _ -> []
+  | TypAst.Type _
+  | TypAst.TypeExtension _
+  | TypAst.Exception _ -> []
 
 and bindings_for_module_type = fun state ~level ~module_prefix ~module_type_path ->
   match find_module_type_summary state module_type_path with
@@ -2775,12 +2833,18 @@ and infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.struc
               declaration)
       in
       (env, [], declarations)
+  | TypAst.TypeExtension declaration ->
+      let env = bind_type_extension_declaration state env ~level ~path_prefix declaration in
+      (env, [], [])
   | TypAst.Expression expression ->
       let _ = infer_expression state env ~level expression in
       (env, [], [])
   | TypAst.External declaration ->
       let env, bindings = bind_declared_value state env ~level declaration.name declaration.type_annotation in
       (env, bindings, [])
+  | TypAst.Exception declaration ->
+      let env = bind_exception_declaration state env ~level ~path_prefix declaration in
+      (env, [], [])
   | TypAst.Module declarations ->
       let env =
         List.fold_left
@@ -2972,6 +3036,15 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
         match item.kind with
         | TypAst.Type declarations ->
             bind_module_type_declarations state ~level ~module_prefix local_env exported_env declarations
+        | TypAst.TypeExtension declaration ->
+            let local_env = bind_type_extension_declaration state local_env ~level ~path_prefix:[] declaration in
+            let exported_env = bind_type_extension_declaration
+              state
+              exported_env
+              ~level
+              ~path_prefix:module_prefix
+              declaration in
+            (local_env, exported_env)
         | TypAst.Let declaration ->
             let local_env, local_bindings = infer_let_declaration state local_env ~level declaration in
             let qualified_bindings = List.map
@@ -2991,6 +3064,15 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
               ~fn:(qualify_binding state module_prefix) in
             state.module_value_bindings <- List.append state.module_value_bindings qualified_bindings;
             (local_env, extend_mono exported_env qualified_bindings)
+        | TypAst.Exception declaration ->
+            let local_env = bind_exception_declaration state local_env ~level ~path_prefix:[] declaration in
+            let exported_env = bind_exception_declaration
+              state
+              exported_env
+              ~level
+              ~path_prefix:module_prefix
+              declaration in
+            (local_env, exported_env)
         | TypAst.Module declarations ->
             let local_env, exported_env =
               List.fold_left declarations ~init:(local_env, exported_env)
@@ -3070,9 +3152,15 @@ let check_signature_item = fun state env ~level (item: TypAst.signature_item) ->
             bind_type_declaration state env ~level ~type_path_prefix:[] ~name_path_prefix:[] declaration)
       in
       (env, [], declarations)
+  | TypAst.TypeExtension declaration ->
+      let env = bind_type_extension_declaration state env ~level ~path_prefix:[] declaration in
+      (env, [], [])
   | TypAst.External declaration ->
       let env, bindings = bind_declared_value state env ~level declaration.name declaration.type_annotation in
       (env, bindings, [])
+  | TypAst.Exception declaration ->
+      let env = bind_exception_declaration state env ~level ~path_prefix:[] declaration in
+      (env, [], [])
 
 let check_interface = fun ~ast ~typing_context items ->
   let state = make_state ~next_binding_stamp:typing_context.Typing_context.next_binding_stamp in

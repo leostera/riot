@@ -93,6 +93,7 @@ type type_definition = {
 
 and type_definition_kind =
   | Abstract
+  | Extensible
   | Alias of core_type
   | Variant of type_constructor list
   | Record of record_field_declaration list
@@ -195,6 +196,7 @@ and expression_kind =
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Match of { scrutinee: expression; cases: match_case list }
+  | Try of { body: expression; cases: match_case list }
   | While of { condition: expression; body: expression }
   | For of { pattern: pattern; start_: expression; stop: expression; body: expression }
   | Function of { parameters: pattern list; body: function_body }
@@ -263,6 +265,18 @@ and external_declaration = {
   primitives: string list;
 }
 
+and type_extension_declaration = {
+  origin: origin;
+  name: path;
+  constructors: type_constructor list;
+}
+
+and exception_declaration = {
+  origin: origin;
+  name: string;
+  payload: core_type option;
+}
+
 and module_declaration = {
   origin: origin;
   name: string;
@@ -298,8 +312,10 @@ and structure_item = {
 and structure_item_kind =
   | Let of let_declaration
   | Type of type_declaration list
+  | TypeExtension of type_extension_declaration
   | Expression of expression
   | External of external_declaration
+  | Exception of exception_declaration
   | Module of module_declaration list
   | ModuleType of module_type_declaration
   | Include of path
@@ -312,7 +328,9 @@ and signature_item = {
 and signature_item_kind =
   | Value of value_declaration
   | Type of type_declaration list
+  | TypeExtension of type_extension_declaration
   | External of external_declaration
+  | Exception of exception_declaration
 
 type t = {
   origin: origin;
@@ -672,6 +690,8 @@ let opaque_type_is_token = fun kind type_expr ->
   | SynAst.TypeExpr.Opaque node -> direct_child_tokens node
   |> List.exists (fun token -> token_kind_is token kind)
   | _ -> false
+
+let type_expr_is_extensible = fun type_expr -> opaque_type_is_token Syn.SyntaxKind.DOTDOT type_expr
 
 let type_expr_is_coercion = fun type_expr ->
   match SynAst.TypeExpr.view type_expr with
@@ -1301,6 +1321,15 @@ and build_expression = fun context syntax_expression ->
           })
     | SynAst.Expr.Match _ ->
         build_failed origin "incomplete match expression"
+    | SynAst.Expr.Try { body=Some body; first_case=Some _ } ->
+        make_expression
+          origin
+          (Try {
+            body = build_expression context body;
+            cases = build_match_cases context syntax_expression
+          })
+    | SynAst.Expr.Try _ ->
+        build_failed origin "incomplete try expression"
     | SynAst.Expr.While { condition=Some condition; body=Some body } ->
         make_expression
           origin
@@ -1395,7 +1424,6 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.Unreachable
     | SynAst.Expr.Object
     | SynAst.Expr.New
-    | SynAst.Expr.Try _
     | SynAst.Expr.Lazy _
     | SynAst.Expr.MethodCall _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind): expression)
@@ -1589,6 +1617,8 @@ and build_type_declaration_member = fun context member ->
   let definition: type_definition =
     match SynAst.TypeDeclaration.Member.manifest member, SynAst.TypeDeclaration.Member.variant_type member, SynAst.TypeDeclaration.Member.record_type
       member with
+    | Some manifest, _, _ when type_expr_is_extensible manifest ->
+        make_type_definition origin Extensible
     | Some manifest, _, _ ->
         make_type_definition origin (Alias (build_core_type context manifest))
     | None, Some variant, _ ->
@@ -1619,6 +1649,48 @@ and build_type_declarations = fun context declaration ->
     declaration
     ~fn:(fun member -> declarations := build_type_declaration_member context member :: !declarations);
   List.reverse !declarations
+
+and build_type_extension_declaration = fun context declaration ->
+  let origin = origin_from_node declaration in
+  let constructors = ref [] in
+  (
+    match SynAst.TypeExtensionDeclaration.variant_type declaration with
+    | Some variant -> SynAst.VariantType.for_each_constructor
+      variant
+      ~fn:(fun constructor -> constructors := build_type_constructor context constructor :: !constructors)
+    | None -> ()
+  );
+  (
+    {
+      origin;
+      name = path_from_ident_tokens_in_node declaration;
+      constructors = List.reverse !constructors
+    }:
+      type_extension_declaration
+  )
+
+and build_exception_declaration = fun context declaration ->
+  let origin = origin_from_node declaration in
+  let payload =
+    match SynAst.ExceptionDeclaration.view declaration with
+    | SynAst.ExceptionDeclaration.Payload { payload=Some (TypeExpr type_expr); _ } -> Some (build_core_type
+      context
+      type_expr)
+    | SynAst.ExceptionDeclaration.Payload { payload=Some (Record _); _ } -> build_failed origin "exception record payload"
+    | SynAst.ExceptionDeclaration.Payload { payload=None; _ }
+    | SynAst.ExceptionDeclaration.Bare -> None
+    | SynAst.ExceptionDeclaration.Alias _ -> build_failed origin "exception alias"
+  in
+  (
+    {
+      origin;
+      name = SynAst.ExceptionDeclaration.name declaration
+      |> require_some origin "missing exception name"
+      |> token_text;
+      payload
+    }:
+      exception_declaration
+  )
 
 and build_structure_items_from_module_expr = fun context node ->
   let items = ref [] in
@@ -1714,6 +1786,12 @@ and build_structure_item = fun context item ->
         make_structure_item origin (External (build_external_declaration context declaration))
     | Type declaration ->
         make_structure_item origin (Type (build_type_declarations context declaration))
+    | TypeExtension declaration ->
+        make_structure_item
+          origin
+          (TypeExtension (build_type_extension_declaration context declaration))
+    | Exception declaration ->
+        make_structure_item origin (Exception (build_exception_declaration context declaration))
     | Module declaration ->
         make_structure_item origin (Module (build_module_declarations context declaration))
     | ModuleType declaration ->
@@ -1724,14 +1802,6 @@ and build_structure_item = fun context item ->
           declaration
           ~fn:(fun token -> tokens := token :: !tokens);
         make_structure_item origin (Include (path_from_ident_tokens (List.reverse !tokens)))
-    | TypeExtension declaration ->
-        build_failed
-          (origin_from_node declaration)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
-    | Exception declaration ->
-        build_failed
-          (origin_from_node declaration)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
     | Class declaration ->
         build_failed
           (origin_from_node declaration)
@@ -1763,12 +1833,12 @@ and build_signature_item = fun context item ->
     | Type declaration -> make_signature_item
       origin
       (Type (build_type_declarations context declaration))
-    | TypeExtension declaration -> build_failed
-      (origin_from_node declaration)
-      (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
-    | Exception declaration -> build_failed
-      (origin_from_node declaration)
-      (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
+    | TypeExtension declaration -> make_signature_item
+      origin
+      (TypeExtension (build_type_extension_declaration context declaration))
+    | Exception declaration -> make_signature_item
+      origin
+      (Exception (build_exception_declaration context declaration))
     | Class declaration -> build_failed
       (origin_from_node declaration)
       (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
