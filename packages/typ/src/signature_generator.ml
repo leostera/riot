@@ -337,6 +337,24 @@ let render_type_declaration_group = function
       :: List.map declarations ~fn:(render_type_declaration_with_keyword "and") in
       String.concat "\n" lines
 
+let render_value_declaration = fun (declaration: TypAst.value_declaration) ->
+  "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
+
+let render_external_declaration = fun (declaration: TypAst.external_declaration) ->
+  "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
+
+let rec render_signature_item = fun (item: TypAst.signature_item) ->
+  match item.kind with
+  | TypAst.Value declaration -> Some (render_value_declaration declaration)
+  | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
+  | TypAst.External declaration -> Some (render_external_declaration declaration)
+
+let render_module_type_declaration = fun (declaration: TypAst.module_type_declaration) ->
+  let signature_items = declaration.items
+  |> List.filter_map ~fn:render_signature_item
+  |> String.concat " " in
+  "module type " ^ declaration.name ^ " = sig " ^ signature_items ^ " end"
+
 let path_from_prefix = fun path_prefix name ->
   match path_prefix with
   | [] -> SurfacePath.from_name name
@@ -445,6 +463,11 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~path_pref
       Some (declarations
       |> List.map ~fn:(render_module_declaration ~root_items ~typing_context ~path_prefix)
       |> String.concat " ")
+  | TypAst.ModuleType declaration ->
+      if List.is_empty path_prefix then
+        Some (render_module_type_declaration declaration)
+      else
+        None
   | TypAst.Let declaration ->
       if List.is_empty path_prefix then
         None
@@ -468,12 +491,8 @@ let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
   | TypAst.Implementation items -> items
   |> List.filter_map
     ~fn:(render_structure_signature_item ~root_items:items ~typing_context ~path_prefix:[])
-  | TypAst.Interface items ->
-      items |> List.filter_map
-        ~fn:(fun (item: TypAst.signature_item) ->
-          match item.kind with
-          | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
-          | _ -> None)
+  | TypAst.Interface items -> items
+  |> List.filter_map ~fn:(fun (item: TypAst.signature_item) -> render_signature_item item)
   | TypAst.Empty _ -> []
 
 let from_typings = fun (typings: Check.Typings.t) ->

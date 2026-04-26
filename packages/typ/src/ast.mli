@@ -189,6 +189,13 @@ and module_declaration = {
   name: string;
   items: structure_item list;
   alias: path option;
+  module_type: path option;
+}
+
+and module_type_declaration = {
+  origin: origin;
+  name: string;
+  items: signature_item list;
 }
 
 and structure_item = {
@@ -202,8 +209,10 @@ and structure_item_kind =
   | Expression of expression
   | External of external_declaration
   | Module of module_declaration list
+  | ModuleType of module_type_declaration
   | Include of path
-type signature_item = {
+
+and signature_item = {
   origin: origin;
   kind: signature_item_kind;
 }

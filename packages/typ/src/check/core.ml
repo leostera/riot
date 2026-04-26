@@ -64,6 +64,11 @@ type module_summary = {
   value_bindings: binding list;
 }
 
+type module_type_summary = {
+  path: SurfacePath.t;
+  items: TypAst.signature_item list;
+}
+
 type state = {
   mutable next_tyvar: int;
   mutable next_binding_stamp: int;
@@ -72,6 +77,7 @@ type state = {
   mutable module_value_bindings: binding list;
   mutable type_aliases: (SurfacePath.t * SurfacePath.t) list;
   mutable module_summaries: module_summary list;
+  mutable module_type_summaries: module_type_summary list;
 }
 
 let unsupported_syntax = fun origin summary ->
@@ -95,6 +101,7 @@ let make_state = fun ~next_binding_stamp ->
     module_value_bindings = [];
     type_aliases = [];
     module_summaries = [];
+    module_type_summaries = [];
   }
 
 let fresh_tyvar = fun state ~level ->
@@ -1563,6 +1570,29 @@ and find_module_summary = fun state path ->
     ~fn:(fun (summary: module_summary) ->
       SurfacePath.equal summary.path path)
 
+and find_module_type_summary = fun state path ->
+  List.find ((state.module_type_summaries: module_type_summary list))
+    ~fn:(fun (summary: module_type_summary) ->
+      SurfacePath.equal summary.path path)
+
+and remove_bindings_with_prefix = fun path_prefix bindings ->
+  List.filter bindings ~fn:(fun binding -> not (binding_has_path_prefix path_prefix binding))
+
+and binding_path_in = fun paths binding ->
+  let path = EntityId.surface_path binding.entity_id in
+  List.exists
+    (fun other ->
+      SurfacePath.equal path other)
+    paths
+
+and remove_bindings_by_paths = fun paths bindings ->
+  List.filter bindings ~fn:(fun binding -> not (binding_path_in paths binding))
+
+and remove_module_summary = fun path summaries ->
+  List.filter
+    summaries
+    ~fn:(fun (summary: module_summary) -> not (SurfacePath.equal summary.path path))
+
 and bind_type_alias = fun state ~name_path ~type_path ->
   state.type_aliases <- (name_path, type_path) :: state.type_aliases
 
@@ -1639,6 +1669,66 @@ and bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_pr
   | TypAst.Abstract ->
       env
 
+and bind_module_type_item_aliases = fun state ~module_prefix (item: TypAst.signature_item) ->
+  match item.kind with
+  | TypAst.Type declarations -> List.for_each
+    declarations
+    ~fn:(fun declaration ->
+      bind_type_alias
+        state
+        ~name_path:(SurfacePath.from_name declaration.name)
+        ~type_path:(qualify_name module_prefix declaration.name))
+  | TypAst.Value _
+  | TypAst.External _ -> ()
+
+and ascribed_binding_for_value_declaration = fun state ~level ~module_prefix name type_annotation ->
+  let ty = lower_core_type state ~level (ref []) type_annotation in
+  let binding = make_binding state ~name:(qualify_name module_prefix name) ~ty in
+  { binding with ty = generalize level ty }
+
+and ascribed_bindings_for_signature_item = fun state ~level ~module_prefix (
+  item: TypAst.signature_item
+) ->
+  match item.kind with
+  | TypAst.Value declaration -> [
+    ascribed_binding_for_value_declaration state ~level ~module_prefix declaration.name declaration.type_annotation
+  ]
+  | TypAst.External declaration -> [
+    ascribed_binding_for_value_declaration state ~level ~module_prefix declaration.name declaration.type_annotation
+  ]
+  | TypAst.Type _ -> []
+
+and ascribe_module_bindings = fun state env ~level ~module_prefix ~module_type_path items ->
+  match find_module_type_summary state module_type_path with
+  | None -> env
+  | Some summary ->
+      let previous_type_aliases = state.type_aliases in
+      List.for_each summary.items ~fn:(bind_module_type_item_aliases state ~module_prefix);
+      let ascribed_bindings = summary.items
+      |> List.flat_map ~fn:(ascribed_bindings_for_signature_item state ~level ~module_prefix) in
+      state.type_aliases <- previous_type_aliases;
+      let ascribed_paths =
+        List.map ascribed_bindings ~fn:(fun binding -> EntityId.surface_path binding.entity_id)
+      in
+      let module_path = SurfacePath.from_segments module_prefix in
+      let base_env_bindings =
+        match find_module_summary state module_path with
+        | Some existing -> existing.env_bindings
+        | None -> []
+      in
+      let env_bindings = extend_mono (remove_bindings_by_paths ascribed_paths base_env_bindings) ascribed_bindings in
+      state.module_value_bindings <- List.append
+        (remove_bindings_with_prefix module_prefix state.module_value_bindings)
+        ascribed_bindings;
+      state.module_summaries <- {
+        path = module_path;
+        items;
+        env_bindings;
+        value_bindings = ascribed_bindings
+      }
+      :: remove_module_summary module_path state.module_summaries;
+      extend_mono (remove_bindings_by_paths ascribed_paths env) ascribed_bindings
+
 and bind_module_type_declarations = fun state ~level ~module_prefix local_env exported_env declarations ->
   let local_env =
     List.fold_left
@@ -1696,6 +1786,13 @@ and infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.struc
           ~fn:(fun env declaration -> bind_module_declaration state env ~level ~path_prefix declaration)
       in
       (env, [], [])
+  | TypAst.ModuleType declaration ->
+      state.module_type_summaries <- {
+        path = qualify_name path_prefix declaration.name;
+        items = declaration.items
+      }
+      :: state.module_type_summaries;
+      (env, [], [])
   | TypAst.Include path -> (
       match find_module_summary state path with
       | Some summary ->
@@ -1715,9 +1812,20 @@ and bind_module_declaration = fun state env ~level ~path_prefix (
   declaration: TypAst.module_declaration
 ) ->
   let module_prefix = List.append path_prefix [ declaration.name ] in
-  match declaration.alias with
-  | Some source_path -> bind_module_alias state env ~module_prefix ~source_path
-  | None -> bind_module_structure state env ~level ~module_prefix declaration.items
+  let env =
+    match declaration.alias with
+    | Some source_path -> bind_module_alias state env ~module_prefix ~source_path
+    | None -> bind_module_structure state env ~level ~module_prefix declaration.items
+  in
+  match declaration.module_type with
+  | Some module_type_path -> ascribe_module_bindings
+    state
+    env
+    ~level
+    ~module_prefix
+    ~module_type_path
+    declaration.items
+  | None -> env
 
 and bind_module_alias = fun state env ~module_prefix ~source_path ->
   match find_module_summary state source_path with
@@ -1799,6 +1907,13 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
             (local_env, exported_env)
         | TypAst.Include path ->
             bind_include state ~level ~module_prefix local_env exported_env path
+        | TypAst.ModuleType declaration ->
+            state.module_type_summaries <- {
+              path = qualify_name module_prefix declaration.name;
+              items = declaration.items
+            }
+            :: state.module_type_summaries;
+            (local_env, exported_env)
         | TypAst.Expression _
         | TypAst.External _ ->
             (local_env, exported_env))
