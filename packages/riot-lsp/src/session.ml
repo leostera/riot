@@ -252,7 +252,10 @@ let lint_diagnostic_to_lsp = fun text ->
 let typ_diagnostic_severity = fun severity ->
   match severity with
   | Typ.Diagnostics.Diagnostic.UnsupportedSyntax _
-  | Typ.Diagnostics.Diagnostic.UnsupportedType _ -> Lsp.Diagnostic.Error
+  | Typ.Diagnostics.Diagnostic.UnsupportedType _
+  | Typ.Diagnostics.Diagnostic.AnnotationMismatch _
+  | Typ.Diagnostics.Diagnostic.InfiniteSubstitution _
+  | Typ.Diagnostics.Diagnostic.TypeMismatch _ -> Lsp.Diagnostic.Error
 
 let typ_diagnostic_to_lsp = fun text ->
   fun (diagnostic: Typ.Diagnostics.Diagnostic.t) ->
@@ -268,6 +271,18 @@ let typ_diagnostic_to_lsp = fun text ->
       | Typ.Diagnostics.Diagnostic.UnsupportedType unsupported -> (
         unsupported.span,
         "Unsupported type: " ^ unsupported.summary
+      )
+      | Typ.Diagnostics.Diagnostic.AnnotationMismatch mismatch -> (
+        mismatch.span,
+        Typ.Diagnostics.Diagnostic.to_string diagnostic
+      )
+      | Typ.Diagnostics.Diagnostic.InfiniteSubstitution substitution -> (
+        substitution.span,
+        Typ.Diagnostics.Diagnostic.to_string diagnostic
+      )
+      | Typ.Diagnostics.Diagnostic.TypeMismatch mismatch -> (
+        mismatch.span,
+        Typ.Diagnostics.Diagnostic.to_string diagnostic
       )
     in
     {
