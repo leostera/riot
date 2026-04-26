@@ -1832,9 +1832,15 @@ and bind_type_alias = fun state ~name_path ~type_path ->
 and bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars (
   field: TypAst.record_field_declaration
 ) ->
-  let field_ty = lower_core_type state ~level (ref vars) field.type_annotation in
+  let field_ty = lower_record_field_type state ~level vars field.type_annotation in
   state.record_labels <- { label = qualify_name path_prefix field.name; owner_ty; field_ty }
   :: state.record_labels
+
+and lower_record_field_type = fun state ~level vars (type_annotation: TypAst.core_type) ->
+  let field_ty = lower_core_type state ~level (ref vars) type_annotation in
+  match type_annotation.kind with
+  | TypAst.Poly _ -> generalize level field_ty
+  | _ -> field_ty
 
 and inline_record_owner_ty = fun type_path constructor_name arguments ->
   TCon (
