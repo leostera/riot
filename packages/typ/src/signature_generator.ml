@@ -404,6 +404,11 @@ let substitute_path = fun substitutions path ->
   in
   loop substitutions
 
+let render_ast_arrow_label = function
+  | TypAst.Nolabel -> ""
+  | TypAst.Labelled label -> label ^ ":"
+  | TypAst.Optional label -> "?" ^ label ^ ":"
+
 let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypAst.core_type) ->
   match type_.kind with
   | TypAst.Wildcard ->
@@ -414,12 +419,13 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       "_"
   | TypAst.Path path ->
       SurfacePath.to_string (substitute_path substitutions path)
-  | TypAst.Apply _ ->
-      render_ast_type_application substitutions type_
-  | TypAst.Arrow { left; right } ->
-      render_ast_arrow_parameter substitutions left
+  | TypAst.Apply { constructor; arguments } ->
+      render_ast_type_application substitutions constructor arguments
+  | TypAst.Arrow { label; parameter; result } ->
+      render_ast_arrow_label label
+      ^ render_ast_arrow_parameter substitutions parameter
       ^ " -> "
-      ^ render_ast_core_type_with_substitutions substitutions right
+      ^ render_ast_core_type_with_substitutions substitutions result
   | TypAst.Tuple { separator; elements } ->
       let separator =
         match separator with
@@ -428,9 +434,7 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
         | `Unknown -> " * "
       in
       elements |> List.map ~fn:(render_ast_tuple_element substitutions) |> String.concat separator
-  | TypAst.Labeled annotation ->
-      render_ast_core_type_with_substitutions substitutions annotation
-  | TypAst.Poly { parameters; body } ->
+  | TypAst.ForAll { parameters; body } ->
       render_poly_type_parameters parameters
       ^ render_ast_core_type_with_substitutions substitutions body
   | TypAst.PolyVariant (fields: TypAst.poly_variant_type_field list) ->
@@ -487,32 +491,17 @@ and render_ast_package_type = fun substitutions (package: TypAst.package_type) -
   ^ constraints
   ^ ")"
 
-and render_ast_type_application = fun substitutions type_ ->
-  let rec type_application_arguments (type_: TypAst.core_type) =
-    match type_.kind with
-    | TypAst.Parenthesized inner -> type_application_arguments inner
-    | TypAst.Tuple { separator=`Comma; elements } -> elements
-    | _ -> [ type_ ]
-  in
-  let rec collect arguments (current: TypAst.core_type) =
-    match current.kind with
-    | TypAst.Apply { argument; constructor } -> collect
-      (List.append (List.reverse (type_application_arguments argument)) arguments)
-      constructor
-    | _ -> (current, arguments)
-  in
-  let constructor, arguments = collect [] type_ in
+and render_ast_type_application = fun substitutions constructor arguments ->
+  let constructor = render_ast_core_type_with_substitutions substitutions constructor in
   match arguments with
-  | [] -> render_ast_core_type_with_substitutions substitutions constructor
-  | [ argument ] -> render_ast_postfix_argument substitutions argument
-  ^ " "
-  ^ render_ast_core_type_with_substitutions substitutions constructor
+  | [] -> constructor
+  | [ argument ] -> render_ast_postfix_argument substitutions argument ^ " " ^ constructor
   | arguments -> "("
   ^ (arguments
   |> List.map ~fn:(render_ast_core_type_with_substitutions substitutions)
   |> String.concat ", ")
   ^ ") "
-  ^ render_ast_core_type_with_substitutions substitutions constructor
+  ^ constructor
 
 and render_ast_postfix_argument = fun substitutions type_ ->
   match type_.kind with

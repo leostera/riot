@@ -16,6 +16,20 @@ type file_kind =
 
 type path = SurfacePath.t
 
+module TypeVar = struct
+  type t = int
+
+  let first = 0
+
+  let next t = t + 1
+
+  let equal = Int.equal
+
+  let compare = Int.compare
+
+  let to_string x = "'" ^ Int.(to_string x)
+end
+
 module Type = struct
   type label =
     | Nolabel
@@ -23,8 +37,7 @@ module Type = struct
     | Optional of string
 
   type variable = {
-    id: int;
-    level: int;
+    id: TypeVar.t;
     mutable link: t option;
   }
 
@@ -39,47 +52,12 @@ module Type = struct
     arguments: t list;
   }
 
-  and poly_variant_bound =
-    | Exact
-    | Upper
-    | Lower
-
-  and poly_variant_field = {
-    tag: string;
-    payload: t option;
-  }
-
-  and package_constraint = {
-    type_name: path;
-    manifest: t;
-  }
-
-  and package = {
-    binder: string option;
-    module_type: path;
-    constraints: package_constraint list;
-  }
-
   and t =
-    | Unknown
-    | Error
     | Var of variable
-    | Generic of int
-    | Int
-    | Bool
-    | Char
-    | String
-    | Float
-    | Unit
-    | List of t
-    | Option of t
+    | Generic of TypeVar.t
     | Tuple of t list
     | Arrow of arrow
     | Constructor of constructor
-    | PolyVariant of poly_variant_bound * poly_variant_field list
-    | Package of package
-
-  let unknown = Unknown
 end
 
 type literal =
@@ -100,19 +78,23 @@ type type_tuple_separator =
 
 type core_type = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   kind: core_type_kind;
 }
+
+and arrow_label =
+  | Nolabel
+  | Labelled of string
+  | Optional of string
 
 and core_type_kind =
   | Wildcard
   | Var of string option
   | Path of path
-  | Apply of { argument: core_type; constructor: core_type }
-  | Arrow of { left: core_type; right: core_type }
+  | Apply of { constructor: core_type; arguments: core_type list }
+  | Arrow of { label: arrow_label; parameter: core_type; result: core_type }
   | Tuple of { separator: type_tuple_separator; elements: core_type list }
-  | Labeled of core_type
-  | Poly of { parameters: string list; body: core_type }
+  | ForAll of { parameters: string list; body: core_type }
   | PolyVariant of poly_variant_type_field list
   | Package of package_type
   | Parenthesized of core_type
@@ -184,7 +166,7 @@ and parameter_kind =
 
 and pattern = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   kind: pattern_kind;
 }
 
@@ -239,7 +221,7 @@ and expression_type_hint = {
 
 and expression = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   type_hint: expression_type_hint option;
   kind: expression_kind;
 }
@@ -650,19 +632,17 @@ let child_exprs = fun expression ->
   SynAst.Expr.for_each_child_expr expression ~fn:(fun child -> children := child :: !children);
   List.reverse !children
 
-let make_core_type = fun origin (kind: core_type_kind) ->
-  ({ origin; type_ = Type.unknown; kind }: core_type)
+let make_core_type = fun origin (kind: core_type_kind) -> ({ origin; type_ = None; kind }: core_type)
 
 let make_type_definition = fun origin (kind: type_definition_kind) ->
   ({ origin; kind }: type_definition)
 
 let make_parameter = fun origin (kind: parameter_kind) -> ({ origin; kind }: parameter)
 
-let make_pattern = fun origin (kind: pattern_kind) ->
-  ({ origin; type_ = Type.unknown; kind }: pattern)
+let make_pattern = fun origin (kind: pattern_kind) -> ({ origin; type_ = None; kind }: pattern)
 
 let make_expression = fun origin (kind: expression_kind) ->
-  { origin; type_ = Type.unknown; type_hint = None; kind }
+  { origin; type_ = None; type_hint = None; kind }
 
 let make_argument = fun origin (kind: argument_kind) -> ({ origin; kind }: argument)
 
@@ -779,6 +759,12 @@ let type_expr_is_coercion = fun type_expr ->
     argument
   | _ -> false
 
+let arrow_label_from_syn_type = fun origin optional_token label ->
+  match optional_token, label with
+  | None, Some label -> Labelled (token_text label)
+  | Some _, Some label -> Optional (token_text label)
+  | _, None -> build_failed origin "missing labeled type label"
+
 let source_slice = fun source -> IO.IoVec.IoSlice.from_string source |> Result.expect ~msg:"failed to create typ AST parser source slice"
 
 let rec build_core_type = fun context type_expr ->
@@ -795,22 +781,18 @@ let rec build_core_type = fun context type_expr ->
       argument ->
         build_core_type context constructor
     | SynAst.TypeExpr.Apply { argument; constructor } ->
-        make_core_type
-          origin
-          (Apply {
-            argument = build_core_type
-              context
-              (require_some origin "missing type application argument" argument);
-            constructor = build_core_type
-              context
-              (require_some origin "missing type application constructor" constructor)
-          })
+        build_type_application context origin argument constructor
     | SynAst.TypeExpr.Arrow { left; right } ->
+        let label, parameter = build_arrow_parameter
+          context
+          origin
+          (require_some origin "missing arrow parameter type" left) in
         make_core_type
           origin
           (Arrow {
-            left = build_core_type context (require_some origin "missing arrow parameter type" left);
-            right = build_core_type context (require_some origin "missing arrow result type" right)
+            label;
+            parameter;
+            result = build_core_type context (require_some origin "missing arrow result type" right)
           })
     | SynAst.TypeExpr.Tuple { left; right; separator } ->
         let separator = type_tuple_separator_from_syn separator in
@@ -818,15 +800,11 @@ let rec build_core_type = fun context type_expr ->
           origin
           (Tuple { separator; elements = tuple_type_elements context origin separator left right })
     | SynAst.TypeExpr.Labeled { annotation; _ } ->
-        make_core_type
-          origin
-          (Labeled (build_core_type
-            context
-            (require_some origin "missing labeled type annotation" annotation)))
+        build_core_type context (require_some origin "missing labeled type annotation" annotation)
     | SynAst.TypeExpr.Poly { body } ->
         make_core_type
           origin
-          (Poly {
+          (ForAll {
             parameters = poly_type_parameters type_expr;
             body = build_core_type context (require_some origin "missing polymorphic type body" body)
           })
@@ -853,6 +831,34 @@ let rec build_core_type = fun context type_expr ->
         unsupported_node node (node_summary node)
     | SynAst.TypeExpr.Unknown node ->
         unsupported_node node (node_summary node): core_type)
+
+and build_type_application = fun context origin argument constructor ->
+  let argument = build_core_type
+    context
+    (require_some origin "missing type application argument" argument) in
+  let constructor = build_core_type
+    context
+    (require_some origin "missing type application constructor" constructor) in
+  let arguments = core_type_application_arguments argument in
+  match constructor.kind with
+  | Apply { constructor; arguments=existing_arguments } -> make_core_type
+    origin
+    (Apply { constructor; arguments = List.append arguments existing_arguments })
+  | _ -> make_core_type origin (Apply { constructor; arguments })
+
+and build_arrow_parameter = fun context origin type_expr ->
+  match SynAst.TypeExpr.view type_expr with
+  | SynAst.TypeExpr.Labeled { optional_token; label; annotation } -> (
+    arrow_label_from_syn_type origin optional_token label,
+    build_core_type context (require_some origin "missing labeled type annotation" annotation)
+  )
+  | _ -> (Nolabel, build_core_type context type_expr)
+
+and core_type_application_arguments = fun (type_: core_type) ->
+  match type_.kind with
+  | Parenthesized inner -> core_type_application_arguments inner
+  | Tuple { separator=`Comma; elements } -> elements
+  | _ -> [ type_ ]
 
 and tuple_type_elements = fun context origin separator left right ->
   let rec flatten type_expr =

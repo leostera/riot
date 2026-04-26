@@ -10,14 +10,26 @@ type file_kind =
   | `Interface
 ]
 type path = Model.Surface_path.t
+module TypeVar: sig
+  type t
+  val first: t
+
+  val next: t -> t
+
+  val equal: t -> t -> bool
+
+  val compare: t -> t -> Std.Order.t
+
+  val to_string: t -> string
+end
+
 module Type: sig
   type label =
     | Nolabel
     | Labelled of string
     | Optional of string
   type variable = {
-    id: int;
-    level: int;
+    id: TypeVar.t;
     mutable link: t option;
   }
 
@@ -32,46 +44,12 @@ module Type: sig
     arguments: t list;
   }
 
-  and poly_variant_bound =
-    | Exact
-    | Upper
-    | Lower
-
-  and poly_variant_field = {
-    tag: string;
-    payload: t option;
-  }
-
-  and package_constraint = {
-    type_name: path;
-    manifest: t;
-  }
-
-  and package = {
-    binder: string option;
-    module_type: path;
-    constraints: package_constraint list;
-  }
-
   and t =
-    | Unknown
-    | Error
     | Var of variable
-    | Generic of int
-    | Int
-    | Bool
-    | Char
-    | String
-    | Float
-    | Unit
-    | List of t
-    | Option of t
+    | Generic of TypeVar.t
     | Tuple of t list
     | Arrow of arrow
     | Constructor of constructor
-    | PolyVariant of poly_variant_bound * poly_variant_field list
-    | Package of package
-  val unknown: t
 end
 
 type literal =
@@ -90,19 +68,23 @@ type type_tuple_separator =
 ]
 type core_type = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   kind: core_type_kind;
 }
+
+and arrow_label =
+  | Nolabel
+  | Labelled of string
+  | Optional of string
 
 and core_type_kind =
   | Wildcard
   | Var of string option
   | Path of path
-  | Apply of { argument: core_type; constructor: core_type }
-  | Arrow of { left: core_type; right: core_type }
+  | Apply of { constructor: core_type; arguments: core_type list }
+  | Arrow of { label: arrow_label; parameter: core_type; result: core_type }
   | Tuple of { separator: type_tuple_separator; elements: core_type list }
-  | Labeled of core_type
-  | Poly of { parameters: string list; body: core_type }
+  | ForAll of { parameters: string list; body: core_type }
   | PolyVariant of poly_variant_type_field list
   | Package of package_type
   | Parenthesized of core_type
@@ -169,7 +151,7 @@ and parameter_kind =
 
 and pattern = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   kind: pattern_kind;
 }
 
@@ -224,7 +206,7 @@ and expression_type_hint = {
 
 and expression = {
   origin: origin;
-  mutable type_: Type.t;
+  mutable type_: Type.t option;
   type_hint: expression_type_hint option;
   kind: expression_kind;
 }
@@ -397,17 +379,17 @@ and source_file_kind =
   | Empty of file_kind
 val core_type_origin: core_type -> origin
 
-val core_type_type: core_type -> Type.t
+val core_type_type: core_type -> Type.t option
 
 val parameter_origin: parameter -> origin
 
 val pattern_origin: pattern -> origin
 
-val pattern_type: pattern -> Type.t
+val pattern_type: pattern -> Type.t option
 
 val expression_origin: expression -> origin
 
-val expression_type: expression -> Type.t
+val expression_type: expression -> Type.t option
 
 val structure_item_origin: structure_item -> origin
 

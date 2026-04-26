@@ -154,36 +154,18 @@ let type_of_constructor = fun state ~level ~at path arguments ->
       let _ = (state, level, at) in
       TCon (resolved_path, arguments)
 
-let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) ->
-  let rec loop arguments (current: TypAst.core_type) =
-    match current.kind with
-    | TypAst.Apply { argument; constructor } ->
-        let lowered_arguments = lower_type_application_arguments state ~level vars argument in
-        loop (List.append (List.reverse lowered_arguments) arguments) constructor
-    | TypAst.Path path ->
-        type_of_constructor state ~level ~at:current.origin path (List.reverse arguments)
-    | _ ->
-        add_diagnostic
-          state
-          (unsupported_type (TypAst.core_type_origin current) "type application constructor");
-        fresh_tyvar state ~level
-  in
-  loop [] type_expr
+let lower_arrow_label = function
+  | TypAst.Nolabel -> Nolabel
+  | TypAst.Labelled label -> Labelled label
+  | TypAst.Optional label -> Optional label
 
-and lower_type_application_arguments = fun state ~level vars (type_expr: TypAst.core_type) ->
+let rec type_application_constructor_path = fun (type_expr: TypAst.core_type) ->
   match type_expr.kind with
-  | TypAst.Parenthesized inner -> lower_type_application_arguments state ~level vars inner
-  | TypAst.Tuple { separator=`Comma; elements } -> List.map
-    elements
-    ~fn:(lower_core_type state ~level vars)
-  | _ -> [ lower_core_type state ~level vars type_expr ]
+  | TypAst.Path path -> Some path
+  | TypAst.Parenthesized inner -> type_application_constructor_path inner
+  | _ -> None
 
-and lower_labeled_type = fun state ~level vars (type_expr: TypAst.core_type) ->
-  match type_expr.kind with
-  | TypAst.Labeled annotation -> lower_core_type state ~level vars annotation
-  | _ -> lower_core_type state ~level vars type_expr
-
-and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
+let rec lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   match type_expr.kind with
   | TypAst.Wildcard ->
       fresh_tyvar state ~level
@@ -205,21 +187,37 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
       | Some ty -> ty
       | None -> type_of_constructor state ~level ~at:type_expr.origin path []
     )
-  | TypAst.Apply _ ->
-      lower_apply_type state ~level vars type_expr
-  | TypAst.Arrow { left; right } ->
+  | TypAst.Apply { constructor; arguments } -> (
+      match type_application_constructor_path constructor with
+      | Some path -> (
+          match lookup_lower_type_var state vars path with
+          | Some _ ->
+              add_diagnostic state (unsupported_type type_expr.origin "type variable application");
+              fresh_tyvar state ~level
+          | None -> type_of_constructor
+            state
+            ~level
+            ~at:type_expr.origin
+            path
+            (List.map arguments ~fn:(lower_core_type state ~level vars))
+        )
+      | None ->
+          add_diagnostic
+            state
+            (unsupported_type (TypAst.core_type_origin constructor) "type application constructor");
+          fresh_tyvar state ~level
+    )
+  | TypAst.Arrow { label; parameter; result } ->
       TArrow (
-        Nolabel,
-        lower_labeled_type state ~level vars left,
-        lower_core_type state ~level vars right
+        lower_arrow_label label,
+        lower_core_type state ~level vars parameter,
+        lower_core_type state ~level vars result
       )
   | TypAst.Tuple { elements; _ } ->
       TTuple (List.map elements ~fn:(lower_core_type state ~level vars))
-  | TypAst.Labeled _ ->
-      lower_labeled_type state ~level vars type_expr
   | TypAst.Parenthesized inner ->
       lower_core_type state ~level vars inner
-  | TypAst.Poly { parameters; body } ->
+  | TypAst.ForAll { parameters; body } ->
       let local_vars = ref !vars in
       parameters
       |> List.for_each
@@ -427,7 +425,7 @@ and infer_constructor_pattern_application = fun state env ~level (pattern: TypAs
         | arguments ->
             let argument: TypAst.pattern = {
               origin = pattern.origin;
-              type_ = TypAst.Type.unknown;
+              type_ = None;
               kind = TypAst.Tuple arguments
             } in
             let argument_ty, bindings = infer_pattern state env ~level argument in
@@ -1598,7 +1596,7 @@ and bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars
 and lower_record_field_type = fun state ~level vars (type_annotation: TypAst.core_type) ->
   let field_ty = lower_core_type state ~level (ref vars) type_annotation in
   match type_annotation.kind with
-  | TypAst.Poly _ -> generalize level field_ty
+  | TypAst.ForAll _ -> generalize level field_ty
   | _ -> field_ty
 
 and inline_record_owner_ty = fun type_path constructor_name arguments ->
