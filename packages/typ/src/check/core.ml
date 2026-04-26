@@ -1648,6 +1648,10 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         then_ty
     | TypAst.Match { scrutinee; cases } ->
         infer_match state env ~level scrutinee cases
+    | TypAst.While { condition; body } ->
+        infer_while state env ~level ~at:expression.origin condition body
+    | TypAst.For { pattern; start_; stop; body } ->
+        infer_for state env ~level ~at:expression.origin pattern start_ stop body
     | TypAst.Function { parameters; body } ->
         infer_function state env ~level parameters body
     | TypAst.Apply _ ->
@@ -2056,6 +2060,26 @@ and infer_match = fun state env ~level scrutinee cases ->
       unify state ~at:case.body.origin result_ty body_ty);
   result_ty
 
+and infer_while = fun state env ~level ~at condition body ->
+  let condition_ty = infer_expression state env ~level condition in
+  unify state ~at:condition.origin condition_ty TBool;
+  let body_ty = infer_expression state env ~level body in
+  unify state ~at:body.origin body_ty TUnit;
+  let _ = at in
+  TUnit
+
+and infer_for = fun state env ~level ~at pattern start_ stop body ->
+  let pattern_ty, bindings = infer_pattern state env ~level pattern in
+  unify state ~at:pattern.origin pattern_ty TInt;
+  let start_ty = infer_expression state env ~level start_ in
+  unify state ~at:start_.origin start_ty TInt;
+  let stop_ty = infer_expression state env ~level stop in
+  unify state ~at:stop.origin stop_ty TInt;
+  let body_ty = infer_expression state (extend_mono env bindings) ~level body in
+  unify state ~at:body.origin body_ty TUnit;
+  let _ = at in
+  TUnit
+
 and infer_function = fun state env ~level parameters body ->
   match parameters with
   | [] ->
@@ -2224,6 +2248,8 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Sequence _
   | TypAst.If _
   | TypAst.Match _
+  | TypAst.While _
+  | TypAst.For _
   | TypAst.Infix _
   | TypAst.Let _
   | TypAst.LetModule _

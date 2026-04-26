@@ -195,6 +195,8 @@ and expression_kind =
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
   | Match of { scrutinee: expression; cases: match_case list }
+  | While of { condition: expression; body: expression }
+  | For of { pattern: pattern; start_: expression; stop: expression; body: expression }
   | Function of { parameters: pattern list; body: function_body }
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
@@ -1299,6 +1301,26 @@ and build_expression = fun context syntax_expression ->
           })
     | SynAst.Expr.Match _ ->
         build_failed origin "incomplete match expression"
+    | SynAst.Expr.While { condition=Some condition; body=Some body } ->
+        make_expression
+          origin
+          (While {
+            condition = build_expression context condition;
+            body = build_expression context body
+          })
+    | SynAst.Expr.While _ ->
+        build_failed origin "incomplete while expression"
+    | SynAst.Expr.For { pattern=Some pattern; start_=Some start_; stop=Some stop; body=Some body } ->
+        make_expression
+          origin
+          (For {
+            pattern = build_pattern context pattern;
+            start_ = build_expression context start_;
+            stop = build_expression context stop;
+            body = build_expression context body
+          })
+    | SynAst.Expr.For _ ->
+        build_failed origin "incomplete for expression"
     | SynAst.Expr.Fun { body=Some body } ->
         make_expression
           origin
@@ -1374,8 +1396,6 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.Object
     | SynAst.Expr.New
     | SynAst.Expr.Try _
-    | SynAst.Expr.While _
-    | SynAst.Expr.For _
     | SynAst.Expr.Lazy _
     | SynAst.Expr.MethodCall _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind): expression)
