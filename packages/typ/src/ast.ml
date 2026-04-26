@@ -199,9 +199,22 @@ and external_declaration = {
 and module_declaration = {
   origin: origin;
   name: string;
+  parameters: functor_parameter list;
   items: structure_item list;
   alias: path option;
   module_type: path option;
+  application: module_application option;
+}
+
+and functor_parameter = {
+  origin: origin;
+  name: string;
+  module_type: path option;
+}
+
+and module_application = {
+  callee: path;
+  argument: path;
 }
 
 and module_type_declaration = {
@@ -320,6 +333,82 @@ let path_from_module_type_node = fun node ->
   match List.reverse !tokens with
   | [] -> None
   | tokens -> Some (path_from_ident_tokens tokens)
+
+let path_from_module_expr_node = fun node ->
+  match SynAst.Node.kind node with
+  | Syn.SyntaxKind.PATH_MODULE_EXPR ->
+      Some (path_from_ident_tokens_in_node node)
+  | Syn.SyntaxKind.MODULE_EXPR -> (
+      match SynAst.Node.first_child_node node ~kind:Syn.SyntaxKind.PATH_MODULE_EXPR with
+      | Some path -> Some (path_from_ident_tokens_in_node path)
+      | None -> None
+    )
+  | _ ->
+      None
+
+let module_application_from_module_expr = fun node ->
+  match SynAst.Node.kind node with
+  | Syn.SyntaxKind.APPLY_MODULE_EXPR ->
+      let paths = ref [] in
+      SynAst.Node.for_each_child_node node
+        ~fn:(fun child ->
+          match path_from_module_expr_node child with
+          | Some path -> paths := path :: !paths
+          | None -> ());
+      (
+        match List.reverse !paths with
+        | callee :: argument :: _ -> Some { callee; argument }
+        | _ -> None
+      )
+  | _ -> None
+
+let member_ident_tokens_between = fun member ~start ~stop ->
+  let rec loop index tokens =
+    if index >= stop then
+      List.reverse tokens
+    else
+      match SynAst.ModuleDeclaration.Member.child_token_at member index with
+      | Some token when Syn.SyntaxKind.(SynAst.Token.kind token = IDENT) -> loop
+        (index + 1)
+        (token :: tokens)
+      | _ -> loop (index + 1) tokens
+  in
+  loop start []
+
+let member_find_token = fun member ~start kind ->
+  let rec loop index =
+    if index >= SynAst.ModuleDeclaration.Member.child_count member then
+      None
+    else if SynAst.ModuleDeclaration.Member.child_token_kind_is member index kind then
+      Some index
+    else
+      loop (index + 1)
+  in
+  loop start
+
+let functor_parameters_from_member = fun origin member ->
+  let child_count = SynAst.ModuleDeclaration.Member.child_count member in
+  let rec loop index parameters =
+    if index >= child_count then
+      List.reverse parameters
+    else
+      match SynAst.ModuleDeclaration.Member.child_token_kind_is member index Syn.SyntaxKind.LPAREN, SynAst.ModuleDeclaration.Member.child_token_at
+        member
+        (index + 1), SynAst.ModuleDeclaration.Member.child_token_kind_is
+        member
+        (index + 2)
+        Syn.SyntaxKind.COLON, member_find_token member ~start:(index + 3) Syn.SyntaxKind.RPAREN with
+      | true, Some name, true, Some close_index when Syn.SyntaxKind.(SynAst.Token.kind name = IDENT) ->
+          let module_type =
+            match member_ident_tokens_between member ~start:(index + 3) ~stop:close_index with
+            | [] -> None
+            | tokens -> Some (path_from_ident_tokens tokens)
+          in
+          let parameter = { origin; name = token_text name; module_type } in
+          loop (close_index + 1) (parameter :: parameters)
+      | _ -> loop (index + 1) parameters
+  in
+  loop 0 []
 
 let literal_from_token = fun token ->
   match SynAst.Token.kind token with
@@ -1052,6 +1141,7 @@ and build_module_declaration_member = fun member ->
   let declaration = SynAst.ModuleDeclaration.Member.declaration member in
   let origin = origin_from_node declaration in
   let module_expr = SynAst.ModuleDeclaration.Member.module_expr member in
+  let parameters = functor_parameters_from_member origin member in
   let module_type =
     match SynAst.ModuleDeclaration.Member.module_type member with
     | Some node -> path_from_module_type_node node
@@ -1062,6 +1152,11 @@ and build_module_declaration_member = fun member ->
     | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (path_from_ident_tokens_in_node
       node)
     | _ -> None
+  in
+  let application =
+    match module_expr with
+    | Some node -> module_application_from_module_expr node
+    | None -> None
   in
   let items =
     match module_expr with
@@ -1079,9 +1174,11 @@ and build_module_declaration_member = fun member ->
       name = SynAst.ModuleDeclaration.Member.name member
       |> require_some origin "missing module declaration name"
       |> token_text;
+      parameters;
       items;
       alias;
       module_type;
+      application;
     }: module_declaration)
 
 and build_module_declarations = fun declaration ->

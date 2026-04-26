@@ -187,9 +187,22 @@ and external_declaration = {
 and module_declaration = {
   origin: origin;
   name: string;
+  parameters: functor_parameter list;
   items: structure_item list;
   alias: path option;
   module_type: path option;
+  application: module_application option;
+}
+
+and functor_parameter = {
+  origin: origin;
+  name: string;
+  module_type: path option;
+}
+
+and module_application = {
+  callee: path;
+  argument: path;
 }
 
 and module_type_declaration = {

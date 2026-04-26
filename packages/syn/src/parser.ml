@@ -3843,12 +3843,25 @@ and parse_functor_module_type = fun p ~signature ->
     Event.Buffer.error p.events (missing_module_type_expr p);
   complete p marker Syntax_kind.FUNCTOR_MODULE_TYPE
 
+and parse_arrow_functor_module_type = fun p ~signature ->
+  let marker = start_node p in
+  consume_balanced_until p ~closer:Syntax_kind.ARROW 0;
+  expect p Syntax_kind.ARROW (missing_module_type_expr p);
+  if not (module_type_boundary p ~signature) then
+    ignore (parse_module_type_expr p ~signature)
+  else
+    Event.Buffer.error p.events (missing_module_type_expr p);
+  complete p marker Syntax_kind.FUNCTOR_MODULE_TYPE
+
 and parse_module_type_atom = fun p ~signature ->
   match current_kind p with
   | Syntax_kind.SIG_KW -> parse_signature_module_type p
   | Syntax_kind.MODULE_KW when starts_with_typeof_module_expr_keyword p ->
       parse_typeof_module_type p ~signature
   | Syntax_kind.FUNCTOR_KW -> parse_functor_module_type p ~signature
+  | Syntax_kind.LPAREN
+    when Syntax_kind.(peek_kind p 1 = IDENT) && Syntax_kind.(peek_kind p 2 = COLON) ->
+      parse_arrow_functor_module_type p ~signature
   | Syntax_kind.LPAREN -> parse_parenthesized_module_type p ~signature
   | Syntax_kind.IDENT ->
       parse_module_path_node p Syntax_kind.PATH_MODULE_TYPE (missing_module_type_expr p)
