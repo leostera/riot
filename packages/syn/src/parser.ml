@@ -3859,9 +3859,8 @@ and parse_module_type_atom = fun p ~signature ->
   | Syntax_kind.MODULE_KW when starts_with_typeof_module_expr_keyword p ->
       parse_typeof_module_type p ~signature
   | Syntax_kind.FUNCTOR_KW -> parse_functor_module_type p ~signature
-  | Syntax_kind.LPAREN
-    when Syntax_kind.(peek_kind p 1 = IDENT) && Syntax_kind.(peek_kind p 2 = COLON) ->
-      parse_arrow_functor_module_type p ~signature
+  | Syntax_kind.LPAREN when Syntax_kind.(peek_kind p 1 = IDENT)
+  && Syntax_kind.(peek_kind p 2 = COLON) -> parse_arrow_functor_module_type p ~signature
   | Syntax_kind.LPAREN -> parse_parenthesized_module_type p ~signature
   | Syntax_kind.IDENT ->
       parse_module_path_node p Syntax_kind.PATH_MODULE_TYPE (missing_module_type_expr p)
