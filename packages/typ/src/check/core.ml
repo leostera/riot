@@ -63,6 +63,7 @@ type state = {
   mutable diagnostics: Diagnostics.Diagnostic.t list;
   mutable record_labels: record_label list;
   mutable module_value_bindings: binding list;
+  mutable type_aliases: (SurfacePath.t * SurfacePath.t) list;
 }
 
 let unsupported_syntax = fun origin summary ->
@@ -84,6 +85,7 @@ let make_state = fun ~next_binding_stamp ->
     diagnostics = [];
     record_labels = [];
     module_value_bindings = [];
+    type_aliases = [];
   }
 
 let fresh_tyvar = fun state ~level ->
@@ -652,6 +654,15 @@ let rec lookup_type_var = fun vars name ->
 
 let bind_type_var = fun vars name ty -> vars := (name, ty) :: !vars
 
+let resolve_type_path = fun state path ->
+  match
+    List.find state.type_aliases
+      ~fn:(fun (source_path, _) ->
+        SurfacePath.equal source_path path)
+  with
+  | Some (_, target_path) -> target_path
+  | None -> path
+
 let type_of_constructor = fun state ~level ~at path arguments ->
   match arguments with
   | [] when SurfacePath.equal path path_int ->
@@ -672,7 +683,7 @@ let type_of_constructor = fun state ~level ~at path arguments ->
       TOption element
   | _ ->
       let _ = (state, level, at) in
-      TCon (path, arguments)
+      TCon (resolve_type_path state path, arguments)
 
 let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   let rec loop arguments (current: TypAst.core_type) =
@@ -1396,6 +1407,9 @@ let qualify_binding = fun state path_prefix binding ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_segments in
   make_binding state ~name:(SurfacePath.from_segments (List.append path_prefix name)) ~ty:binding.ty
 
+let bind_type_alias = fun state ~name_path ~type_path ->
+  state.type_aliases <- (name_path, type_path) :: state.type_aliases
+
 let bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars (
   field: TypAst.record_field_declaration
 ) ->
@@ -1438,6 +1452,7 @@ let bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_pr
 ) ->
   let vars, arguments = type_parameter_bindings declaration.parameters in
   let type_path = qualify_name type_path_prefix declaration.name in
+  bind_type_alias state ~name_path:(qualify_name name_path_prefix declaration.name) ~type_path;
   let result_ty = TCon (type_path, arguments) in
   match declaration.definition.kind with
   | TypAst.Variant constructors ->
@@ -1507,6 +1522,7 @@ and bind_module_declaration = fun state env ~level ~path_prefix (
   declaration: TypAst.module_declaration
 ) ->
   let module_prefix = List.append path_prefix [ declaration.name ] in
+  let previous_type_aliases = state.type_aliases in
   let _, exported_env =
     List.fold_left declaration.items ~init:(env, env)
       ~fn:(fun (local_env, exported_env) item ->
@@ -1563,6 +1579,7 @@ and bind_module_declaration = fun state env ~level ~path_prefix (
         | TypAst.External _ ->
             (local_env, exported_env))
   in
+  state.type_aliases <- previous_type_aliases;
   exported_env
 
 let check_implementation = fun ~ast ~typing_context items ->

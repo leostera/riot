@@ -347,14 +347,24 @@ let find_value_binding = fun (typing_context: TypingContext.t) path ->
     ~fn:(fun binding ->
       SurfacePath.equal (EntityId.surface_path binding.entity_id) path)
 
-let pattern_bound_name = fun (pattern: TypAst.pattern) ->
+let rec pattern_bound_name = fun (pattern: TypAst.pattern) ->
   match pattern.kind with
   | TypAst.Path path -> (
       match List.reverse (SurfacePath.to_segments path) with
       | name :: _ -> Some name
       | [] -> None
     )
-  | _ -> None
+  | TypAst.Constraint { pattern; _ }
+  | TypAst.Attribute pattern
+  | TypAst.Parenthesized pattern ->
+      pattern_bound_name pattern
+  | TypAst.Alias { alias; pattern } -> (
+      match pattern_bound_name alias with
+      | Some name -> Some name
+      | None -> pattern_bound_name pattern
+    )
+  | _ ->
+      None
 
 let let_declaration_names = fun (declaration: TypAst.let_declaration) ->
   declaration.bindings
@@ -377,7 +387,7 @@ let rec render_module_declaration = fun ~typing_context ~path_prefix (
     ~path_prefix:module_prefix
     declaration.items in
   let inline = "module " ^ declaration.name ^ " : sig " ^ signature_items ^ " end" in
-  if String.length inline > 76 then
+  if String.length inline > 77 then
     "module " ^ declaration.name ^ " :\n  sig " ^ signature_items ^ " end"
   else
     inline
