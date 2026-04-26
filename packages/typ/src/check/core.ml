@@ -749,6 +749,8 @@ let path_unit = SurfacePath.from_name "unit"
 
 let path_list = SurfacePath.from_name "list"
 
+let path_array = SurfacePath.from_name "array"
+
 let path_option = SurfacePath.from_name "option"
 
 let path_none = SurfacePath.from_name "None"
@@ -1609,6 +1611,13 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
             let child_ty = infer_expression state env ~level child in
             unify state ~at:child.origin element_ty child_ty);
         TList element_ty
+    | TypAst.Array elements ->
+        let element_ty = fresh_tyvar state ~level in
+        elements |> List.for_each
+          ~fn:(fun child ->
+            let child_ty = infer_expression state env ~level child in
+            unify state ~at:child.origin element_ty child_ty);
+        TCon (path_array, [ element_ty ])
     | TypAst.PolyVariant { tag; payload } ->
         let payload = Option.map payload ~fn:(infer_expression state env ~level) in
         TPolyVariant (Lower, { tags = [ { tag; payload } ] })
@@ -1618,6 +1627,8 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         infer_record_update state env ~level ~at:expression.origin base fields
     | TypAst.FieldAccess { receiver; field } ->
         infer_field_access state env ~level ~at:expression.origin receiver field
+    | TypAst.ArrayIndex { receiver; index } ->
+        infer_array_index state env ~level ~at:expression.origin receiver index
     | TypAst.Assign { target; value } ->
         infer_assignment state env ~level ~at:expression.origin target value
     | TypAst.Sequence { left; right } ->
@@ -1996,6 +2007,18 @@ and infer_field_access = fun state env ~level ~at receiver field ->
   let receiver_ty = infer_expression state env ~level receiver in
   infer_record_field state ~level ~at receiver_ty field
 
+and infer_array_index = fun state env ~level ~at receiver index ->
+  let receiver_ty = infer_expression state env ~level receiver in
+  let index_ty = infer_expression state env ~level index in
+  unify state ~at:index.origin index_ty TInt;
+  let element_ty = fresh_tyvar state ~level in
+  (
+    match prune receiver_ty with
+    | TString -> unify state ~at element_ty TChar
+    | _ -> unify state ~at receiver_ty (TCon (path_array, [ element_ty ]))
+  );
+  element_ty
+
 and infer_assignment = fun state env ~level ~at target value ->
   let value_ty = infer_expression state env ~level value in
   (
@@ -2004,6 +2027,9 @@ and infer_assignment = fun state env ~level ~at target value ->
         let receiver_ty = infer_expression state env ~level receiver in
         let field_ty = infer_record_field state ~level ~at:target.origin receiver_ty field in
         unify state ~at:value.origin field_ty value_ty
+    | TypAst.ArrayIndex { receiver; index } ->
+        let element_ty = infer_array_index state env ~level ~at:target.origin receiver index in
+        unify state ~at:value.origin element_ty value_ty
     | _ ->
         add_diagnostic state (unsupported_syntax target.origin "assignment target");
         let target_ty = infer_expression state env ~level target in
@@ -2182,6 +2208,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Function _ -> true
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
+  | TypAst.Array _ -> false
   | TypAst.Record fields -> List.all
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
@@ -2190,6 +2217,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
     fields
     ~fn:(fun (field: TypAst.record_expression_field) -> is_nonexpansive_expression field.value)
   | TypAst.FieldAccess { receiver; _ } -> is_nonexpansive_expression receiver
+  | TypAst.ArrayIndex _ -> false
   | TypAst.Assign _ -> false
   | TypAst.Apply { callee; arguments } -> is_constructor_expression callee
   && List.all arguments ~fn:is_nonexpansive_argument

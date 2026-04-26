@@ -172,10 +172,12 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | Array of expression list
   | PolyVariant of poly_variant_expression
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
+  | ArrayIndex of { receiver: expression; index: expression }
   | Assign of { target: expression; value: expression }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }

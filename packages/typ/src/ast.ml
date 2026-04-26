@@ -185,10 +185,12 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
+  | Array of expression list
   | PolyVariant of poly_variant_expression
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
+  | ArrayIndex of { receiver: expression; index: expression }
   | Assign of { target: expression; value: expression }
   | Sequence of { left: expression; right: expression }
   | If of { condition: expression; then_branch: expression; else_branch: expression option }
@@ -1203,6 +1205,10 @@ and build_expression = fun context syntax_expression ->
         make_expression
           origin
           (List (child_exprs syntax_expression |> List.map ~fn:(build_expression context)))
+    | SynAst.Expr.Array ->
+        make_expression
+          origin
+          (Array (child_exprs syntax_expression |> List.map ~fn:(build_expression context)))
     | SynAst.Expr.PolyVariant { payload } ->
         make_expression
           origin
@@ -1241,6 +1247,24 @@ and build_expression = fun context syntax_expression ->
           })
     | SynAst.Expr.FieldAccess _ ->
         build_failed origin "incomplete field access"
+    | SynAst.Expr.ArrayIndex { target=Some target; index=Some index } ->
+        make_expression
+          origin
+          (ArrayIndex {
+            receiver = build_expression context target;
+            index = build_expression context index
+          })
+    | SynAst.Expr.ArrayIndex _ ->
+        build_failed origin "incomplete array index"
+    | SynAst.Expr.StringIndex { target=Some target; index=Some index } ->
+        make_expression
+          origin
+          (ArrayIndex {
+            receiver = build_expression context target;
+            index = build_expression context index
+          })
+    | SynAst.Expr.StringIndex _ ->
+        build_failed origin "incomplete string index"
     | SynAst.Expr.Assign { target=Some target; value=Some value; _ } ->
         make_expression
           origin
@@ -1343,7 +1367,6 @@ and build_expression = fun context syntax_expression ->
         unsupported_node node (node_summary node)
     | SynAst.Expr.Unknown node ->
         unsupported_node node (node_summary node)
-    | SynAst.Expr.Array
     | SynAst.Expr.Extension
     | SynAst.Expr.LetException _
     | SynAst.Expr.BindingOperator _
@@ -1354,9 +1377,7 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.While _
     | SynAst.Expr.For _
     | SynAst.Expr.Lazy _
-    | SynAst.Expr.MethodCall _
-    | SynAst.Expr.ArrayIndex _
-    | SynAst.Expr.StringIndex _ ->
+    | SynAst.Expr.MethodCall _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind): expression)
 
 and build_first_class_module_expression = fun context origin syntax_expression ->
