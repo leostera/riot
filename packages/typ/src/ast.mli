@@ -267,6 +267,7 @@ and exception_declaration = {
 and module_declaration = {
   origin: origin;
   name: string;
+  recursive: bool;
   parameters: functor_parameter list;
   items: structure_item list;
   alias: path option;

@@ -280,6 +280,7 @@ and exception_declaration = {
 and module_declaration = {
   origin: origin;
   name: string;
+  recursive: bool;
   parameters: functor_parameter list;
   items: structure_item list;
   alias: path option;
@@ -1652,7 +1653,11 @@ and build_type_declarations = fun context declaration ->
 
 and build_type_extension_declaration = fun context declaration ->
   let origin = origin_from_node declaration in
+  let name_tokens = ref [] in
   let constructors = ref [] in
+  SynAst.TypeExtensionDeclaration.for_each_name_ident
+    declaration
+    ~fn:(fun token -> name_tokens := token :: !name_tokens);
   (
     match SynAst.TypeExtensionDeclaration.variant_type declaration with
     | Some variant -> SynAst.VariantType.for_each_constructor
@@ -1663,7 +1668,7 @@ and build_type_extension_declaration = fun context declaration ->
   (
     {
       origin;
-      name = path_from_ident_tokens_in_node declaration;
+      name = path_from_ident_tokens (List.reverse !name_tokens);
       constructors = List.reverse !constructors
     }:
       type_extension_declaration
@@ -1739,6 +1744,7 @@ and build_module_declaration_member = fun context member ->
       name = SynAst.ModuleDeclaration.Member.name member
       |> require_some origin "missing module declaration name"
       |> token_text;
+      recursive = SynAst.ModuleDeclaration.is_recursive declaration;
       parameters;
       items;
       alias;

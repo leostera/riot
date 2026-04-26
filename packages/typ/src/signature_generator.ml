@@ -760,6 +760,16 @@ and find_in_declarations = fun (declarations: TypAst.module_declaration list) na
       else
         find_in_declarations declarations name rest
 
+let rec resolve_module_declaration_alias = fun ~root_items (declaration: TypAst.module_declaration) ->
+  match declaration.alias with
+  | Some alias -> (
+      match find_module_declaration root_items alias with
+      | Some target when not (String.equal target.name declaration.name) ->
+          resolve_module_declaration_alias ~root_items target
+      | _ -> declaration
+    )
+  | None -> declaration
+
 let render_functor_parameter = fun (parameter: TypAst.functor_parameter) ->
   let module_type =
     match parameter.module_type with
@@ -789,12 +799,14 @@ let application_items_and_substitutions = fun ~root_items ~path_prefix ~module_p
     )
   | None -> ([], [])
 
-let rec render_module_declaration = fun ~root_items ~typing_context ~substitutions ~path_prefix (
+let rec render_module_declaration_with_keyword =
+ fun ~root_items ~typing_context ~substitutions ~path_prefix ~keyword (
   declaration: TypAst.module_declaration
 ) ->
+  let module_head = keyword ^ " " ^ declaration.name in
   let module_prefix = List.append path_prefix [ declaration.name ] in
   match declaration.alias with
-  | Some alias -> "module " ^ declaration.name ^ " = " ^ SurfacePath.to_string alias
+  | Some alias -> module_head ^ " = " ^ SurfacePath.to_string alias
   | None ->
       let items, local_substitutions =
         match declaration.application with
@@ -814,8 +826,7 @@ let rec render_module_declaration = fun ~root_items ~typing_context ~substitutio
         ~path_prefix:module_prefix
         items in
       let signature_items = String.concat " " signature_item_lines in
-      let inline = "module "
-      ^ declaration.name
+      let inline = module_head
       ^ " : "
       ^ functor_parameters
       ^ "sig "
@@ -825,17 +836,55 @@ let rec render_module_declaration = fun ~root_items ~typing_context ~substitutio
         if String.equal functor_parameters "" then
           let signature_line = "sig " ^ signature_items ^ " end" in
           if String.length ("  " ^ signature_line) <= 77 then
-            "module " ^ declaration.name ^ " :\n  " ^ signature_line
+            module_head ^ " :\n  " ^ signature_line
           else
-            "module "
-            ^ declaration.name
+            module_head
             ^ " :\n  sig\n    "
             ^ String.concat "\n    " signature_item_lines
             ^ "\n  end"
         else
-          "module " ^ declaration.name ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
+          module_head ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
       else
         inline
+
+and render_module_declaration = fun ~root_items ~typing_context ~substitutions ~path_prefix declaration ->
+  render_module_declaration_with_keyword
+    ~root_items
+    ~typing_context
+    ~substitutions
+    ~path_prefix
+    ~keyword:"module"
+    declaration
+
+and render_module_declaration_group = fun ~root_items ~typing_context ~substitutions ~path_prefix declarations ->
+  match declarations with
+  | [] -> ""
+  | first :: rest when first.TypAst.recursive ->
+      let first = render_module_declaration_with_keyword
+        ~root_items
+        ~typing_context
+        ~substitutions
+        ~path_prefix
+        ~keyword:"module rec"
+        first in
+      let rest = rest
+      |> List.map
+        ~fn:(render_module_declaration_with_keyword
+          ~root_items
+          ~typing_context
+          ~substitutions
+          ~path_prefix
+          ~keyword:"and") in
+      String.concat "\n" (first :: rest)
+  | _ ->
+      declarations
+      |> List.map
+        ~fn:(render_module_declaration
+          ~root_items
+          ~typing_context
+          ~substitutions
+          ~path_prefix)
+      |> String.concat " "
 
 and render_module_signature_item_lines = fun ~root_items ~typing_context ~substitutions ~path_prefix items ->
   items
@@ -855,10 +904,7 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
   | TypAst.TypeExtension declaration ->
       Some (render_type_extension_declaration_with_substitutions substitutions declaration)
   | TypAst.Module declarations ->
-      Some (declarations
-      |> List.map
-        ~fn:(render_module_declaration ~root_items ~typing_context ~substitutions ~path_prefix)
-      |> String.concat " ")
+      Some (render_module_declaration_group ~root_items ~typing_context ~substitutions ~path_prefix declarations)
   | TypAst.ModuleType declaration ->
       if List.is_empty path_prefix then
         Some (render_module_type_declaration declaration)
@@ -871,7 +917,9 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
         Some (render_let_declaration ~typing_context ~path_prefix declaration)
   | TypAst.Include path -> (
       match find_module_declaration root_items path with
-      | Some declaration -> Some (render_module_signature_items
+      | Some declaration ->
+          let declaration = resolve_module_declaration_alias ~root_items declaration in
+          Some (render_module_signature_items
         ~root_items
         ~typing_context
         ~substitutions
