@@ -50,6 +50,7 @@ module Type: sig
     | Tuple of t list
     | Arrow of arrow
     | Constructor of constructor
+  val to_string: t -> string
 end
 
 type literal =

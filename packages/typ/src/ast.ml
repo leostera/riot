@@ -58,6 +58,41 @@ module Type = struct
     | Tuple of t list
     | Arrow of arrow
     | Constructor of constructor
+
+  let label_to_string = function
+    | Nolabel -> ""
+    | Labelled label -> label ^ ":"
+    | Optional label -> "?" ^ label ^ ":"
+
+  let rec to_string type_ =
+    match type_ with
+    | Var { id; link=None } -> TypeVar.to_string id
+    | Var { link=Some linked; _ } -> to_string linked
+    | Generic id -> TypeVar.to_string id
+    | Tuple elements -> "(" ^ (elements |> List.map ~fn:to_string |> String.concat " * ") ^ ")"
+    | Arrow { label; parameter; result } -> label_to_string label
+    ^ arrow_parameter_to_string parameter
+    ^ " -> "
+    ^ to_string result
+    | Constructor { path; arguments=[] } -> SurfacePath.to_string path
+    | Constructor { path; arguments=[ argument ] } -> constructor_argument_to_string argument
+    ^ " "
+    ^ SurfacePath.to_string path
+    | Constructor { path; arguments } -> "("
+    ^ (arguments |> List.map ~fn:to_string |> String.concat ", ")
+    ^ ") "
+    ^ SurfacePath.to_string path
+
+  and arrow_parameter_to_string type_ =
+    match type_ with
+    | Arrow _ -> "(" ^ to_string type_ ^ ")"
+    | _ -> to_string type_
+
+  and constructor_argument_to_string type_ =
+    match type_ with
+    | Arrow _
+    | Tuple _ -> "(" ^ to_string type_ ^ ")"
+    | _ -> to_string type_
 end
 
 type literal =
