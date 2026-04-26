@@ -277,67 +277,98 @@ let arg_label_equal = fun left right ->
   | (Optional left, Optional right) -> String.equal left right
   | _ -> false
 
+let row_tags_seen = fun seen tags ->
+  List.exists
+    (fun other_tags ->
+      Ptr.equal other_tags tags)
+    !seen
+
 let rec occurs_adjust_levels = fun id level ty ->
-  match prune ty with
-  | TVar ({ var=Unbound (other_id, other_level) } as cell) ->
-      if Int.equal id other_id then
-        raise Occurs;
-      if other_level > level then
-        cell.var <- Unbound (other_id, level)
-  | TVar { var=Generic _ } ->
-      ()
-  | TList element ->
-      occurs_adjust_levels id level element
-  | TOption element ->
-      occurs_adjust_levels id level element
-  | TTuple elements ->
-      List.for_each elements ~fn:(occurs_adjust_levels id level)
-  | TArrow (_, parameter, result) ->
-      occurs_adjust_levels id level parameter;
-      occurs_adjust_levels id level result
-  | TCon (_, arguments) ->
-      List.for_each arguments ~fn:(occurs_adjust_levels id level)
-  | TPolyVariant (_, tags) ->
-      tags.tags
-      |> List.for_each
-        ~fn:(fun field -> Option.for_each field.payload ~fn:(occurs_adjust_levels id level))
-  | TPackage package ->
-      package.constraints
-      |> List.for_each ~fn:(fun constraint_ -> occurs_adjust_levels id level constraint_.manifest)
-  | TInt
-  | TBool
-  | TChar
-  | TString
-  | TFloat
-  | TUnit ->
-      ()
-  | TVar { var=Link linked_ty } ->
-      occurs_adjust_levels id level linked_ty
+  let seen_rows = ref [] in
+  let rec loop ty =
+    match prune ty with
+    | TVar ({ var=Unbound (other_id, other_level) } as cell) ->
+        if Int.equal id other_id then
+          raise Occurs;
+        if other_level > level then
+          cell.var <- Unbound (other_id, level)
+    | TVar { var=Generic _ } ->
+        ()
+    | TList element ->
+        loop element
+    | TOption element ->
+        loop element
+    | TTuple elements ->
+        List.for_each elements ~fn:loop
+    | TArrow (_, parameter, result) ->
+        loop parameter;
+        loop result
+    | TCon (_, arguments) ->
+        List.for_each arguments ~fn:loop
+    | TPolyVariant (_, tags) ->
+        if not (row_tags_seen seen_rows tags) then
+          (
+            seen_rows := tags :: !seen_rows;
+            tags.tags |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:loop)
+          )
+    | TPackage package ->
+        package.constraints |> List.for_each ~fn:(fun constraint_ -> loop constraint_.manifest)
+    | TInt
+    | TBool
+    | TChar
+    | TString
+    | TFloat
+    | TUnit ->
+        ()
+    | TVar { var=Link linked_ty } ->
+        loop linked_ty
+  in
+  loop ty
 
 let rec ty_mentions_unbound_var = fun id ty ->
+  let seen_rows = ref [] in
+  let rec loop ty =
+    match prune ty with
+    | TVar { var=Unbound (other_id, _) } ->
+        Int.equal id other_id
+    | TVar { var=Generic _ } ->
+        false
+    | TList element
+    | TOption element ->
+        loop element
+    | TTuple elements ->
+        List.exists loop elements
+    | TArrow (_, parameter, result) ->
+        loop parameter || loop result
+    | TCon (_, arguments) ->
+        List.exists loop arguments
+    | TPackage package ->
+        List.exists (fun constraint_ -> loop constraint_.manifest) package.constraints
+    | TPolyVariant (_, tags) ->
+        if row_tags_seen seen_rows tags then
+          false
+        else (
+          seen_rows := tags :: !seen_rows;
+          List.exists
+            (fun field -> Option.map field.payload ~fn:loop |> Option.unwrap_or ~default:false)
+            tags.tags
+        )
+    | TInt
+    | TBool
+    | TChar
+    | TString
+    | TFloat
+    | TUnit ->
+        false
+    | TVar { var=Link linked_ty } ->
+        loop linked_ty
+  in
+  loop ty
+
+let supports_recursive_occurrence = fun ty ->
   match prune ty with
-  | TVar { var=Unbound (other_id, _) } -> Int.equal id other_id
-  | TVar { var=Generic _ } -> false
-  | TList element
-  | TOption element -> ty_mentions_unbound_var id element
-  | TTuple elements -> List.exists (ty_mentions_unbound_var id) elements
-  | TArrow (_, parameter, result) -> ty_mentions_unbound_var id parameter
-  || ty_mentions_unbound_var id result
-  | TCon (_, arguments) -> List.exists (ty_mentions_unbound_var id) arguments
-  | TPackage package -> List.exists
-    (fun constraint_ -> ty_mentions_unbound_var id constraint_.manifest)
-    package.constraints
-  | TPolyVariant (_, tags) -> List.exists
-    (fun field ->
-      Option.map field.payload ~fn:(ty_mentions_unbound_var id) |> Option.unwrap_or ~default:false)
-    tags.tags
-  | TInt
-  | TBool
-  | TChar
-  | TString
-  | TFloat
-  | TUnit -> false
-  | TVar { var=Link linked_ty } -> ty_mentions_unbound_var id linked_ty
+  | TPolyVariant _ -> true
+  | _ -> false
 
 let resolve_type_manifest = fun state path ->
   match
@@ -511,7 +542,11 @@ and unify_pruned = fun state ~at left right ->
         occurs_adjust_levels id level ty;
         cell.var <- Link ty
       with
-      | Occurs -> add_diagnostic state (unsupported_type at "occurs check failed")
+      | Occurs ->
+          if supports_recursive_occurrence ty then
+            cell.var <- Link ty
+          else
+            add_diagnostic state (unsupported_type at "occurs check failed")
     )
   | (TVar { var=Generic _ }, _)
   | (_, TVar { var=Generic _ }) ->
@@ -778,6 +813,7 @@ type row_alias = {
 
 let shared_poly_variant_row_aliases = fun ty ->
   let rows = ref [] in
+  let visited_rows = ref [] in
   let remember tags =
     match
       List.find !rows
@@ -786,6 +822,12 @@ let shared_poly_variant_row_aliases = fun ty ->
     with
     | Some (_, count) -> count := !count + 1
     | None -> rows := (tags, ref 1) :: !rows
+  in
+  let already_visited tags =
+    List.exists
+      (fun other_tags ->
+        Ptr.equal other_tags tags)
+      !visited_rows
   in
   let rec collect ty =
     match prune ty with
@@ -801,7 +843,11 @@ let shared_poly_variant_row_aliases = fun ty ->
         List.for_each arguments ~fn:collect
     | TPolyVariant (_, tags) ->
         remember tags;
-        tags.tags |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:collect)
+        if not (already_visited tags) then
+          (
+            visited_rows := tags :: !visited_rows;
+            tags.tags |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:collect)
+          )
     | TPackage package ->
         package.constraints |> List.for_each ~fn:(fun constraint_ -> collect constraint_.manifest)
     | TVar { var=Link linked_ty } ->
@@ -865,7 +911,7 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
         arguments = List.map arguments ~fn:(public_type_of_ty vars row_aliases)
       }
   | TPolyVariant (bound, tags) ->
-      let public_type = Typing_context.PolyVariant {
+      let public_poly_variant () = Typing_context.PolyVariant {
         bound = public_poly_variant_bound bound;
         fields = normalized_poly_variant_tags tags.tags
         |> List.map
@@ -883,9 +929,9 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
               Typing_context.Var id
             else (
               alias.row_alias_emitted <- true;
-              Typing_context.Alias { type_ = public_type; id }
+              Typing_context.Alias { type_ = public_poly_variant (); id }
             )
-        | None -> public_type
+        | None -> public_poly_variant ()
       )
   | TPackage package ->
       Typing_context.Package {

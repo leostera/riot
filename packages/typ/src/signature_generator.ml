@@ -157,8 +157,8 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
     | TypingContext.TypeConstructor { arguments; _ } ->
         List.for_each arguments ~fn:collect
     | TypingContext.Alias { type_; id } ->
-        collect type_;
-        remember id
+        remember id;
+        collect type_
     | TypingContext.Var id ->
         remember id
     | TypingContext.PolyVariant { fields; _ } ->
@@ -219,7 +219,7 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
         | _ -> render_arrow_parameter ~path_prefix ~type_var_name parameter
       in
       let parameter = render_arg_label label parameter in
-      let result = render_type ~path_prefix ~type_var_name result in
+      let result = render_arrow_result ~path_prefix ~type_var_name result in
       parameter ^ " -> " ^ result
   | TypingContext.TypeConstructor { path; arguments=[] } ->
       render_constructor_path ~path_prefix path
@@ -338,6 +338,11 @@ and render_arrow_parameter = fun ~path_prefix ~type_var_name type_ ->
   | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
   | _ -> render_type ~path_prefix ~type_var_name type_
 
+and render_arrow_result = fun ~path_prefix ~type_var_name type_ ->
+  match type_ with
+  | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | _ -> render_type ~path_prefix ~type_var_name type_
+
 and render_arg_label = fun label parameter ->
   match label with
   | TypingContext.Nolabel -> parameter
@@ -347,8 +352,28 @@ and render_arg_label = fun label parameter ->
 let render_scheme = fun ~path_prefix (scheme: TypingContext.scheme) ->
   render_type ~path_prefix ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
 
+let is_arrow_type = function
+  | TypingContext.Arrow _ -> true
+  | _ -> false
+
+let render_multiline_arrow_scheme = fun ~path_prefix (scheme: TypingContext.scheme) ->
+  let type_var_name = type_var_names_by_occurrence scheme.body in
+  let rec loop type_ =
+    match type_ with
+    | TypingContext.Arrow { label; parameter; result } ->
+        let parameter = render_arrow_parameter ~path_prefix ~type_var_name parameter in
+        ("  " ^ render_arg_label label parameter ^ " ->") :: loop result
+    | type_ -> [ "  " ^ render_arrow_result ~path_prefix ~type_var_name type_ ]
+  in
+  loop scheme.body |> String.concat "\n"
+
 let render_named_binding = fun ~path_prefix ~name (binding: TypingContext.value_binding) ->
-  "val " ^ render_value_name name ^ " : " ^ render_scheme ~path_prefix binding.scheme
+  let prefix = "val " ^ render_value_name name ^ " : " in
+  let rendered = render_scheme ~path_prefix binding.scheme in
+  if String.length (prefix ^ rendered) > 80 && is_arrow_type binding.scheme.body then
+    "val " ^ render_value_name name ^ " :\n" ^ render_multiline_arrow_scheme ~path_prefix binding.scheme
+  else
+    prefix ^ rendered
 
 let render_binding = fun (binding: TypingContext.value_binding) ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
