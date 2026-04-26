@@ -822,7 +822,8 @@ let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) -
   let rec loop arguments (current: TypAst.core_type) =
     match current.kind with
     | TypAst.Apply { argument; constructor } ->
-        loop (lower_core_type state ~level vars argument :: arguments) constructor
+        let lowered_arguments = lower_type_application_arguments state ~level vars argument in
+        loop (List.append (List.reverse lowered_arguments) arguments) constructor
     | TypAst.Path path ->
         type_of_constructor state ~level ~at:current.origin path (List.reverse arguments)
     | _ ->
@@ -832,6 +833,14 @@ let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) -
         fresh_tyvar state ~level
   in
   loop [] type_expr
+
+and lower_type_application_arguments = fun state ~level vars (type_expr: TypAst.core_type) ->
+  match type_expr.kind with
+  | TypAst.Parenthesized inner -> lower_type_application_arguments state ~level vars inner
+  | TypAst.Tuple { separator=`Comma; elements } -> List.map
+    elements
+    ~fn:(lower_core_type state ~level vars)
+  | _ -> [ lower_core_type state ~level vars type_expr ]
 
 and lower_labeled_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   match type_expr.kind with
@@ -855,8 +864,11 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.Var None ->
       add_diagnostic state (unsupported_type type_expr.origin "missing type variable");
       fresh_tyvar state ~level
-  | TypAst.Path path ->
-      type_of_constructor state ~level ~at:type_expr.origin path []
+  | TypAst.Path path -> (
+      match lookup_type_var vars path with
+      | Some ty -> ty
+      | None -> type_of_constructor state ~level ~at:type_expr.origin path []
+    )
   | TypAst.Apply _ ->
       lower_apply_type state ~level vars type_expr
   | TypAst.Arrow { left; right } ->
@@ -865,15 +877,22 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
         lower_labeled_type state ~level vars left,
         lower_core_type state ~level vars right
       )
-  | TypAst.Tuple elements ->
+  | TypAst.Tuple { elements; _ } ->
       TTuple (List.map elements ~fn:(lower_core_type state ~level vars))
   | TypAst.Labeled _ ->
       lower_labeled_type state ~level vars type_expr
   | TypAst.Parenthesized inner ->
       lower_core_type state ~level vars inner
-  | TypAst.Poly { body; _ } ->
-      let ty = lower_core_type state ~level:(level + 1) vars body in
-      generalize level ty
+  | TypAst.Poly { parameters; body } ->
+      let local_vars = ref !vars in
+      parameters
+      |> List.for_each
+        ~fn:(fun parameter ->
+          bind_type_var
+            local_vars
+            (SurfacePath.from_name parameter)
+            (fresh_tyvar state ~level:(level + 1)));
+      lower_core_type state ~level:(level + 1) local_vars body
   | TypAst.PolyVariant tags ->
       TPolyVariant (Exact, { tags = normalized_poly_variant_tags tags })
 
@@ -1565,14 +1584,12 @@ and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding)
     else
       infer_lambda state env ~level:(level + 1) binding.parameters binding.body
   in
-  (
-    match binding.type_annotation with
-    | Some annotation ->
-        let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
-        unify state ~at:binding.origin value_ty annotated
-    | None -> ()
-  );
-  value_ty
+  match binding.type_annotation with
+  | Some annotation ->
+      let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
+      unify state ~at:binding.origin value_ty annotated;
+      lower_core_type state ~level:(level + 1) (ref []) annotation
+  | None -> value_ty
 
 and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
   if recursive then
@@ -1590,13 +1607,21 @@ and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_bin
   (extended_env, exported_bindings)
 
 and simple_let_binding_name = fun (binding: TypAst.let_binding) ->
-  match binding.pattern.kind with
-  | TypAst.Path path -> (
-      match simple_path_name path with
-      | Some name when not (is_uppercase_name name) -> Some (SurfacePath.from_name name)
-      | _ -> None
-    )
-  | _ -> None
+  let rec loop (pattern: TypAst.pattern) =
+    match pattern.kind with
+    | TypAst.Path path -> (
+        match simple_path_name path with
+        | Some name when not (is_uppercase_name name) -> Some (SurfacePath.from_name name)
+        | _ -> None
+      )
+    | TypAst.Constraint { pattern; _ }
+    | TypAst.Attribute pattern
+    | TypAst.Parenthesized pattern ->
+        loop pattern
+    | _ ->
+        None
+  in
+  loop binding.pattern
 
 and make_recursive_placeholder = fun state ~level (binding: TypAst.let_binding) ->
   match simple_let_binding_name binding with
@@ -1620,6 +1645,17 @@ and infer_recursive_let_binding = fun state recursive_env ~level placeholders bi
       let value_ty = infer_let_binding_value state recursive_env ~level binding in
       unify state ~at:binding.origin placeholder.ty value_ty
 
+and public_recursive_let_binding = fun state ~level placeholders binding ->
+  match recursive_placeholder_for_binding placeholders binding with
+  | None -> None
+  | Some placeholder ->
+      let ty =
+        match binding.type_annotation with
+        | Some annotation -> lower_core_type state ~level:(level + 1) (ref []) annotation
+        | None -> placeholder.ty
+      in
+      Some { placeholder with ty = generalize level ty }
+
 and infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
   if declaration.recursive then
     let placeholders =
@@ -1634,7 +1670,8 @@ and infer_let_declaration = fun state env ~level (declaration: TypAst.let_declar
     List.for_each
       declaration.bindings
       ~fn:(infer_recursive_let_binding state recursive_env ~level placeholders);
-    let public_bindings = generalized_bindings ~level placeholders in
+    let public_bindings = declaration.bindings
+    |> List.filter_map ~fn:(public_recursive_let_binding state ~level placeholders) in
     (extend_mono env public_bindings, public_bindings)
   else
     List.fold_left declaration.bindings ~init:(env, [])
@@ -1823,9 +1860,22 @@ and constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_pat
   constructor: TypAst.type_constructor
 ) ->
   let ty =
-    match constructor_payload_ty state ~level ~path_prefix ~type_path ~result_arguments vars constructor with
-    | None -> result_ty
-    | Some payload_ty -> arrow payload_ty result_ty
+    match constructor.result with
+    | Some result -> (
+        let vars = ref vars in
+        let constructor_level = level + 1 in
+        let result_ty = lower_core_type state ~level:constructor_level vars result in
+        match constructor.inline_record, constructor.payload with
+        | None, Some payload ->
+            let payload_ty = lower_core_type state ~level:constructor_level vars payload in
+            arrow payload_ty result_ty
+        | _ -> result_ty
+      )
+    | None -> (
+        match constructor_payload_ty state ~level ~path_prefix ~type_path ~result_arguments vars constructor with
+        | None -> result_ty
+        | Some payload_ty -> arrow payload_ty result_ty
+      )
   in
   make_binding state ~name:(qualify_name path_prefix constructor.name) ~ty
 

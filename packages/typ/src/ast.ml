@@ -25,6 +25,13 @@ type literal =
   | Unit
   | Unknown
 
+type type_tuple_separator =
+[
+  `Star
+  | `Comma
+  | `Unknown
+]
+
 type core_type = {
   origin: origin;
   kind: core_type_kind;
@@ -36,7 +43,7 @@ and core_type_kind =
   | Path of path
   | Apply of { argument: core_type; constructor: core_type }
   | Arrow of { left: core_type; right: core_type }
-  | Tuple of core_type list
+  | Tuple of { separator: type_tuple_separator; elements: core_type list }
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
   | PolyVariant of string list
@@ -48,6 +55,7 @@ type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+  result: core_type option;
   inline_record: record_field_declaration list option;
 }
 
@@ -420,6 +428,11 @@ let literal_from_token = fun token ->
   | FALSE_KW -> Bool
   | _ -> Unit
 
+let type_tuple_separator_from_syn = function
+  | SynAst.TypeExpr.Star -> `Star
+  | SynAst.TypeExpr.Comma -> `Comma
+  | SynAst.TypeExpr.UnknownSeparator -> `Unknown
+
 let node_summary = fun node -> Syn.SyntaxKind.to_string (SynAst.Node.kind node)
 
 let child_patterns = fun pattern ->
@@ -534,8 +547,11 @@ let rec build_core_type = fun type_expr ->
             left = build_core_type (require_some origin "missing arrow parameter type" left);
             right = build_core_type (require_some origin "missing arrow result type" right)
           })
-    | SynAst.TypeExpr.Tuple { left; right; _ } ->
-        make_core_type origin (Tuple (tuple_type_elements origin left right))
+    | SynAst.TypeExpr.Tuple { left; right; separator } ->
+        let separator = type_tuple_separator_from_syn separator in
+        make_core_type
+          origin
+          (Tuple { separator; elements = tuple_type_elements origin separator left right })
     | SynAst.TypeExpr.Labeled { annotation; _ } ->
         make_core_type
           origin
@@ -566,13 +582,12 @@ let rec build_core_type = fun type_expr ->
     | SynAst.TypeExpr.Unknown node ->
         unsupported_node node (node_summary node): core_type)
 
-and tuple_type_elements = fun origin left right ->
+and tuple_type_elements = fun origin separator left right ->
   let rec flatten type_expr =
     match SynAst.TypeExpr.view type_expr with
-    | SynAst.TypeExpr.Tuple { left; right; _ } -> tuple_type_elements
-      (origin_from_node type_expr)
-      left
-      right
+    | SynAst.TypeExpr.Tuple { left; right; separator=child_separator } when type_tuple_separator_from_syn
+      child_separator
+    = separator -> tuple_type_elements (origin_from_node type_expr) separator left right
     | _ -> [ build_core_type type_expr ]
   in
   List.append
@@ -1054,17 +1069,15 @@ and build_type_parameter = function
 
 and build_type_constructor = fun constructor ->
   let origin = origin_from_node constructor in
-  (
-    {
+  ({
       origin;
       name = SynAst.VariantConstructor.name constructor
       |> require_some origin "missing variant constructor name"
       |> token_text;
       payload = Option.map (SynAst.VariantConstructor.payload_type constructor) ~fn:build_core_type;
-      inline_record = Option.map (SynAst.VariantConstructor.record_payload constructor) ~fn:build_record_field_declarations
-    }:
-      type_constructor
-  )
+      result = Option.map (SynAst.VariantConstructor.result_type constructor) ~fn:build_core_type;
+      inline_record = Option.map (SynAst.VariantConstructor.record_payload constructor) ~fn:build_record_field_declarations;
+    }: type_constructor)
 
 and build_record_field_declaration = fun field ->
   let origin = origin_from_node field in

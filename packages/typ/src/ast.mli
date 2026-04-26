@@ -18,6 +18,12 @@ type literal =
   | Bool
   | Unit
   | Unknown
+type type_tuple_separator =
+[
+  `Star
+  | `Comma
+  | `Unknown
+]
 type core_type = {
   origin: origin;
   kind: core_type_kind;
@@ -29,7 +35,7 @@ and core_type_kind =
   | Path of path
   | Apply of { argument: core_type; constructor: core_type }
   | Arrow of { left: core_type; right: core_type }
-  | Tuple of core_type list
+  | Tuple of { separator: type_tuple_separator; elements: core_type list }
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
   | PolyVariant of string list
@@ -39,6 +45,7 @@ type type_constructor = {
   origin: origin;
   name: string;
   payload: core_type option;
+  result: core_type option;
   inline_record: record_field_declaration list option;
 }
 

@@ -282,27 +282,50 @@ let substitute_path = fun substitutions path ->
 
 let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypAst.core_type) ->
   match type_.kind with
-  | TypAst.Wildcard -> "_"
-  | TypAst.Var (Some name) -> "'" ^ name
-  | TypAst.Var None -> "_"
-  | TypAst.Path path -> SurfacePath.to_string (substitute_path substitutions path)
-  | TypAst.Apply _ -> render_ast_type_application substitutions type_
-  | TypAst.Arrow { left; right } -> render_ast_arrow_parameter substitutions left
-  ^ " -> "
-  ^ render_ast_core_type_with_substitutions substitutions right
-  | TypAst.Tuple elements -> elements
-  |> List.map ~fn:(render_ast_tuple_element substitutions)
-  |> String.concat " * "
-  | TypAst.Labeled annotation -> render_ast_core_type_with_substitutions substitutions annotation
-  | TypAst.Poly { parameters; body } -> render_poly_type_parameters parameters
-  ^ render_ast_core_type_with_substitutions substitutions body
-  | TypAst.PolyVariant tags -> render_poly_variant_type "" tags
-  | TypAst.Parenthesized inner -> render_ast_core_type_with_substitutions substitutions inner
+  | TypAst.Wildcard ->
+      "_"
+  | TypAst.Var (Some name) ->
+      "'" ^ name
+  | TypAst.Var None ->
+      "_"
+  | TypAst.Path path ->
+      SurfacePath.to_string (substitute_path substitutions path)
+  | TypAst.Apply _ ->
+      render_ast_type_application substitutions type_
+  | TypAst.Arrow { left; right } ->
+      render_ast_arrow_parameter substitutions left
+      ^ " -> "
+      ^ render_ast_core_type_with_substitutions substitutions right
+  | TypAst.Tuple { separator; elements } ->
+      let separator =
+        match separator with
+        | `Comma -> ", "
+        | `Star
+        | `Unknown -> " * "
+      in
+      elements |> List.map ~fn:(render_ast_tuple_element substitutions) |> String.concat separator
+  | TypAst.Labeled annotation ->
+      render_ast_core_type_with_substitutions substitutions annotation
+  | TypAst.Poly { parameters; body } ->
+      render_poly_type_parameters parameters
+      ^ render_ast_core_type_with_substitutions substitutions body
+  | TypAst.PolyVariant tags ->
+      render_poly_variant_type "" tags
+  | TypAst.Parenthesized inner ->
+      render_ast_core_type_with_substitutions substitutions inner
 
 and render_ast_type_application = fun substitutions type_ ->
+  let rec type_application_arguments (type_: TypAst.core_type) =
+    match type_.kind with
+    | TypAst.Parenthesized inner -> type_application_arguments inner
+    | TypAst.Tuple { separator=`Comma; elements } -> elements
+    | _ -> [ type_ ]
+  in
   let rec collect arguments (current: TypAst.core_type) =
     match current.kind with
-    | TypAst.Apply { argument; constructor } -> collect (argument :: arguments) constructor
+    | TypAst.Apply { argument; constructor } -> collect
+      (List.append (List.reverse (type_application_arguments argument)) arguments)
+      constructor
     | _ -> (current, arguments)
   in
   let constructor, arguments = collect [] type_ in
@@ -352,15 +375,23 @@ let render_record_field_declaration = render_record_field_declaration_with_subst
 let render_type_constructor_with_substitutions = fun substitutions (
   constructor: TypAst.type_constructor
 ) ->
-  match constructor.inline_record, constructor.payload with
-  | Some fields, _ -> constructor.name
+  match constructor.inline_record, constructor.payload, constructor.result with
+  | _, None, Some result -> constructor.name
+  ^ " : "
+  ^ render_ast_core_type_with_substitutions substitutions result
+  | _, Some payload, Some result -> constructor.name
+  ^ " : "
+  ^ render_ast_arrow_parameter substitutions payload
+  ^ " -> "
+  ^ render_ast_core_type_with_substitutions substitutions result
+  | Some fields, _, None -> constructor.name
   ^ " of { "
   ^ (fields
   |> List.map ~fn:(render_record_field_declaration_with_substitutions substitutions)
   |> String.concat " ")
   ^ " }"
-  | None, None -> constructor.name
-  | None, Some payload -> constructor.name
+  | None, None, None -> constructor.name
+  | None, Some payload, None -> constructor.name
   ^ " of "
   ^ render_ast_core_type_with_substitutions substitutions payload
 
@@ -387,11 +418,26 @@ let render_type_definition = render_type_definition_with_substitutions []
 let render_type_declaration_with_keyword_and_substitutions = fun substitutions keyword (
   declaration: TypAst.type_declaration
 ) ->
-  keyword
-  ^ " "
-  ^ render_type_parameters declaration.parameters
-  ^ declaration.name
-  ^ render_type_definition_with_substitutions substitutions declaration.definition
+  let prefix = keyword ^ " " ^ render_type_parameters declaration.parameters ^ declaration.name in
+  match declaration.definition.kind with
+  | TypAst.Variant constructors ->
+      let constructors = constructors
+      |> List.map ~fn:(render_type_constructor_with_substitutions substitutions) in
+      let inline = prefix ^ " = " ^ String.concat " | " constructors in
+      if String.length inline <= 77 then
+        inline
+      else
+        (
+          match constructors with
+          | [] -> prefix ^ " ="
+          | constructor :: constructors -> prefix
+          ^ " =\n    "
+          ^ constructor
+          ^ (constructors
+          |> List.map ~fn:(fun constructor -> "\n  | " ^ constructor)
+          |> String.concat "")
+        )
+  | _ -> prefix ^ render_type_definition_with_substitutions substitutions declaration.definition
 
 let render_type_declaration_with_keyword = render_type_declaration_with_keyword_and_substitutions []
 
