@@ -42,7 +42,7 @@ let tests =
     ()
     ~dir:fixtures_dir
     ~filter:fixture_filter
-    ~snapshot_path:(fun path -> Some (Path.add_extension path ~ext:"expected"))
+    ~snapshot_path:(fun path -> Some (Path.add_extension path ~ext:"checker.expected"))
     ~run:checker_test
 
 let main ~args = Test.Cli.main ~name ~tests ~args ()
