@@ -198,6 +198,7 @@ type module_declaration = {
   origin: origin;
   name: string;
   items: structure_item list;
+  alias: path option;
 }
 
 and structure_item = {
@@ -211,6 +212,7 @@ and structure_item_kind =
   | Expression of expression
   | External of external_declaration
   | Module of module_declaration list
+  | Include of path
 
 type signature_item = {
   origin: origin;
@@ -284,6 +286,17 @@ let path_from_syn_path = fun path ->
 
 let path_from_tokens = fun tokens ->
   tokens |> List.map ~fn:token_text |> String.concat "" |> SurfacePath.from_name
+
+let path_from_ident_tokens = fun tokens -> tokens |> List.map ~fn:token_text |> SurfacePath.from_segments
+
+let path_from_ident_tokens_in_node = fun node ->
+  let tokens = ref [] in
+  SynAst.Node.for_each_token node
+    ~fn:(fun token ->
+      match SynAst.Token.kind token with
+      | Syn.SyntaxKind.IDENT -> tokens := token :: !tokens
+      | _ -> ());
+  path_from_ident_tokens (List.reverse !tokens)
 
 let literal_from_token = fun token ->
   match SynAst.Token.kind token with
@@ -964,20 +977,44 @@ let build_type_declarations = fun declaration ->
     ~fn:(fun member -> declarations := build_type_declaration_member member :: !declarations);
   List.reverse !declarations
 
-let rec build_module_declaration_member = fun member ->
+let rec build_structure_items_from_module_expr = fun node ->
+  let items = ref [] in
+  SynAst.Node.for_each_child_node node
+    ~fn:(fun child ->
+      match SynAst.Node.kind child with
+      | Syn.SyntaxKind.STRUCTURE_ITEM -> items := build_structure_item child :: !items
+      | _ -> ());
+  List.reverse !items
+
+and build_module_declaration_member = fun member ->
   let declaration = SynAst.ModuleDeclaration.Member.declaration member in
   let origin = origin_from_node declaration in
-  let items = ref [] in
-  SynAst.ModuleDeclaration.for_each_structure_item
-    declaration
-    ~fn:(fun item -> items := build_structure_item item :: !items);
+  let module_expr = SynAst.ModuleDeclaration.Member.module_expr member in
+  let alias =
+    match module_expr with
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (path_from_ident_tokens_in_node
+      node)
+    | _ -> None
+  in
+  let items =
+    match module_expr with
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = STRUCT_MODULE_EXPR) -> build_structure_items_from_module_expr
+      node
+    | _ ->
+        let items = ref [] in
+        SynAst.ModuleDeclaration.for_each_structure_item
+          declaration
+          ~fn:(fun item -> items := build_structure_item item :: !items);
+        List.reverse !items
+  in
   (
     {
       origin;
       name = SynAst.ModuleDeclaration.Member.name member
       |> require_some origin "missing module declaration name"
       |> token_text;
-      items = List.reverse !items
+      items;
+      alias
     }:
       module_declaration
   )
@@ -1005,6 +1042,12 @@ and build_structure_item = fun item ->
         make_structure_item origin (Type (build_type_declarations declaration))
     | Module declaration ->
         make_structure_item origin (Module (build_module_declarations declaration))
+    | Include declaration ->
+        let tokens = ref [] in
+        SynAst.IncludeDeclaration.for_each_path_ident
+          declaration
+          ~fn:(fun token -> tokens := token :: !tokens);
+        make_structure_item origin (Include (path_from_ident_tokens (List.reverse !tokens)))
     | TypeExtension declaration ->
         build_failed
           (origin_from_node declaration)
@@ -1026,8 +1069,7 @@ and build_structure_item = fun item ->
           (origin_from_node extension)
           (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
     | ModuleType _
-    | Open _
-    | Include _ ->
+    | Open _ ->
         build_failed origin (Syn.SyntaxKind.to_string origin.kind)
     | Error node ->
         unsupported_node node (node_summary node)

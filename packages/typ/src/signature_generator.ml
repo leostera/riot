@@ -378,43 +378,96 @@ let render_let_declaration = fun ~typing_context ~path_prefix declaration ->
         (find_value_binding typing_context path)
         ~fn:(render_named_binding ~path_prefix ~name)) |> String.concat " "
 
-let rec render_module_declaration = fun ~typing_context ~path_prefix (
+let rec find_module_declaration = fun (items: TypAst.structure_item list) path ->
+  find_module_declaration_segments items (SurfacePath.to_segments path)
+
+and find_module_declaration_segments = fun (items: TypAst.structure_item list) segments ->
+  match segments with
+  | [] -> None
+  | name :: rest ->
+      let rec find_in_items (items: TypAst.structure_item list) =
+        match items with
+        | [] -> None
+        | (item: TypAst.structure_item) :: items -> (
+            match item.TypAst.kind with
+            | TypAst.Module declarations -> (
+                match find_in_declarations declarations name rest with
+                | Some declaration -> Some declaration
+                | None -> find_in_items items
+              )
+            | _ -> find_in_items items
+          )
+      in
+      find_in_items items
+
+and find_in_declarations = fun (declarations: TypAst.module_declaration list) name rest ->
+  match declarations with
+  | [] -> None
+  | declaration :: declarations ->
+      if String.equal declaration.TypAst.name name then
+        if List.is_empty rest then
+          Some declaration
+        else
+          find_module_declaration_segments declaration.items rest
+      else
+        find_in_declarations declarations name rest
+
+let rec render_module_declaration = fun ~root_items ~typing_context ~path_prefix (
   declaration: TypAst.module_declaration
 ) ->
   let module_prefix = List.append path_prefix [ declaration.name ] in
-  let signature_items = render_module_signature_items
-    ~typing_context
-    ~path_prefix:module_prefix
-    declaration.items in
-  let inline = "module " ^ declaration.name ^ " : sig " ^ signature_items ^ " end" in
-  if String.length inline > 77 then
-    "module " ^ declaration.name ^ " :\n  sig " ^ signature_items ^ " end"
-  else
-    inline
+  match declaration.alias with
+  | Some alias -> "module " ^ declaration.name ^ " = " ^ SurfacePath.to_string alias
+  | None ->
+      let signature_items = render_module_signature_items
+        ~root_items
+        ~typing_context
+        ~path_prefix:module_prefix
+        declaration.items in
+      let inline = "module " ^ declaration.name ^ " : sig " ^ signature_items ^ " end" in
+      if String.length inline > 77 then
+        "module " ^ declaration.name ^ " :\n  sig " ^ signature_items ^ " end"
+      else
+        inline
 
-and render_module_signature_items = fun ~typing_context ~path_prefix items ->
+and render_module_signature_items = fun ~root_items ~typing_context ~path_prefix items ->
   items
-  |> List.filter_map ~fn:(render_structure_signature_item ~typing_context ~path_prefix)
+  |> List.filter_map ~fn:(render_structure_signature_item ~root_items ~typing_context ~path_prefix)
   |> String.concat " "
 
-and render_structure_signature_item = fun ~typing_context ~path_prefix (item: TypAst.structure_item) ->
+and render_structure_signature_item = fun ~root_items ~typing_context ~path_prefix (
+  item: TypAst.structure_item
+) ->
   match item.kind with
-  | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
-  | TypAst.Module declarations -> Some (declarations
-  |> List.map ~fn:(render_module_declaration ~typing_context ~path_prefix)
-  |> String.concat " ")
+  | TypAst.Type declarations ->
+      Some (render_type_declaration_group declarations)
+  | TypAst.Module declarations ->
+      Some (declarations
+      |> List.map ~fn:(render_module_declaration ~root_items ~typing_context ~path_prefix)
+      |> String.concat " ")
   | TypAst.Let declaration ->
       if List.is_empty path_prefix then
         None
       else
         Some (render_let_declaration ~typing_context ~path_prefix declaration)
+  | TypAst.Include path -> (
+      match find_module_declaration root_items path with
+      | Some declaration -> Some (render_module_signature_items
+        ~root_items
+        ~typing_context
+        ~path_prefix
+        declaration.items)
+      | None -> None
+    )
   | TypAst.Expression _
-  | TypAst.External _ -> None
+  | TypAst.External _ ->
+      None
 
 let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
   match ast.kind with
   | TypAst.Implementation items -> items
-  |> List.filter_map ~fn:(render_structure_signature_item ~typing_context ~path_prefix:[])
+  |> List.filter_map
+    ~fn:(render_structure_signature_item ~root_items:items ~typing_context ~path_prefix:[])
   | TypAst.Interface items ->
       items |> List.filter_map
         ~fn:(fun (item: TypAst.signature_item) ->
