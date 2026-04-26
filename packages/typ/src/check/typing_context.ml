@@ -17,6 +17,11 @@ and type_constructor = {
   arguments: type_expr list;
 }
 
+and alias_type = {
+  type_: type_expr;
+  id: int;
+}
+
 and poly_variant_bound =
   | Exact
   | Upper
@@ -39,6 +44,7 @@ and type_expr =
   | Tuple of type_expr list
   | Arrow of function_type
   | TypeConstructor of type_constructor
+  | Alias of alias_type
   | PolyVariant of poly_variant
   | Var of int
 
@@ -122,6 +128,11 @@ let rec type_expr_serializer = {
               match value with
               | TypeConstructor value -> Some value
               | _ -> None);
+          Serde.Ser.Variant.newtype "Alias" alias_type_serializer
+            (fun value ->
+              match value with
+              | Alias value -> Some value
+              | _ -> None);
           Serde.Ser.Variant.newtype "PolyVariant" poly_variant_serializer
             (fun value ->
               match value with
@@ -179,6 +190,18 @@ and type_constructor_serializer = {
               "arguments"
               (Serde.Ser.contramap Array.from_list (Serde.Ser.array type_expr_serializer))
               (fun value -> value.arguments);
+          ]) in
+      serializer.run backend state value);
+}
+
+and alias_type_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "type" type_expr_serializer (fun value -> value.type_);
+            Serde.Ser.field "id" Serde.Ser.int (fun value -> value.id);
           ]) in
       serializer.run backend state value);
 }

@@ -145,6 +145,9 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
         collect result
     | TypingContext.TypeConstructor { arguments; _ } ->
         List.for_each arguments ~fn:collect
+    | TypingContext.Alias { type_; id } ->
+        collect type_;
+        remember id
     | TypingContext.Var id ->
         remember id
     | TypingContext.Int
@@ -205,6 +208,8 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
       ^ (arguments |> List.map ~fn:(render_type ~path_prefix ~type_var_name) |> String.concat ", ")
       ^ ") "
       ^ render_constructor_path ~path_prefix path
+  | TypingContext.Alias { type_; id } ->
+      render_type ~path_prefix ~type_var_name type_ ^ " as " ^ type_var_name id
   | TypingContext.Var id ->
       type_var_name id
   | TypingContext.PolyVariant { bound; tags } -> (
@@ -217,18 +222,21 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
 and render_postfix_argument = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
   | TypingContext.Arrow _
-  | TypingContext.Tuple _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | TypingContext.Tuple _
+  | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
   | _ -> render_type ~path_prefix ~type_var_name type_
 
 and render_tuple_element = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
   | TypingContext.Arrow _
-  | TypingContext.Tuple _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | TypingContext.Tuple _
+  | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
   | _ -> render_type ~path_prefix ~type_var_name type_
 
 and render_arrow_parameter = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
-  | TypingContext.Arrow _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | TypingContext.Arrow _
+  | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
   | _ -> render_type ~path_prefix ~type_var_name type_
 
 and render_arg_label = fun label parameter ->

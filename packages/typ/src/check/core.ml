@@ -144,6 +144,18 @@ let merge_poly_variant_tags = fun left right -> normalized_poly_variant_tags (Li
 let render_poly_variant_tags = fun tags ->
   tags |> normalized_poly_variant_tags |> List.map ~fn:(fun tag -> "`" ^ tag) |> String.concat " | "
 
+let copy_poly_variant_tags = fun copies tags ->
+  match
+    List.find !copies
+      ~fn:(fun (source, _) ->
+        Ptr.equal source tags)
+  with
+  | Some (_, copy) -> copy
+  | None ->
+      let copy = { tags = normalized_poly_variant_tags tags.tags } in
+      copies := (tags, copy) :: !copies;
+      copy
+
 let rec string_of_ty = fun ty ->
   match prune ty with
   | TInt -> "int"
@@ -319,28 +331,33 @@ let rec unify = fun state ~at left right ->
         state
         (unsupported_type at ("type mismatch: " ^ string_of_ty left ^ " vs " ^ string_of_ty right))
 
-let rec generalize = fun level ty ->
-  match prune ty with
-  | TVar ({ var=Unbound (id, other_level) } as cell) when other_level > level ->
-      cell.var <- Generic id;
-      TVar cell
-  | TList element ->
-      TList (generalize level element)
-  | TOption element ->
-      TOption (generalize level element)
-  | TTuple elements ->
-      TTuple (List.map elements ~fn:(generalize level))
-  | TArrow (label, parameter, result) ->
-      TArrow (label, generalize level parameter, generalize level result)
-  | TCon (path, arguments) ->
-      TCon (path, List.map arguments ~fn:(generalize level))
-  | TPolyVariant (bound, tags) ->
-      TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
-  | ty ->
-      ty
+let generalize = fun level ty ->
+  let poly_variant_copies = ref [] in
+  let rec loop ty =
+    match prune ty with
+    | TVar ({ var=Unbound (id, other_level) } as cell) when other_level > level ->
+        cell.var <- Generic id;
+        TVar cell
+    | TList element ->
+        TList (loop element)
+    | TOption element ->
+        TOption (loop element)
+    | TTuple elements ->
+        TTuple (List.map elements ~fn:loop)
+    | TArrow (label, parameter, result) ->
+        TArrow (label, loop parameter, loop result)
+    | TCon (path, arguments) ->
+        TCon (path, List.map arguments ~fn:loop)
+    | TPolyVariant (bound, tags) ->
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+    | ty ->
+        ty
+  in
+  loop ty
 
 let instantiate = fun state ~level ty ->
   let subst = ref [] in
+  let poly_variant_copies = ref [] in
   let rec loop ty =
     match prune ty with
     | TVar { var=Generic id } -> (
@@ -366,7 +383,7 @@ let instantiate = fun state ~level ty ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
     | ty ->
         ty
   in
@@ -374,6 +391,7 @@ let instantiate = fun state ~level ty ->
 
 let instantiate_pair = fun state ~level left right ->
   let subst = ref [] in
+  let poly_variant_copies = ref [] in
   let rec loop ty =
     match prune ty with
     | TVar { var=Generic id } -> (
@@ -399,7 +417,7 @@ let instantiate_pair = fun state ~level left right ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
     | ty ->
         ty
   in
@@ -475,33 +493,120 @@ let rec lookup_builtin = fun path builtins ->
       else
         lookup_builtin path rest
 
-let rec public_type_of_ty = fun vars ty ->
+type row_alias = {
+  row_tags: poly_variant_tags;
+  row_alias_id: int;
+  mutable row_alias_emitted: bool;
+}
+
+let shared_poly_variant_row_aliases = fun ty ->
+  let rows = ref [] in
+  let remember tags =
+    match
+      List.find !rows
+        ~fn:(fun (other_tags, _) ->
+          Ptr.equal other_tags tags)
+    with
+    | Some (_, count) -> count := !count + 1
+    | None -> rows := (tags, ref 1) :: !rows
+  in
+  let rec collect ty =
+    match prune ty with
+    | TList element
+    | TOption element ->
+        collect element
+    | TTuple elements ->
+        List.for_each elements ~fn:collect
+    | TArrow (_, parameter, result) ->
+        collect parameter;
+        collect result
+    | TCon (_, arguments) ->
+        List.for_each arguments ~fn:collect
+    | TPolyVariant (_, tags) ->
+        remember tags
+    | TVar { var=Link linked_ty } ->
+        collect linked_ty
+    | TInt
+    | TBool
+    | TChar
+    | TString
+    | TFloat
+    | TUnit
+    | TVar { var=Unbound _ }
+    | TVar { var=Generic _ } ->
+        ()
+  in
+  collect ty;
+  let next_alias_id = ref (-1) in
+  !rows |> List.filter_map
+    ~fn:(fun (row_tags, count) ->
+      if !count > 1 then
+        (
+          let row_alias_id = !next_alias_id in
+          next_alias_id := row_alias_id - 1;
+          Some { row_tags; row_alias_id; row_alias_emitted = false }
+        )
+      else
+        None)
+
+let find_row_alias = fun row_aliases tags ->
+  List.find row_aliases
+    ~fn:(fun alias ->
+      Ptr.equal alias.row_tags tags)
+
+let rec public_type_of_ty = fun vars row_aliases ty ->
   match prune ty with
-  | TInt -> Typing_context.Int
-  | TBool -> Typing_context.Bool
-  | TChar -> Typing_context.Char
-  | TString -> Typing_context.String
-  | TFloat -> Typing_context.Float
-  | TUnit -> Typing_context.Unit
-  | TList element -> Typing_context.List (public_type_of_ty vars element)
-  | TOption element -> Typing_context.Option (public_type_of_ty vars element)
-  | TTuple elements -> Typing_context.Tuple (List.map elements ~fn:(public_type_of_ty vars))
-  | TArrow (label, parameter, result) -> Typing_context.Arrow {
-    label = public_arg_label label;
-    parameter = public_type_of_ty vars parameter;
-    result = public_type_of_ty vars result
-  }
-  | TCon (path, arguments) -> Typing_context.TypeConstructor {
-    path;
-    arguments = List.map arguments ~fn:(public_type_of_ty vars)
-  }
-  | TPolyVariant (bound, tags) -> Typing_context.PolyVariant {
-    bound = public_poly_variant_bound bound;
-    tags = normalized_poly_variant_tags tags.tags
-  }
-  | TVar { var=Generic id } -> Typing_context.Var (public_tyvar_id vars id)
-  | TVar { var=Unbound (id, _) } -> Typing_context.Var (public_tyvar_id vars id)
-  | TVar { var=Link linked_ty } -> public_type_of_ty vars linked_ty
+  | TInt ->
+      Typing_context.Int
+  | TBool ->
+      Typing_context.Bool
+  | TChar ->
+      Typing_context.Char
+  | TString ->
+      Typing_context.String
+  | TFloat ->
+      Typing_context.Float
+  | TUnit ->
+      Typing_context.Unit
+  | TList element ->
+      Typing_context.List (public_type_of_ty vars row_aliases element)
+  | TOption element ->
+      Typing_context.Option (public_type_of_ty vars row_aliases element)
+  | TTuple elements ->
+      Typing_context.Tuple (List.map elements ~fn:(public_type_of_ty vars row_aliases))
+  | TArrow (label, parameter, result) ->
+      let label = public_arg_label label in
+      let parameter = public_type_of_ty vars row_aliases parameter in
+      let result = public_type_of_ty vars row_aliases result in
+      Typing_context.Arrow { label; parameter; result }
+  | TCon (path, arguments) ->
+      Typing_context.TypeConstructor {
+        path;
+        arguments = List.map arguments ~fn:(public_type_of_ty vars row_aliases)
+      }
+  | TPolyVariant (bound, tags) ->
+      let public_type = Typing_context.PolyVariant {
+        bound = public_poly_variant_bound bound;
+        tags = normalized_poly_variant_tags tags.tags
+      } in
+      (
+        match find_row_alias row_aliases tags with
+        | Some alias ->
+            let id = public_tyvar_id vars alias.row_alias_id in
+            if alias.row_alias_emitted then
+              Typing_context.Var id
+            else (
+              alias.row_alias_emitted <- true;
+              Typing_context.Alias { type_ = public_type; id }
+            )
+        | None -> public_type
+      )
+  | TVar { var=Generic id } ->
+      Typing_context.Var (public_tyvar_id vars id)
+  | TVar { var=Unbound (id, _) } ->
+      Typing_context.Var (public_tyvar_id vars id)
+  | TVar { var=Link linked_ty } ->
+      public_type_of_ty vars row_aliases linked_ty
 
 and public_tyvar_id = fun vars id ->
   match
@@ -527,7 +632,8 @@ and public_arg_label = function
 
 let public_scheme_of_ty = fun ty ->
   let vars = ref [] in
-  let body = public_type_of_ty vars ty in
+  let row_aliases = shared_poly_variant_row_aliases ty in
+  let body = public_type_of_ty vars row_aliases ty in
   let forall = !vars |> List.map ~fn:(fun (_, public_id) -> public_id) |> List.reverse in
   { Typing_context.forall; body }
 
@@ -556,6 +662,7 @@ let rec import_scheme = fun scheme ->
       loop result
     )
     | Typing_context.TypeConstructor { path; arguments } -> TCon (path, List.map arguments ~fn:loop)
+    | Typing_context.Alias { type_; _ } -> loop type_
     | Typing_context.PolyVariant { bound; tags } -> TPolyVariant (
       import_poly_variant_bound bound,
       { tags = normalized_poly_variant_tags tags }
@@ -1316,23 +1423,82 @@ and infer_function_body = fun state env ~level body ->
   | TypAst.Body body -> infer_expression state env ~level body
   | TypAst.Cases cases -> infer_function_cases state env ~level cases
 
+and simple_pattern_identifier = fun (pattern: TypAst.pattern) ->
+  match pattern.kind with
+  | TypAst.Path path -> (
+      match simple_path_name path with
+      | Some name when not (is_uppercase_name name) -> Some name
+      | _ -> None
+    )
+  | TypAst.Attribute inner
+  | TypAst.Parenthesized inner ->
+      simple_pattern_identifier inner
+  | _ ->
+      None
+
+and simple_expression_identifier = fun (expression: TypAst.expression) ->
+  match expression.kind with
+  | TypAst.Path path -> (
+      match simple_path_name path with
+      | Some name when not (is_uppercase_name name) -> Some name
+      | _ -> None
+    )
+  | _ -> None
+
+and row_identity_tag_case = fun (case: TypAst.match_case) ->
+  match case.guard, case.pattern.kind, case.body.kind with
+  | None, TypAst.PolyVariant pattern_tag, TypAst.PolyVariant body_tag when String.equal pattern_tag body_tag -> Some pattern_tag
+  | _ -> None
+
+and is_row_identity_catch_all_case = fun (case: TypAst.match_case) ->
+  match case.guard, simple_pattern_identifier case.pattern, simple_expression_identifier case.body with
+  | None, Some pattern_name, Some body_name -> String.equal pattern_name body_name
+  | _ -> false
+
+and infer_row_identity_function_cases = fun cases ->
+  let tags = ref [] in
+  let catch_all = ref false in
+  let rec loop = function
+    | [] -> !catch_all && not (List.is_empty !tags)
+    | case :: rest -> (
+        match row_identity_tag_case case with
+        | Some tag ->
+            tags := tag :: !tags;
+            loop rest
+        | None when is_row_identity_catch_all_case case ->
+            catch_all := true;
+            loop rest
+        | None ->
+            false
+      )
+  in
+  if loop cases then
+    let row_tags = { tags = normalized_poly_variant_tags !tags } in
+    let row = TPolyVariant (Lower, row_tags) in
+    Some (TArrow (Nolabel, row, row))
+  else
+    None
+
 and infer_function_cases = fun state env ~level cases ->
-  let parameter_ty = fresh_tyvar state ~level in
-  let result_ty = fresh_tyvar state ~level in
-  List.for_each cases
-    ~fn:(fun (case: TypAst.match_case) ->
-      let case_parameter_ty, bindings = infer_pattern state env ~level case.pattern in
-      unify state ~at:case.origin parameter_ty case_parameter_ty;
-      (
-        match case.guard with
-        | Some guard ->
-            let guard_ty = infer_expression state env ~level guard in
-            unify state ~at:guard.origin guard_ty TBool
-        | None -> ()
-      );
-      let body_ty = infer_expression state (extend_mono env bindings) ~level case.body in
-      unify state ~at:case.body.origin result_ty body_ty);
-  TArrow (Nolabel, parameter_ty, result_ty)
+  match infer_row_identity_function_cases cases with
+  | Some ty -> ty
+  | None ->
+      let parameter_ty = fresh_tyvar state ~level in
+      let result_ty = fresh_tyvar state ~level in
+      List.for_each cases
+        ~fn:(fun (case: TypAst.match_case) ->
+          let case_parameter_ty, bindings = infer_pattern state env ~level case.pattern in
+          unify state ~at:case.origin parameter_ty case_parameter_ty;
+          (
+            match case.guard with
+            | Some guard ->
+                let guard_ty = infer_expression state env ~level guard in
+                unify state ~at:guard.origin guard_ty TBool
+            | None -> ()
+          );
+          let body_ty = infer_expression state (extend_mono env bindings) ~level case.body in
+          unify state ~at:case.body.origin result_ty body_ty);
+      TArrow (Nolabel, parameter_ty, result_ty)
 
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with

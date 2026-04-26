@@ -13,6 +13,11 @@ and type_constructor = {
   arguments: type_expr list;
 }
 
+and alias_type = {
+  type_: type_expr;
+  id: int;
+}
+
 and poly_variant_bound =
   | Exact
   | Upper
@@ -35,6 +40,7 @@ and type_expr =
   | Tuple of type_expr list
   | Arrow of function_type
   | TypeConstructor of type_constructor
+  | Alias of alias_type
   | PolyVariant of poly_variant
   | Var of int
 type scheme = {
