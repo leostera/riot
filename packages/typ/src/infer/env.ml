@@ -1,11 +1,10 @@
 open Std
 open Std.Collections
 open Ast
-open Model
 
 type t = {
-  value_order: Surface_path.t Vector.t;
-  values: (Surface_path.t, Type.t) HashMap.t;
+  value_order: ident Vector.t;
+  values: (ident, Type.t) HashMap.t;
 }
 
 let create () = {

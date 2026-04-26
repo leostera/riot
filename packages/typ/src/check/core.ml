@@ -9,6 +9,10 @@ include Core_builtins
 
 include Core_public
 
+module EntityId = Model.Entity_id
+module SurfacePath = Model.Surface_path
+module TypAst = Ast
+
 let rec lookup_env_binding = fun env surface_path ->
   match env with
   | [] -> None

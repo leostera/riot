@@ -2,6 +2,8 @@ open Std
 open Std.Collections
 open Core_types
 
+module SurfacePath = Model.Surface_path
+
 (* Occurs check plus level adjustment.
 
    When a variable at [level] is linked to a type containing younger variables,

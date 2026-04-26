@@ -2,6 +2,8 @@ open Std
 open Std.Collections
 open Core_types
 
+module SurfacePath = Model.Surface_path
+
 let path_int = SurfacePath.from_name "int"
 
 let path_bool = SurfacePath.from_name "bool"
