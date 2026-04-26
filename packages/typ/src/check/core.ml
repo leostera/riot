@@ -1332,6 +1332,14 @@ let split_field_path = fun path ->
   )
   | _ -> None
 
+let flatten_pattern_application = fun pattern ->
+  let rec loop arguments (pattern: TypAst.pattern) =
+    match pattern.kind with
+    | TypAst.Apply { callee; argument } -> loop (argument :: arguments) callee
+    | _ -> (pattern, arguments)
+  in
+  loop [] pattern
+
 let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
   match pattern.kind with
   | TypAst.Path path -> (
@@ -1390,18 +1398,8 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       let right_ty, right_bindings = infer_pattern state env ~level right in
       unify state ~at:pattern.origin left_ty right_ty;
       (left_ty, merge_or_pattern_bindings state pattern.origin left_bindings right_bindings)
-  | TypAst.Apply { callee; argument } -> (
-      match callee.kind with
-      | TypAst.Path path ->
-          let constructor_ty = lookup_surface_path state env ~level ~at:callee.origin path in
-          let argument_ty, bindings = infer_pattern state env ~level argument in
-          let result_ty = fresh_tyvar state ~level in
-          unify state ~at:pattern.origin constructor_ty (arrow argument_ty result_ty);
-          (result_ty, bindings)
-      | _ ->
-          add_diagnostic state (unsupported_syntax pattern.origin "constructor pattern");
-          (fresh_tyvar state ~level, [])
-    )
+  | TypAst.Apply _ ->
+      infer_constructor_pattern_application state env ~level pattern
   | TypAst.Constraint { pattern=inner; annotation } ->
       let pattern_ty, bindings = infer_pattern state env ~level inner in
       let annotated = lower_core_type state ~level (ref []) annotation in
@@ -1446,6 +1444,41 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
         | _ -> []
       in
       (package_ty, bindings)
+
+and infer_constructor_pattern_application = fun state env ~level (pattern: TypAst.pattern) ->
+  let callee, arguments = flatten_pattern_application pattern in
+  match callee.kind with
+  | TypAst.Path path ->
+      let constructor_ty = lookup_surface_path state env ~level ~at:callee.origin path in
+      let runtime_arguments = constructor_runtime_pattern_arguments state ~level arguments in
+      (
+        match runtime_arguments with
+        | [] ->
+            (constructor_ty, [])
+        | [ argument ] ->
+            let argument_ty, bindings = infer_pattern state env ~level argument in
+            let result_ty = fresh_tyvar state ~level in
+            unify state ~at:pattern.origin constructor_ty (arrow argument_ty result_ty);
+            (result_ty, bindings)
+        | arguments ->
+            let argument: TypAst.pattern = { origin = pattern.origin; kind = TypAst.Tuple arguments } in
+            let argument_ty, bindings = infer_pattern state env ~level argument in
+            let result_ty = fresh_tyvar state ~level in
+            unify state ~at:pattern.origin constructor_ty (arrow argument_ty result_ty);
+            (result_ty, bindings)
+      )
+  | _ ->
+      add_diagnostic state (unsupported_syntax pattern.origin "constructor pattern");
+      (fresh_tyvar state ~level, [])
+
+and constructor_runtime_pattern_arguments = fun state ~level arguments ->
+  arguments |> List.filter
+    ~fn:(fun (argument: TypAst.pattern) ->
+      match argument.kind with
+      | TypAst.LocallyAbstractType names ->
+          names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+          false
+      | _ -> true)
 
 and qualify_path = fun path_prefix path ->
   SurfacePath.from_segments (List.append path_prefix (SurfacePath.to_segments path))
@@ -2202,8 +2235,11 @@ and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding)
   | [], Some annotation ->
       let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
       unify state ~at:binding.origin value_ty annotated;
-      annotated
-  | _ -> value_ty
+      lower_core_type state ~level:(level + 1) (ref []) annotation
+  | _ :: _, Some annotation ->
+      lower_core_type state ~level:(level + 1) (ref []) annotation
+  | _ ->
+      value_ty
 
 and runtime_parameter_count = fun parameters ->
   parameters |> List.filter
