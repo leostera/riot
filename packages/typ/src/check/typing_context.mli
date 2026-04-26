@@ -23,9 +23,14 @@ and poly_variant_bound =
   | Upper
   | Lower
 
+and poly_variant_field = {
+  tag: string;
+  payload: type_expr option;
+}
+
 and poly_variant = {
   bound: poly_variant_bound;
-  tags: string list;
+  fields: poly_variant_field list;
 }
 
 and package_type_constraint = {

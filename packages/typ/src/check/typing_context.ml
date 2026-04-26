@@ -27,9 +27,14 @@ and poly_variant_bound =
   | Upper
   | Lower
 
+and poly_variant_field = {
+  tag: string;
+  payload: type_expr option;
+}
+
 and poly_variant = {
   bound: poly_variant_bound;
-  tags: string list;
+  fields: poly_variant_field list;
 }
 
 and package_type_constraint = {
@@ -238,6 +243,21 @@ and poly_variant_bound_serializer = Serde.Ser.variant
         | Lower -> true
         | _ -> false); ]
 
+and poly_variant_field_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "tag" Serde.Ser.string (fun value -> value.tag);
+            Serde.Ser.field
+              "payload"
+              (Serde.Ser.option type_expr_serializer)
+              (fun value -> value.payload);
+          ]) in
+      serializer.run backend state value);
+}
+
 and poly_variant_serializer = {
   Serde.Ser.run =
     (fun backend state value ->
@@ -246,9 +266,9 @@ and poly_variant_serializer = {
           [
             Serde.Ser.field "bound" poly_variant_bound_serializer (fun value -> value.bound);
             Serde.Ser.field
-              "tags"
-              (Serde.Ser.contramap Array.from_list (Serde.Ser.array Serde.Ser.string))
-              (fun value -> value.tags);
+              "fields"
+              (Serde.Ser.contramap Array.from_list (Serde.Ser.array poly_variant_field_serializer))
+              (fun value -> value.fields);
           ]) in
       serializer.run backend state value);
 }

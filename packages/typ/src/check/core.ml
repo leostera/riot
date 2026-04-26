@@ -31,8 +31,13 @@ and poly_variant_bound =
   | Upper
   | Lower
 
+and poly_variant_field = {
+  tag: string;
+  payload: ty option;
+}
+
 and poly_variant_tags = {
-  mutable tags: string list;
+  mutable tags: poly_variant_field list;
 }
 
 and package_constraint = {
@@ -153,14 +158,34 @@ let rec prune = function
   | ty -> ty
 
 let normalized_poly_variant_tags = fun tags ->
-  tags |> List.sort ~compare:String.compare |> List.unique ~compare:String.compare
+  tags |> List.sort
+    ~compare:(fun left right ->
+      String.compare left.tag right.tag) |> List.fold_left ~init:[]
+    ~fn:(fun fields field ->
+      match fields with
+      | previous :: rest when String.equal previous.tag field.tag -> previous :: rest
+      | _ -> field :: fields) |> List.reverse
 
-let merge_poly_variant_tags = fun left right -> normalized_poly_variant_tags (List.append left right)
+let find_poly_variant_field = fun tag fields ->
+  List.find fields
+    ~fn:(fun field ->
+      String.equal field.tag tag)
 
-let render_poly_variant_tags = fun tags ->
-  tags |> normalized_poly_variant_tags |> List.map ~fn:(fun tag -> "`" ^ tag) |> String.concat " | "
+let poly_variant_tag_names = fun tags -> tags |> List.map ~fn:(fun field -> field.tag)
 
-let copy_poly_variant_tags = fun copies tags ->
+let poly_variant_tags_subset = fun left right ->
+  let right_names = poly_variant_tag_names right in
+  List.all (poly_variant_tag_names left)
+    ~fn:(fun tag ->
+      List.exists
+        (fun other ->
+          String.equal tag other)
+        right_names)
+
+let same_poly_variant_tags = fun left right ->
+  poly_variant_tags_subset left right && poly_variant_tags_subset right left
+
+let copy_poly_variant_tags = fun copies ~map_payload tags ->
   match
     List.find !copies
       ~fn:(fun (source, _) ->
@@ -168,8 +193,12 @@ let copy_poly_variant_tags = fun copies tags ->
   with
   | Some (_, copy) -> copy
   | None ->
-      let copy = { tags = normalized_poly_variant_tags tags.tags } in
+      let copy = { tags = [] } in
       copies := (tags, copy) :: !copies;
+      copy.tags <- tags.tags
+      |> List.map
+        ~fn:(fun field -> { field with payload = Option.map field.payload ~fn:map_payload })
+      |> normalized_poly_variant_tags;
       copy
 
 let rec string_of_ty = fun ty ->
@@ -226,18 +255,20 @@ let rec string_of_ty = fun ty ->
   | TVar { var=Link linked_ty } ->
       string_of_ty linked_ty
 
+and render_poly_variant_payload = fun ty ->
+  match prune ty with
+  | TArrow _ -> "(" ^ string_of_ty ty ^ ")"
+  | _ -> string_of_ty ty
+
+and render_poly_variant_field = fun field ->
+  match field.payload with
+  | None -> "`" ^ field.tag
+  | Some payload -> "`" ^ field.tag ^ " of " ^ render_poly_variant_payload payload
+
+and render_poly_variant_tags = fun tags ->
+  tags |> normalized_poly_variant_tags |> List.map ~fn:render_poly_variant_field |> String.concat " | "
+
 exception Occurs
-
-let poly_variant_tags_subset = fun left right ->
-  List.all left
-    ~fn:(fun tag ->
-      List.exists
-        (fun other ->
-          String.equal tag other)
-        right)
-
-let same_poly_variant_tags = fun left right ->
-  poly_variant_tags_subset left right && poly_variant_tags_subset right left
 
 let arg_label_equal = fun left right ->
   match left, right with
@@ -266,8 +297,10 @@ let rec occurs_adjust_levels = fun id level ty ->
       occurs_adjust_levels id level result
   | TCon (_, arguments) ->
       List.for_each arguments ~fn:(occurs_adjust_levels id level)
-  | TPolyVariant _ ->
-      ()
+  | TPolyVariant (_, tags) ->
+      tags.tags
+      |> List.for_each
+        ~fn:(fun field -> Option.for_each field.payload ~fn:(occurs_adjust_levels id level))
   | TPackage package ->
       package.constraints
       |> List.for_each ~fn:(fun constraint_ -> occurs_adjust_levels id level constraint_.manifest)
@@ -294,7 +327,10 @@ let rec ty_mentions_unbound_var = fun id ty ->
   | TPackage package -> List.exists
     (fun constraint_ -> ty_mentions_unbound_var id constraint_.manifest)
     package.constraints
-  | TPolyVariant _
+  | TPolyVariant (_, tags) -> List.exists
+    (fun field ->
+      Option.map field.payload ~fn:(ty_mentions_unbound_var id) |> Option.unwrap_or ~default:false)
+    tags.tags
   | TInt
   | TBool
   | TChar
@@ -383,7 +419,35 @@ and unify_pruned = fun state ~at left right ->
   | TPolyVariant (left_bound, left_tags), TPolyVariant (right_bound, right_tags) ->
       let left = normalized_poly_variant_tags left_tags.tags in
       let right = normalized_poly_variant_tags right_tags.tags in
-      let merged = merge_poly_variant_tags left right in
+      let unify_payloads left right =
+        left
+        |> List.for_each
+          ~fn:(fun left_field ->
+            match find_poly_variant_field left_field.tag right with
+            | None -> ()
+            | Some right_field -> (
+                match left_field.payload, right_field.payload with
+                | Some left_payload, Some right_payload -> unify state ~at left_payload right_payload
+                | None, None -> ()
+                | (Some _, None)
+                | (None, Some _) -> add_diagnostic
+                  state
+                  (unsupported_type
+                    at
+                    ("polymorphic variant payload mismatch for `" ^ left_field.tag))
+              ))
+      in
+      let merged =
+        right
+        |> List.fold_left ~init:left
+          ~fn:(fun fields right_field ->
+            match find_poly_variant_field right_field.tag fields with
+            | None -> right_field :: fields
+            | Some left_field ->
+                unify_payloads [ left_field ] [ right_field ];
+                fields)
+        |> normalized_poly_variant_tags
+      in
       let ok =
         match left_bound, right_bound with
         | (Upper, Upper)
@@ -406,6 +470,8 @@ and unify_pruned = fun state ~at left right ->
         | Lower, Exact ->
             poly_variant_tags_subset left right
       in
+      if ok then
+        unify_payloads left right;
       if not ok then
         add_diagnostic
           state
@@ -475,6 +541,52 @@ and unify_package = fun state ~at left right ->
       | Some right_constraint -> unify state ~at left_constraint.manifest right_constraint.manifest
       | None -> ())
 
+and coerce = fun state ~at source target ->
+  match prune source, prune target with
+  | TCon (source_path, []), TCon (target_path, []) when SurfacePath.equal source_path target_path ->
+      ()
+  | TCon (path, []), target when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest -> coerce state ~at manifest target
+      | None -> ()
+    )
+  | source, TCon (path, []) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest -> coerce state ~at source manifest
+      | None -> ()
+    )
+  | TPolyVariant (_, source_tags), TPolyVariant (_, target_tags) ->
+      coerce_poly_variant state ~at source_tags target_tags
+  | source, target ->
+      unify state ~at source target
+
+and coerce_poly_variant = fun state ~at source_tags target_tags ->
+  let source = normalized_poly_variant_tags source_tags.tags in
+  let target = normalized_poly_variant_tags target_tags.tags in
+  if poly_variant_tags_subset source target then
+    source |> List.for_each
+      ~fn:(fun source_field ->
+        match find_poly_variant_field source_field.tag target with
+        | None -> ()
+        | Some target_field -> (
+            match source_field.payload, target_field.payload with
+            | Some source_payload, Some target_payload -> unify state ~at source_payload target_payload
+            | None, None -> ()
+            | (Some _, None)
+            | (None, Some _) -> add_diagnostic
+              state
+              (unsupported_type at ("polymorphic variant payload mismatch for `" ^ source_field.tag))
+          ))
+  else
+    add_diagnostic
+      state
+      (unsupported_type
+        at
+        ("polymorphic variant coercion mismatch: "
+        ^ string_of_ty (TPolyVariant (Exact, { tags = source }))
+        ^ " vs "
+        ^ string_of_ty (TPolyVariant (Exact, { tags = target }))))
+
 let generalize = fun level ty ->
   let poly_variant_copies = ref [] in
   let rec loop ty =
@@ -493,7 +605,7 @@ let generalize = fun level ty ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies ~map_payload:loop tags)
     | TPackage package ->
         TPackage {
           package
@@ -534,7 +646,7 @@ let instantiate = fun state ~level ty ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies ~map_payload:loop tags)
     | TPackage package ->
         TPackage {
           package
@@ -575,7 +687,7 @@ let instantiate_pair = fun state ~level left right ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+        TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies ~map_payload:loop tags)
     | TPackage package ->
         TPackage {
           package
@@ -688,7 +800,8 @@ let shared_poly_variant_row_aliases = fun ty ->
     | TCon (_, arguments) ->
         List.for_each arguments ~fn:collect
     | TPolyVariant (_, tags) ->
-        remember tags
+        remember tags;
+        tags.tags |> List.for_each ~fn:(fun field -> Option.for_each field.payload ~fn:collect)
     | TPackage package ->
         package.constraints |> List.for_each ~fn:(fun constraint_ -> collect constraint_.manifest)
     | TVar { var=Link linked_ty } ->
@@ -754,7 +867,13 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
   | TPolyVariant (bound, tags) ->
       let public_type = Typing_context.PolyVariant {
         bound = public_poly_variant_bound bound;
-        tags = normalized_poly_variant_tags tags.tags
+        fields = normalized_poly_variant_tags tags.tags
+        |> List.map
+          ~fn:(fun field ->
+            {
+              Typing_context.tag = field.tag;
+              payload = Option.map field.payload ~fn:(public_type_of_ty vars row_aliases)
+            })
       } in
       (
         match find_row_alias row_aliases tags with
@@ -842,9 +961,15 @@ let rec import_scheme = fun scheme ->
     )
     | Typing_context.TypeConstructor { path; arguments } -> TCon (path, List.map arguments ~fn:loop)
     | Typing_context.Alias { type_; _ } -> loop type_
-    | Typing_context.PolyVariant { bound; tags } -> TPolyVariant (
+    | Typing_context.PolyVariant { bound; fields } -> TPolyVariant (
       import_poly_variant_bound bound,
-      { tags = normalized_poly_variant_tags tags }
+      {
+        tags = fields
+        |> List.map
+          ~fn:(fun field ->
+            { tag = field.Typing_context.tag; payload = Option.map field.payload ~fn:loop })
+        |> normalized_poly_variant_tags
+      }
     )
     | Typing_context.Package package -> TPackage {
       binder = package.binder;
@@ -1101,8 +1226,20 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
             (SurfacePath.from_name parameter)
             (fresh_tyvar state ~level:(level + 1)));
       lower_core_type state ~level:(level + 1) local_vars body
-  | TypAst.PolyVariant tags ->
-      TPolyVariant (Exact, { tags = normalized_poly_variant_tags tags })
+  | TypAst.PolyVariant fields ->
+      TPolyVariant (
+        Exact,
+        {
+          tags = fields
+          |> List.map
+            ~fn:(fun (field: TypAst.poly_variant_type_field) ->
+              {
+                tag = field.tag;
+                payload = Option.map field.payload ~fn:(lower_core_type state ~level vars)
+              })
+          |> normalized_poly_variant_tags
+        }
+      )
   | TypAst.Package package ->
       lower_package_type state ~level vars package
 
@@ -1167,8 +1304,15 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       (fresh_tyvar state ~level, [])
   | TypAst.Literal literal ->
       (literal_type literal, [])
-  | TypAst.PolyVariant tag ->
-      (TPolyVariant (Upper, { tags = [ tag ] }), [])
+  | TypAst.PolyVariant { tag; payload } ->
+      let payload_ty, bindings =
+        match payload with
+        | Some payload ->
+            let payload_ty, bindings = infer_pattern state env ~level payload in
+            (Some payload_ty, bindings)
+        | None -> (None, [])
+      in
+      (TPolyVariant (Upper, { tags = [ { tag; payload = payload_ty } ] }), bindings)
   | TypAst.Tuple elements ->
       let element_types, binding_groups = elements
       |> List.map ~fn:(fun child -> infer_pattern state env ~level child)
@@ -1386,8 +1530,9 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
             let child_ty = infer_expression state env ~level child in
             unify state ~at:child.origin element_ty child_ty);
         TList element_ty
-    | TypAst.PolyVariant tag ->
-        TPolyVariant (Lower, { tags = [ tag ] })
+    | TypAst.PolyVariant { tag; payload } ->
+        let payload = Option.map payload ~fn:(infer_expression state env ~level) in
+        TPolyVariant (Lower, { tags = [ { tag; payload } ] })
     | TypAst.Record fields ->
         infer_record state env ~level ~at:expression.origin fields
     | TypAst.RecordUpdate { base; fields } ->
@@ -1448,10 +1593,16 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
         TUnit
   in
   match expression.type_hint with
-  | Some annotation ->
-      let annotated = lower_core_type state ~level (ref []) annotation in
-      unify state ~at:expression.origin inferred annotated;
-      inferred
+  | Some hint -> (
+      let annotated = lower_core_type state ~level (ref []) hint.TypAst.type_ in
+      match hint.kind with
+      | TypAst.Annotation ->
+          unify state ~at:expression.origin inferred annotated;
+          inferred
+      | TypAst.Coercion ->
+          coerce state ~at:expression.origin inferred annotated;
+          annotated
+    )
   | None -> inferred
 
 and infer_local_module = fun state env ~level ~name ~items ~alias ~unpack body ->
@@ -1551,7 +1702,14 @@ and expand_local_type_manifests = fun manifests ty ->
     | TCon (path, arguments) ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
-        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
+        TPolyVariant (
+          bound,
+          {
+            tags = tags.tags
+            |> List.map ~fn:(fun field -> { field with payload = Option.map field.payload ~fn:loop })
+            |> normalized_poly_variant_tags
+          }
+        )
     | TPackage package ->
         TPackage {
           package
@@ -1614,6 +1772,14 @@ and replace_type_path = fun ~source ~replacement ty ->
     | TArrow (label, parameter, result) -> TArrow (label, loop parameter, loop result)
     | TCon (path, []) when SurfacePath.equal path source -> replacement
     | TCon (path, arguments) -> TCon (path, List.map arguments ~fn:loop)
+    | TPolyVariant (bound, tags) -> TPolyVariant (
+      bound,
+      {
+        tags = tags.tags
+        |> List.map ~fn:(fun field -> { field with payload = Option.map field.payload ~fn:loop })
+        |> normalized_poly_variant_tags
+      }
+    )
     | TPackage package -> TPackage {
       package
       with constraints = package.constraints
@@ -1830,7 +1996,10 @@ and simple_expression_identifier = fun (expression: TypAst.expression) ->
 
 and row_identity_tag_case = fun (case: TypAst.match_case) ->
   match case.guard, case.pattern.kind, case.body.kind with
-  | None, TypAst.PolyVariant pattern_tag, TypAst.PolyVariant body_tag when String.equal pattern_tag body_tag -> Some pattern_tag
+  | (None, TypAst.PolyVariant { tag=pattern_tag; payload=None }, TypAst.PolyVariant {
+    tag=body_tag;
+    payload=None
+  }) when String.equal pattern_tag body_tag -> Some pattern_tag
   | _ -> None
 
 and is_row_identity_catch_all_case = fun (case: TypAst.match_case) ->
@@ -1856,7 +2025,9 @@ and infer_row_identity_function_cases = fun cases ->
       )
   in
   if loop cases then
-    let row_tags = { tags = normalized_poly_variant_tags !tags } in
+    let row_tags = {
+      tags = !tags |> List.map ~fn:(fun tag -> { tag; payload = None }) |> normalized_poly_variant_tags
+    } in
     let row = TPolyVariant (Lower, row_tags) in
     Some (TArrow (Nolabel, row, row))
   else
@@ -2163,7 +2334,18 @@ and replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
   )
   | TPolyVariant (bound, tags) -> TPolyVariant (
     bound,
-    { tags = normalized_poly_variant_tags tags.tags }
+    {
+      tags = tags.tags
+      |> List.map
+        ~fn:(fun field ->
+          {
+            field
+            with payload = Option.map
+              field.payload
+              ~fn:(replace_ty_prefix ~source_prefix ~target_prefix)
+          })
+      |> normalized_poly_variant_tags
+    }
   )
   | TPackage package -> TPackage {
     package

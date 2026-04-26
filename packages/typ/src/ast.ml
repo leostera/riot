@@ -46,9 +46,15 @@ and core_type_kind =
   | Tuple of { separator: type_tuple_separator; elements: core_type list }
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
-  | PolyVariant of string list
+  | PolyVariant of poly_variant_type_field list
   | Package of package_type
   | Parenthesized of core_type
+
+and poly_variant_type_field = {
+  origin: origin;
+  tag: string;
+  payload: core_type option;
+}
 
 and package_type = {
   origin: origin;
@@ -124,7 +130,7 @@ and pattern_kind =
   | Path of path
   | Apply of { callee: pattern; argument: pattern }
   | Literal of literal
-  | PolyVariant of string
+  | PolyVariant of poly_variant_pattern
   | Tuple of pattern list
   | List of pattern list
   | Record of record_pattern_field list
@@ -140,6 +146,11 @@ and pattern_kind =
   | LocallyAbstractType of string list
   | FirstClassModule of { binder: string option; package_type: package_type option }
 
+and poly_variant_pattern = {
+  tag: string;
+  payload: pattern option;
+}
+
 and let_binding = {
   origin: origin;
   pattern: pattern;
@@ -148,9 +159,18 @@ and let_binding = {
   type_annotation: core_type option;
 }
 
+and expression_type_hint_kind =
+  | Annotation
+  | Coercion
+
+and expression_type_hint = {
+  kind: expression_type_hint_kind;
+  type_: core_type;
+}
+
 and expression = {
   origin: origin;
-  type_hint: core_type option;
+  type_hint: expression_type_hint option;
   kind: expression_kind;
 }
 
@@ -165,7 +185,7 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
-  | PolyVariant of string
+  | PolyVariant of poly_variant_expression
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
@@ -187,6 +207,11 @@ and expression_kind =
   | LocalOpen of { module_path: path; body: expression }
   | FirstClassModule of { module_path: path; package_type: package_type option }
   | Assert of expression
+
+and poly_variant_expression = {
+  tag: string;
+  payload: expression option;
+}
 
 and function_body =
   | Body of expression
@@ -547,8 +572,8 @@ let make_signature_item = fun origin (kind: signature_item_kind) ->
 
 let make_source_file = fun origin (kind: source_file_kind) -> ({ origin; kind }: t)
 
-let with_expression_type_hint = fun type_hint (expression: expression) ->
-  { expression with type_hint = Some type_hint }
+let with_expression_type_hint = fun kind type_ (expression: expression) ->
+  { expression with type_hint = Some { kind; type_ } }
 
 exception Build_failed of Diagnostics.Diagnostic.t
 
@@ -574,7 +599,7 @@ let poly_type_parameters = fun type_expr ->
     ~fn:(fun token -> names := token_text token :: !names);
   List.reverse !names
 
-let poly_variant_tags_from_node = fun node ->
+let poly_variant_tag_names_from_node = fun node ->
   let tags = ref [] in
   let saw_backtick = ref false in
   SynAst.Node.for_each_token node
@@ -590,9 +615,26 @@ let poly_variant_tags_from_node = fun node ->
   List.reverse !tags
 
 let poly_variant_tag_from_node = fun origin node ->
-  match poly_variant_tags_from_node node with
+  match poly_variant_tag_names_from_node node with
   | tag :: _ -> tag
   | [] -> build_failed origin "missing polymorphic variant tag"
+
+let poly_variant_type_fields_from_node = fun origin node ->
+  poly_variant_tag_names_from_node node
+  |> List.map ~fn:(fun tag -> ({ origin; tag; payload = None }: poly_variant_type_field))
+
+let opaque_type_is_token = fun kind type_expr ->
+  match SynAst.TypeExpr.view type_expr with
+  | SynAst.TypeExpr.Opaque node -> direct_child_tokens node
+  |> List.exists (fun token -> token_kind_is token kind)
+  | _ -> false
+
+let type_expr_is_coercion = fun type_expr ->
+  match SynAst.TypeExpr.view type_expr with
+  | SynAst.TypeExpr.Apply { argument=Some argument; constructor=Some _ } -> opaque_type_is_token
+    Syn.SyntaxKind.GT
+    argument
+  | _ -> false
 
 let source_slice = fun source -> IO.IoVec.IoSlice.from_string source |> Result.expect ~msg:"failed to create typ AST parser source slice"
 
@@ -605,6 +647,10 @@ let rec build_core_type = fun type_expr ->
         make_core_type origin (Var (Option.map name ~fn:token_text))
     | SynAst.TypeExpr.Path { path } ->
         make_core_type origin (Path (path_from_syn_path path))
+    | SynAst.TypeExpr.Apply { argument=Some argument; constructor=Some constructor } when opaque_type_is_token
+      Syn.SyntaxKind.GT
+      argument ->
+        build_core_type constructor
     | SynAst.TypeExpr.Apply { argument; constructor } ->
         make_core_type
           origin
@@ -643,8 +689,8 @@ let rec build_core_type = fun type_expr ->
           origin
           (Parenthesized (build_core_type (require_some origin "missing parenthesized type" inner)))
     | SynAst.TypeExpr.Opaque node -> (
-        match poly_variant_tags_from_node node with
-        | _ :: _ as tags -> make_core_type origin (PolyVariant tags)
+        match poly_variant_type_fields_from_node origin node with
+        | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
         | [] -> (
             match SynAst.TypeExpr.inner_without_attribute_suffix type_expr with
             | Some inner -> build_core_type inner
@@ -850,7 +896,12 @@ and build_pattern = fun syntax_pattern ->
           origin
           (Literal (Option.map token ~fn:literal_from_token |> Option.unwrap_or ~default:Unknown))
     | SynAst.Pattern.PolyVariant ->
-        make_pattern origin (PolyVariant (poly_variant_tag_from_node origin syntax_pattern))
+        make_pattern
+          origin
+          (PolyVariant {
+            tag = poly_variant_tag_from_node origin syntax_pattern;
+            payload = child_patterns syntax_pattern |> List.head |> Option.map ~fn:build_pattern
+          })
     | SynAst.Pattern.Tuple ->
         make_pattern origin (Tuple (child_patterns syntax_pattern |> List.map ~fn:build_pattern))
     | SynAst.Pattern.List ->
@@ -975,7 +1026,11 @@ and normalize_let_binding_parameters = fun (parameters: pattern list) (
               | None -> Some annotation
             in
             loop (push_parameters acc parameters) type_annotation rest
-        | None -> loop (parameter :: acc) type_annotation rest
+        | None ->
+            if List.is_empty rest && Option.is_none type_annotation then
+              loop (inner :: acc) (Some annotation) rest
+            else
+              loop (parameter :: acc) type_annotation rest
       )
     | parameter :: rest -> (
         match split_special_function_parameter_group parameter with
@@ -1059,7 +1114,13 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.Attribute { inner=None } ->
         build_failed origin "missing attributed expression"
     | SynAst.Expr.Typed { expr=Some expr; annotation=Some annotation } ->
-        with_expression_type_hint (build_core_type annotation) (build_expression expr)
+        let kind =
+          if type_expr_is_coercion annotation then
+            Coercion
+          else
+            Annotation
+        in
+        with_expression_type_hint kind (build_core_type annotation) (build_expression expr)
     | SynAst.Expr.Typed { expr=Some expr; annotation=None } ->
         build_expression expr
     | SynAst.Expr.Typed { expr=None; _ } ->
@@ -1072,10 +1133,13 @@ and build_expression = fun syntax_expression ->
         make_expression
           origin
           (List (child_exprs syntax_expression |> List.map ~fn:build_expression))
-    | SynAst.Expr.PolyVariant { payload=None } ->
-        make_expression origin (PolyVariant (poly_variant_tag_from_node origin syntax_expression))
-    | SynAst.Expr.PolyVariant { payload=Some _ } ->
-        build_failed origin "polymorphic variant payload"
+    | SynAst.Expr.PolyVariant { payload } ->
+        make_expression
+          origin
+          (PolyVariant {
+            tag = poly_variant_tag_from_node origin syntax_expression;
+            payload = Option.map payload ~fn:build_expression
+          })
     | SynAst.Expr.Record ->
         let record = SynAst.RecordExpr.cast syntax_expression |> require_some origin "invalid record expression" in
         (

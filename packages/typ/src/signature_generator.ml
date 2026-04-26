@@ -106,20 +106,31 @@ let render_constructor_path = fun ~path_prefix path ->
   in
   String.concat "." segments
 
-let normalized_poly_variant_tags = fun tags ->
-  tags |> List.sort ~compare:String.compare |> List.unique ~compare:String.compare
+let normalized_poly_variant_fields = fun fields ->
+  fields |> List.sort
+    ~compare:(fun left right ->
+      String.compare left.TypingContext.tag right.TypingContext.tag) |> List.fold_left ~init:[]
+    ~fn:(fun fields field ->
+      match fields with
+      | previous :: rest when String.equal previous.TypingContext.tag field.TypingContext.tag -> previous
+      :: rest
+      | _ -> field :: fields) |> List.reverse
 
-let render_poly_variant_tags = fun tags ->
-  tags |> normalized_poly_variant_tags |> List.map ~fn:(fun tag -> "`" ^ tag) |> String.concat " | "
+let render_poly_variant_fields = fun ~render_payload fields ->
+  fields |> normalized_poly_variant_fields |> List.map
+    ~fn:(fun field ->
+      match field.TypingContext.payload with
+      | None -> "`" ^ field.tag
+      | Some payload -> "`" ^ field.tag ^ " of " ^ render_payload payload) |> String.concat " | "
 
-let render_poly_variant_type = fun bound tags ->
+let render_poly_variant_type = fun bound ~render_payload fields ->
   let prefix =
     if String.equal bound "" then
       "[ "
     else
       "[" ^ bound
   in
-  prefix ^ render_poly_variant_tags tags ^ " ]"
+  prefix ^ render_poly_variant_fields ~render_payload fields ^ " ]"
 
 let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
   let vars = ref [] in
@@ -150,13 +161,15 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
         remember id
     | TypingContext.Var id ->
         remember id
+    | TypingContext.PolyVariant { fields; _ } ->
+        fields
+        |> List.for_each ~fn:(fun field -> Option.for_each field.TypingContext.payload ~fn:collect)
     | TypingContext.Int
     | TypingContext.Bool
     | TypingContext.Char
     | TypingContext.String
     | TypingContext.Float
-    | TypingContext.Unit
-    | TypingContext.PolyVariant _ ->
+    | TypingContext.Unit ->
         ()
     | TypingContext.Package package ->
         package.constraints
@@ -223,14 +236,28 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
       render_type ~path_prefix ~type_var_name type_ ^ " as " ^ type_var_name id
   | TypingContext.Var id ->
       type_var_name id
-  | TypingContext.PolyVariant { bound; tags } -> (
+  | TypingContext.PolyVariant { bound; fields } -> (
       match bound with
-      | TypingContext.Exact -> render_poly_variant_type "" tags
-      | TypingContext.Upper -> render_poly_variant_type "< " tags
-      | TypingContext.Lower -> render_poly_variant_type "> " tags
+      | TypingContext.Exact -> render_poly_variant_type
+        ""
+        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+        fields
+      | TypingContext.Upper -> render_poly_variant_type
+        "< "
+        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+        fields
+      | TypingContext.Lower -> render_poly_variant_type
+        "> "
+        ~render_payload:(render_poly_variant_payload ~path_prefix ~type_var_name)
+        fields
     )
   | TypingContext.Package package ->
       render_package_type ~path_prefix ~type_var_name ~include_binder:false package
+
+and render_poly_variant_payload = fun ~path_prefix ~type_var_name type_ ->
+  match type_ with
+  | TypingContext.Arrow _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | _ -> render_type ~path_prefix ~type_var_name type_
 
 and render_postfix_argument = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
@@ -275,8 +302,12 @@ and type_references_prefix = fun prefix type_ ->
   | TypingContext.String
   | TypingContext.Float
   | TypingContext.Unit
-  | TypingContext.PolyVariant _
   | TypingContext.Var _ -> false
+  | TypingContext.PolyVariant { fields; _ } -> List.exists
+    (fun field ->
+      Option.map field.TypingContext.payload ~fn:(type_references_prefix prefix)
+      |> Option.unwrap_or ~default:false)
+    fields
 
 and render_package_type = fun ~path_prefix ~type_var_name ~include_binder package ->
   let binder =
@@ -377,8 +408,35 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
   | TypAst.Poly { parameters; body } ->
       render_poly_type_parameters parameters
       ^ render_ast_core_type_with_substitutions substitutions body
-  | TypAst.PolyVariant tags ->
-      render_poly_variant_type "" tags
+  | TypAst.PolyVariant (fields: TypAst.poly_variant_type_field list) ->
+      let normalized_fields =
+        fields
+        |> List.sort
+          ~compare:(fun (left: TypAst.poly_variant_type_field) (
+            right: TypAst.poly_variant_type_field
+          ) ->
+            String.compare left.tag right.tag)
+        |> List.fold_left ~init:(([]: TypAst.poly_variant_type_field list))
+          ~fn:(fun fields (field: TypAst.poly_variant_type_field) ->
+            match fields with
+            | previous :: rest when String.equal previous.TypAst.tag field.TypAst.tag -> previous
+            :: rest
+            | _ -> field :: fields)
+        |> List.reverse
+      in
+      let rendered_fields =
+        normalized_fields
+        |> List.map
+          ~fn:(fun (field: TypAst.poly_variant_type_field) ->
+            match field.payload with
+            | None -> "`" ^ field.tag
+            | Some payload -> "`"
+            ^ field.tag
+            ^ " of "
+            ^ render_ast_core_type_with_substitutions substitutions payload)
+        |> String.concat " | "
+      in
+      "[ " ^ rendered_fields ^ " ]"
   | TypAst.Package package ->
       render_ast_package_type substitutions package
   | TypAst.Parenthesized inner ->

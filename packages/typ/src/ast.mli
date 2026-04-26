@@ -38,9 +38,15 @@ and core_type_kind =
   | Tuple of { separator: type_tuple_separator; elements: core_type list }
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
-  | PolyVariant of string list
+  | PolyVariant of poly_variant_type_field list
   | Package of package_type
   | Parenthesized of core_type
+
+and poly_variant_type_field = {
+  origin: origin;
+  tag: string;
+  payload: core_type option;
+}
 
 and package_type = {
   origin: origin;
@@ -111,7 +117,7 @@ and pattern_kind =
   | Path of path
   | Apply of { callee: pattern; argument: pattern }
   | Literal of literal
-  | PolyVariant of string
+  | PolyVariant of poly_variant_pattern
   | Tuple of pattern list
   | List of pattern list
   | Record of record_pattern_field list
@@ -127,6 +133,11 @@ and pattern_kind =
   | LocallyAbstractType of string list
   | FirstClassModule of { binder: string option; package_type: package_type option }
 
+and poly_variant_pattern = {
+  tag: string;
+  payload: pattern option;
+}
+
 and let_binding = {
   origin: origin;
   pattern: pattern;
@@ -135,9 +146,18 @@ and let_binding = {
   type_annotation: core_type option;
 }
 
+and expression_type_hint_kind =
+  | Annotation
+  | Coercion
+
+and expression_type_hint = {
+  kind: expression_type_hint_kind;
+  type_: core_type;
+}
+
 and expression = {
   origin: origin;
-  type_hint: core_type option;
+  type_hint: expression_type_hint option;
   kind: expression_kind;
 }
 
@@ -152,7 +172,7 @@ and expression_kind =
   | Path of path
   | Tuple of expression list
   | List of expression list
-  | PolyVariant of string
+  | PolyVariant of poly_variant_expression
   | Record of record_expression_field list
   | RecordUpdate of { base: expression; fields: record_expression_field list }
   | FieldAccess of { receiver: expression; field: path }
@@ -174,6 +194,11 @@ and expression_kind =
   | LocalOpen of { module_path: path; body: expression }
   | FirstClassModule of { module_path: path; package_type: package_type option }
   | Assert of expression
+
+and poly_variant_expression = {
+  tag: string;
+  payload: expression option;
+}
 
 and function_body =
   | Body of expression
