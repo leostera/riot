@@ -10,6 +10,70 @@ type file_kind =
   | `Interface
 ]
 type path = Model.Surface_path.t
+module Type: sig
+  type label =
+    | Nolabel
+    | Labelled of string
+    | Optional of string
+  type variable = {
+    id: int;
+    level: int;
+    mutable link: t option;
+  }
+
+  and arrow = {
+    label: label;
+    parameter: t;
+    result: t;
+  }
+
+  and constructor = {
+    path: path;
+    arguments: t list;
+  }
+
+  and poly_variant_bound =
+    | Exact
+    | Upper
+    | Lower
+
+  and poly_variant_field = {
+    tag: string;
+    payload: t option;
+  }
+
+  and package_constraint = {
+    type_name: path;
+    manifest: t;
+  }
+
+  and package = {
+    binder: string option;
+    module_type: path;
+    constraints: package_constraint list;
+  }
+
+  and t =
+    | Unknown
+    | Error
+    | Var of variable
+    | Generic of int
+    | Int
+    | Bool
+    | Char
+    | String
+    | Float
+    | Unit
+    | List of t
+    | Option of t
+    | Tuple of t list
+    | Arrow of arrow
+    | Constructor of constructor
+    | PolyVariant of poly_variant_bound * poly_variant_field list
+    | Package of package
+  val unknown: t
+end
+
 type literal =
   | Int
   | Float
@@ -26,6 +90,7 @@ type type_tuple_separator =
 ]
 type core_type = {
   origin: origin;
+  mutable type_: Type.t;
   kind: core_type_kind;
 }
 
@@ -104,6 +169,7 @@ and parameter_kind =
 
 and pattern = {
   origin: origin;
+  mutable type_: Type.t;
   kind: pattern_kind;
 }
 
@@ -158,6 +224,7 @@ and expression_type_hint = {
 
 and expression = {
   origin: origin;
+  mutable type_: Type.t;
   type_hint: expression_type_hint option;
   kind: expression_kind;
 }
@@ -330,11 +397,17 @@ and source_file_kind =
   | Empty of file_kind
 val core_type_origin: core_type -> origin
 
+val core_type_type: core_type -> Type.t
+
 val parameter_origin: parameter -> origin
 
 val pattern_origin: pattern -> origin
 
+val pattern_type: pattern -> Type.t
+
 val expression_origin: expression -> origin
+
+val expression_type: expression -> Type.t
 
 val structure_item_origin: structure_item -> origin
 

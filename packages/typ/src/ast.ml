@@ -16,6 +16,72 @@ type file_kind =
 
 type path = SurfacePath.t
 
+module Type = struct
+  type label =
+    | Nolabel
+    | Labelled of string
+    | Optional of string
+
+  type variable = {
+    id: int;
+    level: int;
+    mutable link: t option;
+  }
+
+  and arrow = {
+    label: label;
+    parameter: t;
+    result: t;
+  }
+
+  and constructor = {
+    path: path;
+    arguments: t list;
+  }
+
+  and poly_variant_bound =
+    | Exact
+    | Upper
+    | Lower
+
+  and poly_variant_field = {
+    tag: string;
+    payload: t option;
+  }
+
+  and package_constraint = {
+    type_name: path;
+    manifest: t;
+  }
+
+  and package = {
+    binder: string option;
+    module_type: path;
+    constraints: package_constraint list;
+  }
+
+  and t =
+    | Unknown
+    | Error
+    | Var of variable
+    | Generic of int
+    | Int
+    | Bool
+    | Char
+    | String
+    | Float
+    | Unit
+    | List of t
+    | Option of t
+    | Tuple of t list
+    | Arrow of arrow
+    | Constructor of constructor
+    | PolyVariant of poly_variant_bound * poly_variant_field list
+    | Package of package
+
+  let unknown = Unknown
+end
+
 type literal =
   | Int
   | Float
@@ -34,6 +100,7 @@ type type_tuple_separator =
 
 type core_type = {
   origin: origin;
+  mutable type_: Type.t;
   kind: core_type_kind;
 }
 
@@ -117,6 +184,7 @@ and parameter_kind =
 
 and pattern = {
   origin: origin;
+  mutable type_: Type.t;
   kind: pattern_kind;
 }
 
@@ -171,6 +239,7 @@ and expression_type_hint = {
 
 and expression = {
   origin: origin;
+  mutable type_: Type.t;
   type_hint: expression_type_hint option;
   kind: expression_kind;
 }
@@ -345,11 +414,17 @@ and source_file_kind =
 
 let core_type_origin = fun (type_: core_type) -> type_.origin
 
+let core_type_type = fun (type_: core_type) -> type_.type_
+
 let parameter_origin = fun (parameter: parameter) -> parameter.origin
 
 let pattern_origin = fun (pattern: pattern) -> pattern.origin
 
+let pattern_type = fun (pattern: pattern) -> pattern.type_
+
 let expression_origin = fun (expression: expression) -> expression.origin
+
+let expression_type = fun (expression: expression) -> expression.type_
 
 let match_case_origin = fun (match_case: match_case) -> match_case.origin
 
@@ -575,16 +650,19 @@ let child_exprs = fun expression ->
   SynAst.Expr.for_each_child_expr expression ~fn:(fun child -> children := child :: !children);
   List.reverse !children
 
-let make_core_type = fun origin (kind: core_type_kind) -> ({ origin; kind }: core_type)
+let make_core_type = fun origin (kind: core_type_kind) ->
+  ({ origin; type_ = Type.unknown; kind }: core_type)
 
 let make_type_definition = fun origin (kind: type_definition_kind) ->
   ({ origin; kind }: type_definition)
 
 let make_parameter = fun origin (kind: parameter_kind) -> ({ origin; kind }: parameter)
 
-let make_pattern = fun origin (kind: pattern_kind) -> ({ origin; kind }: pattern)
+let make_pattern = fun origin (kind: pattern_kind) ->
+  ({ origin; type_ = Type.unknown; kind }: pattern)
 
-let make_expression = fun origin (kind: expression_kind) -> { origin; type_hint = None; kind }
+let make_expression = fun origin (kind: expression_kind) ->
+  { origin; type_ = Type.unknown; type_hint = None; kind }
 
 let make_argument = fun origin (kind: argument_kind) -> ({ origin; kind }: argument)
 

@@ -16,7 +16,7 @@ open Std
 module TypingContext: module type of Typing_context
 
 (** Result of checking one source file. *)
-module Typings: module type of File
+module Typings: module type of Module_typings_file
 
 (** Public environment available before checking a file. *)
 type typing_context = TypingContext.t

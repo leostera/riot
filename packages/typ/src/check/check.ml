@@ -1,7 +1,7 @@
 open Std
 open Std.Result.Syntax
 module TypingContext = Typing_context
-module Typings = File
+module Typings = Module_typings_file
 
 type typing_context = TypingContext.t
 
