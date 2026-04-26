@@ -243,6 +243,7 @@ and external_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
+  primitives: string list;
 }
 
 and module_declaration = {

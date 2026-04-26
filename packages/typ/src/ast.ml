@@ -256,6 +256,7 @@ and external_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
+  primitives: string list;
 }
 
 and module_declaration = {
@@ -1476,6 +1477,10 @@ and build_value_declaration = fun context declaration ->
 
 and build_external_declaration = fun context declaration ->
   let origin = origin_from_node declaration in
+  let primitives = ref [] in
+  SynAst.ExternalDeclaration.for_each_primitive_string
+    declaration
+    ~fn:(fun token -> primitives := token_text token :: !primitives);
   (
     {
       origin;
@@ -1485,7 +1490,8 @@ and build_external_declaration = fun context declaration ->
       |> require_some origin "missing external declaration name";
       type_annotation = SynAst.ExternalDeclaration.type_annotation declaration
       |> require_some origin "missing external declaration type annotation"
-      |> build_core_type context
+      |> build_core_type context;
+      primitives = List.reverse !primitives
     }:
       external_declaration
   )

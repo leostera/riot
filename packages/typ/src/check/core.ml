@@ -2236,10 +2236,7 @@ and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding)
       let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
       unify state ~at:binding.origin value_ty annotated;
       lower_core_type state ~level:(level + 1) (ref []) annotation
-  | _ :: _, Some annotation ->
-      lower_core_type state ~level:(level + 1) (ref []) annotation
-  | _ ->
-      value_ty
+  | _ -> value_ty
 
 and runtime_parameter_count = fun parameters ->
   parameters |> List.filter
@@ -2928,6 +2925,18 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
               ~fn:(qualify_binding state module_prefix) in
             state.module_value_bindings <- List.append state.module_value_bindings qualified_bindings;
             (local_env, extend_mono exported_env qualified_bindings)
+        | TypAst.External declaration ->
+            let local_env, local_bindings = bind_declared_value
+              state
+              local_env
+              ~level
+              declaration.name
+              declaration.type_annotation in
+            let qualified_bindings = List.map
+              local_bindings
+              ~fn:(qualify_binding state module_prefix) in
+            state.module_value_bindings <- List.append state.module_value_bindings qualified_bindings;
+            (local_env, extend_mono exported_env qualified_bindings)
         | TypAst.Module declarations ->
             let local_env, exported_env =
               List.fold_left declarations ~init:(local_env, exported_env)
@@ -2950,8 +2959,7 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
             }
             :: state.module_type_summaries;
             (local_env, exported_env)
-        | TypAst.Expression _
-        | TypAst.External _ ->
+        | TypAst.Expression _ ->
             (local_env, exported_env))
   in
   state.type_aliases <- previous_type_aliases;

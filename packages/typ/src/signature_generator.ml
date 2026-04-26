@@ -634,8 +634,17 @@ let render_type_declaration_group = render_type_declaration_group_with_substitut
 let render_value_declaration = fun (declaration: TypAst.value_declaration) ->
   "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
 
-let render_external_declaration = fun (declaration: TypAst.external_declaration) ->
-  "val " ^ render_value_name declaration.name ^ " : " ^ render_ast_core_type declaration.type_annotation
+let render_external_declaration_with_substitutions = fun substitutions (
+  declaration: TypAst.external_declaration
+) ->
+  "external "
+  ^ render_value_name declaration.name
+  ^ " : "
+  ^ render_ast_core_type_with_substitutions substitutions declaration.type_annotation
+  ^ " = "
+  ^ String.concat " " declaration.primitives
+
+let render_external_declaration = render_external_declaration_with_substitutions []
 
 let rec render_signature_item = fun (item: TypAst.signature_item) ->
   match item.kind with
@@ -841,8 +850,9 @@ and render_structure_signature_item = fun ~root_items ~typing_context ~substitut
         declaration.items)
       | None -> None
     )
-  | TypAst.Expression _
-  | TypAst.External _ ->
+  | TypAst.External declaration ->
+      Some (render_external_declaration_with_substitutions substitutions declaration)
+  | TypAst.Expression _ ->
       None
 
 let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
