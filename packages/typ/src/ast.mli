@@ -178,7 +178,13 @@ type external_declaration = {
   name: string;
   type_annotation: core_type;
 }
-type structure_item = {
+type module_declaration = {
+  origin: origin;
+  name: string;
+  items: structure_item list;
+}
+
+and structure_item = {
   origin: origin;
   kind: structure_item_kind;
 }
@@ -188,6 +194,7 @@ and structure_item_kind =
   | Type of type_declaration list
   | Expression of expression
   | External of external_declaration
+  | Module of module_declaration list
 type signature_item = {
   origin: origin;
   kind: signature_item_kind;

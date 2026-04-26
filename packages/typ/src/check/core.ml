@@ -576,10 +576,50 @@ let lookup_surface_path = fun state env ~level ~at surface_path ->
       fresh_tyvar state ~level
     )
 
+let path_last_segment = fun path ->
+  match List.reverse (SurfacePath.to_segments path) with
+  | segment :: _ -> Some segment
+  | [] -> None
+
+let record_label_matches = fun requested actual ->
+  SurfacePath.equal requested actual
+  || match SurfacePath.to_segments requested, path_last_segment actual with
+  | [ requested ], Some actual -> String.equal requested actual
+  | _ -> false
+
+let lookup_record_labels = fun state label ->
+  List.filter
+    state.record_labels
+    ~fn:(fun record_label -> record_label_matches label record_label.label)
+
 let lookup_record_label = fun state label ->
-  List.find state.record_labels
-    ~fn:(fun record_label ->
-      SurfacePath.equal record_label.label label)
+  match lookup_record_labels state label with
+  | label :: _ -> Some label
+  | [] -> None
+
+let lookup_record_label_for_owner = fun state label owner_ty ->
+  let candidates = lookup_record_labels state label in
+  match prune owner_ty with
+  | TCon (owner_path, _) -> (
+      match
+        List.find candidates
+          ~fn:(fun candidate ->
+            match prune candidate.owner_ty with
+            | TCon (candidate_path, _) -> SurfacePath.equal owner_path candidate_path
+            | _ -> false)
+      with
+      | Some candidate -> Some candidate
+      | None -> (
+          match candidates with
+          | candidate :: _ -> Some candidate
+          | [] -> None
+        )
+    )
+  | _ -> (
+      match candidates with
+      | candidate :: _ -> Some candidate
+      | [] -> None
+    )
 
 let literal_type = function
   | TypAst.Int -> TInt
@@ -806,7 +846,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       infer_parameter state env ~level parameter
 
 and infer_record_pattern_field = fun state env ~level owner_ty (field: TypAst.record_pattern_field) ->
-  match lookup_record_label state field.name with
+  match lookup_record_label_for_owner state field.name owner_ty with
   | None ->
       add_diagnostic
         state
@@ -1043,7 +1083,12 @@ and infer_record = fun state env ~level ~at fields ->
       List.for_each fields
         ~fn:(fun (field: TypAst.record_expression_field) ->
           let value_ty = infer_expression state env ~level field.value in
-          match lookup_record_label state field.name with
+          let label =
+            match !owner_ty with
+            | Some owner_ty -> lookup_record_label_for_owner state field.name owner_ty
+            | None -> lookup_record_label state field.name
+          in
+          match label with
           | None -> add_diagnostic
             state
             (unsupported_type
@@ -1072,7 +1117,7 @@ and infer_record_update = fun state env ~level ~at base fields ->
   List.for_each fields
     ~fn:(fun (field: TypAst.record_expression_field) ->
       let value_ty = infer_expression state env ~level field.value in
-      match lookup_record_label state field.name with
+      match lookup_record_label_for_owner state field.name base_ty with
       | None -> add_diagnostic
         state
         (unsupported_type field.origin ("unbound record field " ^ SurfacePath.to_string field.name))
@@ -1085,7 +1130,7 @@ and infer_record_update = fun state env ~level ~at base fields ->
   base_ty
 
 and infer_record_field = fun state ~level ~at receiver_ty field ->
-  match lookup_record_label state field with
+  match lookup_record_label_for_owner state field receiver_ty with
   | None ->
       add_diagnostic
         state
@@ -1335,41 +1380,52 @@ let type_parameter_bindings = fun parameters ->
       index := !index + 1);
   (!vars, List.reverse !arguments)
 
-let bind_record_field_declaration = fun state ~level ~owner_ty vars (
+let qualify_name = fun path_prefix name ->
+  match path_prefix with
+  | [] -> SurfacePath.from_name name
+  | prefix -> SurfacePath.from_segments (List.append prefix [ name ])
+
+let bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars (
   field: TypAst.record_field_declaration
 ) ->
   let field_ty = lower_core_type state ~level (ref vars) field.type_annotation in
-  state.record_labels <- { label = SurfacePath.from_name field.name; owner_ty; field_ty } :: state.record_labels
+  state.record_labels <- { label = qualify_name path_prefix field.name; owner_ty; field_ty }
+  :: state.record_labels
 
-let inline_record_owner_ty = fun type_name constructor_name arguments ->
-  TCon (SurfacePath.from_segments [ type_name; constructor_name ], arguments)
+let inline_record_owner_ty = fun type_path constructor_name arguments ->
+  TCon (
+    SurfacePath.from_segments (List.append (SurfacePath.to_segments type_path) [ constructor_name ]),
+    arguments
+  )
 
-let constructor_payload_ty = fun state ~level ~type_name ~result_arguments vars (
+let constructor_payload_ty = fun state ~level ~path_prefix ~type_path ~result_arguments vars (
   constructor: TypAst.type_constructor
 ) ->
   match constructor.inline_record, constructor.payload with
   | Some fields, _ ->
-      let owner_ty = inline_record_owner_ty type_name constructor.name result_arguments in
-      fields |> List.for_each ~fn:(bind_record_field_declaration state ~level ~owner_ty vars);
+      let owner_ty = inline_record_owner_ty type_path constructor.name result_arguments in
+      fields
+      |> List.for_each ~fn:(bind_record_field_declaration state ~level ~path_prefix ~owner_ty vars);
       Some owner_ty
   | None, Some payload ->
       Some (lower_core_type state ~level (ref vars) payload)
   | None, None ->
       None
 
-let constructor_binding_of_declaration = fun state ~level ~type_name ~result_ty ~result_arguments vars (
+let constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_path ~result_ty ~result_arguments vars (
   constructor: TypAst.type_constructor
 ) ->
   let ty =
-    match constructor_payload_ty state ~level ~type_name ~result_arguments vars constructor with
+    match constructor_payload_ty state ~level ~path_prefix ~type_path ~result_arguments vars constructor with
     | None -> result_ty
     | Some payload_ty -> arrow payload_ty result_ty
   in
-  make_binding state ~name:(SurfacePath.from_name constructor.name) ~ty
+  make_binding state ~name:(qualify_name path_prefix constructor.name) ~ty
 
-let bind_type_declaration = fun state env ~level (declaration: TypAst.type_declaration) ->
+let bind_type_declaration = fun state env ~level ~path_prefix (declaration: TypAst.type_declaration) ->
   let vars, arguments = type_parameter_bindings declaration.parameters in
-  let result_ty = TCon (SurfacePath.from_name declaration.name, arguments) in
+  let type_path = qualify_name path_prefix declaration.name in
+  let result_ty = TCon (type_path, arguments) in
   match declaration.definition.kind with
   | TypAst.Variant constructors ->
       constructors
@@ -1377,7 +1433,8 @@ let bind_type_declaration = fun state env ~level (declaration: TypAst.type_decla
         ~fn:(constructor_binding_of_declaration
           state
           ~level
-          ~type_name:declaration.name
+          ~path_prefix
+          ~type_path
           ~result_ty
           ~result_arguments:arguments
           vars)
@@ -1387,12 +1444,13 @@ let bind_type_declaration = fun state env ~level (declaration: TypAst.type_decla
       env
   | TypAst.Record fields ->
       fields
-      |> List.for_each ~fn:(bind_record_field_declaration state ~level ~owner_ty:result_ty vars);
+      |> List.for_each
+        ~fn:(bind_record_field_declaration state ~level ~path_prefix ~owner_ty:result_ty vars);
       env
   | TypAst.Abstract ->
       env
 
-let infer_structure_item = fun state env ~level (item: TypAst.structure_item) ->
+let rec infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.structure_item) ->
   match item.kind with
   | TypAst.Let declaration ->
       let env, bindings = infer_let_declaration state env ~level declaration in
@@ -1402,7 +1460,7 @@ let infer_structure_item = fun state env ~level (item: TypAst.structure_item) ->
         List.fold_left
           declarations
           ~init:env
-          ~fn:(fun env declaration -> bind_type_declaration state env ~level declaration)
+          ~fn:(fun env declaration -> bind_type_declaration state env ~level ~path_prefix declaration)
       in
       (env, [], declarations)
   | TypAst.Expression expression ->
@@ -1411,6 +1469,35 @@ let infer_structure_item = fun state env ~level (item: TypAst.structure_item) ->
   | TypAst.External declaration ->
       let env, bindings = bind_declared_value state env ~level declaration.name declaration.type_annotation in
       (env, bindings, [])
+  | TypAst.Module declarations ->
+      let env =
+        List.fold_left
+          declarations
+          ~init:env
+          ~fn:(fun env declaration -> bind_module_declaration state env ~level ~path_prefix declaration)
+      in
+      (env, [], [])
+
+and bind_module_declaration = fun state env ~level ~path_prefix (
+  declaration: TypAst.module_declaration
+) ->
+  let module_prefix = List.append path_prefix [ declaration.name ] in
+  List.fold_left declaration.items ~init:env
+    ~fn:(fun env item ->
+      match item.kind with
+      | TypAst.Type declarations -> List.fold_left
+        declarations
+        ~init:env
+        ~fn:(fun env declaration ->
+          bind_type_declaration state env ~level ~path_prefix:module_prefix declaration)
+      | TypAst.Module declarations -> List.fold_left
+        declarations
+        ~init:env
+        ~fn:(fun env declaration ->
+          bind_module_declaration state env ~level ~path_prefix:module_prefix declaration)
+      | TypAst.Let _
+      | TypAst.Expression _
+      | TypAst.External _ -> env)
 
 let check_implementation = fun ~ast ~typing_context items ->
   let state = make_state ~next_binding_stamp:typing_context.Typing_context.next_binding_stamp in
@@ -1422,6 +1509,7 @@ let check_implementation = fun ~ast ~typing_context items ->
           state
           env
           ~level:0
+          ~path_prefix:[]
           item in
         (
           next_env,
@@ -1451,7 +1539,7 @@ let check_signature_item = fun state env ~level (item: TypAst.signature_item) ->
         List.fold_left
           declarations
           ~init:env
-          ~fn:(fun env declaration -> bind_type_declaration state env ~level declaration)
+          ~fn:(fun env declaration -> bind_type_declaration state env ~level ~path_prefix:[] declaration)
       in
       (env, [], declarations)
   | TypAst.External declaration ->

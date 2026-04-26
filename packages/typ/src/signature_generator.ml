@@ -314,31 +314,41 @@ let render_type_declaration_group = function
       :: List.map declarations ~fn:(render_type_declaration_with_keyword "and") in
       String.concat "\n" lines
 
-let ast_type_declaration_groups = fun (ast: TypAst.t) ->
+let rec render_module_declaration = fun (declaration: TypAst.module_declaration) ->
+  "module " ^ declaration.name ^ " : sig " ^ render_module_signature_items declaration.items ^ " end"
+
+and render_module_signature_items = fun items ->
+  items |> List.filter_map ~fn:render_structure_signature_item |> String.concat " "
+
+and render_structure_signature_item = fun (item: TypAst.structure_item) ->
+  match item.kind with
+  | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
+  | TypAst.Module declarations -> Some (declarations
+  |> List.map ~fn:render_module_declaration
+  |> String.concat " ")
+  | TypAst.Let _
+  | TypAst.Expression _
+  | TypAst.External _ -> None
+
+let ast_signature_declarations = fun (ast: TypAst.t) ->
   match ast.kind with
-  | TypAst.Implementation items ->
-      items |> List.filter_map
-        ~fn:(fun (item: TypAst.structure_item) ->
-          match item.kind with
-          | TypAst.Type declarations -> Some declarations
-          | _ -> None)
+  | TypAst.Implementation items -> items |> List.filter_map ~fn:render_structure_signature_item
   | TypAst.Interface items ->
       items |> List.filter_map
         ~fn:(fun (item: TypAst.signature_item) ->
           match item.kind with
-          | TypAst.Type declarations -> Some declarations
+          | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
           | _ -> None)
   | TypAst.Empty _ -> []
 
 let from_typings = fun (typings: Check.Typings.t) ->
-  let type_declaration_groups =
-    match ast_type_declaration_groups typings.ast with
+  let declaration_lines =
+    match ast_signature_declarations typings.ast with
     | [] -> List.map typings.type_declarations ~fn:(fun declaration -> [ declaration ])
-    | groups -> groups
+    |> List.map ~fn:render_type_declaration_group
+    | declarations -> declarations
   in
-  let lines = List.append
-    (List.map type_declaration_groups ~fn:render_type_declaration_group)
-    (List.map typings.bindings ~fn:render_binding) in
+  let lines = List.append declaration_lines (List.map typings.bindings ~fn:render_binding) in
   match lines with
   | [] -> ""
   | lines -> lines |> String.concat "\n" |> fun source -> source ^ "\n"

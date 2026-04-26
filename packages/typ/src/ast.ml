@@ -194,7 +194,13 @@ type external_declaration = {
   type_annotation: core_type;
 }
 
-type structure_item = {
+type module_declaration = {
+  origin: origin;
+  name: string;
+  items: structure_item list;
+}
+
+and structure_item = {
   origin: origin;
   kind: structure_item_kind;
 }
@@ -204,6 +210,7 @@ and structure_item_kind =
   | Type of type_declaration list
   | Expression of expression
   | External of external_declaration
+  | Module of module_declaration list
 
 type signature_item = {
   origin: origin;
@@ -957,7 +964,32 @@ let build_type_declarations = fun declaration ->
     ~fn:(fun member -> declarations := build_type_declaration_member member :: !declarations);
   List.reverse !declarations
 
-let build_structure_item = fun item ->
+let rec build_module_declaration_member = fun member ->
+  let declaration = SynAst.ModuleDeclaration.Member.declaration member in
+  let origin = origin_from_node declaration in
+  let items = ref [] in
+  SynAst.ModuleDeclaration.for_each_structure_item
+    declaration
+    ~fn:(fun item -> items := build_structure_item item :: !items);
+  (
+    {
+      origin;
+      name = SynAst.ModuleDeclaration.Member.name member
+      |> require_some origin "missing module declaration name"
+      |> token_text;
+      items = List.reverse !items
+    }:
+      module_declaration
+  )
+
+and build_module_declarations = fun declaration ->
+  let declarations = ref [] in
+  SynAst.ModuleDeclaration.for_each_member
+    declaration
+    ~fn:(fun member -> declarations := build_module_declaration_member member :: !declarations);
+  List.reverse !declarations
+
+and build_structure_item = fun item ->
   let origin = origin_from_node item in
   (match SynAst.StructureItem.view item with
     | Let declaration ->
@@ -971,6 +1003,8 @@ let build_structure_item = fun item ->
         make_structure_item origin (External (build_external_declaration declaration))
     | Type declaration ->
         make_structure_item origin (Type (build_type_declarations declaration))
+    | Module declaration ->
+        make_structure_item origin (Module (build_module_declarations declaration))
     | TypeExtension declaration ->
         build_failed
           (origin_from_node declaration)
@@ -991,7 +1025,6 @@ let build_structure_item = fun item ->
         build_failed
           (origin_from_node extension)
           (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
-    | Module _
     | ModuleType _
     | Open _
     | Include _ ->
