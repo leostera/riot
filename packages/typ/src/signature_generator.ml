@@ -86,7 +86,25 @@ let render_poly_type_parameters = function
   | [] -> ""
   | parameters -> (parameters |> List.map ~fn:(fun name -> "'" ^ name) |> String.concat " ") ^ ". "
 
-let render_constructor_path = fun path -> SurfacePath.to_string path
+let render_constructor_path = fun ~path_prefix path ->
+  let segments = SurfacePath.to_segments path in
+  let rec strip prefix segments =
+    match prefix, segments with
+    | [], rest -> Some rest
+    | prefix :: prefixes, segment :: segments when String.equal prefix segment -> strip prefixes segments
+    | _ -> None
+  in
+  let segments =
+    match path_prefix with
+    | [] -> segments
+    | prefix -> (
+        match strip prefix segments with
+        | Some (_ :: _ as rest) -> rest
+        | Some []
+        | None -> segments
+      )
+  in
+  String.concat "." segments
 
 let normalized_poly_variant_tags = fun tags ->
   tags |> List.sort ~compare:String.compare |> List.unique ~compare:String.compare
@@ -151,7 +169,7 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
     in
     loop 0 !vars
 
-let rec render_type = fun ~type_var_name type_ ->
+let rec render_type = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
   | TypingContext.Int ->
       "int"
@@ -166,25 +184,27 @@ let rec render_type = fun ~type_var_name type_ ->
   | TypingContext.Unit ->
       "unit"
   | TypingContext.List element ->
-      render_postfix_argument ~type_var_name element ^ " list"
+      render_postfix_argument ~path_prefix ~type_var_name element ^ " list"
   | TypingContext.Option element ->
-      render_postfix_argument ~type_var_name element ^ " option"
+      render_postfix_argument ~path_prefix ~type_var_name element ^ " option"
   | TypingContext.Tuple elements ->
-      elements |> List.map ~fn:(render_tuple_element ~type_var_name) |> String.concat " * "
+      elements |> List.map ~fn:(render_tuple_element ~path_prefix ~type_var_name) |> String.concat " * "
   | TypingContext.Arrow { label; parameter; result } ->
-      let parameter = render_arrow_parameter ~type_var_name parameter in
+      let parameter = render_arrow_parameter ~path_prefix ~type_var_name parameter in
       let parameter = render_arg_label label parameter in
-      let result = render_type ~type_var_name result in
+      let result = render_type ~path_prefix ~type_var_name result in
       parameter ^ " -> " ^ result
   | TypingContext.TypeConstructor { path; arguments=[] } ->
-      render_constructor_path path
+      render_constructor_path ~path_prefix path
   | TypingContext.TypeConstructor { path; arguments=[ argument ] } ->
-      render_postfix_argument ~type_var_name argument ^ " " ^ render_constructor_path path
+      render_postfix_argument ~path_prefix ~type_var_name argument
+      ^ " "
+      ^ render_constructor_path ~path_prefix path
   | TypingContext.TypeConstructor { path; arguments } ->
       "("
-      ^ (arguments |> List.map ~fn:(render_type ~type_var_name) |> String.concat ", ")
+      ^ (arguments |> List.map ~fn:(render_type ~path_prefix ~type_var_name) |> String.concat ", ")
       ^ ") "
-      ^ render_constructor_path path
+      ^ render_constructor_path ~path_prefix path
   | TypingContext.Var id ->
       type_var_name id
   | TypingContext.PolyVariant { bound; tags } -> (
@@ -194,22 +214,22 @@ let rec render_type = fun ~type_var_name type_ ->
       | TypingContext.Lower -> render_poly_variant_type "> " tags
     )
 
-and render_postfix_argument = fun ~type_var_name type_ ->
+and render_postfix_argument = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
   | TypingContext.Arrow _
-  | TypingContext.Tuple _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
-  | _ -> render_type ~type_var_name type_
+  | TypingContext.Tuple _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | _ -> render_type ~path_prefix ~type_var_name type_
 
-and render_tuple_element = fun ~type_var_name type_ ->
+and render_tuple_element = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
   | TypingContext.Arrow _
-  | TypingContext.Tuple _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
-  | _ -> render_type ~type_var_name type_
+  | TypingContext.Tuple _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | _ -> render_type ~path_prefix ~type_var_name type_
 
-and render_arrow_parameter = fun ~type_var_name type_ ->
+and render_arrow_parameter = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
-  | TypingContext.Arrow _ -> "(" ^ render_type ~type_var_name type_ ^ ")"
-  | _ -> render_type ~type_var_name type_
+  | TypingContext.Arrow _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
+  | _ -> render_type ~path_prefix ~type_var_name type_
 
 and render_arg_label = fun label parameter ->
   match label with
@@ -217,12 +237,15 @@ and render_arg_label = fun label parameter ->
   | TypingContext.Labelled label -> label ^ ":" ^ parameter
   | TypingContext.Optional label -> "?" ^ label ^ ":" ^ parameter
 
-let render_scheme = fun (scheme: TypingContext.scheme) ->
-  render_type ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
+let render_scheme = fun ~path_prefix (scheme: TypingContext.scheme) ->
+  render_type ~path_prefix ~type_var_name:(type_var_names_by_occurrence scheme.body) scheme.body
+
+let render_named_binding = fun ~path_prefix ~name (binding: TypingContext.value_binding) ->
+  "val " ^ render_value_name name ^ " : " ^ render_scheme ~path_prefix binding.scheme
 
 let render_binding = fun (binding: TypingContext.value_binding) ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
-  "val " ^ render_value_name name ^ " : " ^ render_scheme binding.scheme
+  render_named_binding ~path_prefix:[] ~name binding
 
 let rec render_ast_core_type = fun (type_: TypAst.core_type) ->
   match type_.kind with
@@ -314,25 +337,74 @@ let render_type_declaration_group = function
       :: List.map declarations ~fn:(render_type_declaration_with_keyword "and") in
       String.concat "\n" lines
 
-let rec render_module_declaration = fun (declaration: TypAst.module_declaration) ->
-  "module " ^ declaration.name ^ " : sig " ^ render_module_signature_items declaration.items ^ " end"
+let path_from_prefix = fun path_prefix name ->
+  match path_prefix with
+  | [] -> SurfacePath.from_name name
+  | prefix -> SurfacePath.from_segments (List.append prefix [ name ])
 
-and render_module_signature_items = fun items ->
-  items |> List.filter_map ~fn:render_structure_signature_item |> String.concat " "
+let find_value_binding = fun (typing_context: TypingContext.t) path ->
+  List.find typing_context.values
+    ~fn:(fun binding ->
+      SurfacePath.equal (EntityId.surface_path binding.entity_id) path)
 
-and render_structure_signature_item = fun (item: TypAst.structure_item) ->
+let pattern_bound_name = fun (pattern: TypAst.pattern) ->
+  match pattern.kind with
+  | TypAst.Path path -> (
+      match List.reverse (SurfacePath.to_segments path) with
+      | name :: _ -> Some name
+      | [] -> None
+    )
+  | _ -> None
+
+let let_declaration_names = fun (declaration: TypAst.let_declaration) ->
+  declaration.bindings
+  |> List.filter_map ~fn:(fun (binding: TypAst.let_binding) -> pattern_bound_name binding.pattern)
+
+let render_let_declaration = fun ~typing_context ~path_prefix declaration ->
+  declaration |> let_declaration_names |> List.filter_map
+    ~fn:(fun name ->
+      let path = path_from_prefix path_prefix name in
+      Option.map
+        (find_value_binding typing_context path)
+        ~fn:(render_named_binding ~path_prefix ~name)) |> String.concat " "
+
+let rec render_module_declaration = fun ~typing_context ~path_prefix (
+  declaration: TypAst.module_declaration
+) ->
+  let module_prefix = List.append path_prefix [ declaration.name ] in
+  let signature_items = render_module_signature_items
+    ~typing_context
+    ~path_prefix:module_prefix
+    declaration.items in
+  let inline = "module " ^ declaration.name ^ " : sig " ^ signature_items ^ " end" in
+  if String.length inline > 76 then
+    "module " ^ declaration.name ^ " :\n  sig " ^ signature_items ^ " end"
+  else
+    inline
+
+and render_module_signature_items = fun ~typing_context ~path_prefix items ->
+  items
+  |> List.filter_map ~fn:(render_structure_signature_item ~typing_context ~path_prefix)
+  |> String.concat " "
+
+and render_structure_signature_item = fun ~typing_context ~path_prefix (item: TypAst.structure_item) ->
   match item.kind with
   | TypAst.Type declarations -> Some (render_type_declaration_group declarations)
   | TypAst.Module declarations -> Some (declarations
-  |> List.map ~fn:render_module_declaration
+  |> List.map ~fn:(render_module_declaration ~typing_context ~path_prefix)
   |> String.concat " ")
-  | TypAst.Let _
+  | TypAst.Let declaration ->
+      if List.is_empty path_prefix then
+        None
+      else
+        Some (render_let_declaration ~typing_context ~path_prefix declaration)
   | TypAst.Expression _
   | TypAst.External _ -> None
 
-let ast_signature_declarations = fun (ast: TypAst.t) ->
+let ast_signature_declarations = fun typing_context (ast: TypAst.t) ->
   match ast.kind with
-  | TypAst.Implementation items -> items |> List.filter_map ~fn:render_structure_signature_item
+  | TypAst.Implementation items -> items
+  |> List.filter_map ~fn:(render_structure_signature_item ~typing_context ~path_prefix:[])
   | TypAst.Interface items ->
       items |> List.filter_map
         ~fn:(fun (item: TypAst.signature_item) ->
@@ -343,7 +415,7 @@ let ast_signature_declarations = fun (ast: TypAst.t) ->
 
 let from_typings = fun (typings: Check.Typings.t) ->
   let declaration_lines =
-    match ast_signature_declarations typings.ast with
+    match ast_signature_declarations typings.typing_context typings.ast with
     | [] -> List.map typings.type_declarations ~fn:(fun declaration -> [ declaration ])
     |> List.map ~fn:render_type_declaration_group
     | declarations -> declarations
