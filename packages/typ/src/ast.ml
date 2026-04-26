@@ -31,10 +31,24 @@ module TypeVar = struct
 end
 
 module Type = struct
-  type label =
-    | Nolabel
-    | Labelled of string
-    | Optional of string
+  module Label = struct
+    type t =
+      | NoLabel
+      | Labelled of string
+      | Optional of string
+
+    let equal a b =
+      match a, b with
+      | NoLabel, NoLabel -> true
+      | Labelled a, Labelled b -> String.equal a b
+      | Optional a, Optional b -> String.equal a b
+      | _ -> false
+
+    let to_string = function
+      | NoLabel -> ""
+      | Labelled label -> label ^ ":"
+      | Optional label -> "?" ^ label ^ ":"
+  end
 
   type variable = {
     id: TypeVar.t;
@@ -42,7 +56,7 @@ module Type = struct
   }
 
   and arrow = {
-    label: label;
+    label: Label.t;
     parameter: t;
     result: t;
   }
@@ -59,18 +73,13 @@ module Type = struct
     | Arrow of arrow
     | Constructor of constructor
 
-  let label_to_string = function
-    | Nolabel -> ""
-    | Labelled label -> label ^ ":"
-    | Optional label -> "?" ^ label ^ ":"
-
   let rec to_string type_ =
     match type_ with
     | Var { id; link=None } -> TypeVar.to_string id
     | Var { link=Some linked; _ } -> to_string linked
     | Generic id -> TypeVar.to_string id
     | Tuple elements -> "(" ^ (elements |> List.map ~fn:to_string |> String.concat " * ") ^ ")"
-    | Arrow { label; parameter; result } -> label_to_string label
+    | Arrow { label; parameter; result } -> Label.to_string label
     ^ arrow_parameter_to_string parameter
     ^ " -> "
     ^ to_string result
@@ -93,6 +102,33 @@ module Type = struct
     | Arrow _
     | Tuple _ -> "(" ^ to_string type_ ^ ")"
     | _ -> to_string type_
+
+  let same_var (a: variable) (b: variable) = TypeVar.equal a.id b.id
+
+  let rec equal left right =
+    match left, right with
+    | Var { link=Some left; _ }, right -> equal left right
+    | left, Var { link=Some right; _ } -> equal left right
+    | Var left, Var right -> same_var left right
+    | Generic left, Generic right -> TypeVar.equal left right
+    | Tuple left, Tuple right -> equal_many left right
+    | Arrow left, Arrow right -> equal_arrow left right
+    | Constructor left, Constructor right -> equal_constructor left right
+    | _ -> false
+
+  and equal_many left right =
+    if not (Int.equal (List.length left) (List.length right)) then
+      false
+    else
+      List.zip left right |> List.all ~fn:(fun (left, right) -> equal left right)
+
+  and equal_arrow left right =
+    Label.equal left.label right.label
+    && equal left.parameter right.parameter
+    && equal left.result right.result
+
+  and equal_constructor left right =
+    SurfacePath.equal left.path right.path && equal_many left.arguments right.arguments
 end
 
 type literal =
@@ -118,7 +154,7 @@ type core_type = {
 }
 
 and arrow_label =
-  | Nolabel
+  | NoLabel
   | Labelled of string
   | Optional of string
 
@@ -887,7 +923,7 @@ and build_arrow_parameter = fun context origin type_expr ->
     arrow_label_from_syn_type origin optional_token label,
     build_core_type context (require_some origin "missing labeled type annotation" annotation)
   )
-  | _ -> (Nolabel, build_core_type context type_expr)
+  | _ -> (NoLabel, build_core_type context type_expr)
 
 and core_type_application_arguments = fun (type_: core_type) ->
   match type_.kind with

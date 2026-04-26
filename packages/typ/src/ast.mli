@@ -24,17 +24,21 @@ module TypeVar: sig
 end
 
 module Type: sig
-  type label =
-    | Nolabel
-    | Labelled of string
-    | Optional of string
+  module Label: sig
+    type t =
+      | NoLabel
+      | Labelled of string
+      | Optional of string
+    val equal: t -> t -> bool
+  end
+
   type variable = {
     id: TypeVar.t;
     mutable link: t option;
   }
 
   and arrow = {
-    label: label;
+    label: Label.t;
     parameter: t;
     result: t;
   }
@@ -50,6 +54,10 @@ module Type: sig
     | Tuple of t list
     | Arrow of arrow
     | Constructor of constructor
+  val same_var: variable -> variable -> bool
+
+  val equal: t -> t -> bool
+
   val to_string: t -> string
 end
 
@@ -74,7 +82,7 @@ type core_type = {
 }
 
 and arrow_label =
-  | Nolabel
+  | NoLabel
   | Labelled of string
   | Optional of string
 
