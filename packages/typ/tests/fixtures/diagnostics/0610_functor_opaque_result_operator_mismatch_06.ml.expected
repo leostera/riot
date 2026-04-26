@@ -1,0 +1,8 @@
+File "0610_functor_opaque_result_operator_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0610_functor_opaque_result_operator_mismatch_06 is not a valid module name.
+
+File "0610_functor_opaque_result_operator_mismatch_06.ml", line 22, characters 8-18:
+22 | let _ = Out_zeta.y + 6
+             ^^^^^^^^^^
+Error: The value Out_zeta.y has type Out_zeta.u = Make_zeta(Input_zeta).u
+       but an expression was expected of type int

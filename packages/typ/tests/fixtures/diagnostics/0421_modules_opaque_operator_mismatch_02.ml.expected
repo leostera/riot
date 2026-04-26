@@ -1,0 +1,8 @@
+File "0421_modules_opaque_operator_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0421_modules_opaque_operator_mismatch_02 is not a valid module name.
+
+File "0421_modules_opaque_operator_mismatch_02.ml", line 14, characters 8-21:
+14 | let _ = Hidden_beta.x + 2
+             ^^^^^^^^^^^^^
+Error: The value Hidden_beta.x has type Hidden_beta.t
+       but an expression was expected of type int

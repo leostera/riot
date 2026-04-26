@@ -1,0 +1,9 @@
+File "0282_fun_monomorphic_custom_variant_use_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0282_fun_monomorphic_custom_variant_use_05 is not a valid module name.
+
+File "0282_fun_monomorphic_custom_variant_use_05.ml", line 3, characters 43-55:
+3 | let use_epsilon f = (f (Hot_epsilon 4), f (Cold_epsilon true))
+                                               ^^^^^^^^^^^^
+Error: This variant expression is expected to have type left_epsilon
+       There is no constructor Cold_epsilon within type left_epsilon
+Hint:             Did you mean Hot_epsilon?

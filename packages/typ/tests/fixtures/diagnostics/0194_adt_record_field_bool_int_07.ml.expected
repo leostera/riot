@@ -1,0 +1,8 @@
+File "0194_adt_record_field_bool_int_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0194_adt_record_field_bool_int_07 is not a valid module name.
+
+File "0194_adt_record_field_bool_int_07.ml", line 2, characters 38-39:
+2 | let _ : rec_eta = { index = 6; seen = 7 }
+                                          ^
+Error: The constant 7 has type int but an expression was expected of type
+         bool

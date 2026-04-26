@@ -1,0 +1,8 @@
+File "0348_labels_wrong_y_type_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0348_labels_wrong_y_type_02 is not a valid module name.
+
+File "0348_labels_wrong_y_type_02.ml", line 2, characters 26-27:
+2 | let _ = pick_beta ~x:1 ~y:2
+                              ^
+Error: The constant 2 has type int but an expression was expected of type
+         bool

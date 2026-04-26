@@ -1,0 +1,8 @@
+File "0255_fun_recursive_branch_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0255_fun_recursive_branch_mismatch_02 is not a valid module name.
+
+File "0255_fun_recursive_branch_mismatch_02.ml", line 2, characters 22-27:
+2 |   if flag then 1 else false
+                          ^^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

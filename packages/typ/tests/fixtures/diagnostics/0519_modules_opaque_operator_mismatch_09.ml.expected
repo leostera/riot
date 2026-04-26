@@ -1,0 +1,8 @@
+File "0519_modules_opaque_operator_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0519_modules_opaque_operator_mismatch_09 is not a valid module name.
+
+File "0519_modules_opaque_operator_mismatch_09.ml", line 14, characters 8-21:
+14 | let _ = Hidden_iota.x + 9
+             ^^^^^^^^^^^^^
+Error: The value Hidden_iota.x has type Hidden_iota.t
+       but an expression was expected of type int

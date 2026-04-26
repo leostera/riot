@@ -1,0 +1,8 @@
+File "0292_fun_monomorphic_custom_variant_use_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0292_fun_monomorphic_custom_variant_use_06 is not a valid module name.
+
+File "0292_fun_monomorphic_custom_variant_use_06.ml", line 3, characters 37-46:
+3 | let use_zeta f = (f (Low_zeta 5), f (High_zeta true))
+                                         ^^^^^^^^^
+Error: This variant expression is expected to have type left_zeta
+       There is no constructor High_zeta within type left_zeta

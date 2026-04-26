@@ -1,0 +1,8 @@
+File "0209_adt_constructor_int_arg_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0209_adt_constructor_int_arg_mismatch_08 is not a valid module name.
+
+File "0209_adt_constructor_int_arg_mismatch_08.ml", line 2, characters 11-15:
+2 | let _ = On true
+               ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

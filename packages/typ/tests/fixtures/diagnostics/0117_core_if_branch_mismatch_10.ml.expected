@@ -1,0 +1,8 @@
+File "0117_core_if_branch_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0117_core_if_branch_mismatch_10 is not a valid module name.
+
+File "0117_core_if_branch_mismatch_10.ml", line 1, characters 29-34:
+1 | let _ = if false then 9 else false
+                                 ^^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

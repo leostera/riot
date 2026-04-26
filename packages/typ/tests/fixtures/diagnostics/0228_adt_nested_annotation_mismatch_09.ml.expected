@@ -1,0 +1,7 @@
+File "0228_adt_nested_annotation_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0228_adt_nested_annotation_mismatch_09 is not a valid module name.
+
+File "0228_adt_nested_annotation_mismatch_09.ml", line 1, characters 38-42:
+1 | type rec_iota = { depth : int * bool; done : bool }
+                                          ^^^^
+Error: Syntax error

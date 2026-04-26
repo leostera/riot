@@ -1,0 +1,8 @@
+File "0678_fcm_local_abstract_result_annotation_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0678_fcm_local_abstract_result_annotation_02 is not a valid module name.
+
+File "0678_fcm_local_abstract_result_annotation_02.ml", line 8, characters 2-14:
+8 |   X.id X.value
+      ^^^^^^^^^^^^
+Error: This expression has type X.t = a
+       but an expression was expected of type bool

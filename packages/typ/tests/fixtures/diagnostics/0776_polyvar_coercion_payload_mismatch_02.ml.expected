@@ -1,0 +1,8 @@
+File "0776_polyvar_coercion_payload_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0776_polyvar_coercion_payload_mismatch_02 is not a valid module name.
+
+File "0776_polyvar_coercion_payload_mismatch_02.ml", line 2, characters 2-23:
+2 |   (x :> [ `A of bool ])
+      ^^^^^^^^^^^^^^^^^^^^^
+Error: Type [ `A of int ] is not a subtype of [ `A of bool ]
+       Type int is not a subtype of bool

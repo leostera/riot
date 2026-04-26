@@ -1,0 +1,8 @@
+File "0791_polyvar_call_payload_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0791_polyvar_call_payload_mismatch_04 is not a valid module name.
+
+File "0791_polyvar_call_payload_mismatch_04.ml", line 4, characters 23-27:
+4 | let _ = read_delta (`A true)
+                           ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

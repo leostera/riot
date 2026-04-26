@@ -1,0 +1,8 @@
+File "0102_core_function_application_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0102_core_function_application_mismatch_09 is not a valid module name.
+
+File "0102_core_function_application_mismatch_09.ml", line 2, characters 21-25:
+2 | let _ = consume_iota true
+                         ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,8 @@
+File "0482_modules_signature_arity_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0482_modules_signature_arity_mismatch_06 is not a valid module name.
+
+File "0482_modules_signature_arity_mismatch_06.ml", line 3, characters 10-25:
+3 |   val x : (int, bool) box
+              ^^^^^^^^^^^^^^^
+Error: The type constructor box expects 1 argument(s),
+       but is here applied to 2 argument(s)

@@ -1,0 +1,8 @@
+File "0448_modules_opaque_value_annotation_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0448_modules_opaque_value_annotation_mismatch_04 is not a valid module name.
+
+File "0448_modules_opaque_value_annotation_mismatch_04.ml", line 12, characters 14-28:
+12 | let _ : int = Hidden_delta.x
+                   ^^^^^^^^^^^^^^
+Error: The value Hidden_delta.x has type Hidden_delta.t
+       but an expression was expected of type int

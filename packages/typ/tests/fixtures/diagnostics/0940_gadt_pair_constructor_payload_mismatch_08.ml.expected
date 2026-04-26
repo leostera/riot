@@ -1,0 +1,8 @@
+File "0940_gadt_pair_constructor_payload_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0940_gadt_pair_constructor_payload_mismatch_08 is not a valid module name.
+
+File "0940_gadt_pair_constructor_payload_mismatch_08.ml", line 5, characters 50-54:
+5 | let _ : (int * bool) pair_box_theta = Pair_theta (true, 7)
+                                                      ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

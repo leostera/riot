@@ -1,0 +1,8 @@
+File "0167_adt_recursive_tree_payload_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0167_adt_recursive_tree_payload_mismatch_04 is not a valid module name.
+
+File "0167_adt_recursive_tree_payload_mismatch_04.ml", line 5, characters 26-30:
+5 |   Node_delta (Leaf_delta, true, Leaf_delta)
+                              ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

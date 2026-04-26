@@ -1,0 +1,8 @@
+File "0820_polyvar_tuple_payload_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0820_polyvar_tuple_payload_mismatch_06 is not a valid module name.
+
+File "0820_polyvar_tuple_payload_mismatch_06.ml", line 1, characters 35-39:
+1 | let _ : [ `P of int * bool ] = `P (true, 5)
+                                       ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

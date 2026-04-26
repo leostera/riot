@@ -1,0 +1,8 @@
+File "0177_adt_record_pattern_annotation_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0177_adt_record_pattern_annotation_mismatch_05 is not a valid module name.
+
+File "0177_adt_record_pattern_annotation_mismatch_05.ml", line 2, characters 13-29:
+2 | let { size = (epsilon : bool); open_ = other_epsilon } =
+                 ^^^^^^^^^^^^^^^^
+Error: This pattern matches values of type bool
+       but a pattern was expected which matches values of type int

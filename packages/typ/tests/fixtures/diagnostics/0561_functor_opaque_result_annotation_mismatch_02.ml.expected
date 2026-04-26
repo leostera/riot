@@ -1,0 +1,8 @@
+File "0561_functor_opaque_result_annotation_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0561_functor_opaque_result_annotation_mismatch_02 is not a valid module name.
+
+File "0561_functor_opaque_result_annotation_mismatch_02.ml", line 20, characters 14-24:
+20 | let _ : int = Out_beta.y
+                   ^^^^^^^^^^
+Error: The value Out_beta.y has type Out_beta.u = Make_beta(Input_beta).u
+       but an expression was expected of type int

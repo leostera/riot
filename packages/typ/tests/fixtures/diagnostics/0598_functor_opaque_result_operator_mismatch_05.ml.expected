@@ -1,0 +1,9 @@
+File "0598_functor_opaque_result_operator_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0598_functor_opaque_result_operator_mismatch_05 is not a valid module name.
+
+File "0598_functor_opaque_result_operator_mismatch_05.ml", line 22, characters 8-21:
+22 | let _ = Out_epsilon.y + 5
+             ^^^^^^^^^^^^^
+Error: The value Out_epsilon.y has type
+         Out_epsilon.u = Make_epsilon(Input_epsilon).u
+       but an expression was expected of type int

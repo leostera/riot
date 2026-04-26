@@ -1,0 +1,8 @@
+File "0198_adt_constructor_bool_arg_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0198_adt_constructor_bool_arg_mismatch_07 is not a valid module name.
+
+File "0198_adt_constructor_bool_arg_mismatch_07.ml", line 2, characters 15-16:
+2 | let _ = Closed 6
+                   ^
+Error: The constant 6 has type int but an expression was expected of type
+         bool

@@ -1,0 +1,8 @@
+File "0189_adt_record_pattern_annotation_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0189_adt_record_pattern_annotation_mismatch_06 is not a valid module name.
+
+File "0189_adt_record_pattern_annotation_mismatch_06.ml", line 2, characters 12-25:
+2 | let { age = (zeta : bool); ready = other_zeta } =
+                ^^^^^^^^^^^^^
+Error: This pattern matches values of type bool
+       but a pattern was expected which matches values of type int

@@ -1,0 +1,8 @@
+File "0003_core_not_int_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0003_core_not_int_01 is not a valid module name.
+
+File "0003_core_not_int_01.ml", line 2, characters 12-13:
+2 | let _ = not 0
+                ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

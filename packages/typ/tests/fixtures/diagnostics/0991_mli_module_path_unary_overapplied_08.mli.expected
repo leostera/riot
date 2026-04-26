@@ -1,0 +1,8 @@
+File "0991_mli_module_path_unary_overapplied_08.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0991_mli_module_path_unary_overapplied_08 is not a valid module name.
+
+File "0991_mli_module_path_unary_overapplied_08.mli", line 5, characters 14-35:
+5 | val x_theta : (int, bool) M_theta.t
+                  ^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor M_theta.t expects 1 argument(s),
+       but is here applied to 2 argument(s)

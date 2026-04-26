@@ -1,0 +1,8 @@
+File "0572_functor_generative_value_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0572_functor_generative_value_mismatch_03 is not a valid module name.
+
+File "0572_functor_generative_value_mismatch_03.ml", line 9, characters 20-33:
+9 | let _ : B_gamma.t = A_gamma.value
+                        ^^^^^^^^^^^^^
+Error: The value A_gamma.value has type A_gamma.t
+       but an expression was expected of type B_gamma.t

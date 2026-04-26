@@ -1,0 +1,8 @@
+File "0113_core_tuple_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0113_core_tuple_annotation_mismatch_10 is not a valid module name.
+
+File "0113_core_tuple_annotation_mismatch_10.ml", line 1, characters 26-30:
+1 | let kappa : int * bool = (true, 9)
+                              ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

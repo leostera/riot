@@ -1,0 +1,9 @@
+File "0242_fun_monomorphic_custom_variant_use_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0242_fun_monomorphic_custom_variant_use_01 is not a valid module name.
+
+File "0242_fun_monomorphic_custom_variant_use_01.ml", line 3, characters 37-44:
+3 | let use_alpha f = (f (I_alpha 0), f (B_alpha true))
+                                         ^^^^^^^
+Error: This variant expression is expected to have type left_alpha
+       There is no constructor B_alpha within type left_alpha
+Hint:             Did you mean I_alpha?

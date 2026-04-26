@@ -1,0 +1,8 @@
+File "0511_modules_outer_hidden_annotation_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0511_modules_outer_hidden_annotation_mismatch_08 is not a valid module name.
+
+File "0511_modules_outer_hidden_annotation_mismatch_08.ml", line 15, characters 14-34:
+15 | let _ : int = Outer_theta.Hidden.x
+                   ^^^^^^^^^^^^^^^^^^^^
+Error: The value Outer_theta.Hidden.x has type Outer_theta.Hidden.t
+       but an expression was expected of type int

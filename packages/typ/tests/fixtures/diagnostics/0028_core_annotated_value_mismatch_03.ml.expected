@@ -1,0 +1,8 @@
+File "0028_core_annotated_value_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0028_core_annotated_value_mismatch_03 is not a valid module name.
+
+File "0028_core_annotated_value_mismatch_03.ml", line 1, characters 18-23:
+1 | let gamma : int = false
+                      ^^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

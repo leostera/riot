@@ -1,0 +1,8 @@
+File "0260_fun_higher_order_callback_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0260_fun_higher_order_callback_mismatch_02 is not a valid module name.
+
+File "0260_fun_higher_order_callback_mismatch_02.ml", line 2, characters 32-33:
+2 | let _ = apply_beta (fun b -> if b then 1 else 2)
+                                    ^
+Error: The value b has type int but an expression was expected of type 
+       bool because it is in the condition of an if-statement

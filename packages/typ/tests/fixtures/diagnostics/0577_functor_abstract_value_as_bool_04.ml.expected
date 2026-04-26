@@ -1,0 +1,7 @@
+File "0577_functor_abstract_value_as_bool_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0577_functor_abstract_value_as_bool_04 is not a valid module name.
+
+File "0577_functor_abstract_value_as_bool_04.ml", line 7, characters 17-20:
+7 |   let y : bool = X.x
+                     ^^^
+Error: The value X.x has type X.t but an expression was expected of type bool

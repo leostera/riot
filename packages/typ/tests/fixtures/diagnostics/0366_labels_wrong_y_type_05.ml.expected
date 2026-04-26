@@ -1,0 +1,8 @@
+File "0366_labels_wrong_y_type_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0366_labels_wrong_y_type_05 is not a valid module name.
+
+File "0366_labels_wrong_y_type_05.ml", line 2, characters 29-30:
+2 | let _ = pick_epsilon ~x:4 ~y:5
+                                 ^
+Error: The constant 5 has type int but an expression was expected of type
+         bool

@@ -1,0 +1,8 @@
+File "0374_optional_argument_call_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0374_optional_argument_call_mismatch_06 is not a valid module name.
+
+File "0374_optional_argument_call_mismatch_06.ml", line 3, characters 20-24:
+3 | let _ = add_zeta ~x:true 6
+                        ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

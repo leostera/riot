@@ -1,0 +1,8 @@
+File "0232_adt_record_update_bool_field_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0232_adt_record_update_bool_field_10 is not a valid module name.
+
+File "0232_adt_record_update_bool_field_10.ml", line 3, characters 31-33:
+3 | let _ = { base_kappa with ok = 10 }
+                                   ^^
+Error: The constant 10 has type int but an expression was expected of type
+         bool

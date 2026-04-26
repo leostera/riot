@@ -1,0 +1,8 @@
+File "0987_mli_module_path_unary_overapplied_07.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0987_mli_module_path_unary_overapplied_07 is not a valid module name.
+
+File "0987_mli_module_path_unary_overapplied_07.mli", line 5, characters 12-31:
+5 | val x_eta : (int, bool) M_eta.t
+                ^^^^^^^^^^^^^^^^^^^
+Error: The type constructor M_eta.t expects 1 argument(s),
+       but is here applied to 2 argument(s)

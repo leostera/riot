@@ -1,0 +1,8 @@
+File "0971_mli_module_path_unary_overapplied_03.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0971_mli_module_path_unary_overapplied_03 is not a valid module name.
+
+File "0971_mli_module_path_unary_overapplied_03.mli", line 5, characters 14-35:
+5 | val x_gamma : (int, bool) M_gamma.t
+                  ^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor M_gamma.t expects 1 argument(s),
+       but is here applied to 2 argument(s)

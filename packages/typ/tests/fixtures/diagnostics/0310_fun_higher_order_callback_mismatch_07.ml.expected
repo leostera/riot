@@ -1,0 +1,8 @@
+File "0310_fun_higher_order_callback_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0310_fun_higher_order_callback_mismatch_07 is not a valid module name.
+
+File "0310_fun_higher_order_callback_mismatch_07.ml", line 2, characters 31-32:
+2 | let _ = apply_eta (fun b -> if b then 6 else 7)
+                                   ^
+Error: The value b has type int but an expression was expected of type 
+       bool because it is in the condition of an if-statement

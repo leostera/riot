@@ -1,0 +1,9 @@
+File "0867_gadt_witness_annotation_mismatch_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0867_gadt_witness_annotation_mismatch_01 is not a valid module name.
+
+File "0867_gadt_witness_annotation_mismatch_01.ml", line 5, characters 29-39:
+5 | let _ : bool witness_alpha = WInt_alpha
+                                 ^^^^^^^^^^
+Error: The constructor WInt_alpha has type int witness_alpha
+       but an expression was expected of type bool witness_alpha
+       Type int is not compatible with type bool

@@ -1,0 +1,8 @@
+File "0072_core_crate_payload_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0072_core_crate_payload_mismatch_06 is not a valid module name.
+
+File "0072_core_crate_payload_mismatch_06.ml", line 2, characters 26-30:
+2 | let _ : int crate = Crate true
+                              ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

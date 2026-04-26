@@ -1,0 +1,8 @@
+File "0951_gadt_constructor_payload_int_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0951_gadt_constructor_payload_int_mismatch_10 is not a valid module name.
+
+File "0951_gadt_constructor_payload_int_mismatch_10.ml", line 5, characters 36-40:
+5 | let _ : int expr_kappa = EInt_kappa true
+                                        ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

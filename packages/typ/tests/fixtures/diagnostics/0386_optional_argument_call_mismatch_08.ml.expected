@@ -1,0 +1,8 @@
+File "0386_optional_argument_call_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0386_optional_argument_call_mismatch_08 is not a valid module name.
+
+File "0386_optional_argument_call_mismatch_08.ml", line 3, characters 21-25:
+3 | let _ = add_theta ~x:true 8
+                         ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

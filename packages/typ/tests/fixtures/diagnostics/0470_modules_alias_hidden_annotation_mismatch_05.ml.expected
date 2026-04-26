@@ -1,0 +1,8 @@
+File "0470_modules_alias_hidden_annotation_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0470_modules_alias_hidden_annotation_mismatch_05 is not a valid module name.
+
+File "0470_modules_alias_hidden_annotation_mismatch_05.ml", line 14, characters 14-29:
+14 | let _ : int = Alias_epsilon.x
+                   ^^^^^^^^^^^^^^^
+Error: The value Alias_epsilon.x has type Alias_epsilon.t = Hidden_epsilon.t
+       but an expression was expected of type int

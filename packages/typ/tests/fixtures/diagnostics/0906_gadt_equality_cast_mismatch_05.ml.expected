@@ -1,0 +1,8 @@
+File "0906_gadt_equality_cast_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0906_gadt_equality_cast_mismatch_05 is not a valid module name.
+
+File "0906_gadt_equality_cast_mismatch_05.ml", line 7, characters 22-26:
+7 |     | Refl_epsilon -> true
+                          ^^^^
+Error: The constructor true has type bool
+       but an expression was expected of type b = a

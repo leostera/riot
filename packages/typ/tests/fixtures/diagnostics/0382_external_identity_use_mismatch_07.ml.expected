@@ -1,0 +1,8 @@
+File "0382_external_identity_use_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0382_external_identity_use_mismatch_07 is not a valid module name.
+
+File "0382_external_identity_use_mismatch_07.ml", line 2, characters 15-19:
+2 | let _ = id_eta true
+                   ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

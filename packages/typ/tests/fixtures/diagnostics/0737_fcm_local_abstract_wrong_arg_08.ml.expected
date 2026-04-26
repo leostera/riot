@@ -1,0 +1,8 @@
+File "0737_fcm_local_abstract_wrong_arg_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0737_fcm_local_abstract_wrong_arg_08 is not a valid module name.
+
+File "0737_fcm_local_abstract_wrong_arg_08.ml", line 14, characters 64-68:
+14 | let _ = use_theta (module M_theta : Id_theta with type t = int) true
+                                                                     ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

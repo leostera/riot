@@ -1,0 +1,9 @@
+File "0298_fun_polymorphic_record_field_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0298_fun_polymorphic_record_field_mismatch_06 is not a valid module name.
+
+File "0298_fun_polymorphic_record_field_mismatch_06.ml", line 2, characters 40-50:
+2 | let bad_zeta : poly_zeta = { run_zeta = fun _ -> 5 }
+                                            ^^^^^^^^^^
+Error: This field value has type int -> int which is less general than
+         'a. 'a -> 'a
+       The type int is not a type variable.

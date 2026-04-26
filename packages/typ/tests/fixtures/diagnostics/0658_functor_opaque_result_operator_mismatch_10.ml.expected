@@ -1,0 +1,8 @@
+File "0658_functor_opaque_result_operator_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0658_functor_opaque_result_operator_mismatch_10 is not a valid module name.
+
+File "0658_functor_opaque_result_operator_mismatch_10.ml", line 22, characters 8-19:
+22 | let _ = Out_kappa.y + 10
+             ^^^^^^^^^^^
+Error: The value Out_kappa.y has type Out_kappa.u = Make_kappa(Input_kappa).u
+       but an expression was expected of type int

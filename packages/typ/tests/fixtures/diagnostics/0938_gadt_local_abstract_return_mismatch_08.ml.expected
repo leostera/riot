@@ -1,0 +1,8 @@
+File "0938_gadt_local_abstract_return_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0938_gadt_local_abstract_return_mismatch_08 is not a valid module name.
+
+File "0938_gadt_local_abstract_return_mismatch_08.ml", line 9, characters 21-22:
+9 |     | WBool_theta -> x
+                         ^
+Error: The value x has type a = bool but an expression was expected of type
+         int

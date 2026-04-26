@@ -1,0 +1,30 @@
+File "0489_modules_nested_manifest_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0489_modules_nested_manifest_mismatch_07 is not a valid module name.
+
+File "0489_modules_nested_manifest_mismatch_07.ml", lines 6-11, characters 6-3:
+ 6 | ......struct
+ 7 |   module Inner = struct
+ 8 |     type t = int
+ 9 |     let x = 6
+10 |   end
+11 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig module Inner : sig type t = int val x : int end end
+       is not included in
+         sig module Inner : sig type t = bool val x : t end end
+       In module Inner:
+       Modules do not match:
+         sig type t = int val x : int end
+       is not included in
+         sig type t = bool val x : t end
+       In module Inner:
+       Type declarations do not match:
+         type t = int
+       is not included in
+         type t = bool
+       The type int is not equal to the type bool
+       File "0489_modules_nested_manifest_mismatch_07.ml", line 3, characters 4-17:
+         Expected declaration
+       File "0489_modules_nested_manifest_mismatch_07.ml", line 8, characters 4-16:
+         Actual declaration

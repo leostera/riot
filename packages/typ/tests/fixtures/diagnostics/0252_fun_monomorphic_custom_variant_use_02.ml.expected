@@ -1,0 +1,8 @@
+File "0252_fun_monomorphic_custom_variant_use_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0252_fun_monomorphic_custom_variant_use_02 is not a valid module name.
+
+File "0252_fun_monomorphic_custom_variant_use_02.ml", line 3, characters 37-46:
+3 | let use_beta f = (f (Num_beta 1), f (Flag_beta true))
+                                         ^^^^^^^^^
+Error: This variant expression is expected to have type left_beta
+       There is no constructor Flag_beta within type left_beta

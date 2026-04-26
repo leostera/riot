@@ -1,0 +1,8 @@
+File "0200_adt_recursive_list_payload_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0200_adt_recursive_list_payload_mismatch_07 is not a valid module name.
+
+File "0200_adt_recursive_list_payload_mismatch_07.ml", line 2, characters 35-39:
+2 | let _ : int mylist_eta = Cons_eta (true, Nil_eta)
+                                       ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

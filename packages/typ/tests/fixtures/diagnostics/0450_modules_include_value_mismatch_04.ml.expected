@@ -1,0 +1,17 @@
+File "0450_modules_include_value_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0450_modules_include_value_mismatch_04 is not a valid module name.
+
+File "0450_modules_include_value_mismatch_04.ml", lines 5-9, characters 21-3:
+5 | .....................struct
+6 |   include struct
+7 |     let x = true
+8 |   end
+9 | end
+Error: Signature mismatch:
+       Modules do not match: sig val x : bool end is not included in S_delta
+       Values do not match: val x : bool is not included in val x : int
+       The type bool is not compatible with the type int
+       File "0450_modules_include_value_mismatch_04.ml", line 2, characters 2-13:
+         Expected declaration
+       File "0450_modules_include_value_mismatch_04.ml", line 7, characters 8-9:
+         Actual declaration

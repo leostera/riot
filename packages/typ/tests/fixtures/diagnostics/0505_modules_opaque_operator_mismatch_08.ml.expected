@@ -1,0 +1,8 @@
+File "0505_modules_opaque_operator_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0505_modules_opaque_operator_mismatch_08 is not a valid module name.
+
+File "0505_modules_opaque_operator_mismatch_08.ml", line 14, characters 8-22:
+14 | let _ = Hidden_theta.x + 8
+             ^^^^^^^^^^^^^^
+Error: The value Hidden_theta.x has type Hidden_theta.t
+       but an expression was expected of type int

@@ -1,0 +1,8 @@
+File "0136_adt_record_update_bool_field_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0136_adt_record_update_bool_field_02 is not a valid module name.
+
+File "0136_adt_record_update_bool_field_02.ml", line 3, characters 34-35:
+3 | let _ = { base_beta with second = 2 }
+                                      ^
+Error: The constant 2 has type int but an expression was expected of type
+         bool

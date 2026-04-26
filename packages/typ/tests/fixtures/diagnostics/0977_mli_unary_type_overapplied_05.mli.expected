@@ -1,0 +1,8 @@
+File "0977_mli_unary_type_overapplied_05.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0977_mli_unary_type_overapplied_05 is not a valid module name.
+
+File "0977_mli_unary_type_overapplied_05.mli", line 2, characters 16-40:
+2 | val x_epsilon : (int, bool) wrap_epsilon
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor wrap_epsilon expects 1 argument(s),
+       but is here applied to 2 argument(s)

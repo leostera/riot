@@ -1,0 +1,9 @@
+File "0312_fun_monomorphic_custom_variant_use_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0312_fun_monomorphic_custom_variant_use_08 is not a valid module name.
+
+File "0312_fun_monomorphic_custom_variant_use_08.ml", line 3, characters 38-47:
+3 | let use_theta f = (f (On_theta 7), f (Off_theta true))
+                                          ^^^^^^^^^
+Error: This variant expression is expected to have type left_theta
+       There is no constructor Off_theta within type left_theta
+Hint:             Did you mean On_theta?

@@ -1,0 +1,8 @@
+File "0870_gadt_pair_constructor_payload_mismatch_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0870_gadt_pair_constructor_payload_mismatch_01 is not a valid module name.
+
+File "0870_gadt_pair_constructor_payload_mismatch_01.ml", line 5, characters 50-54:
+5 | let _ : (int * bool) pair_box_alpha = Pair_alpha (true, 0)
+                                                      ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

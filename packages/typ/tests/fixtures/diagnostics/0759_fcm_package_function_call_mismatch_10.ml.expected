@@ -1,0 +1,8 @@
+File "0759_fcm_package_function_call_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0759_fcm_package_function_call_mismatch_10 is not a valid module name.
+
+File "0759_fcm_package_function_call_mismatch_10.ml", line 8, characters 8-12:
+8 |   X.run true
+            ^^^^
+Error: The constructor true has type bool
+       but an expression was expected of type X.t

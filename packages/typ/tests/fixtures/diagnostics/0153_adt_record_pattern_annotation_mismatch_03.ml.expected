@@ -1,0 +1,8 @@
+File "0153_adt_record_pattern_annotation_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0153_adt_record_pattern_annotation_mismatch_03 is not a valid module name.
+
+File "0153_adt_record_pattern_annotation_mismatch_03.ml", line 2, characters 14-28:
+2 | let { count = (gamma : bool); flag = other_gamma } =
+                  ^^^^^^^^^^^^^^
+Error: This pattern matches values of type bool
+       but a pattern was expected which matches values of type int

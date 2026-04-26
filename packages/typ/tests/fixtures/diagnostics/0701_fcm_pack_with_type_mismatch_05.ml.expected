@@ -1,0 +1,10 @@
+File "0701_fcm_pack_with_type_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0701_fcm_pack_with_type_mismatch_05 is not a valid module name.
+
+File "0701_fcm_pack_with_type_mismatch_05.ml", line 11, characters 16-25:
+11 | let _ = (module M_epsilon : Box_epsilon with type t = bool)
+                     ^^^^^^^^^
+Error: This expression has type (module Box_epsilon with type t = bool)
+       but an expression was expected of type
+         (module Box_epsilon with type t = M_epsilon.t)
+       Type bool is not compatible with type M_epsilon.t = int

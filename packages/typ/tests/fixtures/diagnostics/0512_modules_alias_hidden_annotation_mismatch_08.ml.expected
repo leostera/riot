@@ -1,0 +1,8 @@
+File "0512_modules_alias_hidden_annotation_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0512_modules_alias_hidden_annotation_mismatch_08 is not a valid module name.
+
+File "0512_modules_alias_hidden_annotation_mismatch_08.ml", line 14, characters 14-27:
+14 | let _ : int = Alias_theta.x
+                   ^^^^^^^^^^^^^
+Error: The value Alias_theta.x has type Alias_theta.t = Hidden_theta.t
+       but an expression was expected of type int

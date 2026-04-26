@@ -1,0 +1,8 @@
+File "0903_gadt_witness_branch_return_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0903_gadt_witness_branch_return_mismatch_05 is not a valid module name.
+
+File "0903_gadt_witness_branch_return_mismatch_05.ml", line 6, characters 20-24:
+6 |   | WInt_epsilon -> true
+                        ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       a

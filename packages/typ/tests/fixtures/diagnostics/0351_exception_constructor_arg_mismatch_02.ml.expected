@@ -1,0 +1,8 @@
+File "0351_exception_constructor_arg_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0351_exception_constructor_arg_mismatch_02 is not a valid module name.
+
+File "0351_exception_constructor_arg_mismatch_02.ml", line 2, characters 15-19:
+2 | let _ = E_beta true
+                   ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,9 @@
+File "0733_fcm_unpack_with_type_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0733_fcm_unpack_with_type_mismatch_08 is not a valid module name.
+
+File "0733_fcm_unpack_with_type_mismatch_08.ml", line 13, characters 28-40:
+13 |   let module N_theta = (val packed_theta : Box_theta with type t = bool) in
+                                 ^^^^^^^^^^^^
+Error: The value packed_theta has type (module Box_theta)
+       but an expression was expected of type
+         (module Box_theta with type t = bool)

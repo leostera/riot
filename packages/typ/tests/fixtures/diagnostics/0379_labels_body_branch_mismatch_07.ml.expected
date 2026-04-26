@@ -1,0 +1,8 @@
+File "0379_labels_body_branch_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0379_labels_body_branch_mismatch_07 is not a valid module name.
+
+File "0379_labels_body_branch_mismatch_07.ml", line 2, characters 22-26:
+2 |   if flag then x else true
+                          ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

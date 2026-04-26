@@ -1,0 +1,9 @@
+File "0725_fcm_existential_escape_pair_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0725_fcm_existential_escape_pair_07 is not a valid module name.
+
+File "0725_fcm_existential_escape_pair_07.ml", line 8, characters 3-10:
+8 |   (M.value, M.value)
+       ^^^^^^^
+Error: The value M.value has type M.t but an expression was expected of type
+         'a
+       The type constructor M.t would escape its scope

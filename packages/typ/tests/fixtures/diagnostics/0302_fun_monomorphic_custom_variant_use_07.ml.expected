@@ -1,0 +1,8 @@
+File "0302_fun_monomorphic_custom_variant_use_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0302_fun_monomorphic_custom_variant_use_07 is not a valid module name.
+
+File "0302_fun_monomorphic_custom_variant_use_07.ml", line 3, characters 36-46:
+3 | let use_eta f = (f (Open_eta 6), f (Closed_eta true))
+                                        ^^^^^^^^^^
+Error: This variant expression is expected to have type left_eta
+       There is no constructor Closed_eta within type left_eta

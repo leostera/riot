@@ -1,0 +1,8 @@
+File "0463_modules_opaque_operator_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0463_modules_opaque_operator_mismatch_05 is not a valid module name.
+
+File "0463_modules_opaque_operator_mismatch_05.ml", line 14, characters 8-24:
+14 | let _ = Hidden_epsilon.x + 5
+             ^^^^^^^^^^^^^^^^
+Error: The value Hidden_epsilon.x has type Hidden_epsilon.t
+       but an expression was expected of type int

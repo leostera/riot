@@ -1,0 +1,9 @@
+File "0947_gadt_witness_annotation_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0947_gadt_witness_annotation_mismatch_09 is not a valid module name.
+
+File "0947_gadt_witness_annotation_mismatch_09.ml", line 5, characters 28-37:
+5 | let _ : bool witness_iota = WInt_iota
+                                ^^^^^^^^^
+Error: The constructor WInt_iota has type int witness_iota
+       but an expression was expected of type bool witness_iota
+       Type int is not compatible with type bool

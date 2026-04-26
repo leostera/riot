@@ -1,0 +1,8 @@
+File "0879_gadt_operator_on_wrong_branch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0879_gadt_operator_on_wrong_branch_02 is not a valid module name.
+
+File "0879_gadt_operator_on_wrong_branch_02.ml", line 11, characters 20-21:
+11 |     | WBool_beta -> x + 2
+                         ^
+Error: The value x has type a = bool but an expression was expected of type
+         int

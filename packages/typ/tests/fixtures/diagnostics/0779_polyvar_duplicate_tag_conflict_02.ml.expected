@@ -1,0 +1,8 @@
+File "0779_polyvar_duplicate_tag_conflict_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0779_polyvar_duplicate_tag_conflict_02 is not a valid module name.
+
+File "0779_polyvar_duplicate_tag_conflict_02.ml", line 1, characters 15-41:
+1 | let bad_beta : [ `A of int | `A of bool ] -> int =
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This variant type contains a constructor [ `A of bool ]
+       which should be [ `A of int ]

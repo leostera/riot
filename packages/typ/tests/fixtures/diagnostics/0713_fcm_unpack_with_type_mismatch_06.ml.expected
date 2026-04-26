@@ -1,0 +1,9 @@
+File "0713_fcm_unpack_with_type_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0713_fcm_unpack_with_type_mismatch_06 is not a valid module name.
+
+File "0713_fcm_unpack_with_type_mismatch_06.ml", line 13, characters 27-38:
+13 |   let module N_zeta = (val packed_zeta : Box_zeta with type t = bool) in
+                                ^^^^^^^^^^^
+Error: The value packed_zeta has type (module Box_zeta)
+       but an expression was expected of type
+         (module Box_zeta with type t = bool)

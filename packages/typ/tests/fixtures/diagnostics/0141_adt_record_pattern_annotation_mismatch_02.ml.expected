@@ -1,0 +1,8 @@
+File "0141_adt_record_pattern_annotation_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0141_adt_record_pattern_annotation_mismatch_02 is not a valid module name.
+
+File "0141_adt_record_pattern_annotation_mismatch_02.ml", line 2, characters 14-27:
+2 | let { first = (beta : bool); second = other_beta } =
+                  ^^^^^^^^^^^^^
+Error: This pattern matches values of type bool
+       but a pattern was expected which matches values of type int

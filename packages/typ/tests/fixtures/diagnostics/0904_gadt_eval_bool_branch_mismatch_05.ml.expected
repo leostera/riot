@@ -1,0 +1,8 @@
+File "0904_gadt_eval_bool_branch_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0904_gadt_eval_bool_branch_mismatch_05 is not a valid module name.
+
+File "0904_gadt_eval_bool_branch_mismatch_05.ml", line 7, characters 22-23:
+7 |   | Bool_epsilon b -> 4
+                          ^
+Error: The constant 4 has type int but an expression was expected of type
+         a = bool

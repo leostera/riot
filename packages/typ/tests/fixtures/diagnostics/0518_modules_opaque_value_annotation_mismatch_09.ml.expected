@@ -1,0 +1,8 @@
+File "0518_modules_opaque_value_annotation_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0518_modules_opaque_value_annotation_mismatch_09 is not a valid module name.
+
+File "0518_modules_opaque_value_annotation_mismatch_09.ml", line 12, characters 14-27:
+12 | let _ : int = Hidden_iota.x
+                   ^^^^^^^^^^^^^
+Error: The value Hidden_iota.x has type Hidden_iota.t
+       but an expression was expected of type int

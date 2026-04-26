@@ -1,0 +1,8 @@
+File "0964_mli_nested_path_zeroary_overapplied_01.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0964_mli_nested_path_zeroary_overapplied_01 is not a valid module name.
+
+File "0964_mli_nested_path_zeroary_overapplied_01.mli", line 7, characters 14-37:
+7 | val x_alpha : int Outer_alpha.Inner.t
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor Outer_alpha.Inner.t expects 0 argument(s),
+       but is here applied to 1 argument(s)

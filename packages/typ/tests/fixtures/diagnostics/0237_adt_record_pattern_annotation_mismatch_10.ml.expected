@@ -1,0 +1,8 @@
+File "0237_adt_record_pattern_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0237_adt_record_pattern_annotation_mismatch_10 is not a valid module name.
+
+File "0237_adt_record_pattern_annotation_mismatch_10.ml", line 2, characters 12-26:
+2 | let { key = (kappa : bool); ok = other_kappa } =
+                ^^^^^^^^^^^^^^
+Error: This pattern matches values of type bool
+       but a pattern was expected which matches values of type int

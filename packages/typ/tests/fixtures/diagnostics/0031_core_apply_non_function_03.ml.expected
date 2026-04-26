@@ -1,0 +1,8 @@
+File "0031_core_apply_non_function_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0031_core_apply_non_function_03 is not a valid module name.
+
+File "0031_core_apply_non_function_03.ml", line 3, characters 2-7:
+3 |   gamma 3
+      ^^^^^
+Error: This expression has type int
+       This is not a function; it cannot be applied.

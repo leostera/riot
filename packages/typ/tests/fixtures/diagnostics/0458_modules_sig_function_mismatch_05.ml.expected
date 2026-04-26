@@ -1,0 +1,22 @@
+File "0458_modules_sig_function_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0458_modules_sig_function_mismatch_05 is not a valid module name.
+
+File "0458_modules_sig_function_mismatch_05.ml", lines 3-5, characters 6-3:
+3 | ......struct
+4 |   let f (x : int) = x
+5 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig val f : int -> int end
+       is not included in
+         sig val f : bool -> bool end
+       Values do not match:
+         val f : int -> int
+       is not included in
+         val f : bool -> bool
+       The type int -> int is not compatible with the type bool -> bool
+       Type int is not compatible with type bool
+       File "0458_modules_sig_function_mismatch_05.ml", line 2, characters 2-22:
+         Expected declaration
+       File "0458_modules_sig_function_mismatch_05.ml", line 4, characters 6-7:
+         Actual declaration

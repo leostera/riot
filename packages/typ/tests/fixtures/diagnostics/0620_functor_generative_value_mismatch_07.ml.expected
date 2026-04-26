@@ -1,0 +1,8 @@
+File "0620_functor_generative_value_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0620_functor_generative_value_mismatch_07 is not a valid module name.
+
+File "0620_functor_generative_value_mismatch_07.ml", line 9, characters 18-29:
+9 | let _ : B_eta.t = A_eta.value
+                      ^^^^^^^^^^^
+Error: The value A_eta.value has type A_eta.t
+       but an expression was expected of type B_eta.t

@@ -1,0 +1,8 @@
+File "0157_adt_record_field_int_bool_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0157_adt_record_field_int_bool_04 is not a valid module name.
+
+File "0157_adt_record_field_int_bool_04.ml", line 2, characters 30-34:
+2 | let _ : rec_delta = { value = true; mark = false }
+                                  ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,7 @@
+File "0223_adt_variant_branch_result_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0223_adt_variant_branch_result_mismatch_09 is not a valid module name.
+
+File "0223_adt_variant_branch_result_mismatch_09.ml", line 4, characters 11-12:
+4 |   | C y -> y
+               ^
+Error: The value y has type bool but an expression was expected of type int

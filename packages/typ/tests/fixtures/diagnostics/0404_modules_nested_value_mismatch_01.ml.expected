@@ -1,0 +1,26 @@
+File "0404_modules_nested_value_mismatch_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0404_modules_nested_value_mismatch_01 is not a valid module name.
+
+File "0404_modules_nested_value_mismatch_01.ml", lines 5-9, characters 6-3:
+5 | ......struct
+6 |   module Inner = struct
+7 |     let x = 0
+8 |   end
+9 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig module Inner : sig val x : int end end
+       is not included in
+         sig module Inner : sig val x : bool end end
+       In module Inner:
+       Modules do not match:
+         sig val x : int end
+       is not included in
+         sig val x : bool end
+       In module Inner:
+       Values do not match: val x : int is not included in val x : bool
+       The type int is not compatible with the type bool
+       File "0404_modules_nested_value_mismatch_01.ml", line 3, characters 4-16:
+         Expected declaration
+       File "0404_modules_nested_value_mismatch_01.ml", line 7, characters 8-9:
+         Actual declaration

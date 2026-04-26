@@ -1,0 +1,8 @@
+File "0029_core_tuple_annotation_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0029_core_tuple_annotation_mismatch_03 is not a valid module name.
+
+File "0029_core_tuple_annotation_mismatch_03.ml", line 1, characters 26-30:
+1 | let gamma : int * bool = (true, 2)
+                              ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

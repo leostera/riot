@@ -1,0 +1,8 @@
+File "0670_fcm_hidden_value_to_int_consumer_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0670_fcm_hidden_value_to_int_consumer_01 is not a valid module name.
+
+File "0670_fcm_hidden_value_to_int_consumer_01.ml", line 10, characters 20-27:
+10 |   consume_int_alpha M.value
+                         ^^^^^^^
+Error: The value M.value has type M.t but an expression was expected of type
+         int

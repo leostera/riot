@@ -1,0 +1,8 @@
+File "0190_adt_tuple_constructor_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0190_adt_tuple_constructor_mismatch_06 is not a valid module name.
+
+File "0190_adt_tuple_constructor_mismatch_06.ml", line 2, characters 30-34:
+2 | let _ : rec_zeta = Pair_zeta (true, 5)
+                                  ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

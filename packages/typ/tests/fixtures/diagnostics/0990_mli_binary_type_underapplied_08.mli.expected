@@ -1,0 +1,8 @@
+File "0990_mli_binary_type_underapplied_08.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0990_mli_binary_type_underapplied_08 is not a valid module name.
+
+File "0990_mli_binary_type_underapplied_08.mli", line 2, characters 14-28:
+2 | val x_theta : int pair_theta
+                  ^^^^^^^^^^^^^^
+Error: The type constructor pair_theta expects 2 argument(s),
+       but is here applied to 1 argument(s)

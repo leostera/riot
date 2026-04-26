@@ -1,0 +1,18 @@
+File "0466_modules_local_module_signature_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0466_modules_local_module_signature_mismatch_05 is not a valid module name.
+
+File "0466_modules_local_module_signature_mismatch_05.ml", lines 4-6, characters 8-5:
+4 | ........struct
+5 |     let x = 4
+6 |   end...
+Error: Signature mismatch:
+       Modules do not match:
+         sig val x : int end
+       is not included in
+         sig val x : bool end
+       Values do not match: val x : int is not included in val x : bool
+       The type int is not compatible with the type bool
+       File "0466_modules_local_module_signature_mismatch_05.ml", line 3, characters 4-16:
+         Expected declaration
+       File "0466_modules_local_module_signature_mismatch_05.ml", line 5, characters 8-9:
+         Actual declaration

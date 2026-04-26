@@ -1,0 +1,8 @@
+File "0975_mli_module_path_unary_overapplied_04.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0975_mli_module_path_unary_overapplied_04 is not a valid module name.
+
+File "0975_mli_module_path_unary_overapplied_04.mli", line 5, characters 14-35:
+5 | val x_delta : (int, bool) M_delta.t
+                  ^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor M_delta.t expects 1 argument(s),
+       but is here applied to 2 argument(s)

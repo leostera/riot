@@ -1,0 +1,10 @@
+File "0741_fcm_pack_with_type_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0741_fcm_pack_with_type_mismatch_09 is not a valid module name.
+
+File "0741_fcm_pack_with_type_mismatch_09.ml", line 11, characters 16-22:
+11 | let _ = (module M_iota : Box_iota with type t = bool)
+                     ^^^^^^
+Error: This expression has type (module Box_iota with type t = bool)
+       but an expression was expected of type
+         (module Box_iota with type t = M_iota.t)
+       Type bool is not compatible with type M_iota.t = int

@@ -1,0 +1,8 @@
+File "0179_adt_recursive_tree_payload_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0179_adt_recursive_tree_payload_mismatch_05 is not a valid module name.
+
+File "0179_adt_recursive_tree_payload_mismatch_05.ml", line 5, characters 30-34:
+5 |   Node_epsilon (Leaf_epsilon, true, Leaf_epsilon)
+                                  ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

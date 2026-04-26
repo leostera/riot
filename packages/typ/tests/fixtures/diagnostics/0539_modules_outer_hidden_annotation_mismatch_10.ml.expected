@@ -1,0 +1,8 @@
+File "0539_modules_outer_hidden_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0539_modules_outer_hidden_annotation_mismatch_10 is not a valid module name.
+
+File "0539_modules_outer_hidden_annotation_mismatch_10.ml", line 15, characters 14-34:
+15 | let _ : int = Outer_kappa.Hidden.x
+                   ^^^^^^^^^^^^^^^^^^^^
+Error: The value Outer_kappa.Hidden.x has type Outer_kappa.Hidden.t
+       but an expression was expected of type int

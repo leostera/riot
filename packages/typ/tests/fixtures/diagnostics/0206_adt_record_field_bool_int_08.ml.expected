@@ -1,0 +1,8 @@
+File "0206_adt_record_field_bool_int_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0206_adt_record_field_bool_int_08 is not a valid module name.
+
+File "0206_adt_record_field_bool_int_08.ml", line 2, characters 40-41:
+2 | let _ : rec_theta = { score = 7; live = 8 }
+                                            ^
+Error: The constant 8 has type int but an expression was expected of type
+         bool

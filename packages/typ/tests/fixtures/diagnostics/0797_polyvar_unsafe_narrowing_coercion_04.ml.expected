@@ -1,0 +1,8 @@
+File "0797_polyvar_unsafe_narrowing_coercion_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0797_polyvar_unsafe_narrowing_coercion_04 is not a valid module name.
+
+File "0797_polyvar_unsafe_narrowing_coercion_04.ml", line 2, characters 2-15:
+2 |   (x :> [ `A ])
+      ^^^^^^^^^^^^^
+Error: Type [ `A | `B ] is not a subtype of [ `A ]
+       The second variant type does not allow tag(s) `B

@@ -1,0 +1,9 @@
+File "0845_polyvar_exact_row_annotation_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0845_polyvar_exact_row_annotation_mismatch_09 is not a valid module name.
+
+File "0845_polyvar_exact_row_annotation_mismatch_09.ml", line 1, characters 29-55:
+1 | let _ : [ `A of int | `B ] = (`A true : [ `A of bool ])
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This expression has type [ `A of bool ]
+       but an expression was expected of type [ `A of int | `B ]
+       The first variant type does not allow tag(s) `B

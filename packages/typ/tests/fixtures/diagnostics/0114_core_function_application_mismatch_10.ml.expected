@@ -1,0 +1,8 @@
+File "0114_core_function_application_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0114_core_function_application_mismatch_10 is not a valid module name.
+
+File "0114_core_function_application_mismatch_10.ml", line 2, characters 22-23:
+2 | let _ = consume_kappa 0
+                          ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

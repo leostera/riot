@@ -1,0 +1,8 @@
+File "0634_functor_opaque_result_operator_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0634_functor_opaque_result_operator_mismatch_08 is not a valid module name.
+
+File "0634_functor_opaque_result_operator_mismatch_08.ml", line 22, characters 8-19:
+22 | let _ = Out_theta.y + 8
+             ^^^^^^^^^^^
+Error: The value Out_theta.y has type Out_theta.u = Make_theta(Input_theta).u
+       but an expression was expected of type int

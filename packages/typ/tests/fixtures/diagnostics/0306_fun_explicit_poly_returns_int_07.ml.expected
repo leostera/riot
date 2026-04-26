@@ -1,0 +1,9 @@
+File "0306_fun_explicit_poly_returns_int_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0306_fun_explicit_poly_returns_int_07 is not a valid module name.
+
+File "0306_fun_explicit_poly_returns_int_07.ml", line 1, characters 29-39:
+1 | let bad_eta : 'a. 'a -> 'a = fun _ -> 6
+                                 ^^^^^^^^^^
+Error: This definition has type int -> int which is less general than
+         'a. 'a -> 'a
+       The type int is not a type variable.

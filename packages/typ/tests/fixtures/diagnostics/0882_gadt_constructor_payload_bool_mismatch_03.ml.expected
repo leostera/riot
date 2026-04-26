@@ -1,0 +1,8 @@
+File "0882_gadt_constructor_payload_bool_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0882_gadt_constructor_payload_bool_mismatch_03 is not a valid module name.
+
+File "0882_gadt_constructor_payload_bool_mismatch_03.ml", line 5, characters 38-39:
+5 | let _ : bool expr_gamma = EBool_gamma 2
+                                          ^
+Error: The constant 2 has type int but an expression was expected of type
+         bool

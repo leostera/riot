@@ -1,0 +1,8 @@
+File "0172_adt_record_update_bool_field_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0172_adt_record_update_bool_field_05 is not a valid module name.
+
+File "0172_adt_record_update_bool_field_05.ml", line 3, characters 36-37:
+3 | let _ = { base_epsilon with open_ = 5 }
+                                        ^
+Error: The constant 5 has type int but an expression was expected of type
+         bool

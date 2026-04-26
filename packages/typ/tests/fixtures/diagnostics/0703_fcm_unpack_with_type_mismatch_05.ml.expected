@@ -1,0 +1,9 @@
+File "0703_fcm_unpack_with_type_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0703_fcm_unpack_with_type_mismatch_05 is not a valid module name.
+
+File "0703_fcm_unpack_with_type_mismatch_05.ml", line 13, characters 30-44:
+13 |   let module N_epsilon = (val packed_epsilon : Box_epsilon with type t = bool) in
+                                   ^^^^^^^^^^^^^^
+Error: The value packed_epsilon has type (module Box_epsilon)
+       but an expression was expected of type
+         (module Box_epsilon with type t = bool)

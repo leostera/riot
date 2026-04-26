@@ -1,0 +1,18 @@
+File "0617_functor_result_signature_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0617_functor_result_signature_mismatch_07 is not a valid module name.
+
+File "0617_functor_result_signature_mismatch_07.ml", lines 8-10, characters 6-3:
+ 8 | ......struct
+ 9 |   let y = X.x
+10 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig val y : X.t end
+       is not included in
+         sig val y : bool end
+       Values do not match: val y : X.t is not included in val y : bool
+       The type X.t is not compatible with the type bool
+       File "0617_functor_result_signature_mismatch_07.ml", line 7, characters 2-14:
+         Expected declaration
+       File "0617_functor_result_signature_mismatch_07.ml", line 9, characters 6-7:
+         Actual declaration

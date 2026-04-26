@@ -1,0 +1,8 @@
+File "0396_labels_wrong_y_type_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0396_labels_wrong_y_type_10 is not a valid module name.
+
+File "0396_labels_wrong_y_type_10.ml", line 2, characters 27-29:
+2 | let _ = pick_kappa ~x:9 ~y:10
+                               ^^
+Error: The constant 10 has type int but an expression was expected of type
+         bool

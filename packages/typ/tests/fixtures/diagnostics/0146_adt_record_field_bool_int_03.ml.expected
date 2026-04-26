@@ -1,0 +1,8 @@
+File "0146_adt_record_field_bool_int_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0146_adt_record_field_bool_int_03 is not a valid module name.
+
+File "0146_adt_record_field_bool_int_03.ml", line 2, characters 40-41:
+2 | let _ : rec_gamma = { count = 2; flag = 3 }
+                                            ^
+Error: The constant 3 has type int but an expression was expected of type
+         bool

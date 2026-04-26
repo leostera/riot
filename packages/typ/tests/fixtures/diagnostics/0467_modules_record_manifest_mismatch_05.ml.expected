@@ -1,0 +1,26 @@
+File "0467_modules_record_manifest_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0467_modules_record_manifest_mismatch_05 is not a valid module name.
+
+File "0467_modules_record_manifest_mismatch_05.ml", lines 4-7, characters 6-3:
+4 | ......struct
+5 |   type t = { size : int }
+6 |   let x = { size = 4 }
+7 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = { size : int; } val x : t end
+       is not included in
+         sig type t = { size : bool; } val x : t end
+       Type declarations do not match:
+         type t = { size : int; }
+       is not included in
+         type t = { size : bool; }
+       Fields do not match:
+         size : int;
+       is not the same as:
+         size : bool;
+       The type int is not equal to the type bool
+       File "0467_modules_record_manifest_mismatch_05.ml", line 2, characters 2-26:
+         Expected declaration
+       File "0467_modules_record_manifest_mismatch_05.ml", line 5, characters 2-25:
+         Actual declaration

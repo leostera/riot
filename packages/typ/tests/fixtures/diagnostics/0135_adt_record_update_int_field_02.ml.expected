@@ -1,0 +1,8 @@
+File "0135_adt_record_update_int_field_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0135_adt_record_update_int_field_02 is not a valid module name.
+
+File "0135_adt_record_update_int_field_02.ml", line 3, characters 33-37:
+3 | let _ = { base_beta with first = true }
+                                     ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

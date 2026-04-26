@@ -1,0 +1,8 @@
+File "0086_core_and_int_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0086_core_and_int_08 is not a valid module name.
+
+File "0086_core_and_int_08.ml", line 2, characters 41-42:
+2 | let _ = match false with true -> true && 0 | false -> false
+                                             ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

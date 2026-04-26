@@ -1,0 +1,8 @@
+File "0710_fcm_hidden_value_to_int_consumer_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0710_fcm_hidden_value_to_int_consumer_05 is not a valid module name.
+
+File "0710_fcm_hidden_value_to_int_consumer_05.ml", line 10, characters 22-29:
+10 |   consume_int_epsilon M.value
+                           ^^^^^^^
+Error: The value M.value has type M.t but an expression was expected of type
+         int

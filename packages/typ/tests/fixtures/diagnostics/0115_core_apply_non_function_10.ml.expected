@@ -1,0 +1,8 @@
+File "0115_core_apply_non_function_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0115_core_apply_non_function_10 is not a valid module name.
+
+File "0115_core_apply_non_function_10.ml", line 3, characters 2-7:
+3 |   kappa 10
+      ^^^^^
+Error: This expression has type int
+       This is not a function; it cannot be applied.

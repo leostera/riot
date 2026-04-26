@@ -1,0 +1,8 @@
+File "0965_mli_unary_type_overapplied_02.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0965_mli_unary_type_overapplied_02 is not a valid module name.
+
+File "0965_mli_unary_type_overapplied_02.mli", line 2, characters 13-34:
+2 | val x_beta : (int, bool) wrap_beta
+                 ^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor wrap_beta expects 1 argument(s),
+       but is here applied to 2 argument(s)

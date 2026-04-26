@@ -1,0 +1,8 @@
+File "0902_gadt_constructor_payload_bool_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0902_gadt_constructor_payload_bool_mismatch_05 is not a valid module name.
+
+File "0902_gadt_constructor_payload_bool_mismatch_05.ml", line 5, characters 42-43:
+5 | let _ : bool expr_epsilon = EBool_epsilon 4
+                                              ^
+Error: The constant 4 has type int but an expression was expected of type
+         bool

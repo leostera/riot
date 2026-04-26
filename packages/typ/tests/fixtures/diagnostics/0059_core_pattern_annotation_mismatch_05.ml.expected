@@ -1,0 +1,8 @@
+File "0059_core_pattern_annotation_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0059_core_pattern_annotation_mismatch_05 is not a valid module name.
+
+File "0059_core_pattern_annotation_mismatch_05.ml", line 1, characters 41-42:
+1 | let ((epsilon : bool), other_epsilon) = (4, 5)
+                                             ^
+Error: The constant 4 has type int but an expression was expected of type
+         bool

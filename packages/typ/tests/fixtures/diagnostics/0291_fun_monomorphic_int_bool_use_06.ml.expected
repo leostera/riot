@@ -1,0 +1,8 @@
+File "0291_fun_monomorphic_int_bool_use_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0291_fun_monomorphic_int_bool_use_06 is not a valid module name.
+
+File "0291_fun_monomorphic_int_bool_use_06.ml", line 1, characters 25-29:
+1 | let use_zeta f = (f 5, f true)
+                             ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

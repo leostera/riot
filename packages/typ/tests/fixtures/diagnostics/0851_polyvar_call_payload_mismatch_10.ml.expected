@@ -1,0 +1,8 @@
+File "0851_polyvar_call_payload_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0851_polyvar_call_payload_mismatch_10 is not a valid module name.
+
+File "0851_polyvar_call_payload_mismatch_10.ml", line 4, characters 23-27:
+4 | let _ = read_kappa (`A true)
+                           ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

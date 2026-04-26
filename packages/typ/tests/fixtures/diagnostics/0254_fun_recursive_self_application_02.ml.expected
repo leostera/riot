@@ -1,0 +1,9 @@
+File "0254_fun_recursive_self_application_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0254_fun_recursive_self_application_02 is not a valid module name.
+
+File "0254_fun_recursive_self_application_02.ml", line 1, characters 23-24:
+1 | let rec bad_beta x = x x
+                           ^
+Error: The value x has type 'a -> 'b but an expression was expected of type
+         'a
+       The type variable 'a occurs inside 'a -> 'b

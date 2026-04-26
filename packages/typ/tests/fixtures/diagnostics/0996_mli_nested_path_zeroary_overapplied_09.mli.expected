@@ -1,0 +1,8 @@
+File "0996_mli_nested_path_zeroary_overapplied_09.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0996_mli_nested_path_zeroary_overapplied_09 is not a valid module name.
+
+File "0996_mli_nested_path_zeroary_overapplied_09.mli", line 7, characters 13-35:
+7 | val x_iota : int Outer_iota.Inner.t
+                 ^^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor Outer_iota.Inner.t expects 0 argument(s),
+       but is here applied to 1 argument(s)

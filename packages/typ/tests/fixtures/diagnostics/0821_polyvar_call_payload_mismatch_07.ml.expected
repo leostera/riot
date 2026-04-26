@@ -1,0 +1,8 @@
+File "0821_polyvar_call_payload_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0821_polyvar_call_payload_mismatch_07 is not a valid module name.
+
+File "0821_polyvar_call_payload_mismatch_07.ml", line 4, characters 21-25:
+4 | let _ = read_eta (`A true)
+                         ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,8 @@
+File "0434_modules_opaque_value_annotation_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0434_modules_opaque_value_annotation_mismatch_03 is not a valid module name.
+
+File "0434_modules_opaque_value_annotation_mismatch_03.ml", line 12, characters 14-28:
+12 | let _ : int = Hidden_gamma.x
+                   ^^^^^^^^^^^^^^
+Error: The value Hidden_gamma.x has type Hidden_gamma.t
+       but an expression was expected of type int

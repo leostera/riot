@@ -1,0 +1,8 @@
+File "0389_labels_wrong_x_type_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0389_labels_wrong_x_type_09 is not a valid module name.
+
+File "0389_labels_wrong_x_type_09.ml", line 2, characters 21-25:
+2 | let _ = pick_iota ~x:true ~y:true
+                         ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

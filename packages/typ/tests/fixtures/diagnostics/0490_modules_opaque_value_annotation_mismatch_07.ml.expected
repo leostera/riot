@@ -1,0 +1,8 @@
+File "0490_modules_opaque_value_annotation_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0490_modules_opaque_value_annotation_mismatch_07 is not a valid module name.
+
+File "0490_modules_opaque_value_annotation_mismatch_07.ml", line 12, characters 14-26:
+12 | let _ : int = Hidden_eta.x
+                   ^^^^^^^^^^^^
+Error: The value Hidden_eta.x has type Hidden_eta.t
+       but an expression was expected of type int

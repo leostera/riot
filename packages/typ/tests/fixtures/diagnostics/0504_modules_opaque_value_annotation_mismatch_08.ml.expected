@@ -1,0 +1,8 @@
+File "0504_modules_opaque_value_annotation_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0504_modules_opaque_value_annotation_mismatch_08 is not a valid module name.
+
+File "0504_modules_opaque_value_annotation_mismatch_08.ml", line 12, characters 14-28:
+12 | let _ : int = Hidden_theta.x
+                   ^^^^^^^^^^^^^^
+Error: The value Hidden_theta.x has type Hidden_theta.t
+       but an expression was expected of type int

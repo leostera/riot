@@ -1,0 +1,8 @@
+File "0726_fcm_two_package_type_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0726_fcm_two_package_type_mismatch_07 is not a valid module name.
+
+File "0726_fcm_two_package_type_mismatch_07.ml", line 9, characters 3-10:
+9 |   (P.value : Q.t)
+       ^^^^^^^
+Error: The value P.value has type P.t but an expression was expected of type
+         Q.t

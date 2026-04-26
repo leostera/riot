@@ -1,0 +1,8 @@
+File "0392_optional_argument_call_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0392_optional_argument_call_mismatch_09 is not a valid module name.
+
+File "0392_optional_argument_call_mismatch_09.ml", line 3, characters 20-24:
+3 | let _ = add_iota ~x:true 9
+                        ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,8 @@
+File "0272_fun_monomorphic_custom_variant_use_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0272_fun_monomorphic_custom_variant_use_04 is not a valid module name.
+
+File "0272_fun_monomorphic_custom_variant_use_04.ml", line 3, characters 40-51:
+3 | let use_delta f = (f (Left_delta 3), f (Right_delta true))
+                                            ^^^^^^^^^^^
+Error: This variant expression is expected to have type left_delta
+       There is no constructor Right_delta within type left_delta

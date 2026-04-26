@@ -1,0 +1,8 @@
+File "0619_functor_generative_constructor_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0619_functor_generative_constructor_mismatch_07 is not a valid module name.
+
+File "0619_functor_generative_constructor_mismatch_07.ml", line 8, characters 18-25:
+8 | let _ : B_eta.t = A_eta.T
+                      ^^^^^^^
+Error: The constructor A_eta.T belongs to the variant type A_eta.t
+       but a constructor was expected belonging to the variant type B_eta.t

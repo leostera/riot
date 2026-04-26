@@ -1,0 +1,8 @@
+File "0931_gadt_constructor_payload_int_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0931_gadt_constructor_payload_int_mismatch_08 is not a valid module name.
+
+File "0931_gadt_constructor_payload_int_mismatch_08.ml", line 5, characters 36-40:
+5 | let _ : int expr_theta = EInt_theta true
+                                        ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

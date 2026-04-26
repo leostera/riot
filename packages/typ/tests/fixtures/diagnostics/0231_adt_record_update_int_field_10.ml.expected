@@ -1,0 +1,8 @@
+File "0231_adt_record_update_int_field_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0231_adt_record_update_int_field_10 is not a valid module name.
+
+File "0231_adt_record_update_int_field_10.ml", line 3, characters 32-36:
+3 | let _ = { base_kappa with key = true }
+                                    ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

@@ -1,0 +1,8 @@
+File "0462_modules_opaque_value_annotation_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0462_modules_opaque_value_annotation_mismatch_05 is not a valid module name.
+
+File "0462_modules_opaque_value_annotation_mismatch_05.ml", line 12, characters 14-30:
+12 | let _ : int = Hidden_epsilon.x
+                   ^^^^^^^^^^^^^^^^
+Error: The value Hidden_epsilon.x has type Hidden_epsilon.t
+       but an expression was expected of type int

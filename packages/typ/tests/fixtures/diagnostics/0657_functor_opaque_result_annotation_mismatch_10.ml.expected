@@ -1,0 +1,8 @@
+File "0657_functor_opaque_result_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0657_functor_opaque_result_annotation_mismatch_10 is not a valid module name.
+
+File "0657_functor_opaque_result_annotation_mismatch_10.ml", line 20, characters 14-25:
+20 | let _ : int = Out_kappa.y
+                   ^^^^^^^^^^^
+Error: The value Out_kappa.y has type Out_kappa.u = Make_kappa(Input_kappa).u
+       but an expression was expected of type int

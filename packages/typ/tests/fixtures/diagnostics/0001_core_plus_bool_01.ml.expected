@@ -1,0 +1,8 @@
+File "0001_core_plus_bool_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0001_core_plus_bool_01 is not a valid module name.
+
+File "0001_core_plus_bool_01.ml", line 2, characters 12-16:
+2 | let _ = 1 + true
+                ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

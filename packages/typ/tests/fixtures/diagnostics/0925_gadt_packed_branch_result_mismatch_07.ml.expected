@@ -1,0 +1,7 @@
+File "0925_gadt_packed_branch_result_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0925_gadt_packed_branch_result_mismatch_07 is not a valid module name.
+
+File "0925_gadt_packed_branch_result_mismatch_07.ml", line 9, characters 29-30:
+9 |   | Pack_eta (Bool_eta b) -> b
+                                 ^
+Error: The value b has type bool but an expression was expected of type int

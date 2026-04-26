@@ -1,0 +1,7 @@
+File "0219_adt_record_update_int_field_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0219_adt_record_update_int_field_09 is not a valid module name.
+
+File "0219_adt_record_update_int_field_09.ml", line 1, characters 31-35:
+1 | type rec_iota = { depth : int; done : bool }
+                                   ^^^^
+Error: Syntax error

@@ -1,0 +1,8 @@
+File "0035_core_pattern_annotation_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0035_core_pattern_annotation_mismatch_03 is not a valid module name.
+
+File "0035_core_pattern_annotation_mismatch_03.ml", line 1, characters 37-38:
+1 | let ((gamma : bool), other_gamma) = (2, 3)
+                                         ^
+Error: The constant 2 has type int but an expression was expected of type
+         bool

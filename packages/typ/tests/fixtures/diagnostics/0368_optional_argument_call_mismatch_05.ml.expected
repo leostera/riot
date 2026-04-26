@@ -1,0 +1,8 @@
+File "0368_optional_argument_call_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0368_optional_argument_call_mismatch_05 is not a valid module name.
+
+File "0368_optional_argument_call_mismatch_05.ml", line 3, characters 23-27:
+3 | let _ = add_epsilon ~x:true 5
+                           ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

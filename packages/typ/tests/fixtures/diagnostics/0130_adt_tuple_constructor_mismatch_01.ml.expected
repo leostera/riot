@@ -1,0 +1,8 @@
+File "0130_adt_tuple_constructor_mismatch_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0130_adt_tuple_constructor_mismatch_01 is not a valid module name.
+
+File "0130_adt_tuple_constructor_mismatch_01.ml", line 2, characters 32-36:
+2 | let _ : rec_alpha = Pair_alpha (true, 0)
+                                    ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

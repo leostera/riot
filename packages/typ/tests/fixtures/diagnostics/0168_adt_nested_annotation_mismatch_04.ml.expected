@@ -1,0 +1,8 @@
+File "0168_adt_nested_annotation_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0168_adt_nested_annotation_mismatch_04 is not a valid module name.
+
+File "0168_adt_nested_annotation_mismatch_04.ml", line 2, characters 31-35:
+2 | let _ : rec_delta = { value = (true, 3); mark = false }
+                                   ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

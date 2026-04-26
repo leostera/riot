@@ -1,0 +1,8 @@
+File "0399_exception_constructor_arg_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0399_exception_constructor_arg_mismatch_10 is not a valid module name.
+
+File "0399_exception_constructor_arg_mismatch_10.ml", line 2, characters 16-20:
+2 | let _ = E_kappa true
+                    ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

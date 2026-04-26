@@ -1,0 +1,7 @@
+File "0279_fun_locally_abstract_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0279_fun_locally_abstract_mismatch_04 is not a valid module name.
+
+File "0279_fun_locally_abstract_mismatch_04.ml", line 1, characters 39-40:
+1 | let bad_delta (type a) (x : a) : int = x
+                                           ^
+Error: The value x has type a but an expression was expected of type int

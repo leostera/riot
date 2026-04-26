@@ -1,0 +1,8 @@
+File "0262_fun_monomorphic_custom_variant_use_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0262_fun_monomorphic_custom_variant_use_03 is not a valid module name.
+
+File "0262_fun_monomorphic_custom_variant_use_03.ml", line 3, characters 40-51:
+3 | let use_gamma f = (f (IntC_gamma 2), f (BoolC_gamma true))
+                                            ^^^^^^^^^^^
+Error: This variant expression is expected to have type left_gamma
+       There is no constructor BoolC_gamma within type left_gamma

@@ -1,0 +1,9 @@
+File "0322_fun_monomorphic_custom_variant_use_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0322_fun_monomorphic_custom_variant_use_09 is not a valid module name.
+
+File "0322_fun_monomorphic_custom_variant_use_09.ml", line 3, characters 35-41:
+3 | let use_iota f = (f (A_iota 8), f (C_iota true))
+                                       ^^^^^^
+Error: This variant expression is expected to have type left_iota
+       There is no constructor C_iota within type left_iota
+Hint:             Did you mean A_iota?

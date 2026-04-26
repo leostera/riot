@@ -1,0 +1,8 @@
+File "0119_core_pattern_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0119_core_pattern_annotation_mismatch_10 is not a valid module name.
+
+File "0119_core_pattern_annotation_mismatch_10.ml", line 1, characters 37-38:
+1 | let ((kappa : bool), other_kappa) = (9, 10)
+                                         ^
+Error: The constant 9 has type int but an expression was expected of type
+         bool

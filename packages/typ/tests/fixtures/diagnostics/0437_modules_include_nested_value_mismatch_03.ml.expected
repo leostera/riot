@@ -1,0 +1,28 @@
+File "0437_modules_include_nested_value_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0437_modules_include_nested_value_mismatch_03 is not a valid module name.
+
+File "0437_modules_include_nested_value_mismatch_03.ml", lines 7-13, characters 21-3:
+ 7 | .....................struct
+ 8 |   include struct
+ 9 |     module Inner = struct
+10 |       let x = true
+11 |     end
+12 |   end
+13 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig module Inner : sig val x : bool end end
+       is not included in
+         S_gamma
+       In module Inner:
+       Modules do not match:
+         sig val x : bool end
+       is not included in
+         sig val x : int end
+       In module Inner:
+       Values do not match: val x : bool is not included in val x : int
+       The type bool is not compatible with the type int
+       File "0437_modules_include_nested_value_mismatch_03.ml", line 3, characters 4-15:
+         Expected declaration
+       File "0437_modules_include_nested_value_mismatch_03.ml", line 10, characters 10-11:
+         Actual declaration

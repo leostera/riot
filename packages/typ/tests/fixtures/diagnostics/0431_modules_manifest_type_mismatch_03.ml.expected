@@ -1,0 +1,22 @@
+File "0431_modules_manifest_type_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0431_modules_manifest_type_mismatch_03 is not a valid module name.
+
+File "0431_modules_manifest_type_mismatch_03.ml", lines 4-7, characters 6-3:
+4 | ......struct
+5 |   type t = int
+6 |   let x = 2
+7 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = int val x : int end
+       is not included in
+         sig type t = bool val x : t end
+       Type declarations do not match:
+         type t = int
+       is not included in
+         type t = bool
+       The type int is not equal to the type bool
+       File "0431_modules_manifest_type_mismatch_03.ml", line 2, characters 2-15:
+         Expected declaration
+       File "0431_modules_manifest_type_mismatch_03.ml", line 5, characters 2-14:
+         Actual declaration

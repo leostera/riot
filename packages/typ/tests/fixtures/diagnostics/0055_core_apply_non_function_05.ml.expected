@@ -1,0 +1,8 @@
+File "0055_core_apply_non_function_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0055_core_apply_non_function_05 is not a valid module name.
+
+File "0055_core_apply_non_function_05.ml", line 3, characters 2-9:
+3 |   epsilon 5
+      ^^^^^^^
+Error: This expression has type int
+       This is not a function; it cannot be applied.

@@ -1,0 +1,26 @@
+File "0509_modules_record_manifest_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0509_modules_record_manifest_mismatch_08 is not a valid module name.
+
+File "0509_modules_record_manifest_mismatch_08.ml", lines 4-7, characters 6-3:
+4 | ......struct
+5 |   type t = { score : int }
+6 |   let x = { score = 7 }
+7 | end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = { score : int; } val x : t end
+       is not included in
+         sig type t = { score : bool; } val x : t end
+       Type declarations do not match:
+         type t = { score : int; }
+       is not included in
+         type t = { score : bool; }
+       Fields do not match:
+         score : int;
+       is not the same as:
+         score : bool;
+       The type int is not equal to the type bool
+       File "0509_modules_record_manifest_mismatch_08.ml", line 2, characters 2-27:
+         Expected declaration
+       File "0509_modules_record_manifest_mismatch_08.ml", line 5, characters 2-26:
+         Actual declaration

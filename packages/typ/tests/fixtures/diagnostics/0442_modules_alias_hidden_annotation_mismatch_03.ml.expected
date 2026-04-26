@@ -1,0 +1,8 @@
+File "0442_modules_alias_hidden_annotation_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0442_modules_alias_hidden_annotation_mismatch_03 is not a valid module name.
+
+File "0442_modules_alias_hidden_annotation_mismatch_03.ml", line 14, characters 14-27:
+14 | let _ : int = Alias_gamma.x
+                   ^^^^^^^^^^^^^
+Error: The value Alias_gamma.x has type Alias_gamma.t = Hidden_gamma.t
+       but an expression was expected of type int

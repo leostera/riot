@@ -1,0 +1,9 @@
+File "0303_fun_self_application_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0303_fun_self_application_07 is not a valid module name.
+
+File "0303_fun_self_application_07.ml", line 1, characters 18-19:
+1 | let bad_eta x = x x
+                      ^
+Error: The value x has type 'a -> 'b but an expression was expected of type
+         'a
+       The type variable 'a occurs inside 'a -> 'b

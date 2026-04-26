@@ -1,0 +1,8 @@
+File "0981_mli_unary_type_overapplied_06.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0981_mli_unary_type_overapplied_06 is not a valid module name.
+
+File "0981_mli_unary_type_overapplied_06.mli", line 2, characters 13-34:
+2 | val x_zeta : (int, bool) wrap_zeta
+                 ^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor wrap_zeta expects 1 argument(s),
+       but is here applied to 2 argument(s)

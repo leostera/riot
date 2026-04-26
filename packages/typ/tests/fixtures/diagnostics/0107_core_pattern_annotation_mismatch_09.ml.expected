@@ -1,0 +1,8 @@
+File "0107_core_pattern_annotation_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0107_core_pattern_annotation_mismatch_09 is not a valid module name.
+
+File "0107_core_pattern_annotation_mismatch_09.ml", line 1, characters 35-36:
+1 | let ((iota : bool), other_iota) = (8, 9)
+                                       ^
+Error: The constant 8 has type int but an expression was expected of type
+         bool

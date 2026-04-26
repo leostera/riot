@@ -1,0 +1,8 @@
+File "0809_polyvar_duplicate_tag_conflict_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0809_polyvar_duplicate_tag_conflict_05 is not a valid module name.
+
+File "0809_polyvar_duplicate_tag_conflict_05.ml", line 1, characters 18-44:
+1 | let bad_epsilon : [ `A of int | `A of bool ] -> int =
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This variant type contains a constructor [ `A of bool ]
+       which should be [ `A of int ]

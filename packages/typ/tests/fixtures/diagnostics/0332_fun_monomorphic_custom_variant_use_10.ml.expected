@@ -1,0 +1,9 @@
+File "0332_fun_monomorphic_custom_variant_use_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0332_fun_monomorphic_custom_variant_use_10 is not a valid module name.
+
+File "0332_fun_monomorphic_custom_variant_use_10.ml", line 3, characters 39-49:
+3 | let use_kappa f = (f (Tag_kappa 9), f (Mark_kappa true))
+                                           ^^^^^^^^^^
+Error: This variant expression is expected to have type left_kappa
+       There is no constructor Mark_kappa within type left_kappa
+Hint:             Did you mean Tag_kappa?

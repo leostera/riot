@@ -1,0 +1,8 @@
+File "0066_core_function_application_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0066_core_function_application_mismatch_06 is not a valid module name.
+
+File "0066_core_function_application_mismatch_06.ml", line 2, characters 21-22:
+2 | let _ = consume_zeta 0
+                         ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

@@ -1,0 +1,9 @@
+File "0247_fun_explicit_poly_returns_bool_01.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0247_fun_explicit_poly_returns_bool_01 is not a valid module name.
+
+File "0247_fun_explicit_poly_returns_bool_01.ml", line 1, characters 31-44:
+1 | let bad_alpha : 'a. 'a -> 'a = fun _ -> true
+                                   ^^^^^^^^^^^^^
+Error: This definition has type bool -> bool which is less general than
+         'a. 'a -> 'a
+       The type bool is not a type variable.

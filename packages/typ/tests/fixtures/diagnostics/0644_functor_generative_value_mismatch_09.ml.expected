@@ -1,0 +1,8 @@
+File "0644_functor_generative_value_mismatch_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0644_functor_generative_value_mismatch_09 is not a valid module name.
+
+File "0644_functor_generative_value_mismatch_09.ml", line 9, characters 19-31:
+9 | let _ : B_iota.t = A_iota.value
+                       ^^^^^^^^^^^^
+Error: The value A_iota.value has type A_iota.t
+       but an expression was expected of type B_iota.t

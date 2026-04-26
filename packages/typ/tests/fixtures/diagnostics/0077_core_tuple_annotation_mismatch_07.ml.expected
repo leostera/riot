@@ -1,0 +1,8 @@
+File "0077_core_tuple_annotation_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0077_core_tuple_annotation_mismatch_07 is not a valid module name.
+
+File "0077_core_tuple_annotation_mismatch_07.ml", line 1, characters 24-28:
+1 | let eta : int * bool = (true, 6)
+                            ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

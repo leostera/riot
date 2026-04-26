@@ -1,0 +1,8 @@
+File "0992_mli_nested_path_zeroary_overapplied_08.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0992_mli_nested_path_zeroary_overapplied_08 is not a valid module name.
+
+File "0992_mli_nested_path_zeroary_overapplied_08.mli", line 7, characters 14-37:
+7 | val x_theta : int Outer_theta.Inner.t
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+Error: The type constructor Outer_theta.Inner.t expects 0 argument(s),
+       but is here applied to 1 argument(s)

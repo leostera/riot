@@ -1,0 +1,7 @@
+File "0604_functor_call_abstract_function_int_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0604_functor_call_abstract_function_int_06 is not a valid module name.
+
+File "0604_functor_call_abstract_function_int_06.ml", line 7, characters 15-16:
+7 |   let y = X.id 5
+                   ^
+Error: The constant 5 has type int but an expression was expected of type X.t

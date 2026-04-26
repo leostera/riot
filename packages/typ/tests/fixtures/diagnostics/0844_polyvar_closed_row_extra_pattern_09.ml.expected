@@ -1,0 +1,9 @@
+File "0844_polyvar_closed_row_extra_pattern_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0844_polyvar_closed_row_extra_pattern_09 is not a valid module name.
+
+File "0844_polyvar_closed_row_extra_pattern_09.ml", line 3, characters 4-6:
+3 |   | `B -> 8
+        ^^
+Error: This pattern matches values of type [? `B ]
+       but a pattern was expected which matches values of type [ `A of int ]
+       The second variant type does not allow tag(s) `B

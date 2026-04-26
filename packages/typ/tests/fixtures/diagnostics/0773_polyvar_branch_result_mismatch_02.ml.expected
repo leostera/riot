@@ -1,0 +1,7 @@
+File "0773_polyvar_branch_result_mismatch_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0773_polyvar_branch_result_mismatch_02 is not a valid module name.
+
+File "0773_polyvar_branch_result_mismatch_02.ml", line 3, characters 21-22:
+3 |   | `B (y : bool) -> y
+                         ^
+Error: The value y has type bool but an expression was expected of type int

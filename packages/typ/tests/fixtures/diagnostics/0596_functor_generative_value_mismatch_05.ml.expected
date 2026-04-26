@@ -1,0 +1,8 @@
+File "0596_functor_generative_value_mismatch_05.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0596_functor_generative_value_mismatch_05 is not a valid module name.
+
+File "0596_functor_generative_value_mismatch_05.ml", line 9, characters 22-37:
+9 | let _ : B_epsilon.t = A_epsilon.value
+                          ^^^^^^^^^^^^^^^
+Error: The value A_epsilon.value has type A_epsilon.t
+       but an expression was expected of type B_epsilon.t

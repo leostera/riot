@@ -1,0 +1,11 @@
+File "0722_fcm_pack_tuple_type_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0722_fcm_pack_tuple_type_mismatch_07 is not a valid module name.
+
+File "0722_fcm_pack_tuple_type_mismatch_07.ml", line 11, characters 16-21:
+11 | let _ = (module M_eta : Cell_eta with type t = bool * bool)
+                     ^^^^^
+Error: This expression has type (module Cell_eta with type t = bool * bool)
+       but an expression was expected of type
+         (module Cell_eta with type t = M_eta.t)
+       Type bool * bool is not compatible with type M_eta.t = int * int
+       Type bool is not compatible with type int

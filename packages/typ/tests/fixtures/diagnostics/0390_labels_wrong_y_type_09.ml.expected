@@ -1,0 +1,8 @@
+File "0390_labels_wrong_y_type_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0390_labels_wrong_y_type_09 is not a valid module name.
+
+File "0390_labels_wrong_y_type_09.ml", line 2, characters 26-27:
+2 | let _ = pick_iota ~x:8 ~y:9
+                              ^
+Error: The constant 9 has type int but an expression was expected of type
+         bool

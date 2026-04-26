@@ -1,0 +1,8 @@
+File "0986_mli_binary_type_underapplied_07.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0986_mli_binary_type_underapplied_07 is not a valid module name.
+
+File "0986_mli_binary_type_underapplied_07.mli", line 2, characters 12-24:
+2 | val x_eta : int pair_eta
+                ^^^^^^^^^^^^
+Error: The type constructor pair_eta expects 2 argument(s),
+       but is here applied to 1 argument(s)

@@ -1,0 +1,9 @@
+File "0792_polyvar_call_wrong_tag_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0792_polyvar_call_wrong_tag_04 is not a valid module name.
+
+File "0792_polyvar_call_wrong_tag_04.ml", line 5, characters 19-21:
+5 | let _ = read_delta `C
+                       ^^
+Error: The constructor `C has type [> `C ]
+       but an expression was expected of type [ `A | `B ]
+       The second variant type does not allow tag(s) `C

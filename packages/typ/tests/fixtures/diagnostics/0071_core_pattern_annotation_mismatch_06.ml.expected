@@ -1,0 +1,8 @@
+File "0071_core_pattern_annotation_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0071_core_pattern_annotation_mismatch_06 is not a valid module name.
+
+File "0071_core_pattern_annotation_mismatch_06.ml", line 1, characters 35-36:
+1 | let ((zeta : bool), other_zeta) = (5, 6)
+                                       ^
+Error: The constant 5 has type int but an expression was expected of type
+         bool

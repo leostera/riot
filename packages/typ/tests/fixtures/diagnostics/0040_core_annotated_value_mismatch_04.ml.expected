@@ -1,0 +1,8 @@
+File "0040_core_annotated_value_mismatch_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0040_core_annotated_value_mismatch_04 is not a valid module name.
+
+File "0040_core_annotated_value_mismatch_04.ml", line 1, characters 19-20:
+1 | let delta : bool = 0
+                       ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

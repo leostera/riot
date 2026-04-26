@@ -1,0 +1,8 @@
+File "0147_adt_record_update_int_field_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0147_adt_record_update_int_field_03 is not a valid module name.
+
+File "0147_adt_record_update_int_field_03.ml", line 3, characters 34-38:
+3 | let _ = { base_gamma with count = true }
+                                      ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

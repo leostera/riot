@@ -1,0 +1,8 @@
+File "0491_modules_opaque_operator_mismatch_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0491_modules_opaque_operator_mismatch_07 is not a valid module name.
+
+File "0491_modules_opaque_operator_mismatch_07.ml", line 14, characters 8-20:
+14 | let _ = Hidden_eta.x + 7
+             ^^^^^^^^^^^^
+Error: The value Hidden_eta.x has type Hidden_eta.t
+       but an expression was expected of type int

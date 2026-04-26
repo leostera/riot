@@ -1,0 +1,8 @@
+File "0656_functor_generative_value_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0656_functor_generative_value_mismatch_10 is not a valid module name.
+
+File "0656_functor_generative_value_mismatch_10.ml", line 9, characters 20-33:
+9 | let _ : B_kappa.t = A_kappa.value
+                        ^^^^^^^^^^^^^
+Error: The value A_kappa.value has type A_kappa.t
+       but an expression was expected of type B_kappa.t

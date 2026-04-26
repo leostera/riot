@@ -1,0 +1,8 @@
+File "0271_fun_monomorphic_int_bool_use_04.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0271_fun_monomorphic_int_bool_use_04 is not a valid module name.
+
+File "0271_fun_monomorphic_int_bool_use_04.ml", line 1, characters 26-30:
+1 | let use_delta f = (f 3, f true)
+                              ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

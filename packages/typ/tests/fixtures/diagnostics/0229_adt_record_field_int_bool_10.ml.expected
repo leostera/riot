@@ -1,0 +1,8 @@
+File "0229_adt_record_field_int_bool_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0229_adt_record_field_int_bool_10 is not a valid module name.
+
+File "0229_adt_record_field_int_bool_10.ml", line 2, characters 28-32:
+2 | let _ : rec_kappa = { key = true; ok = false }
+                                ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

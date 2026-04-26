@@ -1,0 +1,9 @@
+File "0104_core_if_condition_non_bool_09.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0104_core_if_condition_non_bool_09 is not a valid module name.
+
+File "0104_core_if_condition_non_bool_09.ml", line 1, characters 11-12:
+1 | let _ = if 8 then 9 else 10
+               ^
+Error: The constant 8 has type int but an expression was expected of type
+         bool
+       because it is in the condition of an if-statement

@@ -1,0 +1,8 @@
+File "0609_functor_opaque_result_annotation_mismatch_06.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0609_functor_opaque_result_annotation_mismatch_06 is not a valid module name.
+
+File "0609_functor_opaque_result_annotation_mismatch_06.ml", line 20, characters 14-24:
+20 | let _ : int = Out_zeta.y
+                   ^^^^^^^^^^
+Error: The value Out_zeta.y has type Out_zeta.u = Make_zeta(Input_zeta).u
+       but an expression was expected of type int

@@ -1,0 +1,8 @@
+File "0014_core_and_int_02.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0014_core_and_int_02 is not a valid module name.
+
+File "0014_core_and_int_02.ml", line 2, characters 18-19:
+2 | let bad = true && 0
+                      ^
+Error: The constant 0 has type int but an expression was expected of type
+         bool

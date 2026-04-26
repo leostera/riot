@@ -1,0 +1,8 @@
+File "0727_fcm_local_abstract_wrong_arg_07.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0727_fcm_local_abstract_wrong_arg_07 is not a valid module name.
+
+File "0727_fcm_local_abstract_wrong_arg_07.ml", line 14, characters 58-62:
+14 | let _ = use_eta (module M_eta : Id_eta with type t = int) true
+                                                               ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

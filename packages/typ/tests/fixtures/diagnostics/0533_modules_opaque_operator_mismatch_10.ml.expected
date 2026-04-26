@@ -1,0 +1,8 @@
+File "0533_modules_opaque_operator_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0533_modules_opaque_operator_mismatch_10 is not a valid module name.
+
+File "0533_modules_opaque_operator_mismatch_10.ml", line 14, characters 8-22:
+14 | let _ = Hidden_kappa.x + 10
+             ^^^^^^^^^^^^^^
+Error: The value Hidden_kappa.x has type Hidden_kappa.t
+       but an expression was expected of type int

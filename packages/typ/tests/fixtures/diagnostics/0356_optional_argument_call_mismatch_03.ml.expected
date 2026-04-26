@@ -1,0 +1,8 @@
+File "0356_optional_argument_call_mismatch_03.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0356_optional_argument_call_mismatch_03 is not a valid module name.
+
+File "0356_optional_argument_call_mismatch_03.ml", line 3, characters 21-25:
+3 | let _ = add_gamma ~x:true 3
+                         ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int

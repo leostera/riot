@@ -1,0 +1,8 @@
+File "0962_mli_binary_type_underapplied_01.mli", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0962_mli_binary_type_underapplied_01 is not a valid module name.
+
+File "0962_mli_binary_type_underapplied_01.mli", line 2, characters 14-28:
+2 | val x_alpha : int pair_alpha
+                  ^^^^^^^^^^^^^^
+Error: The type constructor pair_alpha expects 2 argument(s),
+       but is here applied to 1 argument(s)

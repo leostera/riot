@@ -1,0 +1,8 @@
+File "0532_modules_opaque_value_annotation_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0532_modules_opaque_value_annotation_mismatch_10 is not a valid module name.
+
+File "0532_modules_opaque_value_annotation_mismatch_10.ml", line 12, characters 14-28:
+12 | let _ : int = Hidden_kappa.x
+                   ^^^^^^^^^^^^^^
+Error: The value Hidden_kappa.x has type Hidden_kappa.t
+       but an expression was expected of type int

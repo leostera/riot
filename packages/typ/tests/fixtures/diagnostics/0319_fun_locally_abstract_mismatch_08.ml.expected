@@ -1,0 +1,7 @@
+File "0319_fun_locally_abstract_mismatch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0319_fun_locally_abstract_mismatch_08 is not a valid module name.
+
+File "0319_fun_locally_abstract_mismatch_08.ml", line 1, characters 39-40:
+1 | let bad_theta (type a) (x : a) : int = x
+                                           ^
+Error: The value x has type a but an expression was expected of type int

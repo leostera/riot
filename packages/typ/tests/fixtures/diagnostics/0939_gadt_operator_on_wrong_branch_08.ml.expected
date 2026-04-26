@@ -1,0 +1,8 @@
+File "0939_gadt_operator_on_wrong_branch_08.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0939_gadt_operator_on_wrong_branch_08 is not a valid module name.
+
+File "0939_gadt_operator_on_wrong_branch_08.ml", line 11, characters 21-22:
+11 |     | WBool_theta -> x + 8
+                          ^
+Error: The value x has type a = bool but an expression was expected of type
+         int

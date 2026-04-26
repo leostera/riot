@@ -1,0 +1,8 @@
+File "0233_adt_constructor_int_arg_mismatch_10.ml", line 1:
+Warning 24 [bad-module-name]: bad source file name: 0233_adt_constructor_int_arg_mismatch_10 is not a valid module name.
+
+File "0233_adt_constructor_int_arg_mismatch_10.ml", line 2, characters 12-16:
+2 | let _ = Tag true
+                ^^^^
+Error: This expression should not be a boolean literal, the expected type is
+       int
