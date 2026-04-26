@@ -379,6 +379,14 @@ let render_binding = fun (binding: TypingContext.value_binding) ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_string in
   render_named_binding ~path_prefix:[] ~name binding
 
+let render_inferred_value = fun (name, type_) ->
+  "val " ^ render_value_name (SurfacePath.to_string name) ^ " : " ^ TypAst.Type.to_string type_
+
+let from_values = fun values ->
+  match values |> Iter.Iterator.to_list |> List.map ~fn:render_inferred_value with
+  | [] -> ""
+  | lines -> String.concat "\n" lines ^ "\n"
+
 type path_substitution = {
   source: SurfacePath.t;
   target: SurfacePath.t;
@@ -686,8 +694,7 @@ let rec pattern_bound_name = fun (pattern: TypAst.pattern) ->
       | [] -> None
     )
   | TypAst.Constraint { pattern; _ }
-  | TypAst.Attribute pattern
-  | TypAst.Parenthesized pattern ->
+  | TypAst.Attribute pattern ->
       pattern_bound_name pattern
   | TypAst.Alias { alias; pattern } -> (
       match pattern_bound_name alias with

@@ -387,8 +387,7 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
           )
         | _ -> (pattern_ty, bindings)
       )
-  | TypAst.Attribute inner
-  | TypAst.Parenthesized inner ->
+  | TypAst.Attribute inner ->
       infer_pattern state env ~level inner
   | TypAst.FirstClassModule { binder; package_type } ->
       let package_ty =
@@ -1089,8 +1088,7 @@ and simple_pattern_identifier = fun (pattern: TypAst.pattern) ->
       | Some name when not (is_uppercase_name name) -> Some name
       | _ -> None
     )
-  | TypAst.Attribute inner
-  | TypAst.Parenthesized inner ->
+  | TypAst.Attribute inner ->
       simple_pattern_identifier inner
   | _ ->
       None
@@ -1308,8 +1306,7 @@ and simple_let_binding_name = fun (binding: TypAst.let_binding) ->
         | _ -> None
       )
     | TypAst.Constraint { pattern; _ }
-    | TypAst.Attribute pattern
-    | TypAst.Parenthesized pattern ->
+    | TypAst.Attribute pattern ->
         loop pattern
     | _ ->
         None

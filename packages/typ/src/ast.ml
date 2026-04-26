@@ -265,7 +265,6 @@ and pattern_kind =
   | Constraint of constrained_pattern
   | Alias of alias_pattern
   | Attribute of pattern
-  | Parenthesized of pattern
   | FirstClassModule of first_class_module_pattern
 
 and pattern_application = {
@@ -1324,7 +1323,7 @@ and build_pattern = fun context syntax_pattern ->
             tail = build_pattern context (require_some origin "missing cons tail" tail)
           })
     | SynAst.Pattern.Parenthesized { inner=Some inner } ->
-        make_pattern origin (Parenthesized (build_pattern context inner))
+        build_pattern context inner
     | SynAst.Pattern.Parenthesized { inner=None } ->
         make_pattern origin (Bind unit_constructor_ident)
     | SynAst.Pattern.Constraint { pattern; annotation } ->

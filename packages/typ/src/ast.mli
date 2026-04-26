@@ -377,8 +377,6 @@ and pattern_kind =
   | Alias of alias_pattern
   (** Pattern with attributes preserved as a source-shaped wrapper. *)
   | Attribute of pattern
-  (** Parenthesized pattern kept while the AST is still source-shaped. *)
-  | Parenthesized of pattern
   (** First-class module pattern. *)
   | FirstClassModule of first_class_module_pattern
 
