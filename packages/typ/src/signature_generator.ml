@@ -158,6 +158,9 @@ let type_var_names_by_occurrence = fun (type_: TypingContext.type_expr) ->
     | TypingContext.Unit
     | TypingContext.PolyVariant _ ->
         ()
+    | TypingContext.Package package ->
+        package.constraints
+        |> List.for_each ~fn:(fun constraint_ -> collect constraint_.TypingContext.manifest)
   in
   collect type_;
   fun id ->
@@ -193,7 +196,15 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
   | TypingContext.Tuple elements ->
       elements |> List.map ~fn:(render_tuple_element ~path_prefix ~type_var_name) |> String.concat " * "
   | TypingContext.Arrow { label; parameter; result } ->
-      let parameter = render_arrow_parameter ~path_prefix ~type_var_name parameter in
+      let parameter =
+        match parameter with
+        | TypingContext.Package package -> render_package_type
+          ~path_prefix
+          ~type_var_name
+          ~include_binder:(package_binder_referenced_in_result package result)
+          package
+        | _ -> render_arrow_parameter ~path_prefix ~type_var_name parameter
+      in
       let parameter = render_arg_label label parameter in
       let result = render_type ~path_prefix ~type_var_name result in
       parameter ^ " -> " ^ result
@@ -218,6 +229,8 @@ let rec render_type = fun ~path_prefix ~type_var_name type_ ->
       | TypingContext.Upper -> render_poly_variant_type "< " tags
       | TypingContext.Lower -> render_poly_variant_type "> " tags
     )
+  | TypingContext.Package package ->
+      render_package_type ~path_prefix ~type_var_name ~include_binder:false package
 
 and render_postfix_argument = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
@@ -225,6 +238,61 @@ and render_postfix_argument = fun ~path_prefix ~type_var_name type_ ->
   | TypingContext.Tuple _
   | TypingContext.Alias _ -> "(" ^ render_type ~path_prefix ~type_var_name type_ ^ ")"
   | _ -> render_type ~path_prefix ~type_var_name type_
+
+and package_binder_referenced_in_result = fun package result ->
+  match package.TypingContext.binder with
+  | None -> false
+  | Some binder -> type_references_prefix [ binder ] result
+
+and type_references_prefix = fun prefix type_ ->
+  let path_has_prefix path =
+    let rec strip prefix segments =
+      match prefix, segments with
+      | [], _ -> true
+      | expected :: prefix, segment :: segments when String.equal expected segment -> strip prefix segments
+      | _ -> false
+    in
+    strip prefix (SurfacePath.to_segments path)
+  in
+  match type_ with
+  | TypingContext.List element
+  | TypingContext.Option element -> type_references_prefix prefix element
+  | TypingContext.Tuple elements -> List.exists (type_references_prefix prefix) elements
+  | TypingContext.Arrow { parameter; result; _ } -> type_references_prefix prefix parameter
+  || type_references_prefix prefix result
+  | TypingContext.TypeConstructor { path; arguments } -> path_has_prefix path
+  || List.exists (type_references_prefix prefix) arguments
+  | TypingContext.Alias { type_; _ } -> type_references_prefix prefix type_
+  | TypingContext.Package package -> path_has_prefix package.module_type
+  || List.exists
+    (fun constraint_ ->
+      path_has_prefix constraint_.TypingContext.type_name
+      || type_references_prefix prefix constraint_.TypingContext.manifest)
+    package.constraints
+  | TypingContext.Int
+  | TypingContext.Bool
+  | TypingContext.Char
+  | TypingContext.String
+  | TypingContext.Float
+  | TypingContext.Unit
+  | TypingContext.PolyVariant _
+  | TypingContext.Var _ -> false
+
+and render_package_type = fun ~path_prefix ~type_var_name ~include_binder package ->
+  let binder =
+    match include_binder, package.TypingContext.binder with
+    | true, Some binder -> binder ^ " : "
+    | _ -> ""
+  in
+  let constraints = package.constraints
+  |> List.map
+    ~fn:(fun constraint_ ->
+      " with type "
+      ^ render_constructor_path ~path_prefix constraint_.TypingContext.type_name
+      ^ " = "
+      ^ render_type ~path_prefix ~type_var_name constraint_.TypingContext.manifest)
+  |> String.concat "" in
+  "(module " ^ binder ^ render_constructor_path ~path_prefix package.module_type ^ constraints ^ ")"
 
 and render_tuple_element = fun ~path_prefix ~type_var_name type_ ->
   match type_ with
@@ -311,8 +379,30 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
       ^ render_ast_core_type_with_substitutions substitutions body
   | TypAst.PolyVariant tags ->
       render_poly_variant_type "" tags
+  | TypAst.Package package ->
+      render_ast_package_type substitutions package
   | TypAst.Parenthesized inner ->
       render_ast_core_type_with_substitutions substitutions inner
+
+and render_ast_package_type = fun substitutions (package: TypAst.package_type) ->
+  let binder =
+    match package.binder with
+    | Some binder -> binder ^ " : "
+    | None -> ""
+  in
+  let constraints = package.constraints
+  |> List.map
+    ~fn:(fun (constraint_: TypAst.package_type_constraint) ->
+      " with type "
+      ^ SurfacePath.to_string (substitute_path substitutions constraint_.type_name)
+      ^ " = "
+      ^ render_ast_core_type_with_substitutions substitutions constraint_.manifest)
+  |> String.concat "" in
+  "(module "
+  ^ binder
+  ^ SurfacePath.to_string (substitute_path substitutions package.module_type)
+  ^ constraints
+  ^ ")"
 
 and render_ast_type_application = fun substitutions type_ ->
   let rec type_application_arguments (type_: TypAst.core_type) =

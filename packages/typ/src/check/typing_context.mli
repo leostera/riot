@@ -28,6 +28,17 @@ and poly_variant = {
   tags: string list;
 }
 
+and package_type_constraint = {
+  type_name: Model.Surface_path.t;
+  manifest: type_expr;
+}
+
+and package_type = {
+  binder: string option;
+  module_type: Model.Surface_path.t;
+  constraints: package_type_constraint list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -42,6 +53,7 @@ and type_expr =
   | TypeConstructor of type_constructor
   | Alias of alias_type
   | PolyVariant of poly_variant
+  | Package of package_type
   | Var of int
 type scheme = {
   forall: int list;

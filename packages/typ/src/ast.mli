@@ -39,7 +39,21 @@ and core_type_kind =
   | Labeled of core_type
   | Poly of { parameters: string list; body: core_type }
   | PolyVariant of string list
+  | Package of package_type
   | Parenthesized of core_type
+
+and package_type = {
+  origin: origin;
+  binder: string option;
+  module_type: path;
+  constraints: package_type_constraint list;
+}
+
+and package_type_constraint = {
+  origin: origin;
+  type_name: path;
+  manifest: core_type;
+}
 type type_parameter = string option
 type type_constructor = {
   origin: origin;
@@ -110,6 +124,8 @@ and pattern_kind =
   | LabeledParameter of parameter
   | OptionalParameter of parameter
   | OptionalParameterDefault of parameter
+  | LocallyAbstractType of string list
+  | FirstClassModule of { binder: string option; package_type: package_type option }
 
 and let_binding = {
   origin: origin;
@@ -123,6 +139,12 @@ and expression = {
   origin: origin;
   type_hint: core_type option;
   kind: expression_kind;
+}
+
+and module_unpack = {
+  origin: origin;
+  expression: expression;
+  package_type: package_type option;
 }
 
 and expression_kind =
@@ -142,8 +164,15 @@ and expression_kind =
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
   | Let of { first_binding: let_binding; body: expression }
-  | LetModule of { name: string; items: structure_item list; alias: path option; body: expression }
+  | LetModule of {
+      name: string;
+      items: structure_item list;
+      alias: path option;
+      unpack: module_unpack option;
+      body: expression
+    }
   | LocalOpen of { module_path: path; body: expression }
+  | FirstClassModule of { module_path: path; package_type: package_type option }
   | Assert of expression
 
 and function_body =

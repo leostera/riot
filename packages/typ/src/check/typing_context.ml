@@ -32,6 +32,17 @@ and poly_variant = {
   tags: string list;
 }
 
+and package_type_constraint = {
+  type_name: Model.Surface_path.t;
+  manifest: type_expr;
+}
+
+and package_type = {
+  binder: string option;
+  module_type: Model.Surface_path.t;
+  constraints: package_type_constraint list;
+}
+
 and type_expr =
   | Int
   | Bool
@@ -46,6 +57,7 @@ and type_expr =
   | TypeConstructor of type_constructor
   | Alias of alias_type
   | PolyVariant of poly_variant
+  | Package of package_type
   | Var of int
 
 type scheme = {
@@ -137,6 +149,11 @@ let rec type_expr_serializer = {
             (fun value ->
               match value with
               | PolyVariant value -> Some value
+              | _ -> None);
+          Serde.Ser.Variant.newtype "Package" package_type_serializer
+            (fun value ->
+              match value with
+              | Package value -> Some value
               | _ -> None);
           Serde.Ser.Variant.newtype "Var" Serde.Ser.int
             (fun value ->
@@ -232,6 +249,39 @@ and poly_variant_serializer = {
               "tags"
               (Serde.Ser.contramap Array.from_list (Serde.Ser.array Serde.Ser.string))
               (fun value -> value.tags);
+          ]) in
+      serializer.run backend state value);
+}
+
+and package_type_constraint_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "type_name" Model.Surface_path.serializer (fun value -> value.type_name);
+            Serde.Ser.field "manifest" type_expr_serializer (fun value -> value.manifest);
+          ]) in
+      serializer.run backend state value);
+}
+
+and package_type_serializer = {
+  Serde.Ser.run =
+    (fun backend state value ->
+      let serializer = Serde.Ser.record
+        (Serde.Ser.fields
+          [
+            Serde.Ser.field "binder" (Serde.Ser.option Serde.Ser.string) (fun value -> value.binder);
+            Serde.Ser.field
+              "module_type"
+              Model.Surface_path.serializer
+              (fun value -> value.module_type);
+            Serde.Ser.field
+              "constraints"
+              (Serde.Ser.contramap
+                Array.from_list
+                (Serde.Ser.array package_type_constraint_serializer))
+              (fun value -> value.constraints);
           ]) in
       serializer.run backend state value);
 }

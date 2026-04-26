@@ -18,6 +18,7 @@ type ty =
   | TArrow of arg_label * ty * ty
   | TCon of SurfacePath.t * ty list
   | TPolyVariant of poly_variant_bound * poly_variant_tags
+  | TPackage of package_ty
   | TVar of tyvar_cell
 
 and arg_label =
@@ -32,6 +33,17 @@ and poly_variant_bound =
 
 and poly_variant_tags = {
   mutable tags: string list;
+}
+
+and package_constraint = {
+  type_name: SurfacePath.t;
+  manifest: ty;
+}
+
+and package_ty = {
+  binder: string option;
+  module_type: SurfacePath.t;
+  constraints: package_constraint list;
 }
 
 and tyvar_cell = {
@@ -84,6 +96,8 @@ type state = {
   mutable record_labels: record_label list;
   mutable module_value_bindings: binding list;
   mutable type_aliases: (SurfacePath.t * SurfacePath.t) list;
+  mutable type_manifests: (SurfacePath.t * ty) list;
+  mutable locally_abstract_types: (SurfacePath.t * ty) list;
   mutable module_summaries: module_summary list;
   mutable module_type_summaries: module_type_summary list;
   mutable functor_summaries: functor_summary list;
@@ -109,6 +123,8 @@ let make_state = fun ~next_binding_stamp ->
     record_labels = [];
     module_value_bindings = [];
     type_aliases = [];
+    type_manifests = [];
+    locally_abstract_types = [];
     module_summaries = [];
     module_type_summaries = [];
     functor_summaries = [];
@@ -158,28 +174,57 @@ let copy_poly_variant_tags = fun copies tags ->
 
 let rec string_of_ty = fun ty ->
   match prune ty with
-  | TInt -> "int"
-  | TBool -> "bool"
-  | TChar -> "char"
-  | TString -> "string"
-  | TFloat -> "float"
-  | TUnit -> "unit"
-  | TList element -> string_of_ty element ^ " list"
-  | TOption element -> string_of_ty element ^ " option"
-  | TTuple elements -> elements |> List.map ~fn:string_of_ty |> String.concat " * "
-  | TArrow (_, parameter, result) -> string_of_ty parameter ^ " -> " ^ string_of_ty result
-  | TCon (path, []) -> SurfacePath.to_string path
-  | TCon (path, [ argument ]) -> string_of_ty argument ^ " " ^ SurfacePath.to_string path
-  | TCon (path, arguments) -> "("
-  ^ (arguments |> List.map ~fn:string_of_ty |> String.concat ", ")
-  ^ ") "
-  ^ SurfacePath.to_string path
-  | TPolyVariant (Exact, tags) -> "[ " ^ render_poly_variant_tags tags.tags ^ " ]"
-  | TPolyVariant (Upper, tags) -> "[< " ^ render_poly_variant_tags tags.tags ^ " ]"
-  | TPolyVariant (Lower, tags) -> "[> " ^ render_poly_variant_tags tags.tags ^ " ]"
-  | TVar { var=Unbound (id, _) } -> "'_" ^ Int.to_string id
-  | TVar { var=Generic id } -> "'a" ^ Int.to_string id
-  | TVar { var=Link linked_ty } -> string_of_ty linked_ty
+  | TInt ->
+      "int"
+  | TBool ->
+      "bool"
+  | TChar ->
+      "char"
+  | TString ->
+      "string"
+  | TFloat ->
+      "float"
+  | TUnit ->
+      "unit"
+  | TList element ->
+      string_of_ty element ^ " list"
+  | TOption element ->
+      string_of_ty element ^ " option"
+  | TTuple elements ->
+      elements |> List.map ~fn:string_of_ty |> String.concat " * "
+  | TArrow (_, parameter, result) ->
+      string_of_ty parameter ^ " -> " ^ string_of_ty result
+  | TCon (path, []) ->
+      SurfacePath.to_string path
+  | TCon (path, [ argument ]) ->
+      string_of_ty argument ^ " " ^ SurfacePath.to_string path
+  | TCon (path, arguments) ->
+      "("
+      ^ (arguments |> List.map ~fn:string_of_ty |> String.concat ", ")
+      ^ ") "
+      ^ SurfacePath.to_string path
+  | TPolyVariant (Exact, tags) ->
+      "[ " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Upper, tags) ->
+      "[< " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPolyVariant (Lower, tags) ->
+      "[> " ^ render_poly_variant_tags tags.tags ^ " ]"
+  | TPackage package ->
+      let constraints = package.constraints
+      |> List.map
+        ~fn:(fun constraint_ ->
+          " with type "
+          ^ SurfacePath.to_string constraint_.type_name
+          ^ " = "
+          ^ string_of_ty constraint_.manifest)
+      |> String.concat "" in
+      "(module " ^ SurfacePath.to_string package.module_type ^ constraints ^ ")"
+  | TVar { var=Unbound (id, _) } ->
+      "'_" ^ Int.to_string id
+  | TVar { var=Generic id } ->
+      "'a" ^ Int.to_string id
+  | TVar { var=Link linked_ty } ->
+      string_of_ty linked_ty
 
 exception Occurs
 
@@ -223,6 +268,9 @@ let rec occurs_adjust_levels = fun id level ty ->
       List.for_each arguments ~fn:(occurs_adjust_levels id level)
   | TPolyVariant _ ->
       ()
+  | TPackage package ->
+      package.constraints
+      |> List.for_each ~fn:(fun constraint_ -> occurs_adjust_levels id level constraint_.manifest)
   | TInt
   | TBool
   | TChar
@@ -233,7 +281,59 @@ let rec occurs_adjust_levels = fun id level ty ->
   | TVar { var=Link linked_ty } ->
       occurs_adjust_levels id level linked_ty
 
+let rec ty_mentions_unbound_var = fun id ty ->
+  match prune ty with
+  | TVar { var=Unbound (other_id, _) } -> Int.equal id other_id
+  | TVar { var=Generic _ } -> false
+  | TList element
+  | TOption element -> ty_mentions_unbound_var id element
+  | TTuple elements -> List.exists (ty_mentions_unbound_var id) elements
+  | TArrow (_, parameter, result) -> ty_mentions_unbound_var id parameter
+  || ty_mentions_unbound_var id result
+  | TCon (_, arguments) -> List.exists (ty_mentions_unbound_var id) arguments
+  | TPackage package -> List.exists
+    (fun constraint_ -> ty_mentions_unbound_var id constraint_.manifest)
+    package.constraints
+  | TPolyVariant _
+  | TInt
+  | TBool
+  | TChar
+  | TString
+  | TFloat
+  | TUnit -> false
+  | TVar { var=Link linked_ty } -> ty_mentions_unbound_var id linked_ty
+
+let resolve_type_manifest = fun state path ->
+  match
+    List.find state.type_manifests
+      ~fn:(fun (manifest_path, _) ->
+        SurfacePath.equal manifest_path path)
+  with
+  | Some (_, manifest) -> Some manifest
+  | None -> None
+
+let has_type_manifest = fun state path -> Option.is_some (resolve_type_manifest state path)
+
 let rec unify = fun state ~at left right ->
+  match left, right with
+  | TVar ({ var=Link linked_ty } as cell), TCon (path, []) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest ->
+          unify state ~at linked_ty manifest;
+          cell.var <- Link (TCon (path, []))
+      | None -> ()
+    )
+  | TCon (path, []), TVar ({ var=Link linked_ty } as cell) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest ->
+          unify state ~at linked_ty manifest;
+          cell.var <- Link (TCon (path, []))
+      | None -> ()
+    )
+  | _ ->
+      unify_pruned state ~at left right
+
+and unify_pruned = fun state ~at left right ->
   match prune left, prune right with
   | TVar left_cell, TVar right_cell when Ptr.equal left_cell right_cell ->
       ()
@@ -315,6 +415,30 @@ let rec unify = fun state ~at left right ->
             ^ string_of_ty (TPolyVariant (left_bound, { tags = left }))
             ^ " vs "
             ^ string_of_ty (TPolyVariant (right_bound, { tags = right }))))
+  | TPackage left, TPackage right ->
+      unify_package state ~at left right
+  | TVar ({ var=Unbound (id, _) } as cell), TCon (path, []) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest when ty_mentions_unbound_var id manifest -> ()
+      | Some _
+      | None -> cell.var <- Link (TCon (path, []))
+    )
+  | TCon (path, []), TVar ({ var=Unbound (id, _) } as cell) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest when ty_mentions_unbound_var id manifest -> ()
+      | Some _
+      | None -> cell.var <- Link (TCon (path, []))
+    )
+  | TCon (path, []), other when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest -> unify state ~at manifest other
+      | None -> ()
+    )
+  | other, TCon (path, []) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest -> unify state ~at other manifest
+      | None -> ()
+    )
   | (TVar ({ var=Unbound (id, level) } as cell), ty)
   | (ty, TVar ({ var=Unbound (id, level) } as cell)) -> (
       try
@@ -330,6 +454,26 @@ let rec unify = fun state ~at left right ->
       add_diagnostic
         state
         (unsupported_type at ("type mismatch: " ^ string_of_ty left ^ " vs " ^ string_of_ty right))
+
+and unify_package = fun state ~at left right ->
+  if not (SurfacePath.equal left.module_type right.module_type) then
+    add_diagnostic
+      state
+      (unsupported_type
+        at
+        ("package module type mismatch: "
+        ^ SurfacePath.to_string left.module_type
+        ^ " vs "
+        ^ SurfacePath.to_string right.module_type));
+  left.constraints |> List.for_each
+    ~fn:(fun left_constraint ->
+      match
+        List.find right.constraints
+          ~fn:(fun right_constraint ->
+            SurfacePath.equal left_constraint.type_name right_constraint.type_name)
+      with
+      | Some right_constraint -> unify state ~at left_constraint.manifest right_constraint.manifest
+      | None -> ())
 
 let generalize = fun level ty ->
   let poly_variant_copies = ref [] in
@@ -350,6 +494,13 @@ let generalize = fun level ty ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
         TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+    | TPackage package ->
+        TPackage {
+          package
+          with constraints = package.constraints
+          |> List.map
+            ~fn:(fun constraint_ -> { constraint_ with manifest = loop constraint_.manifest })
+        }
     | ty ->
         ty
   in
@@ -384,6 +535,13 @@ let instantiate = fun state ~level ty ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
         TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+    | TPackage package ->
+        TPackage {
+          package
+          with constraints = package.constraints
+          |> List.map
+            ~fn:(fun constraint_ -> { constraint_ with manifest = loop constraint_.manifest })
+        }
     | ty ->
         ty
   in
@@ -418,6 +576,13 @@ let instantiate_pair = fun state ~level left right ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
         TPolyVariant (bound, copy_poly_variant_tags poly_variant_copies tags)
+    | TPackage package ->
+        TPackage {
+          package
+          with constraints = package.constraints
+          |> List.map
+            ~fn:(fun constraint_ -> { constraint_ with manifest = loop constraint_.manifest })
+        }
     | ty ->
         ty
   in
@@ -524,6 +689,8 @@ let shared_poly_variant_row_aliases = fun ty ->
         List.for_each arguments ~fn:collect
     | TPolyVariant (_, tags) ->
         remember tags
+    | TPackage package ->
+        package.constraints |> List.for_each ~fn:(fun constraint_ -> collect constraint_.manifest)
     | TVar { var=Link linked_ty } ->
         collect linked_ty
     | TInt
@@ -601,6 +768,18 @@ let rec public_type_of_ty = fun vars row_aliases ty ->
             )
         | None -> public_type
       )
+  | TPackage package ->
+      Typing_context.Package {
+        binder = package.binder;
+        module_type = package.module_type;
+        constraints = package.constraints
+        |> List.map
+          ~fn:(fun constraint_ ->
+            {
+              Typing_context.type_name = constraint_.type_name;
+              manifest = public_type_of_ty vars row_aliases constraint_.manifest
+            })
+      }
   | TVar { var=Generic id } ->
       Typing_context.Var (public_tyvar_id vars id)
   | TVar { var=Unbound (id, _) } ->
@@ -667,6 +846,14 @@ let rec import_scheme = fun scheme ->
       import_poly_variant_bound bound,
       { tags = normalized_poly_variant_tags tags }
     )
+    | Typing_context.Package package -> TPackage {
+      binder = package.binder;
+      module_type = package.module_type;
+      constraints = package.constraints
+      |> List.map
+        ~fn:(fun constraint_ ->
+          { type_name = constraint_.Typing_context.type_name; manifest = loop constraint_.manifest })
+    }
     | Typing_context.Var id -> TVar { var = Generic id }
   in
   let _ = scheme.Typing_context.forall in
@@ -787,6 +974,26 @@ let rec lookup_type_var = fun vars name ->
 
 let bind_type_var = fun vars name ty -> vars := (name, ty) :: !vars
 
+let lookup_locally_abstract_type = fun state name ->
+  match
+    List.find state.locally_abstract_types
+      ~fn:(fun (other_name, _) ->
+        SurfacePath.equal name other_name)
+  with
+  | Some (_, ty) -> Some ty
+  | None -> None
+
+let lookup_lower_type_var = fun state vars name ->
+  match lookup_type_var vars name with
+  | Some ty -> Some ty
+  | None -> lookup_locally_abstract_type state name
+
+let bind_locally_abstract_type = fun state ~level name ->
+  let path = SurfacePath.from_name name in
+  match lookup_locally_abstract_type state path with
+  | Some _ -> ()
+  | None -> state.locally_abstract_types <- (path, fresh_tyvar state ~level) :: state.locally_abstract_types
+
 let resolve_type_path = fun state path ->
   match
     List.find state.type_aliases
@@ -797,26 +1004,27 @@ let resolve_type_path = fun state path ->
   | None -> path
 
 let type_of_constructor = fun state ~level ~at path arguments ->
+  let resolved_path = resolve_type_path state path in
   match arguments with
-  | [] when SurfacePath.equal path path_int ->
+  | [] when SurfacePath.equal resolved_path path_int ->
       TInt
-  | [] when SurfacePath.equal path path_bool ->
+  | [] when SurfacePath.equal resolved_path path_bool ->
       TBool
-  | [] when SurfacePath.equal path path_char ->
+  | [] when SurfacePath.equal resolved_path path_char ->
       TChar
-  | [] when SurfacePath.equal path path_string ->
+  | [] when SurfacePath.equal resolved_path path_string ->
       TString
-  | [] when SurfacePath.equal path path_float ->
+  | [] when SurfacePath.equal resolved_path path_float ->
       TFloat
-  | [] when SurfacePath.equal path path_unit ->
+  | [] when SurfacePath.equal resolved_path path_unit ->
       TUnit
-  | [ element ] when SurfacePath.equal path path_list ->
+  | [ element ] when SurfacePath.equal resolved_path path_list ->
       TList element
-  | [ element ] when SurfacePath.equal path path_option ->
+  | [ element ] when SurfacePath.equal resolved_path path_option ->
       TOption element
   | _ ->
       let _ = (state, level, at) in
-      TCon (resolve_type_path state path, arguments)
+      TCon (resolved_path, arguments)
 
 let rec lower_apply_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   let rec loop arguments (current: TypAst.core_type) =
@@ -854,7 +1062,7 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
   | TypAst.Var (Some name) ->
       let name = SurfacePath.from_name name in
       (
-        match lookup_type_var vars name with
+        match lookup_lower_type_var state vars name with
         | Some ty -> ty
         | None ->
             let ty = fresh_tyvar state ~level in
@@ -865,7 +1073,7 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
       add_diagnostic state (unsupported_type type_expr.origin "missing type variable");
       fresh_tyvar state ~level
   | TypAst.Path path -> (
-      match lookup_type_var vars path with
+      match lookup_lower_type_var state vars path with
       | Some ty -> ty
       | None -> type_of_constructor state ~level ~at:type_expr.origin path []
     )
@@ -895,6 +1103,21 @@ and lower_core_type = fun state ~level vars (type_expr: TypAst.core_type) ->
       lower_core_type state ~level:(level + 1) local_vars body
   | TypAst.PolyVariant tags ->
       TPolyVariant (Exact, { tags = normalized_poly_variant_tags tags })
+  | TypAst.Package package ->
+      lower_package_type state ~level vars package
+
+and lower_package_type = fun state ~level vars (package: TypAst.package_type) ->
+  TPackage {
+    binder = package.binder;
+    module_type = package.module_type;
+    constraints = package.constraints
+    |> List.map
+      ~fn:(fun (constraint_: TypAst.package_type_constraint) ->
+        {
+          type_name = constraint_.type_name;
+          manifest = lower_core_type state ~level vars constraint_.manifest
+        })
+  }
 
 let extend_mono = fun (env: env) (bindings: binding list) ->
   List.fold_left bindings ~init:env ~fn:(fun extended_env binding -> binding :: extended_env)
@@ -1014,6 +1237,39 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
   | TypAst.OptionalParameter parameter
   | TypAst.OptionalParameterDefault parameter ->
       infer_parameter state env ~level parameter
+  | TypAst.LocallyAbstractType names ->
+      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+      (TUnit, [])
+  | TypAst.FirstClassModule { binder; package_type } ->
+      let package_ty =
+        match package_type with
+        | Some package -> lower_package_type state ~level (ref []) package
+        | None ->
+            add_diagnostic
+              state
+              (unsupported_type pattern.origin "missing first-class module package type");
+            TPackage { binder; module_type = SurfacePath.empty; constraints = [] }
+      in
+      let bindings =
+        match binder, prune package_ty with
+        | Some name, TPackage package -> bind_first_class_module_pattern state ~level name package
+        | _ -> []
+      in
+      (package_ty, bindings)
+
+and qualify_path = fun path_prefix path ->
+  SurfacePath.from_segments (List.append path_prefix (SurfacePath.to_segments path))
+
+and bind_first_class_module_pattern = fun state ~level name (package: package_ty) ->
+  let module_prefix = [ name ] in
+  let manifests = package_manifests_for_module ~module_prefix package in
+  state.type_manifests <- List.append manifests state.type_manifests;
+  bindings_for_module_type state ~level ~module_prefix ~module_type_path:package.module_type
+
+and package_manifests_for_module = fun ~module_prefix (package: package_ty) ->
+  package.constraints
+  |> List.map
+    ~fn:(fun constraint_ -> (qualify_path module_prefix constraint_.type_name, constraint_.manifest))
 
 and infer_record_pattern_field = fun state env ~level owner_ty (field: TypAst.record_pattern_field) ->
   match lookup_record_label_for_owner state field.name owner_ty with
@@ -1171,10 +1427,21 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
     | TypAst.Let { first_binding; body } ->
         let extended_env, _ = infer_let_binding state env ~level ~recursive:false first_binding in
         infer_expression state extended_env ~level body
-    | TypAst.LetModule { name; items; alias; body } ->
-        infer_local_module state env ~level ~name ~items ~alias body
+    | TypAst.LetModule {
+      name;
+      items;
+      alias;
+      unpack;
+      body
+    } ->
+        infer_local_module state env ~level ~name ~items ~alias ~unpack body
     | TypAst.LocalOpen { module_path; body } ->
         infer_local_open state env ~level ~at:expression.origin module_path body
+    | TypAst.FirstClassModule { module_path; package_type } -> (
+        match package_type with
+        | Some package -> lower_package_type state ~level (ref []) package
+        | None -> TPackage { binder = None; module_type = module_path; constraints = [] }
+      )
     | TypAst.Assert argument ->
         let inferred = infer_expression state env ~level argument in
         unify state ~at:expression.origin inferred TBool;
@@ -1187,22 +1454,50 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
       inferred
   | None -> inferred
 
-and infer_local_module = fun state env ~level ~name ~items ~alias body ->
+and infer_local_module = fun state env ~level ~name ~items ~alias ~unpack body ->
   let previous_module_value_bindings = state.module_value_bindings in
   let previous_module_summaries = state.module_summaries in
   let previous_record_labels = state.record_labels in
+  let previous_type_manifests = state.type_manifests in
   let module_prefix = [ name ] in
-  let extended_env =
-    match alias with
-    | Some source_path -> bind_module_alias state env ~module_prefix ~source_path
-    | None -> bind_module_structure state env ~level ~module_prefix items
+  let extended_env, unpack_manifests =
+    match unpack with
+    | Some unpack -> infer_module_unpack state env ~level ~module_prefix unpack
+    | None -> (
+        match alias with
+        | Some source_path -> (bind_module_alias state env ~module_prefix ~source_path, [])
+        | None -> (bind_module_structure state env ~level ~module_prefix items, [])
+      )
   in
-  let local_manifests = collect_local_type_manifests state ~level ~module_prefix items in
+  let local_manifests = List.append
+    unpack_manifests
+    (collect_local_type_manifests state ~level ~module_prefix items) in
   let result = infer_expression state extended_env ~level body |> expand_local_type_manifests local_manifests in
   state.module_value_bindings <- previous_module_value_bindings;
   state.module_summaries <- previous_module_summaries;
   state.record_labels <- previous_record_labels;
+  state.type_manifests <- previous_type_manifests;
   result
+
+and infer_module_unpack = fun state env ~level ~module_prefix (unpack: TypAst.module_unpack) ->
+  let expression_ty = infer_expression state env ~level unpack.expression in
+  let package_ty =
+    match unpack.package_type with
+    | Some package ->
+        let ascribed = lower_package_type state ~level (ref []) package in
+        unify state ~at:unpack.origin expression_ty ascribed;
+        ascribed
+    | None -> expression_ty
+  in
+  match prune package_ty with
+  | TPackage package ->
+      let manifests = package_manifests_for_module ~module_prefix package in
+      state.type_manifests <- List.append manifests state.type_manifests;
+      let bindings = bindings_for_module_type state ~level ~module_prefix ~module_type_path:package.module_type in
+      (extend_mono env bindings, manifests)
+  | _ ->
+      add_diagnostic state (unsupported_type unpack.origin "first-class module unpack package type");
+      (env, [])
 
 and infer_local_open = fun state env ~level ~at module_path body ->
   match find_module_summary state module_path with
@@ -1257,6 +1552,13 @@ and expand_local_type_manifests = fun manifests ty ->
         TCon (path, List.map arguments ~fn:loop)
     | TPolyVariant (bound, tags) ->
         TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
+    | TPackage package ->
+        TPackage {
+          package
+          with constraints = package.constraints
+          |> List.map
+            ~fn:(fun constraint_ -> { constraint_ with manifest = loop constraint_.manifest })
+        }
     | ty ->
         ty
   in
@@ -1303,11 +1605,66 @@ and is_labeled_argument = function
   | Optional _ -> true
   | Nolabel -> false
 
+and replace_type_path = fun ~source ~replacement ty ->
+  let rec loop ty =
+    match ty with
+    | TList element -> TList (loop element)
+    | TOption element -> TOption (loop element)
+    | TTuple elements -> TTuple (List.map elements ~fn:loop)
+    | TArrow (label, parameter, result) -> TArrow (label, loop parameter, loop result)
+    | TCon (path, []) when SurfacePath.equal path source -> replacement
+    | TCon (path, arguments) -> TCon (path, List.map arguments ~fn:loop)
+    | TPackage package -> TPackage {
+      package
+      with constraints = package.constraints
+      |> List.map ~fn:(fun constraint_ -> { constraint_ with manifest = loop constraint_.manifest })
+    }
+    | ty -> ty
+  in
+  loop ty
+
+and replace_package_binder_result = fun (package: package_ty) result_ty ->
+  match package.binder with
+  | None -> result_ty
+  | Some binder -> package.constraints
+  |> List.fold_left
+    ~init:result_ty
+    ~fn:(fun result_ty constraint_ ->
+      replace_type_path
+        ~source:(qualify_path [ binder ] constraint_.type_name)
+        ~replacement:constraint_.manifest
+        result_ty)
+
+and same_type_variable = fun left right ->
+  match left, right with
+  | TVar left, TVar right -> Ptr.equal left right
+  | _ -> false
+
+and prefer_argument_alias_result = fun state ~at result_ty argument_ty ->
+  match prune argument_ty with
+  | TCon (path, []) when has_type_manifest state path -> (
+      match resolve_type_manifest state path with
+      | Some manifest ->
+          unify state ~at result_ty manifest;
+          argument_ty
+      | None -> result_ty
+    )
+  | _ -> result_ty
+
 and apply_argument_to_function = fun state ~level ~at function_ty argument_label argument_ty ->
   match prune function_ty with
   | TArrow (parameter_label, parameter_ty, result_ty) when apply_label_matches parameter_label argument_label ->
+      let result_tracks_parameter = same_type_variable parameter_ty result_ty in
       unify state ~at parameter_ty argument_ty;
-      result_ty
+      let result_ty =
+        match prune parameter_ty with
+        | TPackage package -> replace_package_binder_result package result_ty
+        | _ -> result_ty
+      in
+      if result_tracks_parameter then
+        prefer_argument_alias_result state ~at result_ty argument_ty
+      else
+        result_ty
   | TArrow (Optional _, _, result_ty) when arg_label_equal argument_label Nolabel ->
       apply_argument_to_function state ~level ~at result_ty argument_label argument_ty
   | TArrow (parameter_label, parameter_ty, result_ty) when is_labeled_argument argument_label ->
@@ -1430,7 +1787,14 @@ and infer_match = fun state env ~level scrutinee cases ->
 
 and infer_function = fun state env ~level parameters body ->
   match parameters with
-  | [] -> infer_function_body state env ~level body
+  | [] ->
+      infer_function_body state env ~level body
+  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
+      let previous = state.locally_abstract_types in
+      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+      let result = infer_function state env ~level rest body in
+      state.locally_abstract_types <- previous;
+      result
   | parameter :: rest ->
       let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
@@ -1521,11 +1885,37 @@ and infer_function_cases = fun state env ~level cases ->
 
 and infer_lambda = fun state env ~level parameters body ->
   match parameters with
-  | [] -> infer_expression state env ~level body
+  | [] ->
+      infer_expression state env ~level body
+  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
+      let previous = state.locally_abstract_types in
+      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+      let result = infer_lambda state env ~level rest body in
+      state.locally_abstract_types <- previous;
+      result
   | parameter :: rest ->
       let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
       let extended_env = extend_mono env parameter_bindings in
       let result_ty = infer_lambda state extended_env ~level rest body in
+      TArrow (label, parameter_ty, result_ty)
+
+and infer_annotated_lambda = fun state env ~level parameters body annotation ->
+  match parameters with
+  | [] ->
+      let body_ty = infer_expression state env ~level body in
+      let annotated = lower_core_type state ~level (ref []) annotation in
+      unify state ~at:annotation.origin body_ty annotated;
+      annotated
+  | ({ TypAst.kind=TypAst.LocallyAbstractType names; _ }: TypAst.pattern) :: rest ->
+      let previous = state.locally_abstract_types in
+      names |> List.for_each ~fn:(bind_locally_abstract_type state ~level);
+      let result = infer_annotated_lambda state env ~level rest body annotation in
+      state.locally_abstract_types <- previous;
+      result
+  | parameter :: rest ->
+      let label, parameter_ty, parameter_bindings = infer_function_parameter state env ~level parameter in
+      let extended_env = extend_mono env parameter_bindings in
+      let result_ty = infer_annotated_lambda state extended_env ~level rest body annotation in
       TArrow (label, parameter_ty, result_ty)
 
 and is_constructor_path = fun path ->
@@ -1538,6 +1928,7 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Literal _
   | TypAst.Path _
   | TypAst.PolyVariant _
+  | TypAst.FirstClassModule _
   | TypAst.Function _ -> true
   | TypAst.Tuple elements
   | TypAst.List elements -> List.all elements ~fn:is_nonexpansive_expression
@@ -1579,17 +1970,40 @@ and is_nonexpansive_let_binding = fun (binding: TypAst.let_binding) ->
 
 and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding) ->
   let value_ty =
-    if List.is_empty binding.parameters then
-      infer_expression state env ~level:(level + 1) binding.body
-    else
-      infer_lambda state env ~level:(level + 1) binding.parameters binding.body
+    match binding.parameters, binding.type_annotation with
+    | [], _ -> infer_expression state env ~level:(level + 1) binding.body
+    | _, Some annotation -> infer_annotated_lambda
+      state
+      env
+      ~level:(level + 1)
+      binding.parameters
+      binding.body
+      annotation
+    | _, None -> infer_lambda state env ~level:(level + 1) binding.parameters binding.body
   in
-  match binding.type_annotation with
-  | Some annotation ->
+  match binding.parameters, binding.type_annotation with
+  | [], Some annotation ->
       let annotated = lower_core_type state ~level:(level + 1) (ref []) annotation in
       unify state ~at:binding.origin value_ty annotated;
-      lower_core_type state ~level:(level + 1) (ref []) annotation
-  | None -> value_ty
+      annotated
+  | _ -> value_ty
+
+and runtime_parameter_count = fun parameters ->
+  parameters |> List.filter
+    ~fn:(fun (parameter: TypAst.pattern) ->
+      match parameter.kind with
+      | TypAst.LocallyAbstractType _ -> false
+      | _ -> true) |> List.length
+
+and unify_function_result_annotation = fun state ~at ~arity function_ty annotation ->
+  match arity, prune function_ty with
+  | n, TArrow (_, _, result) when n > 0 -> unify_function_result_annotation
+    state
+    ~at
+    ~arity:(n - 1)
+    result
+    annotation
+  | _, result -> unify state ~at result annotation
 
 and infer_let_binding = fun state env ~level ~recursive (binding: TypAst.let_binding) ->
   if recursive then
@@ -1751,6 +2165,17 @@ and replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
     bound,
     { tags = normalized_poly_variant_tags tags.tags }
   )
+  | TPackage package -> TPackage {
+    package
+    with module_type = replace_path_prefix ~source_prefix ~target_prefix package.module_type;
+    constraints = package.constraints
+    |> List.map
+      ~fn:(fun constraint_ ->
+        {
+          type_name = replace_path_prefix ~source_prefix ~target_prefix constraint_.type_name;
+          manifest = replace_ty_prefix ~source_prefix ~target_prefix constraint_.manifest
+        })
+  }
   | ty -> ty
 
 and replace_ty_prefixes = fun substitutions ty ->
@@ -1906,7 +2331,8 @@ and bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_pr
           vars)
       |> extend_generalized env ~level
   | TypAst.Alias type_ ->
-      let _ = lower_core_type state ~level (ref vars) type_ in
+      let manifest = lower_core_type state ~level (ref vars) type_ in
+      state.type_manifests <- (type_path, manifest) :: state.type_manifests;
       env
   | TypAst.Record fields ->
       fields
@@ -1934,7 +2360,10 @@ and bind_module_type_item_aliases = fun state ~module_prefix (item: TypAst.signa
   | TypAst.External _ -> ()
 
 and ascribed_binding_for_value_declaration = fun state ~level ~module_prefix name type_annotation ->
+  let previous_type_manifests = state.type_manifests in
+  state.type_manifests <- [];
   let ty = lower_core_type state ~level (ref []) type_annotation in
+  state.type_manifests <- previous_type_manifests;
   let binding = make_binding state ~name:(qualify_name module_prefix name) ~ty in
   { binding with ty = generalize level ty }
 
