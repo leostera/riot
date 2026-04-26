@@ -1028,6 +1028,10 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
     | TypAst.Let { first_binding; body } ->
         let extended_env, _ = infer_let_binding state env ~level ~recursive:false first_binding in
         infer_expression state extended_env ~level body
+    | TypAst.LetModule { name; items; alias; body } ->
+        infer_local_module state env ~level ~name ~items ~alias body
+    | TypAst.LocalOpen { module_path; body } ->
+        infer_local_open state env ~level ~at:expression.origin module_path body
     | TypAst.Assert argument ->
         let inferred = infer_expression state env ~level argument in
         unify state ~at:expression.origin inferred TBool;
@@ -1039,6 +1043,81 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
       unify state ~at:expression.origin inferred annotated;
       inferred
   | None -> inferred
+
+and infer_local_module = fun state env ~level ~name ~items ~alias body ->
+  let previous_module_value_bindings = state.module_value_bindings in
+  let previous_module_summaries = state.module_summaries in
+  let previous_record_labels = state.record_labels in
+  let module_prefix = [ name ] in
+  let extended_env =
+    match alias with
+    | Some source_path -> bind_module_alias state env ~module_prefix ~source_path
+    | None -> bind_module_structure state env ~level ~module_prefix items
+  in
+  let local_manifests = collect_local_type_manifests state ~level ~module_prefix items in
+  let result = infer_expression state extended_env ~level body |> expand_local_type_manifests local_manifests in
+  state.module_value_bindings <- previous_module_value_bindings;
+  state.module_summaries <- previous_module_summaries;
+  state.record_labels <- previous_record_labels;
+  result
+
+and infer_local_open = fun state env ~level ~at module_path body ->
+  match find_module_summary state module_path with
+  | Some (summary: module_summary) ->
+      let source_prefix = SurfacePath.to_segments summary.path in
+      let copied_bindings = summary.env_bindings
+      |> List.filter_map
+        ~fn:(copy_binding_prefix_to_local state ~source_prefix ~target_prefix:source_prefix) in
+      infer_expression state (extend_mono env copied_bindings) ~level body
+  | None ->
+      add_diagnostic
+        state
+        (unsupported_type at ("unbound opened module " ^ SurfacePath.to_string module_path));
+      infer_expression state env ~level body
+
+and collect_local_type_manifests = fun state ~level ~module_prefix items ->
+  items |> List.flat_map
+    ~fn:(fun (item: TypAst.structure_item) ->
+      match item.kind with
+      | TypAst.Type declarations ->
+          declarations |> List.filter_map
+            ~fn:(fun (declaration: TypAst.type_declaration) ->
+              match declaration.parameters, declaration.definition.kind with
+              | [], TypAst.Alias manifest -> Some (
+                qualify_name module_prefix declaration.name,
+                lower_core_type state ~level (ref []) manifest
+              )
+              | _ -> None)
+      | _ -> [])
+
+and expand_local_type_manifests = fun manifests ty ->
+  let rec loop ty =
+    match prune ty with
+    | TList element ->
+        TList (loop element)
+    | TOption element ->
+        TOption (loop element)
+    | TTuple elements ->
+        TTuple (List.map elements ~fn:loop)
+    | TArrow (label, parameter, result) ->
+        TArrow (label, loop parameter, loop result)
+    | TCon (path, []) -> (
+        match
+          List.find manifests
+            ~fn:(fun (manifest_path, _) ->
+              SurfacePath.equal manifest_path path)
+        with
+        | Some (_, manifest) -> manifest
+        | None -> TCon (path, [])
+      )
+    | TCon (path, arguments) ->
+        TCon (path, List.map arguments ~fn:loop)
+    | TPolyVariant (bound, tags) ->
+        TPolyVariant (bound, { tags = normalized_poly_variant_tags tags.tags })
+    | ty ->
+        ty
+  in
+  loop ty
 
 and infer_apply = fun state env ~level (expression: TypAst.expression) ->
   let rec collect arguments (current: TypAst.expression) =
@@ -1276,7 +1355,9 @@ and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
   | TypAst.Match _
   | TypAst.Infix _
   | TypAst.Let _
+  | TypAst.LetModule _
   | TypAst.Assert _ -> false
+  | TypAst.LocalOpen { body; _ } -> is_nonexpansive_expression body
 
 and is_constructor_expression = fun (expression: TypAst.expression) ->
   match expression.kind with
@@ -1356,7 +1437,7 @@ and infer_recursive_let_binding = fun state recursive_env ~level placeholders bi
       let value_ty = infer_let_binding_value state recursive_env ~level binding in
       unify state ~at:binding.origin placeholder.ty value_ty
 
-let infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
+and infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
   if declaration.recursive then
     let placeholders =
       List.fold_left declaration.bindings ~init:[]
@@ -1383,7 +1464,7 @@ let infer_let_declaration = fun state env ~level (declaration: TypAst.let_declar
           binding in
         (next_env, List.append public_bindings item_bindings))
 
-let bind_declared_value = fun state env ~level name annotation ->
+and bind_declared_value = fun state env ~level name annotation ->
   let ty = lower_core_type state ~level (ref []) annotation in
   let name = SurfacePath.from_name name in
   let binding = make_binding state ~name ~ty in
@@ -1391,11 +1472,11 @@ let bind_declared_value = fun state env ~level name annotation ->
   let extended_env = binding :: env in
   (extended_env, [ binding ])
 
-let type_parameter_name = function
+and type_parameter_name = function
   | Some name -> SurfacePath.from_name name
   | None -> SurfacePath.from_name "_"
 
-let type_parameter_bindings = fun parameters ->
+and type_parameter_bindings = fun parameters ->
   let index = ref 0 in
   let vars = ref [] in
   let arguments = ref [] in
@@ -1407,12 +1488,12 @@ let type_parameter_bindings = fun parameters ->
       index := !index + 1);
   (!vars, List.reverse !arguments)
 
-let qualify_name = fun path_prefix name ->
+and qualify_name = fun path_prefix name ->
   match path_prefix with
   | [] -> SurfacePath.from_name name
   | prefix -> SurfacePath.from_segments (List.append prefix [ name ])
 
-let rec strip_prefix = fun prefix segments ->
+and strip_prefix = fun prefix segments ->
   match prefix, segments with
   | [], rest -> Some rest
   | prefix :: prefixes, segment :: segments when String.equal prefix segment -> strip_prefix
@@ -1420,17 +1501,17 @@ let rec strip_prefix = fun prefix segments ->
     segments
   | _ -> None
 
-let path_has_prefix = fun prefix path ->
+and path_has_prefix = fun prefix path ->
   match strip_prefix prefix (SurfacePath.to_segments path) with
   | Some _ -> true
   | None -> false
 
-let replace_path_prefix = fun ~source_prefix ~target_prefix path ->
+and replace_path_prefix = fun ~source_prefix ~target_prefix path ->
   match strip_prefix source_prefix (SurfacePath.to_segments path) with
   | Some rest -> SurfacePath.from_segments (List.append target_prefix rest)
   | None -> path
 
-let rec replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
+and replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
   match prune ty with
   | TList element -> TList (replace_ty_prefix ~source_prefix ~target_prefix element)
   | TOption element -> TOption (replace_ty_prefix ~source_prefix ~target_prefix element)
@@ -1452,11 +1533,11 @@ let rec replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
   )
   | ty -> ty
 
-let qualify_binding = fun state path_prefix binding ->
+and qualify_binding = fun state path_prefix binding ->
   let name = EntityId.surface_path binding.entity_id |> SurfacePath.to_segments in
   make_binding state ~name:(SurfacePath.from_segments (List.append path_prefix name)) ~ty:binding.ty
 
-let copy_binding_prefix = fun state ~source_prefix ~target_prefix binding ->
+and copy_binding_prefix = fun state ~source_prefix ~target_prefix binding ->
   let source_path = EntityId.surface_path binding.entity_id in
   match strip_prefix source_prefix (SurfacePath.to_segments source_path) with
   | Some rest -> Some (make_binding
@@ -1465,7 +1546,7 @@ let copy_binding_prefix = fun state ~source_prefix ~target_prefix binding ->
     ~ty:(replace_ty_prefix ~source_prefix ~target_prefix binding.ty))
   | None -> None
 
-let copy_binding_prefix_to_local = fun state ~source_prefix ~target_prefix binding ->
+and copy_binding_prefix_to_local = fun state ~source_prefix ~target_prefix binding ->
   let source_path = EntityId.surface_path binding.entity_id in
   match strip_prefix source_prefix (SurfacePath.to_segments source_path) with
   | Some rest -> Some (make_binding
@@ -1474,31 +1555,31 @@ let copy_binding_prefix_to_local = fun state ~source_prefix ~target_prefix bindi
     ~ty:(replace_ty_prefix ~source_prefix ~target_prefix binding.ty))
   | None -> None
 
-let binding_has_path_prefix = fun path_prefix binding ->
+and binding_has_path_prefix = fun path_prefix binding ->
   path_has_prefix path_prefix (EntityId.surface_path binding.entity_id)
 
-let find_module_summary = fun state path ->
-  List.find state.module_summaries
-    ~fn:(fun summary ->
+and find_module_summary = fun state path ->
+  List.find ((state.module_summaries: module_summary list))
+    ~fn:(fun (summary: module_summary) ->
       SurfacePath.equal summary.path path)
 
-let bind_type_alias = fun state ~name_path ~type_path ->
+and bind_type_alias = fun state ~name_path ~type_path ->
   state.type_aliases <- (name_path, type_path) :: state.type_aliases
 
-let bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars (
+and bind_record_field_declaration = fun state ~level ~path_prefix ~owner_ty vars (
   field: TypAst.record_field_declaration
 ) ->
   let field_ty = lower_core_type state ~level (ref vars) field.type_annotation in
   state.record_labels <- { label = qualify_name path_prefix field.name; owner_ty; field_ty }
   :: state.record_labels
 
-let inline_record_owner_ty = fun type_path constructor_name arguments ->
+and inline_record_owner_ty = fun type_path constructor_name arguments ->
   TCon (
     SurfacePath.from_segments (List.append (SurfacePath.to_segments type_path) [ constructor_name ]),
     arguments
   )
 
-let constructor_payload_ty = fun state ~level ~path_prefix ~type_path ~result_arguments vars (
+and constructor_payload_ty = fun state ~level ~path_prefix ~type_path ~result_arguments vars (
   constructor: TypAst.type_constructor
 ) ->
   match constructor.inline_record, constructor.payload with
@@ -1512,7 +1593,7 @@ let constructor_payload_ty = fun state ~level ~path_prefix ~type_path ~result_ar
   | None, None ->
       None
 
-let constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_path ~result_ty ~result_arguments vars (
+and constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_path ~result_ty ~result_arguments vars (
   constructor: TypAst.type_constructor
 ) ->
   let ty =
@@ -1522,7 +1603,7 @@ let constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_pat
   in
   make_binding state ~name:(qualify_name path_prefix constructor.name) ~ty
 
-let bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_prefix (
+and bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_prefix (
   declaration: TypAst.type_declaration
 ) ->
   let vars, arguments = type_parameter_bindings declaration.parameters in
@@ -1558,7 +1639,7 @@ let bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_pr
   | TypAst.Abstract ->
       env
 
-let bind_module_type_declarations = fun state ~level ~module_prefix local_env exported_env declarations ->
+and bind_module_type_declarations = fun state ~level ~module_prefix local_env exported_env declarations ->
   let local_env =
     List.fold_left
       declarations
@@ -1581,7 +1662,7 @@ let bind_module_type_declarations = fun state ~level ~module_prefix local_env ex
   in
   (local_env, exported_env)
 
-let rec infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.structure_item) ->
+and infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.structure_item) ->
   match item.kind with
   | TypAst.Let declaration ->
       let env, bindings = infer_let_declaration state env ~level declaration in

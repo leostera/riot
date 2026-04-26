@@ -147,6 +147,8 @@ and expression_kind =
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
   | Let of { first_binding: let_binding; body: expression }
+  | LetModule of { name: string; items: structure_item list; alias: path option; body: expression }
+  | LocalOpen of { module_path: path; body: expression }
   | Assert of expression
 
 and function_body =
@@ -176,25 +178,25 @@ and argument_kind =
   | Labeled of { label: string; value: expression option }
   | Optional of { label: string; value: expression option }
 
-type let_declaration = {
+and let_declaration = {
   origin: origin;
   recursive: bool;
   bindings: let_binding list;
 }
 
-type value_declaration = {
+and value_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
 }
 
-type external_declaration = {
+and external_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
 }
 
-type module_declaration = {
+and module_declaration = {
   origin: origin;
   name: string;
   items: structure_item list;
@@ -796,6 +798,10 @@ and build_expression = fun syntax_expression ->
           (Let { first_binding = build_let_binding first_binding; body = build_expression body })
     | SynAst.Expr.Let _ ->
         build_failed origin "incomplete let expression"
+    | SynAst.Expr.LetModule _ ->
+        build_let_module_expression origin syntax_expression
+    | SynAst.Expr.LocalOpen _ ->
+        build_local_open_expression origin syntax_expression
     | SynAst.Expr.Assert { argument=Some argument } ->
         make_expression origin (Assert (build_expression argument))
     | SynAst.Expr.Assert { argument=None } ->
@@ -811,8 +817,6 @@ and build_expression = fun syntax_expression ->
     | SynAst.Expr.Array
     | SynAst.Expr.Extension
     | SynAst.Expr.FirstClassModule
-    | SynAst.Expr.LocalOpen _
-    | SynAst.Expr.LetModule _
     | SynAst.Expr.LetException _
     | SynAst.Expr.BindingOperator _
     | SynAst.Expr.Unreachable
@@ -844,7 +848,44 @@ and build_argument = fun syntax_expression ->
       })
     | _ -> make_argument origin (Positional (build_expression syntax_expression)): argument)
 
-let build_let_declaration = fun declaration ->
+and build_let_module_expression = fun origin syntax_expression ->
+  let let_module = SynAst.LetModuleExpr.cast syntax_expression |> require_some origin "invalid let module expression" in
+  let body = SynAst.LetModuleExpr.body let_module |> require_some origin "missing let module body" in
+  let name = SynAst.LetModuleExpr.name let_module
+  |> require_some origin "missing let module name"
+  |> token_text in
+  let module_body_node = SynAst.LetModuleExpr.module_body_node let_module in
+  let alias =
+    match module_body_node with
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> Some (path_from_ident_tokens_in_node
+      node)
+    | _ -> None
+  in
+  let items =
+    match module_body_node with
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = STRUCT_MODULE_EXPR) -> build_structure_items_from_module_expr
+      node
+    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> []
+    | _ -> build_failed origin "unsupported let module body"
+  in
+  make_expression origin (LetModule { name; items; alias; body = build_expression body })
+
+and build_local_open_expression = fun origin syntax_expression ->
+  let local_open = SynAst.LocalOpenExpr.cast syntax_expression |> require_some origin "invalid local open expression" in
+  let module_path, body =
+    match SynAst.LocalOpenExpr.view local_open with
+    | LetOpen { module_path; body; _ }
+    | Delimited { module_path; body; _ } -> (module_path, body)
+  in
+  make_expression
+    origin
+    (LocalOpen {
+      module_path = path_from_syn_path
+        (require_some origin "missing local open module path" module_path);
+      body = build_expression (require_some origin "missing local open body" body)
+    })
+
+and build_let_declaration = fun declaration ->
   let bindings = ref [] in
   SynAst.LetDeclaration.for_each_binding
     declaration
@@ -858,14 +899,14 @@ let build_let_declaration = fun declaration ->
       let_declaration
   )
 
-let name_from_declaration_tokens = fun for_each_token fallback ->
+and name_from_declaration_tokens = fun for_each_token fallback ->
   let tokens = ref [] in
   for_each_token ~fn:(fun token -> tokens := token :: !tokens);
   match List.reverse !tokens with
   | [] -> Option.map fallback ~fn:token_text
   | tokens -> Some (path_from_tokens tokens |> SurfacePath.to_string)
 
-let build_value_declaration = fun declaration ->
+and build_value_declaration = fun declaration ->
   let origin = origin_from_node declaration in
   (
     {
@@ -881,7 +922,7 @@ let build_value_declaration = fun declaration ->
       value_declaration
   )
 
-let build_external_declaration = fun declaration ->
+and build_external_declaration = fun declaration ->
   let origin = origin_from_node declaration in
   (
     {
@@ -897,11 +938,11 @@ let build_external_declaration = fun declaration ->
       external_declaration
   )
 
-let build_type_parameter = function
+and build_type_parameter = function
   | SynAst.TypeDeclaration.Named { name; _ } -> Some (token_text name)
   | SynAst.TypeDeclaration.Wildcard _ -> None
 
-let rec build_type_constructor = fun constructor ->
+and build_type_constructor = fun constructor ->
   let origin = origin_from_node constructor in
   (
     {
@@ -936,7 +977,7 @@ and build_record_field_declarations = fun record ->
     ~fn:(fun field -> fields := build_record_field_declaration field :: !fields);
   List.reverse !fields
 
-let build_type_declaration_member = fun member ->
+and build_type_declaration_member = fun member ->
   let origin = origin_from_node (SynAst.TypeDeclaration.Member.declaration member) in
   let parameters = ref [] in
   SynAst.TypeDeclaration.Member.for_each_parameter
@@ -970,14 +1011,14 @@ let build_type_declaration_member = fun member ->
       type_declaration
   )
 
-let build_type_declarations = fun declaration ->
+and build_type_declarations = fun declaration ->
   let declarations = ref [] in
   SynAst.TypeDeclaration.for_each_member
     declaration
     ~fn:(fun member -> declarations := build_type_declaration_member member :: !declarations);
   List.reverse !declarations
 
-let rec build_structure_items_from_module_expr = fun node ->
+and build_structure_items_from_module_expr = fun node ->
   let items = ref [] in
   SynAst.Node.for_each_child_node node
     ~fn:(fun child ->

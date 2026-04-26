@@ -135,6 +135,8 @@ and expression_kind =
   | Apply of { callee: expression; arguments: argument list }
   | Infix of { left: expression; operator: path; right: expression }
   | Let of { first_binding: let_binding; body: expression }
+  | LetModule of { name: string; items: structure_item list; alias: path option; body: expression }
+  | LocalOpen of { module_path: path; body: expression }
   | Assert of expression
 
 and function_body =
@@ -163,22 +165,26 @@ and argument_kind =
   | Positional of expression
   | Labeled of { label: string; value: expression option }
   | Optional of { label: string; value: expression option }
-type let_declaration = {
+
+and let_declaration = {
   origin: origin;
   recursive: bool;
   bindings: let_binding list;
 }
-type value_declaration = {
+
+and value_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
 }
-type external_declaration = {
+
+and external_declaration = {
   origin: origin;
   name: string;
   type_annotation: core_type;
 }
-type module_declaration = {
+
+and module_declaration = {
   origin: origin;
   name: string;
   items: structure_item list;
