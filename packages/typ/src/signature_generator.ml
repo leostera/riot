@@ -349,6 +349,9 @@ and render_ast_postfix_argument = fun substitutions type_ ->
 
 and render_ast_tuple_element = fun substitutions type_ ->
   match type_.kind with
+  | TypAst.Parenthesized inner -> "("
+  ^ render_ast_core_type_with_substitutions substitutions inner
+  ^ ")"
   | TypAst.Arrow _
   | TypAst.Tuple _ -> "(" ^ render_ast_core_type_with_substitutions substitutions type_ ^ ")"
   | _ -> render_ast_core_type_with_substitutions substitutions type_
