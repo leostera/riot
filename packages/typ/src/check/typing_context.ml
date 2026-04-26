@@ -83,6 +83,11 @@ type t = {
 
 let empty = { next_binding_stamp = 0; values = [] }
 
+(* [type_expr] is recursive, and Serde serializers are values rather than
+   generated from type declarations. Keep the serializer group mutually
+   recursive so nested arrows, constructors, packages, and rows can all call
+   back into [type_expr_serializer]. *)
+
 let rec type_expr_serializer = {
   Serde.Ser.run =
     (fun backend state value ->

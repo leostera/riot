@@ -5,6 +5,13 @@ module SurfacePath = Model.Surface_path
 module BindingId = Model.Binding_id
 module EntityId = Model.Entity_id
 
+(* Internal inference type language.
+
+   This deliberately does not reuse [Typing_context.type_expr]. The checker
+   needs mutable union-find variables, level tracking, shared row objects, and
+   manifest expansion while solving. Only exported bindings are converted to the
+   immutable public type language. *)
+
 type ty =
   | TInt
   | TBool
@@ -93,6 +100,12 @@ type functor_summary = {
   env_bindings: binding list;
   value_bindings: binding list;
 }
+
+(* Per-check mutable state.
+
+   The one-shot checker keeps mutation query-local: each file check allocates a
+   fresh [state], imports any caller-provided [Typing_context.t], and exports a
+   new public context at the end. Nothing here is shared across checks. *)
 
 type state = {
   mutable next_tyvar: int;
@@ -283,6 +296,14 @@ let row_tags_seen = fun seen tags ->
       Ptr.equal other_tags tags)
     !seen
 
+(* Occurs check plus level adjustment.
+
+   When a variable at [level] is linked to a type containing younger variables,
+   those younger variables must be lowered to [level]. That preserves the
+   generalization invariant: a binding may only quantify variables created
+   deeper than the surrounding environment. Shared polymorphic-variant rows can
+   be cyclic through links, so row objects are tracked by identity while walking. *)
+
 let rec occurs_adjust_levels = fun id level ty ->
   let seen_rows = ref [] in
   let rec loop ty =
@@ -381,6 +402,13 @@ let resolve_type_manifest = fun state path ->
 
 let has_type_manifest = fun state path -> Option.is_some (resolve_type_manifest state path)
 
+(* Unification is intentionally permissive around manifest aliases.
+
+   For source compatibility with OCaml interfaces, exported named aliases should
+   often survive in public types even when their manifest is known. The special
+   [TCon(path, [])] cases use manifests to check compatibility, but prefer to
+   keep the named constructor linked when doing so is sound. *)
+
 let rec unify = fun state ~at left right ->
   match left, right with
   | TVar ({ var=Link linked_ty } as cell), TCon (path, []) when has_type_manifest state path -> (
@@ -448,6 +476,9 @@ and unify_pruned = fun state ~at left right ->
             ^ " but got "
             ^ Int.to_string (List.length right_arguments)))
   | TPolyVariant (left_bound, left_tags), TPolyVariant (right_bound, right_tags) ->
+      (* Row objects are mutable and may be shared by multiple occurrences of
+         the same row variable. Merging updates both sides for compatible open
+         rows so later constraints see the accumulated tag set. *)
       let left = normalized_poly_variant_tags left_tags.tags in
       let right = normalized_poly_variant_tags right_tags.tags in
       let unify_payloads left right =
@@ -577,6 +608,9 @@ and unify_package = fun state ~at left right ->
       | None -> ())
 
 and coerce = fun state ~at source target ->
+  (* Coercion differs from unification only where the language has directional
+     pressure today: polymorphic variants. Everything else falls back to normal
+     equality-style unification after manifest expansion. *)
   match prune source, prune target with
   | TCon (source_path, []), TCon (target_path, []) when SurfacePath.equal source_path target_path ->
       ()
@@ -623,6 +657,9 @@ and coerce_poly_variant = fun state ~at source_tags target_tags ->
         ^ string_of_ty (TPolyVariant (Exact, { tags = target }))))
 
 let generalize = fun level ty ->
+  (* Turn all variables born below [level] into generic variables. Polymorphic
+     variant rows are copied instead of reused so a generalized scheme cannot be
+     mutated by a later instantiation. *)
   let poly_variant_copies = ref [] in
   let rec loop ty =
     match prune ty with
@@ -654,6 +691,9 @@ let generalize = fun level ty ->
   loop ty
 
 let instantiate = fun state ~level ty ->
+  (* Every use of a generalized binding receives fresh flexible variables.
+     Shared rows are copied consistently within the instantiation so aliases in
+     a single scheme remain aliases after freshening. *)
   let subst = ref [] in
   let poly_variant_copies = ref [] in
   let rec loop ty =
@@ -816,6 +856,9 @@ type row_alias = {
 }
 
 let shared_poly_variant_row_aliases = fun ty ->
+  (* Public rendering needs to preserve shared row identity. If the same row
+     object appears more than once in a type, expose the first occurrence as an
+     alias and later occurrences as the alias variable. *)
   let rows = ref [] in
   let visited_rows = ref [] in
   let remember tags =
@@ -885,6 +928,9 @@ let find_row_alias = fun row_aliases tags ->
       Ptr.equal alias.row_tags tags)
 
 let rec public_type_of_ty = fun vars row_aliases ty ->
+  (* Convert internal mutable types into the immutable public type language.
+     [vars] assigns stable, dense public ids in occurrence order; those ids are
+     local to the returned scheme. *)
   match prune ty with
   | TInt ->
       Typing_context.Int
@@ -993,6 +1039,9 @@ let public_binding_of_binding = fun binding ->
   }
 
 let rec import_scheme = fun scheme ->
+  (* Importing a caller-provided public context goes through [Generic] variables.
+     Later lookup instantiates those generics, so values from previous checks
+     keep normal HM polymorphism. *)
   let rec loop type_expr =
     match type_expr with
     | Typing_context.Int -> TInt
@@ -1345,6 +1394,9 @@ let flatten_pattern_application = fun pattern ->
   loop [] pattern
 
 let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
+  (* Pattern inference returns both the type matched by the pattern and the
+     monomorphic bindings introduced by that pattern. The caller decides whether
+     those bindings are generalized based on the binding form/value restriction. *)
   match pattern.kind with
   | TypAst.Path path -> (
       match simple_path_name path with
@@ -1450,6 +1502,10 @@ let rec infer_pattern = fun state env ~level (pattern: TypAst.pattern) ->
       (package_ty, bindings)
 
 and infer_constructor_pattern_application = fun state env ~level (pattern: TypAst.pattern) ->
+  (* Constructor patterns arrive as nested pattern application. Locally abstract
+     type pseudo-arguments participate in GADT-style annotations but are not
+     runtime payloads, so they are filtered out before constructing the payload
+     tuple. *)
   let callee, arguments = flatten_pattern_application pattern in
   match callee.kind with
   | TypAst.Path path ->
@@ -1598,6 +1654,10 @@ and infer_path_expression = fun state env ~level ~at path ->
     )
 
 and infer_expression = fun state env ~level (expression: TypAst.expression) ->
+  (* Expression inference computes a type and emits diagnostics into [state].
+     Type hints are applied after the structural expression has been inferred,
+     which lets annotations check the expression while coercions can return the
+     target type. *)
   let inferred =
     match expression.kind with
     | TypAst.Literal literal ->
@@ -1704,6 +1764,9 @@ and infer_expression = fun state env ~level (expression: TypAst.expression) ->
   | None -> inferred
 
 and infer_local_module = fun state env ~level ~name ~items ~alias ~unpack body ->
+  (* Local modules are scoped expressions, not top-level exports. The checker
+     temporarily installs their summaries, labels, and manifests while checking
+     the body, then restores the previous state so those names cannot leak. *)
   let previous_module_value_bindings = state.module_value_bindings in
   let previous_module_summaries = state.module_summaries in
   let previous_record_labels = state.record_labels in
@@ -1821,6 +1884,9 @@ and expand_local_type_manifests = fun manifests ty ->
   loop ty
 
 and infer_apply = fun state env ~level (expression: TypAst.expression) ->
+  (* Applications are normalized here instead of in [Typ.Ast]: nested Apply
+     nodes are flattened so labelled arguments can be matched against the full
+     arrow chain in one left-to-right pass. *)
   let rec collect arguments (current: TypAst.expression) =
     match current.kind with
     | TypAst.Apply { callee; arguments=current_arguments } -> collect
@@ -1916,6 +1982,10 @@ and prefer_argument_alias_result = fun state ~at result_ty argument_ty ->
   | _ -> result_ty
 
 and apply_argument_to_function = fun state ~level ~at function_ty argument_label argument_ty ->
+  (* Labelled application can skip over optional parameters and can apply a
+     labelled argument deeper in the arrow chain. When a result is the same
+     variable as the parameter, aliases from the supplied argument are preferred
+     so generated signatures keep source-level names such as [Derived.t]. *)
   match prune function_ty with
   | TArrow (parameter_label, parameter_ty, result_ty) when apply_label_matches parameter_label argument_label ->
       let result_tracks_parameter = same_type_variable parameter_ty result_ty in
@@ -2103,6 +2173,8 @@ and infer_for = fun state env ~level ~at pattern start_ stop body ->
   TUnit
 
 and infer_function = fun state env ~level parameters body ->
+  (* Locally abstract types are scoped to the function tail that follows them.
+     Save/restore keeps pseudo-parameters from escaping into sibling terms. *)
   match parameters with
   | [] ->
       infer_function_body state env ~level body
@@ -2159,6 +2231,10 @@ and is_row_identity_catch_all_case = fun (case: TypAst.match_case) ->
   | _ -> false
 
 and infer_row_identity_function_cases = fun cases ->
+  (* Fast path for the common row-polymorphic identity shape:
+       function `A -> `A | `B -> `B | x -> x
+     The generic match inference would otherwise collapse this to a less useful
+     exact row too early for the oracle interface fixtures. *)
   let tags = ref [] in
   let catch_all = ref false in
   let rec loop = function
@@ -2246,6 +2322,8 @@ and is_constructor_path = fun path ->
   | None -> false
 
 and is_nonexpansive_expression = fun (expression: TypAst.expression) ->
+  (* Current value-restriction approximation. Non-expansive let bindings may be
+     generalized; expansive ones keep their inferred variables monomorphic. *)
   match expression.kind with
   | TypAst.Literal _
   | TypAst.Path _
@@ -2296,6 +2374,10 @@ and is_nonexpansive_let_binding = fun (binding: TypAst.let_binding) ->
   (not (List.is_empty binding.parameters)) || is_nonexpansive_expression binding.body
 
 and infer_let_binding_value = fun state env ~level (binding: TypAst.let_binding) ->
+  (* Binding bodies are checked one level deeper so generalization can quantify
+     variables introduced by the value without capturing variables from [env].
+     For full-value annotations, return the lowered annotation after checking so
+     exported signatures preserve the user's explicit shape. *)
   let value_ty =
     match binding.parameters, binding.type_annotation with
     | [], _ -> infer_expression state env ~level:(level + 1) binding.body
@@ -2398,6 +2480,9 @@ and public_recursive_let_binding = fun state ~level placeholders binding ->
       Some { placeholder with ty = generalize level ty }
 
 and infer_let_declaration = fun state env ~level (declaration: TypAst.let_declaration) ->
+  (* Recursive groups are handled by placeholders: first allocate a monomorphic
+     type for each simple binder, then infer every RHS in the recursive
+     environment, and finally generalize the placeholders for export. *)
   if declaration.recursive then
     let placeholders =
       List.fold_left declaration.bindings ~init:[]
@@ -2473,6 +2558,9 @@ and replace_path_prefix = fun ~source_prefix ~target_prefix path ->
   | None -> path
 
 and replace_ty_prefix = fun ~source_prefix ~target_prefix ty ->
+  (* Module aliases, includes, and functor applications copy already inferred
+     bindings under a new path. Types inside those bindings must be rewritten in
+     lock-step or signatures would refer back to the source module. *)
   match prune ty with
   | TList element -> TList (replace_ty_prefix ~source_prefix ~target_prefix element)
   | TOption element -> TOption (replace_ty_prefix ~source_prefix ~target_prefix element)
@@ -2651,6 +2739,11 @@ and constructor_binding_of_declaration = fun state ~level ~path_prefix ~type_pat
 and bind_type_declaration = fun state env ~level ~type_path_prefix ~name_path_prefix (
   declaration: TypAst.type_declaration
 ) ->
+  (* Type declarations update two namespaces:
+     - [type_path_prefix] is where the nominal type actually lives.
+     - [name_path_prefix] is where constructors/fields are exported.
+     These differ inside modules so local use can stay unqualified while the
+     module summary exports qualified names. *)
   let vars, arguments = type_parameter_bindings declaration.parameters in
   let type_path = qualify_name type_path_prefix declaration.name in
   bind_type_alias state ~name_path:(qualify_name name_path_prefix declaration.name) ~type_path;
@@ -2753,6 +2846,10 @@ and ascribed_bindings_for_signature_item = fun state ~level ~module_prefix (
   | TypAst.Exception _ -> []
 
 and bindings_for_module_type = fun state ~level ~module_prefix ~module_type_path ->
+  (* Module type ascription creates bindings from the signature rather than from
+     inferred implementation values. While lowering those declared types, the
+     signature's abstract type names are temporarily aliased to the concrete
+     module path being checked. *)
   match find_module_type_summary state module_type_path with
   | None -> []
   | Some summary ->
@@ -2945,6 +3042,10 @@ and bind_functor_declaration = fun state env ~level ~module_prefix (
   env
 
 and bind_module_application = fun state env ~module_prefix (application: TypAst.module_application) ->
+  (* Functor application is represented today by copying the functor body
+     summary and substituting the first parameter path with the argument path.
+     This is intentionally small, but it keeps the oracle fixtures moving until
+     full module typing/coercions are introduced. *)
   match find_functor_summary state application.callee with
   | None -> env
   | Some summary ->
@@ -2998,6 +3099,11 @@ and bind_module_alias = fun state env ~module_prefix ~source_path ->
   | None -> env
 
 and bind_include = fun state ~level ~module_prefix local_env exported_env path ->
+  (* Includes have two effects inside a module:
+     - local names become available unqualified for following items;
+     - exported names are copied under the including module prefix.
+     Type declarations from the included summary are replayed first so copied
+     values can refer to the including module's nominal type paths. *)
   match find_module_summary state path with
   | Some summary ->
       let source_prefix = SurfacePath.to_segments summary.path in
@@ -3029,6 +3135,9 @@ and bind_include = fun state ~level ~module_prefix local_env exported_env path -
   | None -> (local_env, exported_env)
 
 and bind_module_structure = fun state env ~level ~module_prefix items ->
+  (* Check a structure twice at once: [local_env] models unqualified names
+     available while processing later items inside the module, and
+     [exported_env] accumulates the qualified names visible from outside. *)
   let previous_type_aliases = state.type_aliases in
   let _, exported_env =
     List.fold_left items ~init:(env, env)
@@ -3108,6 +3217,9 @@ and bind_module_structure = fun state env ~level ~module_prefix items ->
   exported_env
 
 let check_implementation = fun ~ast ~typing_context items ->
+  (* Public entry for implementation files. Imported context values seed the
+     environment; direct top-level bindings are returned in [bindings], while
+     module member values are retained in the outgoing [typing_context]. *)
   let state = make_state ~next_binding_stamp:typing_context.Typing_context.next_binding_stamp in
   let env = env_of_typing_context typing_context in
   let _, bindings, type_declarations =
