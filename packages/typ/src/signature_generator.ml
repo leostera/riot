@@ -611,13 +611,15 @@ let rec render_module_declaration = fun ~root_items ~typing_context ~substitutio
       ^ " end" in
       if String.length inline > 77 then
         if String.equal functor_parameters "" then
-          match signature_item_lines with
-          | [ line ] -> "module " ^ declaration.name ^ " :\n  sig " ^ line ^ " end"
-          | _ -> "module "
-          ^ declaration.name
-          ^ " :\n  sig\n    "
-          ^ String.concat "\n    " signature_item_lines
-          ^ "\n  end"
+          let signature_line = "sig " ^ signature_items ^ " end" in
+          if String.length ("  " ^ signature_line) <= 77 then
+            "module " ^ declaration.name ^ " :\n  " ^ signature_line
+          else
+            "module "
+            ^ declaration.name
+            ^ " :\n  sig\n    "
+            ^ String.concat "\n    " signature_item_lines
+            ^ "\n  end"
         else
           "module " ^ declaration.name ^ " :\n  " ^ functor_parameters ^ "sig " ^ signature_items ^ " end"
       else
