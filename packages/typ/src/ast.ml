@@ -1223,6 +1223,10 @@ let rec build_parameter = fun context parameter ->
   let origin = origin_from_node parameter in
   (
     match SynAst.Parameter.view parameter with
+    | SynAst.Parameter.Positional { pattern } ->
+        let pattern = build_pattern context pattern in
+        let (pattern, annotation) = extract_parameter_annotation pattern in
+        make_parameter ?annotation origin Unlabeled pattern
     | SynAst.Parameter.Labeled { label; pattern } ->
         let label_token = require_some origin "missing labeled parameter label" label in
         let label_text = token_text label_token in
@@ -1358,12 +1362,7 @@ and build_pattern = fun context syntax_pattern ->
     | SynAst.Pattern.Ident { path = syntax_path } ->
         make_pattern origin (Bind (ident_from_syn_path syntax_path))
     | SynAst.Pattern.Construct { constructor; payload } ->
-        let callee =
-          make_pattern
-            origin
-            (Bind (ident_from_syn_path
-              (require_some origin "missing pattern constructor" constructor)))
-        in
+        let callee = make_pattern origin (Bind (ident_from_syn_path constructor)) in
         (
           match payload with
           | Some payload ->
@@ -1721,13 +1720,9 @@ and build_expression = fun context syntax_expression ->
           })
     | SynAst.Expr.Fun { body = None; first_case = None } ->
         build_failed origin "missing function body"
-    | SynAst.Expr.Apply { callee = Some callee; argument } ->
-        let arguments = [
-          build_argument context (require_some origin "missing application argument" argument);
-        ]
-        in
+    | SynAst.Expr.Apply { callee; argument } ->
+        let arguments = [ build_argument context argument ] in
         make_expression origin (Apply { callee = build_expression context callee; arguments })
-    | SynAst.Expr.Apply { callee = None; _ } -> build_failed origin "missing application callee"
     | SynAst.Expr.Infix { left = Some left; operator = Some operator; right = Some right } ->
         make_expression
           origin
