@@ -1040,31 +1040,10 @@ and infer_field_access = fun state env ~level ~at receiver field ->
   let receiver_ty = infer_expression state env ~level receiver in
   infer_record_field state ~level ~at receiver_ty field
 
-and infer_array_index = fun state env ~level ~at receiver index ->
-  let receiver_ty = infer_expression state env ~level receiver in
-  let index_ty = infer_expression state env ~level index in
-  unify state ~at:index.origin index_ty TInt;
-  let element_ty = fresh_tyvar state ~level in
-  (
-    match prune receiver_ty with
-    | TString -> unify state ~at element_ty TChar
-    | _ -> unify state ~at receiver_ty (TCon (path_array, [ element_ty ]))
-  );
-  element_ty
-
 and infer_assignment = fun state env ~level ~at target value ->
   let value_ty = infer_expression state env ~level value in
-  (
-    match target.kind with
-    | TypAst.FieldAccess { receiver; field } ->
-        let receiver_ty = infer_expression state env ~level receiver in
-        let field_ty = infer_record_field state ~level ~at:target.origin receiver_ty field in
-        unify state ~at:value.origin field_ty value_ty
-    | _ ->
-        add_diagnostic state (unsupported_syntax target.origin "assignment target");
-        let target_ty = infer_expression state env ~level target in
-        unify state ~at:target.origin target_ty value_ty
-  );
+  let target_ty = infer_expression state env ~level target in
+  unify state ~at target_ty value_ty;
   TUnit
 
 and infer_match = fun state env ~level scrutinee cases ->

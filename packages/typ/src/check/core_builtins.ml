@@ -48,6 +48,10 @@ let path_star_dot = SurfacePath.from_name "*."
 
 let path_slash_dot = SurfacePath.from_name "/."
 
+let path_array_get = SurfacePath.from_name ".()"
+
+let path_string_get = SurfacePath.from_name ".[]"
+
 type builtin = {
   path: SurfacePath.t;
   ty: ty;
@@ -70,6 +74,11 @@ let builtin_bindings = [
   { path = path_minus_dot; ty = arrow TFloat (arrow TFloat TFloat) };
   { path = path_star_dot; ty = arrow TFloat (arrow TFloat TFloat) };
   { path = path_slash_dot; ty = arrow TFloat (arrow TFloat TFloat) };
+  {
+    path = path_array_get;
+    ty = arrow (TCon (path_array, [ generic_var 0 ])) (arrow TInt (generic_var 0));
+  };
+  { path = path_string_get; ty = arrow TString (arrow TInt TChar) };
 ]
 
 let rec lookup_builtin = fun path builtins ->
