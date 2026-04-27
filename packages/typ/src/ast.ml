@@ -929,25 +929,26 @@ let inherited_poly_variant_type_fields_from_node = fun context origin node ->
         | None -> build_failed origin ("unknown polymorphic variant row " ^ name))
 
 let opaque_type_is_token = fun kind type_expr ->
-  match SynAst.TypeExpr.view type_expr with
-  | SynAst.TypeExpr.Opaque node ->
-      direct_child_tokens node
-      |> List.exists (fun token -> token_kind_is token kind)
-  | _ -> false
+  direct_child_tokens type_expr
+  |> List.exists (fun token -> token_kind_is token kind)
 
 let type_expr_is_extensible = fun type_expr -> opaque_type_is_token Syn.SyntaxKind.DOTDOT type_expr
 
 let type_expr_is_coercion = fun type_expr ->
   match SynAst.TypeExpr.view type_expr with
-  | SynAst.TypeExpr.Apply { argument = Some argument; constructor = Some _ } ->
-      opaque_type_is_token Syn.SyntaxKind.GT argument
+  | SynAst.TypeExpr.Apply { args; _ } -> (
+      match Vector.first args with
+      | Some argument -> opaque_type_is_token Syn.SyntaxKind.GT argument
+      | None -> false
+    )
   | _ -> false
 
-let arrow_label_from_syn_type = fun origin optional_token label ->
-  match (optional_token, label) with
-  | (None, Some label) -> Labelled (token_text label)
-  | (Some _, Some label) -> Optional (token_text label)
-  | (_, None) -> build_failed origin "missing labeled type label"
+let arrow_label_from_syn_type = fun origin label ->
+  match label with
+  | None -> NoLabel
+  | Some { SynAst.TypeExpr.name = Some label; optional_ = false } -> Labelled (token_text label)
+  | Some { name = Some label; optional_ = true } -> Optional (token_text label)
+  | Some { name = None; _ } -> build_failed origin "missing labeled type label"
 
 let source_slice = fun source ->
   IO.IoVec.IoSlice.from_string source
@@ -959,31 +960,38 @@ let rec build_core_type = fun context type_expr ->
     match SynAst.TypeExpr.view type_expr with
     | SynAst.TypeExpr.Wildcard -> make_core_type origin Wildcard
     | SynAst.TypeExpr.Var { name } -> make_core_type origin (Var (Option.map name ~fn:token_text))
-    | SynAst.TypeExpr.Path { path = syntax_path } ->
+    | SynAst.TypeExpr.Unit -> make_core_type origin (TypeIdent (SurfacePath.from_name "unit"))
+    | SynAst.TypeExpr.Ident { path = syntax_path } ->
         make_core_type origin (TypeIdent (ident_from_syn_path syntax_path))
-    | SynAst.TypeExpr.Apply { argument = Some argument; constructor = Some constructor } when opaque_type_is_token
-      Syn.SyntaxKind.GT
-      argument -> build_core_type context constructor
-    | SynAst.TypeExpr.Apply { argument; constructor } ->
-        build_type_application context origin argument constructor
-    | SynAst.TypeExpr.Arrow { left; right } ->
-        let (label, parameter) =
-          build_arrow_parameter
-            context
+    | SynAst.TypeExpr.Apply { ident; args } ->
+        let constructor =
+          make_core_type
             origin
-            (require_some origin "missing arrow parameter type" left)
+            (TypeIdent (ident_from_syn_path (require_some origin "missing type application constructor" ident)))
         in
+        let arguments =
+          args
+          |> Vector.iter
+          |> Iter.Iterator.map ~fn:(build_core_type context)
+          |> Iter.Iterator.to_list
+        in
+        make_core_type origin (Apply { constructor; arguments })
+    | SynAst.TypeExpr.Arrow { label; arg; ret } ->
         make_core_type
           origin
           (Arrow {
-            label;
-            parameter;
-            result = build_core_type context (require_some origin "missing arrow result type" right);
+            label = arrow_label_from_syn_type origin label;
+            parameter = build_core_type context (require_some origin "missing arrow parameter type" arg);
+            result = build_core_type context (require_some origin "missing arrow result type" ret);
           })
-    | SynAst.TypeExpr.Tuple { left; right; _ } ->
-        make_core_type origin (Tuple (tuple_type_elements context origin left right))
-    | SynAst.TypeExpr.Labeled { annotation; _ } ->
-        build_core_type context (require_some origin "missing labeled type annotation" annotation)
+    | SynAst.TypeExpr.Tuple { parts } ->
+        let parts =
+          parts
+          |> Vector.iter
+          |> Iter.Iterator.map ~fn:(build_core_type context)
+          |> Iter.Iterator.to_list
+        in
+        make_core_type origin (Tuple parts)
     | SynAst.TypeExpr.Poly { body } ->
         make_core_type
           origin
@@ -993,13 +1001,7 @@ let rec build_core_type = fun context type_expr ->
               context
               (require_some origin "missing polymorphic type body" body);
           })
-    | SynAst.TypeExpr.Parenthesized { inner } ->
-        make_core_type
-          origin
-          (Parenthesized (build_core_type
-            context
-            (require_some origin "missing parenthesized type" inner)))
-    | SynAst.TypeExpr.Opaque node -> (
+    | SynAst.TypeExpr.Unknown node -> (
         match poly_variant_type_fields_from_node origin node with
         | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
         | [] -> (
@@ -1013,7 +1015,6 @@ let rec build_core_type = fun context type_expr ->
           )
       )
     | SynAst.TypeExpr.Error node -> unsupported_node node (node_summary node)
-    | SynAst.TypeExpr.Unknown node -> (unsupported_node node (node_summary node)): core_type
   )
 
 and build_type_application = fun context origin argument constructor ->
@@ -1033,10 +1034,8 @@ and build_type_application = fun context origin argument constructor ->
 
 and build_arrow_parameter = fun context origin type_expr ->
   match SynAst.TypeExpr.view type_expr with
-  | SynAst.TypeExpr.Labeled { optional_token; label; annotation } -> (
-    arrow_label_from_syn_type origin optional_token label,
-    build_core_type context (require_some origin "missing labeled type annotation" annotation)
-  )
+  | SynAst.TypeExpr.Arrow { label; arg = Some arg; _ } ->
+      (arrow_label_from_syn_type origin label, build_core_type context arg)
   | _ -> (NoLabel, build_core_type context type_expr)
 
 and core_type_application_arguments = fun (type_: core_type) ->
@@ -1048,8 +1047,11 @@ and core_type_application_arguments = fun (type_: core_type) ->
 and tuple_type_elements = fun context origin left right ->
   let rec flatten type_expr =
     match SynAst.TypeExpr.view type_expr with
-    | SynAst.TypeExpr.Tuple { left; right; _ } ->
-        tuple_type_elements context (origin_from_node type_expr) left right
+    | SynAst.TypeExpr.Tuple { parts } ->
+        parts
+        |> Vector.iter
+        |> Iter.Iterator.map ~fn:(build_core_type context)
+        |> Iter.Iterator.to_list
     | _ -> [ build_core_type context type_expr ]
   in
   List.append
@@ -1239,16 +1241,16 @@ and locally_abstract_type_names = fun origin syntax_pattern ->
 
 and build_parameter_from_pattern = fun context syntax_pattern ->
   let origin = origin_from_node syntax_pattern in
-  match SynAst.Pattern.view syntax_pattern with
-  | SynAst.Pattern.LabeledParam parameter
-  | SynAst.Pattern.OptionalParam parameter
-  | SynAst.Pattern.OptionalParamDefault parameter -> build_parameter context parameter
-  | SynAst.Pattern.LocallyAbstractType ->
-      build_failed origin "locally abstract type binder outside function parameter list"
-  | _ ->
-      let pattern = build_pattern context syntax_pattern in
-      let (pattern, annotation) = extract_parameter_annotation pattern in
-      make_parameter ?annotation origin Unlabeled pattern
+  match SynAst.Parameter.cast syntax_pattern with
+  | Some parameter -> build_parameter context parameter
+  | None -> (
+      match SynAst.LocallyAbstractTypePattern.cast syntax_pattern with
+      | Some _ -> build_failed origin "locally abstract type binder outside function parameter list"
+      | None ->
+          let pattern = build_pattern context syntax_pattern in
+          let (pattern, annotation) = extract_parameter_annotation pattern in
+          make_parameter ?annotation origin Unlabeled pattern
+    )
 
 and build_function_parameters = fun context syntax_parameters ->
   let type_binders = ref [] in
@@ -1257,15 +1259,15 @@ and build_function_parameters = fun context syntax_parameters ->
   |> List.for_each
     ~fn:(fun syntax_parameter ->
       let origin = origin_from_node syntax_parameter in
-      match SynAst.Pattern.view syntax_parameter with
-      | SynAst.Pattern.LocallyAbstractType ->
+      match SynAst.LocallyAbstractTypePattern.cast syntax_parameter with
+      | Some _ ->
           type_binders := List.append
             (
               locally_abstract_type_names origin syntax_parameter
               |> List.reverse
             )
             !type_binders
-      | _ -> parameters := build_parameter_from_pattern context syntax_parameter :: !parameters);
+      | None -> parameters := build_parameter_from_pattern context syntax_parameter :: !parameters);
   (List.reverse !type_binders, List.reverse !parameters)
 
 and build_first_class_module_pattern = fun context origin syntax_pattern ->
@@ -1290,49 +1292,53 @@ and build_pattern = fun context syntax_pattern ->
   let origin = origin_from_node syntax_pattern in
   (
     match SynAst.Pattern.view syntax_pattern with
+    | SynAst.Pattern.Unit -> make_pattern origin (Bind unit_constructor_ident)
     | SynAst.Pattern.Wildcard -> make_pattern origin Wildcard
-    | SynAst.Pattern.Path { path = syntax_path } ->
+    | SynAst.Pattern.Ident { path = syntax_path } ->
         make_pattern origin (Bind (ident_from_syn_path syntax_path))
-    | SynAst.Pattern.Apply { callee; argument } ->
-        make_pattern
-          origin
-          (Apply {
-            callee = build_pattern context (require_some origin "missing pattern callee" callee);
-            argument = build_pattern
-              context
-              (require_some origin "missing pattern argument" argument);
-          })
+    | SynAst.Pattern.Construct { constructor; payload } ->
+        let callee =
+          make_pattern
+            origin
+            (Bind (ident_from_syn_path (require_some origin "missing pattern constructor" constructor)))
+        in
+        (
+          match payload with
+          | Some payload -> make_pattern origin (Apply { callee; argument = build_pattern context payload })
+          | None -> callee
+        )
     | SynAst.Pattern.Literal { token } ->
         let token = require_some origin "missing literal pattern token" token in
         make_pattern origin (Literal (literal_from_token origin token))
-    | SynAst.Pattern.PolyVariant ->
+    | SynAst.Pattern.PolyVariant { payload; _ } ->
         make_pattern
           origin
           (
             PolyVariant {
               tag = poly_variant_tag_from_node origin syntax_pattern;
-              payload =
-                child_patterns syntax_pattern
-                |> List.head
-                |> Option.map ~fn:(build_pattern context);
+              payload = Option.map payload ~fn:(build_pattern context);
             }
           )
-    | SynAst.Pattern.Tuple ->
+    | SynAst.Pattern.Tuple { parts } ->
         make_pattern
           origin
           (
             Tuple (
-              child_patterns syntax_pattern
-              |> List.map ~fn:(build_pattern context)
+              parts
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_pattern context)
+              |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Pattern.List ->
+    | SynAst.Pattern.List { items } ->
         make_pattern
           origin
           (
             List (
-              child_patterns syntax_pattern
-              |> List.map ~fn:(build_pattern context)
+              items
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_pattern context)
+              |> Iter.Iterator.to_list
             )
           )
     | SynAst.Pattern.Record ->
@@ -1355,9 +1361,6 @@ and build_pattern = fun context syntax_pattern ->
             head = build_pattern context (require_some origin "missing cons head" head);
             tail = build_pattern context (require_some origin "missing cons tail" tail);
           })
-    | SynAst.Pattern.Parenthesized { inner = Some inner } -> build_pattern context inner
-    | SynAst.Pattern.Parenthesized { inner = None } ->
-        make_pattern origin (Bind unit_constructor_ident)
     | SynAst.Pattern.Constraint { pattern; annotation } ->
         make_pattern
           origin
@@ -1376,21 +1379,11 @@ and build_pattern = fun context syntax_pattern ->
             pattern = build_pattern context (require_some origin "missing aliased pattern" pattern);
             alias = build_pattern context (require_some origin "missing pattern alias" alias);
           })
-    | SynAst.Pattern.Attribute { inner } ->
-        make_pattern
-          origin
-          (Attribute (build_pattern context (require_some origin "missing attributed pattern" inner)))
     | SynAst.Pattern.FirstClassModule ->
         build_first_class_module_pattern context origin syntax_pattern
     | SynAst.Pattern.Error node -> unsupported_node node (node_summary node)
     | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
-    | SynAst.Pattern.Array
-    | SynAst.Pattern.Extension
-    | SynAst.Pattern.LabeledParam _
-    | SynAst.Pattern.OptionalParam _
-    | SynAst.Pattern.OptionalParamDefault _
-    | SynAst.Pattern.LocalOpen
-    | SynAst.Pattern.LocallyAbstractType
+    | SynAst.Pattern.Array _
     | SynAst.Pattern.Interval _
     | SynAst.Pattern.Lazy _
     | SynAst.Pattern.Exception _ ->
@@ -1481,17 +1474,13 @@ and build_expression = fun context syntax_expression ->
   let origin = origin_from_node syntax_expression in
   (
     match SynAst.Expr.view syntax_expression with
+    | SynAst.Expr.Unit -> make_expression origin (Ident unit_constructor_ident)
     | SynAst.Expr.Literal { token } ->
         let token = require_some origin "missing literal expression token" token in
         make_expression origin (Literal (literal_from_token origin token))
-    | SynAst.Expr.Path { path = syntax_path } ->
+    | SynAst.Expr.Ident { path = syntax_path } ->
         make_expression origin (Ident (ident_from_syn_path syntax_path))
-    | SynAst.Expr.Parenthesized { inner = Some inner } -> build_expression context inner
-    | SynAst.Expr.Parenthesized { inner = None } ->
-        make_expression origin (Ident unit_constructor_ident)
-    | SynAst.Expr.Attribute { inner = Some inner } -> build_expression context inner
-    | SynAst.Expr.Attribute { inner = None } -> build_failed origin "missing attributed expression"
-    | SynAst.Expr.Typed { expr = Some expr; annotation = Some annotation } ->
+    | SynAst.Expr.Annotated { expr = Some expr; annotation = Some annotation } ->
         let kind =
           if type_expr_is_coercion annotation then
             Coercion
@@ -1502,49 +1491,55 @@ and build_expression = fun context syntax_expression ->
           kind
           (build_core_type context annotation)
           (build_expression context expr)
-    | SynAst.Expr.Typed { expr = Some expr; annotation = None } -> build_expression context expr
-    | SynAst.Expr.Typed { expr = None; _ } -> build_failed origin "missing typed expression"
-    | SynAst.Expr.Tuple ->
+    | SynAst.Expr.Annotated { expr = Some expr; annotation = None } -> build_expression context expr
+    | SynAst.Expr.Annotated { expr = None; _ } -> build_failed origin "missing typed expression"
+    | SynAst.Expr.Tuple { items } ->
         make_expression
           origin
           (
             Tuple (
-              child_exprs syntax_expression
-              |> List.map ~fn:(build_expression context)
+              items
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_expression context)
+              |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.List ->
+    | SynAst.Expr.List { items } ->
         make_expression
           origin
           (
             List (
-              child_exprs syntax_expression
-              |> List.map ~fn:(build_expression context)
+              items
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_expression context)
+              |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.Array ->
+    | SynAst.Expr.Array { items } ->
         make_expression
           origin
           (
             Array (
-              child_exprs syntax_expression
-              |> List.map ~fn:(build_expression context)
+              items
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_expression context)
+              |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.PolyVariant { payload } ->
+    | SynAst.Expr.PolyVariant { payload; _ } ->
         make_expression
           origin
           (PolyVariant {
             tag = poly_variant_tag_from_node origin syntax_expression;
             payload = Option.map payload ~fn:(build_expression context);
           })
-    | SynAst.Expr.Record ->
+    | SynAst.Expr.Record { base; _ } ->
         let record =
           SynAst.RecordExpr.cast syntax_expression
           |> require_some origin "invalid record expression"
         in
         (
-          match SynAst.RecordExpr.base record with
+          match base with
           | Some base ->
               make_expression
                 origin
@@ -1557,19 +1552,6 @@ and build_expression = fun context syntax_expression ->
                 origin
                 (Record { update = None; fields = build_record_expression_fields context record })
         )
-    | SynAst.Expr.RecordUpdate ->
-        let record =
-          SynAst.RecordExpr.cast syntax_expression
-          |> require_some origin "invalid record update"
-        in
-        make_expression
-          origin
-          (Record {
-            update = Some (build_expression
-              context
-              (require_some origin "missing record update base" (SynAst.RecordExpr.base record)));
-            fields = build_record_expression_fields context record;
-          })
     | SynAst.Expr.FieldAccess { target = Some target; field = Some field } ->
         make_expression
           origin
@@ -1578,24 +1560,6 @@ and build_expression = fun context syntax_expression ->
             field = SurfacePath.from_name (token_text field);
           })
     | SynAst.Expr.FieldAccess _ -> build_failed origin "incomplete field access"
-    | SynAst.Expr.ArrayIndex { target = Some target; index = Some index } ->
-        make_expression
-          origin
-          (Infix {
-            left = build_expression context target;
-            operator = SurfacePath.from_name ".()";
-            right = build_expression context index;
-          })
-    | SynAst.Expr.ArrayIndex _ -> build_failed origin "incomplete array index"
-    | SynAst.Expr.StringIndex { target = Some target; index = Some index } ->
-        make_expression
-          origin
-          (Infix {
-            left = build_expression context target;
-            operator = SurfacePath.from_name ".[]";
-            right = build_expression context index;
-          })
-    | SynAst.Expr.StringIndex _ -> build_failed origin "incomplete string index"
     | SynAst.Expr.Assign { target = Some target; value = Some value; _ } ->
         make_expression
           origin
@@ -1662,15 +1626,14 @@ and build_expression = fun context syntax_expression ->
             }
           )
     | SynAst.Expr.For _ -> build_failed origin "incomplete for expression"
-    | SynAst.Expr.Fun { body = Some body } ->
+    | SynAst.Expr.Fun { body = Some body; _ } ->
         let (type_binders, parameters) =
           build_function_parameters context (direct_child_patterns syntax_expression)
         in
         make_expression
           origin
           (Function { type_binders; parameters; body = Body (build_expression context body) })
-    | SynAst.Expr.Fun { body = None } -> build_failed origin "missing function body"
-    | SynAst.Expr.Function { first_case = Some _ } ->
+    | SynAst.Expr.Fun { body = None; first_case = Some _ } ->
         make_expression
           origin
           (Function {
@@ -1678,7 +1641,7 @@ and build_expression = fun context syntax_expression ->
             parameters = [];
             body = Cases (build_match_cases context syntax_expression);
           })
-    | SynAst.Expr.Function { first_case = None } -> build_failed origin "missing function cases"
+    | SynAst.Expr.Fun { body = None; first_case = None } -> build_failed origin "missing function body"
     | SynAst.Expr.Apply { callee = Some callee; argument } ->
         let arguments = [
           build_argument context (require_some origin "missing application argument" argument);
@@ -1692,6 +1655,20 @@ and build_expression = fun context syntax_expression ->
           (Infix {
             left = build_expression context left;
             operator = SurfacePath.from_name (token_text operator);
+            right = build_expression context right;
+          })
+    | SynAst.Expr.Infix { left = Some left; operator = None; right = Some right } ->
+        let operator =
+          match SynAst.Node.kind syntax_expression with
+          | Syn.SyntaxKind.ARRAY_INDEX_EXPR -> ".()"
+          | Syn.SyntaxKind.STRING_INDEX_EXPR -> ".[]"
+          | _ -> build_failed origin "missing infix operator"
+        in
+        make_expression
+          origin
+          (Infix {
+            left = build_expression context left;
+            operator = SurfacePath.from_name operator;
             right = build_expression context right;
           })
     | SynAst.Expr.Infix _ -> build_failed origin "incomplete infix expression"
@@ -1712,22 +1689,15 @@ and build_expression = fun context syntax_expression ->
     | SynAst.Expr.Let _ -> build_failed origin "incomplete let expression"
     | SynAst.Expr.LetModule _ -> build_let_module_expression context origin syntax_expression
     | SynAst.Expr.LocalOpen _ -> build_local_open_expression context origin syntax_expression
-    | SynAst.Expr.FirstClassModule ->
-        build_first_class_module_expression context origin syntax_expression
-    | SynAst.Expr.Assert { argument = Some argument } ->
-        make_expression origin (Assert (build_expression context argument))
-    | SynAst.Expr.Assert { argument = None } -> build_failed origin "missing assert argument"
-    | SynAst.Expr.LabeledArg _ -> build_failed origin "labeled argument outside application"
-    | SynAst.Expr.OptionalArg _ -> build_failed origin "optional argument outside application"
     | SynAst.Expr.Error node -> unsupported_node node (node_summary node)
-    | SynAst.Expr.Unknown node -> unsupported_node node (node_summary node)
-    | SynAst.Expr.Extension
+    | SynAst.Expr.Unknown node ->
+        (
+          match SynAst.Node.kind node with
+          | Syn.SyntaxKind.FIRST_CLASS_MODULE_EXPR ->
+              build_first_class_module_expression context origin syntax_expression
+          | _ -> unsupported_node node (node_summary node)
+        )
     | SynAst.Expr.LetException _
-    | SynAst.Expr.BindingOperator _
-    | SynAst.Expr.Unreachable
-    | SynAst.Expr.Object
-    | SynAst.Expr.New
-    | SynAst.Expr.Lazy _
     | SynAst.Expr.MethodCall _ ->
         (build_failed origin (Syn.SyntaxKind.to_string origin.kind)): expression
   )
@@ -1743,25 +1713,39 @@ and build_first_class_module_expression = fun context origin syntax_expression -
 
 and build_argument = fun context syntax_expression ->
   let origin = origin_from_node syntax_expression in
-  (
-    match SynAst.Expr.view syntax_expression with
-    | SynAst.Expr.LabeledArg { label; value } ->
-        make_argument
-          origin
-          (Labeled {
-            label = token_text (require_some origin "missing labeled argument label" label);
-            value = Option.map value ~fn:(build_expression context);
-          })
-    | SynAst.Expr.OptionalArg { label; value } ->
+  let first_ident_token =
+    let found = ref None in
+    SynAst.Node.for_each_token
+      syntax_expression
+      ~fn:(fun token ->
+        match (!found, SynAst.Token.kind token) with
+        | (None, Syn.SyntaxKind.IDENT) -> found := Some token
+        | _ -> ());
+    !found
+  in
+  match SynAst.Node.kind syntax_expression with
+  | Syn.SyntaxKind.LABELED_ARG ->
+      make_argument
+        origin
+        (Labeled {
+          label = token_text (require_some origin "missing labeled argument label" first_ident_token);
+          value =
+            child_exprs syntax_expression
+            |> List.head
+            |> Option.map ~fn:(build_expression context);
+        })
+  | Syn.SyntaxKind.OPTIONAL_ARG ->
         make_argument
           origin
           (Optional {
-            label = token_text (require_some origin "missing optional argument label" label);
-            value = Option.map value ~fn:(build_expression context);
+            label = token_text (require_some origin "missing optional argument label" first_ident_token);
+            value =
+              child_exprs syntax_expression
+              |> List.head
+              |> Option.map ~fn:(build_expression context);
           })
-    | _ ->
-        (make_argument origin (Positional (build_expression context syntax_expression))): argument
-  )
+  | _ ->
+      (make_argument origin (Positional (build_expression context syntax_expression)): argument)
 
 and build_let_module_expression = fun context origin syntax_expression ->
   let let_module =
