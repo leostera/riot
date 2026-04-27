@@ -68,40 +68,90 @@ module Type = struct
     | Arrow of arrow
     | Constructor of constructor
 
-  let rec to_string type_ =
-    match type_ with
-    | Var { id; link = None } -> TypeVar.to_string id
-    | Var { link = Some linked; _ } -> to_string linked
-    | Generic id -> TypeVar.to_string id
-    | Tuple elements ->
-        elements
-        |> List.map ~fn:to_string
-        |> String.concat " * "
-    | Arrow { label; parameter; result } ->
-        Label.to_string label ^ arrow_parameter_to_string parameter ^ " -> " ^ to_string result
-    | Constructor { ident; arguments = [] } -> SurfacePath.to_string ident
-    | Constructor { ident; arguments = [ argument ] } ->
-        constructor_argument_to_string argument ^ " " ^ SurfacePath.to_string ident
-    | Constructor { ident; arguments } ->
-        "("
-        ^ (
-          arguments
-          |> List.map ~fn:to_string
-          |> String.concat ", "
-        )
-        ^ ") "
-        ^ SurfacePath.to_string ident
+  type render_state = {
+    names: (TypeVar.t, string) HashMap.t;
+    mutable next_name: int;
+  }
 
-  and arrow_parameter_to_string type_ =
-    match type_ with
-    | Arrow _ -> "(" ^ to_string type_ ^ ")"
-    | _ -> to_string type_
+  let type_var_display_name index =
+    match List.get
+      [
+        "'a";
+        "'b";
+        "'c";
+        "'d";
+        "'e";
+        "'f";
+        "'g";
+        "'h";
+        "'i";
+        "'j";
+        "'k";
+        "'l";
+        "'m";
+        "'n";
+        "'o";
+        "'p";
+        "'q";
+        "'r";
+        "'s";
+        "'t";
+        "'u";
+        "'v";
+        "'w";
+        "'x";
+        "'y";
+        "'z";
+      ]
+      ~at:index with
+    | Some name -> name
+    | None -> "'a" ^ Int.to_string index
 
-  and constructor_argument_to_string type_ =
-    match type_ with
-    | Arrow _
-    | Tuple _ -> "(" ^ to_string type_ ^ ")"
-    | _ -> to_string type_
+  let type_var_to_string state id =
+    match HashMap.get state.names ~key:id with
+    | Some name -> name
+    | None ->
+        let name = type_var_display_name state.next_name in
+        state.next_name <- state.next_name + 1;
+        let _ = HashMap.insert state.names ~key:id ~value:name in
+        name
+
+  let to_string type_ =
+    let state = { names = HashMap.with_capacity ~size:4; next_name = 0 } in
+    let rec loop type_ =
+      match type_ with
+      | Var { id; link = None } -> type_var_to_string state id
+      | Var { link = Some linked; _ } -> loop linked
+      | Generic id -> type_var_to_string state id
+      | Tuple elements ->
+          elements
+          |> List.map ~fn:loop
+          |> String.concat " * "
+      | Arrow { label; parameter; result } ->
+          Label.to_string label ^ arrow_parameter_to_string parameter ^ " -> " ^ loop result
+      | Constructor { ident; arguments = [] } -> SurfacePath.to_string ident
+      | Constructor { ident; arguments = [ argument ] } ->
+          constructor_argument_to_string argument ^ " " ^ SurfacePath.to_string ident
+      | Constructor { ident; arguments } ->
+          "("
+          ^ (
+            arguments
+            |> List.map ~fn:loop
+            |> String.concat ", "
+          )
+          ^ ") "
+          ^ SurfacePath.to_string ident
+    and arrow_parameter_to_string type_ =
+      match type_ with
+      | Arrow _ -> "(" ^ loop type_ ^ ")"
+      | _ -> loop type_
+    and constructor_argument_to_string type_ =
+      match type_ with
+      | Arrow _
+      | Tuple _ -> "(" ^ loop type_ ^ ")"
+      | _ -> loop type_
+    in
+    loop type_
 
   let same_var (a: variable) (b: variable) = TypeVar.equal a.id b.id
 

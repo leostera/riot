@@ -2,6 +2,8 @@ open Std
 
 module State = State
 module Unifier = Unifier
+module TypeScheme = TypeScheme
+module Quantifier = Quantifier
 module Typer = Typer
 module ModuleInterface = ModuleInterface
 

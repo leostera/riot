@@ -17,6 +17,12 @@ module State: module type of State
 *)
 module Unifier: module type of Unifier
 
+(** Reusable generalized type assigned to exported and local values. *)
+module TypeScheme: module type of TypeScheme
+
+(** Generalization and instantiation of type schemes. *)
+module Quantifier: module type of Quantifier
+
 (** Exported summary inferred for one source module. *)
 module ModuleInterface: module type of ModuleInterface
 
