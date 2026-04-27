@@ -47,7 +47,7 @@ val get_value: t -> name:Ast.ident -> TypeScheme.t option
 (**
    Iterate over exported value bindings from the root/module scope.
 
-   Local scopes are intentionally ignored. The iterator order is the map's
-   deterministic key order.
+   Local scopes are intentionally ignored. Bindings are yielded in source
+   addition order, with replacement bindings ordered by their last addition.
 *)
 val exports: t -> (Ast.ident * TypeScheme.t) Iter.Iterator.t

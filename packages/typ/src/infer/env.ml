@@ -4,15 +4,20 @@ open Ast
 
 module IdentMap = Map.Make (Model.Surface_path)
 
-type scope = TypeScheme.t IdentMap.t
+type binding = {
+  scheme: TypeScheme.t;
+  ordinal: int;
+}
+
+type scope = binding IdentMap.t
 
 type scopes =
   | Root of scope
   | Scope of { root: scope; current: scope; parent: scopes }
 
-type t = { scopes: scopes }
+type t = { scopes: scopes; next_ordinal: int }
 
-let create () = { scopes = Root IdentMap.empty }
+let create () = { scopes = Root IdentMap.empty; next_ordinal = 0 }
 
 let root_scope = function
   | Root scope -> scope
@@ -28,23 +33,26 @@ let push_scope t =
   let parent = t.scopes in
   let current = IdentMap.empty in
   let scopes = Scope { root; current; parent } in
-  { scopes }
+  { t with scopes }
 
 let pop_scope t =
   match t.scopes with
   | Root _ -> t
-  | Scope { parent; _ } -> { scopes = parent }
+  | Scope { parent; _ } -> { t with scopes = parent }
 
 let add_value t ~name ~scheme =
-  let scopes = map_current t.scopes ~fn:(fun scope -> IdentMap.insert scope ~key:name ~value:scheme) in
-  { scopes }
+  let binding = { scheme; ordinal = t.next_ordinal } in
+  let scopes =
+    map_current t.scopes ~fn:(fun scope -> IdentMap.insert scope ~key:name ~value:binding)
+  in
+  { scopes; next_ordinal = t.next_ordinal + 1 }
 
 let rec get_value_in_scope scopes ~name =
   match scopes with
-  | Root scope -> IdentMap.get scope ~key:name
+  | Root scope -> Option.map (IdentMap.get scope ~key:name) ~fn:(fun binding -> binding.scheme)
   | Scope { current; parent; _ } -> (
       match IdentMap.get current ~key:name with
-      | Some _ as scheme -> scheme
+      | Some binding -> Some binding.scheme
       | None -> get_value_in_scope parent ~name
     )
 
@@ -67,4 +75,6 @@ end
 let exports t =
   root_scope t.scopes
   |> IdentMap.to_list
+  |> List.sort ~compare:(fun (_, left) (_, right) -> Int.compare left.ordinal right.ordinal)
+  |> List.map ~fn:(fun (name, binding) -> (name, binding.scheme))
   |> Iter.Iterator.make (module ExportIter)
