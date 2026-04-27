@@ -1776,8 +1776,7 @@ and build_expression = fun context syntax_expression ->
             build_first_class_module_expression context origin syntax_expression
         | _ -> unsupported_node node (node_summary node)
       )
-    | SynAst.Expr.LetException _
-    | SynAst.Expr.MethodCall _ ->
+    | SynAst.Expr.LetException _ ->
         (build_failed origin (Syn.SyntaxKind.to_string origin.kind)): expression
   )
 
@@ -1829,7 +1828,8 @@ and build_argument = fun context syntax_expression ->
               |> Option.map ~fn:(build_expression context);
           }
         )
-  | _ -> ((make_argument origin (Positional (build_expression context syntax_expression))): argument)
+  | _ ->
+      ((make_argument origin (Positional (build_expression context syntax_expression))): argument)
 
 and build_let_module_expression = fun context origin syntax_expression ->
   let let_module =
@@ -2203,10 +2203,6 @@ and build_structure_item = fun context item ->
           declaration
           ~fn:(fun token -> tokens := token :: !tokens);
         make_structure_item origin (Include (ident_from_tokens_as_segments (List.reverse !tokens)))
-    | Class declaration ->
-        build_failed
-          (origin_from_node declaration)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
     | Attribute attribute ->
         build_failed
           (origin_from_node attribute)
@@ -2236,10 +2232,6 @@ and build_signature_item = fun context item ->
           (TypeExtension (build_type_extension_declaration context declaration))
     | Exception declaration ->
         make_signature_item origin (Exception (build_exception_declaration context declaration))
-    | Class declaration ->
-        build_failed
-          (origin_from_node declaration)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind declaration))
     | Attribute attribute ->
         build_failed
           (origin_from_node attribute)
