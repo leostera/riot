@@ -994,16 +994,10 @@ let rec build_core_type = fun context type_expr ->
     match SynAst.TypeExpr.view type_expr with
     | SynAst.TypeExpr.Wildcard -> make_core_type origin Wildcard
     | SynAst.TypeExpr.Var { name } -> make_core_type origin (Var (Option.map name ~fn:token_text))
-    | SynAst.TypeExpr.Unit -> make_core_type origin (TypeIdent (SurfacePath.from_name "unit"))
     | SynAst.TypeExpr.Ident { path = syntax_path } ->
         make_core_type origin (TypeIdent (ident_from_syn_path syntax_path))
     | SynAst.TypeExpr.Apply { ident; args } ->
-        let constructor =
-          make_core_type
-            origin
-            (TypeIdent (ident_from_syn_path
-              (require_some origin "missing type application constructor" ident)))
-        in
+        let constructor = make_core_type origin (TypeIdent (ident_from_syn_path ident)) in
         let arguments =
           args
           |> Vector.iter
@@ -1408,12 +1402,17 @@ and build_pattern = fun context syntax_pattern ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Pattern.Record ->
-        let record =
-          SynAst.RecordPattern.cast syntax_pattern
-          |> require_some origin "invalid record pattern"
-        in
-        make_pattern origin (Record (build_record_pattern_fields context record))
+    | SynAst.Pattern.Record { fields; _ } ->
+        make_pattern
+          origin
+          (
+            Record (
+              fields
+              |> Vector.iter
+              |> Iter.Iterator.map ~fn:(build_record_pattern_field context)
+              |> Iter.Iterator.to_list
+            )
+          )
     | SynAst.Pattern.Or { left; right } ->
         make_pattern
           origin
@@ -1443,10 +1442,10 @@ and build_pattern = fun context syntax_pattern ->
         make_pattern
           origin
           (Alias {
-            pattern = build_pattern context (require_some origin "missing aliased pattern" pattern);
-            alias = build_pattern context (require_some origin "missing pattern alias" alias);
+            pattern = build_pattern context pattern;
+            alias = build_pattern context alias;
           })
-    | SynAst.Pattern.FirstClassModule ->
+    | SynAst.Pattern.FirstClassModule _ ->
         build_first_class_module_pattern context origin syntax_pattern
     | SynAst.Pattern.Error node -> unsupported_node node (node_summary node)
     | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
@@ -2185,9 +2184,9 @@ and build_structure_item = fun context item ->
       )
     | External declaration ->
         make_structure_item origin (External (build_external_declaration context declaration))
-    | Type declaration ->
+    | Type (SynAst.TypeDeclarationItem declaration) ->
         make_structure_item origin (Type (build_type_declarations context declaration))
-    | TypeExtension declaration ->
+    | Type (SynAst.TypeExtensionItem declaration) ->
         make_structure_item
           origin
           (TypeExtension (build_type_extension_declaration context declaration))
@@ -2224,9 +2223,9 @@ and build_signature_item = fun context item ->
         make_signature_item origin (Value (build_value_declaration context declaration))
     | External declaration ->
         make_signature_item origin (External (build_external_declaration context declaration))
-    | Type declaration ->
+    | Type (SynAst.TypeDeclarationItem declaration) ->
         make_signature_item origin (Type (build_type_declarations context declaration))
-    | TypeExtension declaration ->
+    | Type (SynAst.TypeExtensionItem declaration) ->
         make_signature_item
           origin
           (TypeExtension (build_type_extension_declaration context declaration))
