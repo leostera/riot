@@ -7,11 +7,19 @@ let name = "typ:checker"
 
 let fixtures_dir = Path.v "packages/typ/tests/fixtures/corpus"
 
+let checker_snapshot_path = fun path -> Path.add_extension path ~ext:"checker.expected"
+
+let pending_checker_snapshot_path = fun path -> Path.add_extension path ~ext:"checker.expected.new"
+
+let has_pending_checker_snapshot = fun path ->
+  Fs.exists (pending_checker_snapshot_path path)
+  |> Result.unwrap_or ~default:false
+
 let fixture_filter = fun path ->
   match Path.extension path with
   | Some ".ml"
-  | Some ".mli" -> Test.FixtureRunner.Keep
-  | _ -> Test.FixtureRunner.Skip
+  | Some ".mli" when not (has_pending_checker_snapshot path) -> `keep
+  | _ -> `skip
 
 let source_slice = fun source ->
   IO.IoVec.IoSlice.from_string source
@@ -60,7 +68,7 @@ let tests =
     ()
     ~dir:fixtures_dir
     ~filter:fixture_filter
-    ~snapshot_path:(fun path -> Some (Path.add_extension path ~ext:"checker.expected"))
+    ~snapshot_path:(fun path -> Some (checker_snapshot_path path))
     ~run:checker_test
 
 let main ~args = Test.Cli.main ~name ~tests ~args ()

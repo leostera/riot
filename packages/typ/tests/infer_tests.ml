@@ -8,14 +8,20 @@ let fixtures_dir = Path.v "packages/typ/tests/fixtures/corpus"
 
 let infer_snapshot_path = fun path -> Path.add_extension path ~ext:"infer.expected"
 
+let pending_infer_snapshot_path = fun path -> Path.add_extension path ~ext:"infer.expected.new"
+
 let has_infer_snapshot = fun path ->
   Fs.exists (infer_snapshot_path path)
+  |> Result.unwrap_or ~default:false
+
+let has_pending_infer_snapshot = fun path ->
+  Fs.exists (pending_infer_snapshot_path path)
   |> Result.unwrap_or ~default:false
 
 let fixture_filter = fun path ->
   match Path.extension path with
   | Some ".ml"
-  | Some ".mli" when has_infer_snapshot path -> `keep
+  | Some ".mli" when has_infer_snapshot path && not (has_pending_infer_snapshot path) -> `keep
   | _ -> `skip
 
 let source_slice = fun source ->

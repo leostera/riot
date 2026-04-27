@@ -1,0 +1,3 @@
+val answer : 'a
+val choose : 'a
+val seed_of : 'a

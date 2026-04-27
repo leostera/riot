@@ -1,0 +1,3 @@
+val answer : 'a
+val packed : 'a
+val seed_of : 'a
