@@ -993,7 +993,7 @@ let rec build_core_type = fun context type_expr ->
   (
     match SynAst.TypeExpr.view type_expr with
     | SynAst.TypeExpr.Wildcard -> make_core_type origin Wildcard
-    | SynAst.TypeExpr.Var { name } -> make_core_type origin (Var (Option.map name ~fn:token_text))
+    | SynAst.TypeExpr.Var { name } -> make_core_type origin (Var (Some (token_text name)))
     | SynAst.TypeExpr.Ident { path = syntax_path } ->
         make_core_type origin (TypeIdent (ident_from_syn_path syntax_path))
     | SynAst.TypeExpr.Apply { ident; args } ->
@@ -1010,10 +1010,8 @@ let rec build_core_type = fun context type_expr ->
           origin
           (Arrow {
             label = arrow_label_from_syn_type origin label;
-            parameter = build_core_type
-              context
-              (require_some origin "missing arrow parameter type" arg);
-            result = build_core_type context (require_some origin "missing arrow result type" ret);
+            parameter = build_core_type context arg;
+            result = build_core_type context ret;
           })
     | SynAst.TypeExpr.Tuple { parts } ->
         let parts =
@@ -1028,9 +1026,7 @@ let rec build_core_type = fun context type_expr ->
           origin
           (ForAll {
             parameters = poly_type_parameters type_expr;
-            body = build_core_type
-              context
-              (require_some origin "missing polymorphic type body" body);
+            body = build_core_type context body;
           })
     | SynAst.TypeExpr.Unknown node -> (
         match poly_variant_type_fields_from_node origin node with
@@ -1065,7 +1061,7 @@ and build_type_application = fun context origin argument constructor ->
 
 and build_arrow_parameter = fun context origin type_expr ->
   match SynAst.TypeExpr.view type_expr with
-  | SynAst.TypeExpr.Arrow { label; arg = Some arg; _ } -> (
+  | SynAst.TypeExpr.Arrow { label; arg; _ } -> (
     arrow_label_from_syn_type origin label,
     build_core_type context arg
   )
@@ -1311,7 +1307,7 @@ and strip_let_return_annotation_from_parameter = fun return_annotation syntax_pa
   match (return_annotation, SynAst.Node.kind syntax_parameter) with
   | (Some _, Syn.SyntaxKind.CONSTRAINT_PATTERN) -> (
       match SynAst.Pattern.view syntax_parameter with
-      | Constraint { pattern = Some parameter; annotation = Some _ } -> parameter
+      | Constraint { pattern = parameter; _ } -> parameter
       | _ -> syntax_parameter
     )
   | _ -> syntax_parameter
@@ -1370,7 +1366,6 @@ and build_pattern = fun context syntax_pattern ->
           | None -> callee
         )
     | SynAst.Pattern.Literal { token } ->
-        let token = require_some origin "missing literal pattern token" token in
         make_pattern origin (Literal (literal_from_token origin token))
     | SynAst.Pattern.PolyVariant { payload; _ } ->
         make_pattern
@@ -1415,27 +1410,17 @@ and build_pattern = fun context syntax_pattern ->
     | SynAst.Pattern.Or { left; right } ->
         make_pattern
           origin
-          (Or {
-            left = build_pattern context (require_some origin "missing left or-pattern" left);
-            right = build_pattern context (require_some origin "missing right or-pattern" right);
-          })
+          (Or { left = build_pattern context left; right = build_pattern context right })
     | SynAst.Pattern.Cons { head; tail } ->
         make_pattern
           origin
-          (Cons {
-            head = build_pattern context (require_some origin "missing cons head" head);
-            tail = build_pattern context (require_some origin "missing cons tail" tail);
-          })
+          (Cons { head = build_pattern context head; tail = build_pattern context tail })
     | SynAst.Pattern.Constraint { pattern; annotation } ->
         make_pattern
           origin
           (Constraint {
-            pattern = build_pattern
-              context
-              (require_some origin "missing constrained pattern" pattern);
-            annotation = build_core_type
-              context
-              (require_some origin "missing pattern type annotation" annotation);
+            pattern = build_pattern context pattern;
+            annotation = build_core_type context annotation;
           })
     | SynAst.Pattern.Alias { pattern; alias } ->
         make_pattern
@@ -1511,19 +1496,29 @@ and build_let_binding = fun context binding ->
 
 and build_match_case = fun context match_case ->
   let origin = origin_from_node match_case in
-  let view = SynAst.MatchCase.view match_case in
-  ({
-    origin;
-    pattern = build_pattern context (require_some origin "missing match case pattern" view.pattern);
-    guard = Option.map view.guard ~fn:(build_expression context);
-    body = build_expression context (require_some origin "missing match case body" view.body);
-  }: match_case)
+  match SynAst.MatchCase.view match_case with
+  | SynAst.MatchCase.Case { pattern; guard; body } ->
+      ({
+        origin;
+        pattern = build_pattern context pattern;
+        guard = Option.map guard ~fn:(build_expression context);
+        body = build_expression context body;
+      }: match_case)
+  | SynAst.MatchCase.Unknown node -> unsupported_node node (node_summary node)
+
+and build_match_case_option = fun context match_case ->
+  match SynAst.MatchCase.view match_case with
+  | SynAst.MatchCase.Unknown _ -> None
+  | SynAst.MatchCase.Case _ -> Some (build_match_case context match_case)
 
 and build_match_cases = fun context syntax_expression ->
   let cases = ref [] in
   SynAst.Expr.for_each_match_case
     syntax_expression
-    ~fn:(fun match_case -> cases := build_match_case context match_case :: !cases);
+    ~fn:(fun match_case ->
+      match build_match_case_option context match_case with
+      | Some match_case -> cases := match_case :: !cases
+      | None -> ());
   List.reverse !cases
 
 and build_record_expression_field = fun context (field: SynAst.RecordExpr.field) ->
@@ -1547,11 +1542,10 @@ and build_expression = fun context syntax_expression ->
     match SynAst.Expr.view syntax_expression with
     | SynAst.Expr.Unit -> make_expression origin (Ident unit_constructor_ident)
     | SynAst.Expr.Literal { token } ->
-        let token = require_some origin "missing literal expression token" token in
         make_expression origin (Literal (literal_from_token origin token))
     | SynAst.Expr.Ident { path = syntax_path } ->
         make_expression origin (Ident (ident_from_syn_path syntax_path))
-    | SynAst.Expr.Annotated { expr = Some expr; annotation = Some annotation } ->
+    | SynAst.Expr.Annotated { expr; annotation } ->
         let (kind, type_) =
           if type_expr_is_coercion annotation then
             (
@@ -1568,8 +1562,6 @@ and build_expression = fun context syntax_expression ->
           kind
           type_
           (build_expression context expr)
-    | SynAst.Expr.Annotated { expr = Some expr; annotation = None } -> build_expression context expr
-    | SynAst.Expr.Annotated { expr = None; _ } -> build_failed origin "missing typed expression"
     | SynAst.Expr.Tuple { items } ->
         make_expression
           origin
@@ -1629,31 +1621,30 @@ and build_expression = fun context syntax_expression ->
                 origin
                 (Record { update = None; fields = build_record_expression_fields context record })
         )
-    | SynAst.Expr.FieldAccess { target = Some target; field = Some field } ->
+    | SynAst.Expr.FieldAccess { target; field } ->
         make_expression
           origin
           (FieldAccess {
             receiver = build_expression context target;
             field = SurfacePath.from_name (token_text field);
           })
-    | SynAst.Expr.FieldAccess _ -> build_failed origin "incomplete field access"
-    | SynAst.Expr.Assign { target = Some target; value = Some value; _ } ->
+    | SynAst.Expr.Assign { target; value; _ } ->
         make_expression
           origin
           (Assign {
             target = build_expression context target;
             value = build_expression context value;
           })
-    | SynAst.Expr.Assign _ -> build_failed origin "incomplete assignment"
-    | SynAst.Expr.Sequence { left = Some left; right = Some right } ->
+    | SynAst.Expr.Sequence { left; right = Some right } ->
         make_expression
           origin
           (Sequence {
             left = build_expression context left;
             right = build_expression context right;
           })
-    | SynAst.Expr.Sequence _ -> build_failed origin "incomplete sequence expression"
-    | SynAst.Expr.If { condition = Some condition; then_branch = Some then_branch; else_branch } ->
+    | SynAst.Expr.Sequence { right = None; _ } ->
+        build_failed origin "incomplete sequence expression"
+    | SynAst.Expr.If { condition; then_branch; else_branch } ->
         make_expression
           origin
           (If {
@@ -1661,36 +1652,32 @@ and build_expression = fun context syntax_expression ->
             then_branch = build_expression context then_branch;
             else_branch = Option.map else_branch ~fn:(build_expression context);
           })
-    | SynAst.Expr.If _ -> build_failed origin "incomplete if expression"
-    | SynAst.Expr.Match { scrutinee = Some scrutinee; first_case = Some _ } ->
+    | SynAst.Expr.Match { scrutinee; first_case = _ } ->
         make_expression
           origin
           (Match {
             scrutinee = build_expression context scrutinee;
             cases = build_match_cases context syntax_expression;
           })
-    | SynAst.Expr.Match _ -> build_failed origin "incomplete match expression"
-    | SynAst.Expr.Try { body = Some body; first_case = Some _ } ->
+    | SynAst.Expr.Try { body; first_case = _ } ->
         make_expression
           origin
           (Try {
             body = build_expression context body;
             cases = build_match_cases context syntax_expression;
           })
-    | SynAst.Expr.Try _ -> build_failed origin "incomplete try expression"
-    | SynAst.Expr.While { condition = Some condition; body = Some body } ->
+    | SynAst.Expr.While { condition; body } ->
         make_expression
           origin
           (While {
             condition = build_expression context condition;
             body = build_expression context body;
           })
-    | SynAst.Expr.While _ -> build_failed origin "incomplete while expression"
     | SynAst.Expr.For {
-      pattern = Some pattern;
-      start_ = Some start_;
-      stop = Some stop;
-      body = Some body
+      pattern;
+      start_;
+      stop;
+      body
     } ->
         make_expression
           origin
@@ -1702,15 +1689,14 @@ and build_expression = fun context syntax_expression ->
               body = build_expression context body;
             }
           )
-    | SynAst.Expr.For _ -> build_failed origin "incomplete for expression"
-    | SynAst.Expr.Fun { body = Some body; _ } ->
+    | SynAst.Expr.Fun { body = Body_expr body } ->
         let (type_binders, parameters) =
           build_function_parameters context (direct_child_patterns syntax_expression)
         in
         make_expression
           origin
           (Function { type_binders; parameters; body = Body (build_expression context body) })
-    | SynAst.Expr.Fun { body = None; first_case = Some _ } ->
+    | SynAst.Expr.Fun { body = Body_cases { first_case = _ } } ->
         make_expression
           origin
           (Function {
@@ -1718,12 +1704,10 @@ and build_expression = fun context syntax_expression ->
             parameters = [];
             body = Cases (build_match_cases context syntax_expression);
           })
-    | SynAst.Expr.Fun { body = None; first_case = None } ->
-        build_failed origin "missing function body"
     | SynAst.Expr.Apply { callee; argument } ->
         let arguments = [ build_argument context argument ] in
         make_expression origin (Apply { callee = build_expression context callee; arguments })
-    | SynAst.Expr.Infix { left = Some left; operator = Some operator; right = Some right } ->
+    | SynAst.Expr.Infix { left; operator; right } ->
         make_expression
           origin
           (Infix {
@@ -1731,36 +1715,19 @@ and build_expression = fun context syntax_expression ->
             operator = SurfacePath.from_name (token_text operator);
             right = build_expression context right;
           })
-    | SynAst.Expr.Infix { left = Some left; operator = None; right = Some right } ->
-        let operator =
-          match SynAst.Node.kind syntax_expression with
-          | Syn.SyntaxKind.ARRAY_INDEX_EXPR -> ".()"
-          | Syn.SyntaxKind.STRING_INDEX_EXPR -> ".[]"
-          | _ -> build_failed origin "missing infix operator"
-        in
-        make_expression
-          origin
-          (Infix {
-            left = build_expression context left;
-            operator = SurfacePath.from_name operator;
-            right = build_expression context right;
-          })
-    | SynAst.Expr.Infix _ -> build_failed origin "incomplete infix expression"
-    | SynAst.Expr.Prefix { operator = Some operator; operand = Some operand } ->
+    | SynAst.Expr.Prefix { operator; operand } ->
         let callee = make_expression origin (Ident (SurfacePath.from_name (token_text operator))) in
         let argument = build_expression context operand in
         make_expression
           origin
           (Apply { callee; arguments = [ make_argument argument.origin (Positional argument) ] })
-    | SynAst.Expr.Prefix _ -> build_failed origin "incomplete prefix expression"
-    | SynAst.Expr.Let { first_binding = Some first_binding; body = Some body } ->
+    | SynAst.Expr.Let { first_binding; body } ->
         make_expression
           origin
           (Let {
             first_binding = build_let_binding context first_binding;
             body = build_expression context body;
           })
-    | SynAst.Expr.Let _ -> build_failed origin "incomplete let expression"
     | SynAst.Expr.LetModule _ -> build_let_module_expression context origin syntax_expression
     | SynAst.Expr.LocalOpen _ -> build_local_open_expression context origin syntax_expression
     | SynAst.Expr.Error node -> unsupported_node node (node_summary node)
@@ -2092,7 +2059,11 @@ and build_structure_items_from_module_expr = fun context node ->
     node
     ~fn:(fun child ->
       match SynAst.Node.kind child with
-      | Syn.SyntaxKind.STRUCTURE_ITEM -> items := build_structure_item context child :: !items
+      | Syn.SyntaxKind.STRUCTURE_ITEM -> (
+          match build_structure_item_option context child with
+          | Some item -> items := item :: !items
+          | None -> ()
+        )
       | _ -> ());
   List.reverse !items
 
@@ -2125,7 +2096,10 @@ and build_module_declaration_member = fun context member ->
         let items = ref [] in
         SynAst.ModuleDeclaration.for_each_structure_item
           declaration
-          ~fn:(fun item -> items := build_structure_item context item :: !items);
+          ~fn:(fun item ->
+            match build_structure_item_option context item with
+            | Some item -> items := item :: !items
+            | None -> ());
         List.reverse !items
   in
   ({
@@ -2155,7 +2129,10 @@ and build_module_type_declaration = fun context declaration ->
   let items = ref [] in
   SynAst.ModuleTypeDeclaration.for_each_signature_item
     declaration
-    ~fn:(fun item -> items := build_signature_item context item :: !items);
+    ~fn:(fun item ->
+      match build_signature_item_option context item with
+      | Some item -> items := item :: !items
+      | None -> ());
   ({
     origin;
     name =
@@ -2210,6 +2187,12 @@ and build_structure_item = fun context item ->
     | Unknown node -> (unsupported_node node (node_summary node)): structure_item
   )
 
+and build_structure_item_option = fun context item ->
+  match SynAst.StructureItem.view item with
+  | Error _
+  | Unknown _ -> None
+  | _ -> Some (build_structure_item context item)
+
 and build_signature_item = fun context item ->
   let origin = origin_from_node item in
   (
@@ -2242,6 +2225,12 @@ and build_signature_item = fun context item ->
     | Unknown node -> (unsupported_node node (node_summary node)): signature_item
   )
 
+and build_signature_item_option = fun context item ->
+  match SynAst.SignatureItem.view item with
+  | Error _
+  | Unknown _ -> None
+  | _ -> Some (build_signature_item context item)
+
 let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
   try
     let context = make_build_context () in
@@ -2252,13 +2241,19 @@ let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
           let items = ref [] in
           SynAst.Implementation.for_each_item
             implementation
-            ~fn:(fun item -> items := build_structure_item context item :: !items);
+            ~fn:(fun item ->
+              match build_structure_item_option context item with
+              | Some item -> items := item :: !items
+              | None -> ());
           make_source_file (origin_from_node source_file) (Implementation (List.reverse !items))
       | Interface interface ->
           let items = ref [] in
           SynAst.Interface.for_each_item
             interface
-            ~fn:(fun item -> items := build_signature_item context item :: !items);
+            ~fn:(fun item ->
+              match build_signature_item_option context item with
+              | Some item -> items := item :: !items
+              | None -> ());
           make_source_file (origin_from_node source_file) (Interface (List.reverse !items))
       | Empty ->
           let kind =
