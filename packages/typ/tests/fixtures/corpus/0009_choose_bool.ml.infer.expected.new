@@ -1,2 +1,2 @@
-val choose : '0
-val answer : '1
+val choose : 'a
+val answer : 'a

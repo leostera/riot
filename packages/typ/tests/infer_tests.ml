@@ -41,6 +41,8 @@ let render_infer_diagnostics = fun (diagnostics: Typ.Diagnostics.t) ->
 let render_interface = fun (intf: Typ.Infer.ModuleInterface.t) ->
   intf
   |> Typ.Infer.ModuleInterface.values
+  |> Iter.Iterator.map
+    ~fn:(fun (name, (type_scheme: Typ.Infer.TypeScheme.t)) -> (name, type_scheme.body))
   |> Typ.SignatureGenerator.from_values
 
 let render_result = fun (result: Typ.Infer.infer_result) ->

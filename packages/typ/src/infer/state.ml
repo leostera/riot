@@ -1,6 +1,6 @@
 type t = {
   mutable next_var: Ast.TypeVar.t;
-  env: Env.t;
+  mutable env: Env.t;
   diagnostics: Diagnostics.t;
 }
 
@@ -11,6 +11,12 @@ let create () = {
 }
 
 let env state = state.env
+
+let set_env state env =
+  state.env <- env
+
+let update_env state fn =
+  state.env <- fn state.env
 
 let diagnostics state = state.diagnostics
 

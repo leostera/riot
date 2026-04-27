@@ -53,7 +53,7 @@ let infer_literal _state (lit: literal) =
 
 let infer_ident (state: State.t) ident =
   match InferEnv.get_value (State.env state) ~name:ident with
-  | Some type_ -> type_
+  | Some scheme -> Quantifier.instantiate state scheme
   | None -> State.fresh_var state
 
 let rec infer_expr (state: State.t) (expr: expression) =
@@ -109,7 +109,9 @@ let rec core_type_to_type (state: State.t) (annotation: core_type) =
 let rec bind_pattern (state: State.t) (pattern: pattern) type_ =
   pattern.type_ <- Some type_;
   match pattern.kind with
-  | Bind name -> ignore (InferEnv.add_value (State.env state) ~name ~type_)
+  | Bind name ->
+      let scheme = Quantifier.generalize type_ in
+      State.update_env state (fun env -> InferEnv.add_value env ~name ~scheme)
   | Constraint { pattern; annotation } ->
       let expected = core_type_to_type state annotation in
       unify state ~expected ~actual:type_ ~on_error:(annotation_diagnostic annotation);

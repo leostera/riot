@@ -1,41 +1,53 @@
 open Std
-open Std.Collections
 
 (**
-   Mutable environment for one inference run.
+   Lexically scoped environment for one inference run.
 
-   `Env.t` is query-local checker state. It records bindings discovered while
-   typing a file and supports fast lookup for later expressions in the same
-   run. The current slice stores only values.
+   `Env.t` is query-local checker state. It records value bindings discovered
+   while typing a file and supports lookup from the current lexical scope
+   outwards. The root scope is the module scope; only values in that root scope
+   are exported through `values`.
 *)
-type t = {
-  value_order: Ast.ident Vector.t;
-  values: (Ast.ident, Ast.Type.t) HashMap.t;
-}
+type t
 
-(** Create an empty inference environment. *)
+(** Create an empty environment with a single root/module scope. *)
 val create: unit -> t
 
 (**
-   Add or replace a value binding.
+   Push a new empty lexical scope.
 
-   Returns the previous type for `name` when one was already present. This
-   matches the current "last binding wins" behavior of generated module
-   summaries.
+   The new scope can see all bindings from its parent scopes, but bindings
+   added to it disappear after `pop_scope`.
 *)
-val add_value: t -> name:Ast.ident -> type_:Ast.Type.t -> Ast.Type.t option
-
-(** True when a value binding exists for `name`. *)
-val has_value: t -> name:Ast.ident -> bool
-
-(** Find the type currently bound to `name`, if any. *)
-val get_value: t -> name:Ast.ident -> Ast.Type.t option
+val push_scope: t -> t
 
 (**
-   Iterate over visible value bindings in first-seen order.
+   Pop the current lexical scope.
 
-   Rebinding an existing value updates the stored type but keeps the original
-   export position. That matches the current "last binding wins" lookup
-   behavior while keeping generated signatures stable.
+   Popping the root scope is a no-op, so the environment always has a module
+   scope available.
 *)
-val values: t -> (Ast.ident * Ast.Type.t) Iter.Iterator.t
+val pop_scope: t -> t
+
+(**
+   Add or replace a value binding in the current scope.
+
+   At top level this creates or updates an exported module value. Inside a
+   pushed scope it creates or updates a local value that shadows outer bindings
+   during lookup but is never exported.
+*)
+val add_value: t -> name:Ast.ident -> scheme:TypeScheme.t -> t
+
+(** True when a value binding exists in the current scope or any outer scope. *)
+val has_value: t -> name:Ast.ident -> bool
+
+(** Find the nearest type scheme currently bound to `name`, if any. *)
+val get_value: t -> name:Ast.ident -> TypeScheme.t option
+
+(**
+   Iterate over exported value bindings from the root/module scope.
+
+   Local scopes are intentionally ignored. The iterator order is the map's
+   deterministic key order.
+*)
+val exports: t -> (Ast.ident * TypeScheme.t) Iter.Iterator.t
