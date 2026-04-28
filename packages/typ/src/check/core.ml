@@ -465,11 +465,7 @@ and package_manifests_for_module = fun ~module_prefix (package: package_ty) ->
     ~fn:(fun constraint_ -> (qualify_path module_prefix constraint_.type_name, constraint_.manifest))
 
 and infer_record_pattern_field = fun
-  state
-  env
-  ~level
-  owner_ty
-  (field: TypAst.record_pattern_field) ->
+  state env ~level owner_ty (field: TypAst.record_pattern_field) ->
   match lookup_record_label_for_owner state field.name owner_ty with
   | None ->
       add_diagnostic
@@ -1100,12 +1096,11 @@ and infer_for = fun state env ~level ~at pattern start_ stop body ->
   unify state ~at:start_.origin start_ty TInt;
   let stop_ty = infer_expression state env ~level stop in
   unify state ~at:stop.origin stop_ty TInt;
-  let body_ty =
-    infer_expression
-      state
-      (extend_mono env bindings)
-      ~level
-      body
+  let body_ty = infer_expression
+    state
+    (extend_mono env bindings)
+    ~level
+    body
   in
   unify state ~at:body.origin body_ty TUnit;
   let _ = at in
@@ -1213,12 +1208,11 @@ and infer_function_cases = fun state env ~level cases ->
                 unify state ~at:guard.origin guard_ty TBool
             | None -> ()
           );
-          let body_ty =
-            infer_expression
-              state
-              (extend_mono env bindings)
-              ~level
-              case.body
+          let body_ty = infer_expression
+            state
+            (extend_mono env bindings)
+            ~level
+            case.body
           in
           unify state ~at:case.body.origin result_ty body_ty);
       TArrow (NoLabel, parameter_ty, result_ty)
@@ -1570,11 +1564,7 @@ and copy_binding_prefix = fun state ~source_prefix ~target_prefix binding ->
   | None -> None
 
 and copy_binding_prefix_with_substitutions = fun
-  state
-  ~source_prefix
-  ~target_prefix
-  ~substitutions
-  binding ->
+  state ~source_prefix ~target_prefix ~substitutions binding ->
   let source_path = EntityId.surface_path binding.entity_id in
   match strip_prefix source_prefix (SurfacePath.to_segments source_path) with
   | Some rest ->
@@ -1606,15 +1596,15 @@ and binding_has_path_prefix = fun path_prefix binding ->
     (EntityId.surface_path binding.entity_id)
 
 and find_module_summary = fun state path -> List.find
-  (state.module_summaries: module_summary list)
+  ((state.module_summaries: module_summary list))
   ~fn:(fun (summary: module_summary) -> SurfacePath.equal summary.path path)
 
 and find_module_type_summary = fun state path -> List.find
-  (state.module_type_summaries: module_type_summary list)
+  ((state.module_type_summaries: module_type_summary list))
   ~fn:(fun (summary: module_type_summary) -> SurfacePath.equal summary.path path)
 
 and find_functor_summary = fun state path -> List.find
-  (state.functor_summaries: functor_summary list)
+  ((state.functor_summaries: functor_summary list))
   ~fn:(fun (summary: functor_summary) -> SurfacePath.equal summary.path path)
 
 and remove_bindings_with_prefix = fun path_prefix bindings ->
@@ -1643,12 +1633,7 @@ and bind_type_alias = fun state ~name_path ~type_path -> state.type_aliases <- (
 :: state.type_aliases
 
 and bind_record_field_declaration = fun
-  state
-  ~level
-  ~path_prefix
-  ~owner_ty
-  vars
-  (field: TypAst.record_field_declaration) ->
+  state ~level ~path_prefix ~owner_ty vars (field: TypAst.record_field_declaration) ->
   let field_ty = lower_record_field_type state ~level vars field.type_annotation in
   state.record_labels <- { label = qualify_name path_prefix field.name; owner_ty; field_ty }
   :: state.record_labels
@@ -1722,12 +1707,7 @@ and constructor_binding_of_declaration = fun
     ~ty
 
 and bind_type_declaration = fun
-  state
-  env
-  ~level
-  ~type_path_prefix
-  ~name_path_prefix
-  (declaration: TypAst.type_declaration) ->
+  state env ~level ~type_path_prefix ~name_path_prefix (declaration: TypAst.type_declaration) ->
   (* Type declarations update two namespaces:
      - [type_path_prefix] is where the nominal type actually lives.
      - [name_path_prefix] is where constructors/fields are exported.
@@ -1772,11 +1752,7 @@ and bind_type_declaration = fun
   | TypAst.Abstract -> env
 
 and bind_type_extension_declaration = fun
-  state
-  env
-  ~level
-  ~path_prefix
-  (declaration: TypAst.type_extension_declaration) ->
+  state env ~level ~path_prefix (declaration: TypAst.type_extension_declaration) ->
   let type_path = resolve_type_path state declaration.name in
   let result_ty = TCon (type_path, []) in
   declaration.constructors
@@ -1792,22 +1768,17 @@ and bind_type_extension_declaration = fun
   |> extend_generalized env ~level
 
 and bind_exception_declaration = fun
-  state
-  env
-  ~level
-  ~path_prefix
-  (declaration: TypAst.exception_declaration) ->
+  state env ~level ~path_prefix (declaration: TypAst.exception_declaration) ->
   let result_ty = TCon (path_exn, []) in
   let ty =
     match declaration.payload with
     | Some payload -> arrow (lower_core_type state ~level (ref []) payload) result_ty
     | None -> result_ty
   in
-  let binding =
-    make_binding
-      state
-      ~name:(qualify_name path_prefix declaration.name)
-      ~ty
+  let binding = make_binding
+    state
+    ~name:(qualify_name path_prefix declaration.name)
+    ~ty
   in
   extend_generalized env ~level [ binding ]
 
@@ -1831,19 +1802,15 @@ and ascribed_binding_for_value_declaration = fun state ~level ~module_prefix nam
   state.type_manifests <- [];
   let ty = lower_core_type state ~level (ref []) type_annotation in
   state.type_manifests <- previous_type_manifests;
-  let binding =
-    make_binding
-      state
-      ~name:(qualify_name module_prefix name)
-      ~ty
+  let binding = make_binding
+    state
+    ~name:(qualify_name module_prefix name)
+    ~ty
   in
   { binding with ty = generalize level ty }
 
 and ascribed_bindings_for_signature_item = fun
-  state
-  ~level
-  ~module_prefix
-  (item: TypAst.signature_item) ->
+  state ~level ~module_prefix (item: TypAst.signature_item) ->
   match item.kind with
   | TypAst.Value declaration ->
       [
@@ -1889,7 +1856,9 @@ and ascribe_module_bindings = fun state env ~level ~module_prefix ~module_type_p
   match find_module_type_summary state module_type_path with
   | None -> env
   | Some summary ->
-      let ascribed_bindings = bindings_for_module_type state ~level ~module_prefix ~module_type_path in
+      let ascribed_bindings =
+        bindings_for_module_type state ~level ~module_prefix ~module_type_path
+      in
       let ascribed_paths =
         List.map ascribed_bindings ~fn:(fun binding -> EntityId.surface_path binding.entity_id)
       in
@@ -1915,12 +1884,7 @@ and ascribe_module_bindings = fun state env ~level ~module_prefix ~module_type_p
       extend_mono (remove_bindings_by_paths ascribed_paths env) ascribed_bindings
 
 and bind_module_type_declarations = fun
-  state
-  ~level
-  ~module_prefix
-  local_env
-  exported_env
-  declarations ->
+  state ~level ~module_prefix local_env exported_env declarations ->
   let local_env =
     List.fold_left
       declarations
@@ -2022,11 +1986,7 @@ and infer_structure_item = fun state env ~level ~path_prefix (item: TypAst.struc
     )
 
 and bind_module_declaration = fun
-  state
-  env
-  ~level
-  ~path_prefix
-  (declaration: TypAst.module_declaration) ->
+  state env ~level ~path_prefix (declaration: TypAst.module_declaration) ->
   let module_prefix = List.append path_prefix [ declaration.name ] in
   match (declaration.parameters, declaration.application, declaration.alias) with
   | (_ :: _, _, _) -> bind_functor_declaration state env ~level ~module_prefix declaration
@@ -2064,11 +2024,7 @@ and bind_functor_parameters = fun state env ~level parameters ->
       bind_functor_parameter state env ~level parameter)
 
 and bind_functor_declaration = fun
-  state
-  env
-  ~level
-  ~module_prefix
-  (declaration: TypAst.module_declaration) ->
+  state env ~level ~module_prefix (declaration: TypAst.module_declaration) ->
   let parameter_env = bind_functor_parameters state env ~level declaration.parameters in
   let _ = bind_module_structure state parameter_env ~level ~module_prefix declaration.items in
   let env =
@@ -2094,10 +2050,7 @@ and bind_functor_declaration = fun
   env
 
 and bind_module_application = fun
-  state
-  env
-  ~module_prefix
-  (application: TypAst.module_application) ->
+  state env ~module_prefix (application: TypAst.module_application) ->
   (* Functor application is represented today by copying the functor body
      summary and substituting the first parameter path with the argument path.
      This is intentionally small, but it keeps the oracle fixtures moving until

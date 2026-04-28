@@ -20,7 +20,9 @@ let shared_poly_variant_row_aliases = fun ty ->
     | Some (_, count) -> count := !count + 1
     | None -> rows := (tags, ref 1) :: !rows
   in
-  let already_visited tags = List.exists (fun other_tags -> Ptr.equal other_tags tags) !visited_rows in
+  let already_visited tags =
+    List.exists (fun other_tags -> Ptr.equal other_tags tags) !visited_rows
+  in
   let rec collect ty =
     match prune ty with
     | TList element

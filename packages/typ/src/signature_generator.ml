@@ -469,11 +469,12 @@ let rec render_ast_core_type_with_substitutions = fun substitutions (type_: TypA
         fields
         |> List.sort
           ~compare:(fun
-            (left: TypAst.poly_variant_type_field)
-            (right: TypAst.poly_variant_type_field) ->
-            String.compare left.tag right.tag)
+            (left: TypAst.poly_variant_type_field) (right: TypAst.poly_variant_type_field) ->
+            String.compare
+              left.tag
+              right.tag)
         |> List.fold_left
-          ~init:([]: TypAst.poly_variant_type_field list)
+          ~init:(([]: TypAst.poly_variant_type_field list))
           ~fn:(fun fields (field: TypAst.poly_variant_type_field) ->
             match fields with
             | previous :: rest when String.equal previous.TypAst.tag field.TypAst.tag ->
@@ -557,8 +558,7 @@ and render_ast_arrow_parameter = fun substitutions type_ ->
 let render_ast_core_type = render_ast_core_type_with_substitutions []
 
 let render_record_field_declaration_with_substitutions = fun
-  substitutions
-  (field: TypAst.record_field_declaration) ->
+  substitutions (field: TypAst.record_field_declaration) ->
   (
     if field.mutable_ then
       "mutable "
@@ -571,8 +571,7 @@ let render_record_field_declaration_with_substitutions = fun
 let render_record_field_declaration = render_record_field_declaration_with_substitutions []
 
 let render_type_constructor_with_substitutions = fun
-  substitutions
-  (constructor: TypAst.type_constructor) ->
+  substitutions (constructor: TypAst.type_constructor) ->
   match (constructor.inline_record, constructor.payload, constructor.result) with
   | (_, None, Some result) ->
       constructor.name ^ " : " ^ render_ast_core_type_with_substitutions substitutions result
@@ -598,8 +597,7 @@ let render_type_constructor_with_substitutions = fun
 let render_type_constructor = render_type_constructor_with_substitutions []
 
 let render_type_definition_with_substitutions = fun
-  substitutions
-  (definition: TypAst.type_definition) ->
+  substitutions (definition: TypAst.type_definition) ->
   match definition.kind with
   | TypAst.Abstract -> ""
   | TypAst.Extensible -> " = .."
@@ -623,9 +621,7 @@ let render_type_definition_with_substitutions = fun
 let render_type_definition = render_type_definition_with_substitutions []
 
 let render_type_declaration_with_keyword_and_substitutions = fun
-  substitutions
-  keyword
-  (declaration: TypAst.type_declaration) ->
+  substitutions keyword (declaration: TypAst.type_declaration) ->
   let prefix = keyword ^ " " ^ render_type_parameters declaration.parameters ^ declaration.name in
   match declaration.definition.kind with
   | TypAst.Variant constructors ->
@@ -671,8 +667,7 @@ let render_type_declaration_group_with_substitutions = fun substitutions ->
 let render_type_declaration_group = render_type_declaration_group_with_substitutions []
 
 let render_type_extension_declaration_with_substitutions = fun
-  substitutions
-  (declaration: TypAst.type_extension_declaration) ->
+  substitutions (declaration: TypAst.type_extension_declaration) ->
   "type "
   ^ SurfacePath.to_string (substitute_path substitutions declaration.name)
   ^ " += "
@@ -685,8 +680,7 @@ let render_type_extension_declaration_with_substitutions = fun
 let render_type_extension_declaration = render_type_extension_declaration_with_substitutions []
 
 let render_exception_declaration_with_substitutions = fun
-  substitutions
-  (declaration: TypAst.exception_declaration) ->
+  substitutions (declaration: TypAst.exception_declaration) ->
   match declaration.payload with
   | Some payload ->
       "exception "
@@ -704,8 +698,7 @@ let render_value_declaration = fun (declaration: TypAst.value_declaration) ->
   ^ render_ast_core_type declaration.type_annotation
 
 let render_external_declaration_with_substitutions = fun
-  substitutions
-  (declaration: TypAst.external_declaration) ->
+  substitutions (declaration: TypAst.external_declaration) ->
   "external "
   ^ render_value_name declaration.name
   ^ " : "
@@ -809,8 +802,7 @@ and find_in_declarations = fun (declarations: TypAst.module_declaration list) na
         find_in_declarations declarations name rest
 
 let rec resolve_module_declaration_alias = fun
-  ~root_items
-  (declaration: TypAst.module_declaration) ->
+  ~root_items (declaration: TypAst.module_declaration) ->
   match declaration.alias with
   | Some alias -> (
       match find_module_declaration root_items alias with
@@ -897,11 +889,7 @@ let rec render_module_declaration_with_keyword = fun
         inline
 
 and render_module_declaration = fun
-  ~root_items
-  ~typing_context
-  ~substitutions
-  ~path_prefix
-  declaration ->
+  ~root_items ~typing_context ~substitutions ~path_prefix declaration ->
   render_module_declaration_with_keyword
     ~root_items
     ~typing_context
@@ -911,11 +899,7 @@ and render_module_declaration = fun
     declaration
 
 and render_module_declaration_group = fun
-  ~root_items
-  ~typing_context
-  ~substitutions
-  ~path_prefix
-  declarations ->
+  ~root_items ~typing_context ~substitutions ~path_prefix declarations ->
   match declarations with
   | [] -> ""
   | first :: rest when first.TypAst.recursive ->
@@ -946,30 +930,18 @@ and render_module_declaration_group = fun
       |> String.concat " "
 
 and render_module_signature_item_lines = fun
-  ~root_items
-  ~typing_context
-  ~substitutions
-  ~path_prefix
-  items ->
+  ~root_items ~typing_context ~substitutions ~path_prefix items ->
   items
   |> List.filter_map
     ~fn:(render_structure_signature_item ~root_items ~typing_context ~substitutions ~path_prefix)
 
 and render_module_signature_items = fun
-  ~root_items
-  ~typing_context
-  ~substitutions
-  ~path_prefix
-  items ->
+  ~root_items ~typing_context ~substitutions ~path_prefix items ->
   render_module_signature_item_lines ~root_items ~typing_context ~substitutions ~path_prefix items
   |> String.concat " "
 
 and render_structure_signature_item = fun
-  ~root_items
-  ~typing_context
-  ~substitutions
-  ~path_prefix
-  (item: TypAst.structure_item) ->
+  ~root_items ~typing_context ~substitutions ~path_prefix (item: TypAst.structure_item) ->
   match item.kind with
   | TypAst.Type declarations ->
       Some (render_type_declaration_group_with_substitutions substitutions declarations)
