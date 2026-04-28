@@ -23,7 +23,7 @@ open Std
 *)
 type origin = {
   (** Source byte span for the node. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Original syntax kind that produced this semantic node. *)
   kind: Syn.SyntaxKind.t;
 }

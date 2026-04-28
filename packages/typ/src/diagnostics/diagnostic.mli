@@ -8,7 +8,7 @@
     slice. *)
 type unsupported_syntax = {
   (** Source span for the unsupported syntax. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Syntax kind that triggered the diagnostic. *)
   kind: Syn.SyntaxKind.t;
   (** Short human-readable explanation. *)
@@ -19,7 +19,7 @@ type unsupported_syntax = {
     slice. *)
 type unsupported_type = {
   (** Source span for the unsupported type. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Short human-readable explanation. *)
   summary: string;
 }
@@ -30,9 +30,9 @@ type unsupported_type = {
     constraint came from source syntax that promised a type. *)
 type annotation_mismatch = {
   (** Source span for the failed annotation constraint. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Source span for the annotation that created the constraint. *)
-  annotation_span: Syn.Ceibo.Span.t;
+  annotation_span: Ceibo.Span.t;
   (** Type required by the annotation. *)
   expected: string;
   (** Type inferred from the checked expression or pattern. *)
@@ -42,7 +42,7 @@ type annotation_mismatch = {
 (** Failed unification where a solver variable would contain itself. *)
 type infinite_substitution = {
   (** Source span for the constraint that triggered the failure. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Solver variable being linked. *)
   var: string;
   (** Type that would make the variable recursive. *)
@@ -52,7 +52,7 @@ type infinite_substitution = {
 (** Fallback type mismatch when no richer constraint-site diagnostic exists. *)
 type type_mismatch = {
   (** Source span for the failed type constraint. *)
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   (** Expected type. *)
   expected: string;
   (** Actual type. *)
@@ -74,22 +74,22 @@ type t =
 
 (** Build an annotation mismatch diagnostic. *)
 val annotation_mismatch :
-  span:Syn.Ceibo.Span.t ->
-  annotation_span:Syn.Ceibo.Span.t ->
+  span:Ceibo.Span.t ->
+  annotation_span:Ceibo.Span.t ->
   expected:string ->
   actual:string ->
   t
 
 (** Build an infinite-substitution diagnostic. *)
 val infinite_substitution :
-  span:Syn.Ceibo.Span.t ->
+  span:Ceibo.Span.t ->
   var:string ->
   type_:string ->
   t
 
 (** Build a generic type mismatch diagnostic. *)
 val type_mismatch :
-  span:Syn.Ceibo.Span.t ->
+  span:Ceibo.Span.t ->
   expected:string ->
   actual:string ->
   t

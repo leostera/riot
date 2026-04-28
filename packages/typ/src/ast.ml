@@ -1,11 +1,10 @@
 open Std
 open Std.Collections
 
-module SynAst = Syn.Ast
 module SurfacePath = Model.Surface_path
 
 type origin = {
-  span: Syn.Ceibo.Span.t;
+  span: Ceibo.Span.t;
   kind: Syn.SyntaxKind.t;
 }
 
@@ -577,45 +576,41 @@ let structure_item_origin = fun (item: structure_item) -> item.origin
 
 let signature_item_origin = fun (item: signature_item) -> item.origin
 
-let span_from_token_body = fun token ->
-  let (_start, end_) = SynAst.Token.raw_range token in
-  let width = SynAst.Token.width token in
-  ((
-    if end_ >= width then
-      end_ - width
-    else
-      0
-  ), end_)
-
 let span_from_node = fun node ->
-  match SynAst.Node.first_descendant_token node with
-  | None ->
-      let (start, end_) = SynAst.Node.raw_range node in
-      Syn.Ceibo.Span.make ~start ~end_
-  | Some first ->
-      let (start, _) = span_from_token_body first in
-      let last_end = ref start in
-      SynAst.Node.for_each_token
-        node
-        ~fn:(fun token ->
-          let (_, end_) = span_from_token_body token in
-          last_end := end_);
-      Syn.Ceibo.Span.make ~start ~end_:!last_end
+  Ceibo.Span.make
+    ~start:(Syn.Ast.Node.span_start node)
+    ~end_:(Syn.Ast.Node.span_end node)
 
-let origin_from_node = fun node -> { span = span_from_node node; kind = SynAst.Node.kind node }
+let origin_from_node = fun node -> { span = span_from_node node; kind = Syn.Ast.Node.kind node }
 
-let origin_has_same_span_as_node = fun origin node ->
-  let span = span_from_node node in
+let origin_from_type_expr = fun type_expr -> {
+  span = span_from_node (Syn.Ast.TypeExpr.as_node type_expr);
+  kind = Syn.Ast.TypeExpr.kind type_expr;
+}
+
+let origin_has_same_span = fun (origin: origin) (span: Ceibo.Span.t) ->
   Int.equal origin.span.start span.start && Int.equal origin.span.end_ span.end_
 
-let token_text = SynAst.Token.text
+let origin_has_same_span_as_node = fun origin node ->
+  origin_has_same_span
+    origin
+    (span_from_node node)
 
-let ident_from_syn_path = fun syntax_path ->
-  let segments = ref [] in
-  SynAst.Path.for_each_ident
-    syntax_path
-    ~fn:(fun token -> segments := token_text token :: !segments);
-  SurfacePath.from_segments (List.reverse !segments)
+let origin_has_same_span_as_type_expr = fun origin type_expr ->
+  origin_has_same_span
+    origin
+    (span_from_node (Syn.Ast.TypeExpr.as_node type_expr))
+
+let token_text = Syn.Ast.Token.text
+
+let ident_from_syn_ident = fun syntax_ident ->
+  let segments =
+    Syn.Ast.Ident.fold_segment
+      syntax_ident
+      ~init:[]
+      ~fn:(fun token segments -> Continue (token_text token :: segments))
+  in
+  SurfacePath.from_segments (List.reverse segments)
 
 let ident_from_tokens = fun tokens ->
   tokens
@@ -630,7 +625,7 @@ let ident_from_tokens_as_segments = fun tokens ->
 
 let ident_tokens = fun tokens ->
   tokens
-  |> List.filter ~fn:(fun token -> Syn.SyntaxKind.(SynAst.Token.kind token = IDENT))
+  |> List.filter ~fn:(fun token -> Syn.SyntaxKind.(Syn.Ast.Token.kind token = IDENT))
 
 let ident_from_tokens_in_tokens = fun tokens ->
   tokens
@@ -638,35 +633,39 @@ let ident_from_tokens_in_tokens = fun tokens ->
   |> ident_from_tokens_as_segments
 
 let ident_from_node = fun node ->
-  let tokens = ref [] in
-  SynAst.Node.for_each_token
-    node
-    ~fn:(fun token ->
-      match SynAst.Token.kind token with
-      | Syn.SyntaxKind.IDENT -> tokens := token :: !tokens
-      | _ -> ());
-  ident_from_tokens_as_segments (List.reverse !tokens)
+  let tokens =
+    Syn.Ast.Node.fold_token
+      node
+      ~init:[]
+      ~fn:(fun token tokens ->
+        match Syn.Ast.Token.kind token with
+        | Syn.SyntaxKind.IDENT -> Continue (token :: tokens)
+        | _ -> Continue tokens)
+  in
+  ident_from_tokens_as_segments (List.reverse tokens)
 
 let module_type_ident_from_node = fun node ->
-  let tokens = ref [] in
-  let stop = ref false in
-  SynAst.Node.for_each_token
-    node
-    ~fn:(fun token ->
-      match SynAst.Token.kind token with
-      | Syn.SyntaxKind.WITH_KW -> stop := true
-      | Syn.SyntaxKind.IDENT when not !stop -> tokens := token :: !tokens
-      | _ -> ());
-  match List.reverse !tokens with
+  let (tokens, _) =
+    Syn.Ast.Node.fold_token
+      node
+      ~init:([], false)
+      ~fn:(fun token (tokens, stop) ->
+        match Syn.Ast.Token.kind token with
+        | Syn.SyntaxKind.WITH_KW -> Continue (tokens, true)
+        | Syn.SyntaxKind.IDENT when not stop -> Continue (token :: tokens, stop)
+        | _ -> Continue (tokens, stop))
+  in
+  match List.reverse tokens with
   | [] -> None
   | tokens -> Some (ident_from_tokens_as_segments tokens)
 
 let direct_child_tokens = fun node ->
-  let tokens = ref [] in
-  SynAst.Node.for_each_child_token node ~fn:(fun token -> tokens := token :: !tokens);
-  List.reverse !tokens
+  let tokens =
+    Syn.Ast.Node.fold_child_token node ~init:[] ~fn:(fun token tokens -> Continue (token :: tokens))
+  in
+  List.reverse tokens
 
-let token_kind_is = fun token kind -> Syn.SyntaxKind.(SynAst.Token.kind token = kind)
+let token_kind_is = fun token kind -> Syn.SyntaxKind.(Syn.Ast.Token.kind token = kind)
 
 let rec split_at_token_kind = fun kind tokens ->
   match tokens with
@@ -701,27 +700,29 @@ let type_source_from_tokens = fun tokens ->
   |> String.concat " "
 
 let module_expr_ident_from_node = fun node ->
-  match SynAst.Node.kind node with
+  match Syn.Ast.Node.kind node with
   | Syn.SyntaxKind.PATH_MODULE_EXPR -> Some (ident_from_node node)
   | Syn.SyntaxKind.MODULE_EXPR -> (
-      match SynAst.Node.first_child_node node ~kind:Syn.SyntaxKind.PATH_MODULE_EXPR with
+      match Syn.Ast.Node.first_child_node node ~kind:Syn.SyntaxKind.PATH_MODULE_EXPR with
       | Some syntax_path -> Some (ident_from_node syntax_path)
       | None -> None
     )
   | _ -> None
 
 let module_application_from_module_expr = fun node ->
-  match SynAst.Node.kind node with
+  match Syn.Ast.Node.kind node with
   | Syn.SyntaxKind.APPLY_MODULE_EXPR ->
-      let idents = ref [] in
-      SynAst.Node.for_each_child_node
-        node
-        ~fn:(fun child ->
-          match module_expr_ident_from_node child with
-          | Some ident -> idents := ident :: !idents
-          | None -> ());
+      let idents =
+        Syn.Ast.Node.fold_child_node
+          node
+          ~init:[]
+          ~fn:(fun child idents ->
+            match module_expr_ident_from_node child with
+            | Some ident -> Continue (ident :: idents)
+            | None -> Continue idents)
+      in
       (
-        match List.reverse !idents with
+        match List.reverse idents with
         | callee :: argument :: _ -> Some ({ callee; argument }: module_application)
         | _ -> None
       )
@@ -732,8 +733,8 @@ let member_ident_tokens_between = fun member ~start ~stop ->
     if index >= stop then
       List.reverse tokens
     else
-      match SynAst.ModuleDeclaration.Member.child_token_at member index with
-      | Some token when Syn.SyntaxKind.(SynAst.Token.kind token = IDENT) ->
+      match Syn.Ast.ModuleDeclaration.Member.child_token_at member index with
+      | Some token when Syn.SyntaxKind.(Syn.Ast.Token.kind token = IDENT) ->
           loop (index + 1) (token :: tokens)
       | _ -> loop (index + 1) tokens
   in
@@ -741,9 +742,9 @@ let member_ident_tokens_between = fun member ~start ~stop ->
 
 let member_find_token = fun member ~start kind ->
   let rec loop index =
-    if index >= SynAst.ModuleDeclaration.Member.child_count member then
+    if index >= Syn.Ast.ModuleDeclaration.Member.child_count member then
       None
-    else if SynAst.ModuleDeclaration.Member.child_token_kind_is member index kind then
+    else if Syn.Ast.ModuleDeclaration.Member.child_token_kind_is member index kind then
       Some index
     else
       loop (index + 1)
@@ -751,18 +752,18 @@ let member_find_token = fun member ~start kind ->
   loop start
 
 let functor_parameters_from_member = fun origin member ->
-  let child_count = SynAst.ModuleDeclaration.Member.child_count member in
+  let child_count = Syn.Ast.ModuleDeclaration.Member.child_count member in
   let rec loop index parameters =
     if index >= child_count then
       List.reverse parameters
     else
       match (
-        SynAst.ModuleDeclaration.Member.child_token_kind_is member index Syn.SyntaxKind.LPAREN,
-        SynAst.ModuleDeclaration.Member.child_token_at member (index + 1),
-        SynAst.ModuleDeclaration.Member.child_token_kind_is member (index + 2) Syn.SyntaxKind.COLON,
+        Syn.Ast.ModuleDeclaration.Member.child_token_kind_is member index Syn.SyntaxKind.LPAREN,
+        Syn.Ast.ModuleDeclaration.Member.child_token_at member (index + 1),
+        Syn.Ast.ModuleDeclaration.Member.child_token_kind_is member (index + 2) Syn.SyntaxKind.COLON,
         member_find_token member ~start:(index + 3) Syn.SyntaxKind.RPAREN
       ) with
-      | (true, Some name, true, Some close_index) when Syn.SyntaxKind.(SynAst.Token.kind name
+      | (true, Some name, true, Some close_index) when Syn.SyntaxKind.(Syn.Ast.Token.kind name
       = IDENT) ->
           let module_type =
             match member_ident_tokens_between member ~start:(index + 3) ~stop:close_index with
@@ -788,7 +789,7 @@ let build_failed = fun origin summary ->
 let unit_constructor_ident = SurfacePath.from_name "()"
 
 let literal_from_token = fun origin token ->
-  match SynAst.Token.kind token with
+  match Syn.Ast.Token.kind token with
   | Syn.SyntaxKind.INT -> Int
   | FLOAT -> Float
   | CHAR -> Char
@@ -797,27 +798,38 @@ let literal_from_token = fun origin token ->
   | FALSE_KW -> Bool
   | kind -> build_failed origin ("unsupported literal " ^ Syn.SyntaxKind.to_string kind)
 
-let node_summary = fun node -> Syn.SyntaxKind.to_string (SynAst.Node.kind node)
+let node_summary = fun node -> Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node)
 
 let child_patterns = fun pattern ->
-  let children = ref [] in
-  SynAst.Pattern.for_each_child_pattern pattern ~fn:(fun child -> children := child :: !children);
-  List.reverse !children
+  let children =
+    Syn.Ast.Pattern.fold_child_pattern
+      pattern
+      ~init:[]
+      ~fn:(fun child children -> Continue (child :: children))
+  in
+  List.reverse children
 
 let direct_child_patterns = fun node ->
-  let children = ref [] in
-  SynAst.Node.for_each_child_node
-    node
-    ~fn:(fun child ->
-      match SynAst.Pattern.cast child with
-      | Some pattern -> children := pattern :: !children
-      | None -> ());
-  List.reverse !children
+  let children =
+    Syn.Ast.Node.fold_child_node
+      node
+      ~init:[]
+      ~fn:(fun child children ->
+        match Syn.Ast.Pattern.cast child with
+        | Syn.Ast.Node pattern -> Continue (pattern :: children)
+        | Syn.Ast.Unknown _
+        | Syn.Ast.Error _ -> Continue children)
+  in
+  List.reverse children
 
 let child_exprs = fun expression ->
-  let children = ref [] in
-  SynAst.Expr.for_each_child_expr expression ~fn:(fun child -> children := child :: !children);
-  List.reverse !children
+  let children =
+    Syn.Ast.Expr.fold_child_expr
+      expression
+      ~init:[]
+      ~fn:(fun child children -> Continue (child :: children))
+  in
+  List.reverse children
 
 let make_core_type = fun origin (kind: core_type_kind) -> ({ origin; type_ = None; kind }: core_type)
 
@@ -864,26 +876,42 @@ let require_some = fun origin summary value ->
 
 let unsupported_node = fun node summary -> build_failed (origin_from_node node) summary
 
+let cast_error_summary = fun label (error: Syn.Ast.cast_error) ->
+  let expected =
+    error.expected
+    |> List.map ~fn:Syn.SyntaxKind.to_string
+    |> String.concat ", "
+  in
+  label ^ ": expected " ^ expected ^ ", got " ^ Syn.SyntaxKind.to_string error.actual
+
+let require_cast = fun label cast_result ->
+  match cast_result with
+  | Syn.Ast.Node value -> value
+  | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
+  | Syn.Ast.Error error ->
+      build_failed (origin_from_node error.node) (cast_error_summary label error)
+
 let poly_type_parameters = fun type_expr ->
-  let names = ref [] in
-  SynAst.TypeExpr.for_each_poly_type_name
-    type_expr
-    ~fn:(fun token -> names := token_text token :: !names);
-  List.reverse !names
+  let names =
+    Syn.Ast.TypeExpr.fold_poly_type_name
+      type_expr
+      ~init:[]
+      ~fn:(fun token names -> Continue (token_text token :: names))
+  in
+  List.reverse names
 
 let poly_variant_tag_names_from_node = fun node ->
-  let tags = ref [] in
-  let saw_backtick = ref false in
-  SynAst.Node.for_each_token
-    node
-    ~fn:(fun token ->
-      match SynAst.Token.kind token with
-      | Syn.SyntaxKind.BACKTICK -> saw_backtick := true
-      | IDENT when !saw_backtick ->
-          tags := token_text token :: !tags;
-          saw_backtick := false
-      | _ -> saw_backtick := false);
-  List.reverse !tags
+  let (tags, _) =
+    Syn.Ast.Node.fold_token
+      node
+      ~init:([], false)
+      ~fn:(fun token (tags, saw_backtick) ->
+        match Syn.Ast.Token.kind token with
+        | Syn.SyntaxKind.BACKTICK -> Continue (tags, true)
+        | IDENT when saw_backtick -> Continue (token_text token :: tags, false)
+        | _ -> Continue (tags, false))
+  in
+  List.reverse tags
 
 let poly_variant_tag_from_node = fun origin node ->
   match poly_variant_tag_names_from_node node with
@@ -901,19 +929,18 @@ let poly_variant_type_fields_from_node = fun origin node ->
   |> List.map ~fn:(fun tag -> ({ origin; tag; payload = None }: poly_variant_type_field))
 
 let poly_variant_inherited_type_names_from_node = fun node ->
-  let names = ref [] in
-  let saw_backtick = ref false in
-  SynAst.Node.for_each_token
-    node
-    ~fn:(fun token ->
-      match SynAst.Token.kind token with
-      | Syn.SyntaxKind.BACKTICK -> saw_backtick := true
-      | IDENT when !saw_backtick -> saw_backtick := false
-      | IDENT ->
-          names := token_text token :: !names;
-          saw_backtick := false
-      | _ -> saw_backtick := false);
-  List.reverse !names
+  let (names, _) =
+    Syn.Ast.Node.fold_token
+      node
+      ~init:([], false)
+      ~fn:(fun token (names, saw_backtick) ->
+        match Syn.Ast.Token.kind token with
+        | Syn.SyntaxKind.BACKTICK -> Continue (names, true)
+        | IDENT when saw_backtick -> Continue (names, false)
+        | IDENT -> Continue (token_text token :: names, false)
+        | _ -> Continue (names, false))
+  in
+  List.reverse names
 
 let find_poly_variant_type_alias = fun context name ->
   List.find
@@ -933,13 +960,14 @@ let inherited_poly_variant_type_fields_from_node = fun context origin node ->
         | None -> build_failed origin ("unknown polymorphic variant row " ^ name))
 
 let type_expr_contains_token = fun kind type_expr ->
-  let found = ref false in
-  SynAst.Node.for_each_token
-    type_expr
-    ~fn:(fun token ->
-      if token_kind_is token kind then
-        found := true);
-  !found
+  Syn.Ast.Node.fold_token
+    (Syn.Ast.TypeExpr.as_node type_expr)
+    ~init:false
+    ~fn:(fun token found ->
+      if found || token_kind_is token kind then
+        Return true
+      else
+        Continue false)
 
 let type_expr_is_extensible = fun type_expr ->
   type_expr_contains_token
@@ -947,14 +975,13 @@ let type_expr_is_extensible = fun type_expr ->
     type_expr
 
 let type_expr_first_token_kind_is = fun kind type_expr ->
-  let first = ref None in
-  SynAst.Node.for_each_token
-    type_expr
-    ~fn:(fun token ->
-      match !first with
-      | Some _ -> ()
-      | None -> first := Some token);
-  match !first with
+  let first =
+    Syn.Ast.Node.fold_token
+      (Syn.Ast.TypeExpr.as_node type_expr)
+      ~init:None
+      ~fn:(fun token _ -> Return (Some token))
+  in
+  match first with
   | Some token -> token_kind_is token kind
   | None -> false
 
@@ -964,23 +991,26 @@ let type_expr_is_coercion = fun type_expr ->
     type_expr
 
 let type_expr_coercion_target_tokens = fun origin type_expr ->
-  let seen_coercion = ref false in
-  let tokens = ref [] in
-  SynAst.Node.for_each_token
-    type_expr
-    ~fn:(fun token ->
-      if !seen_coercion then
-        tokens := token :: !tokens
-      else if token_kind_is token Syn.SyntaxKind.GT then
-        seen_coercion := true);
-  match drop_final_rparen (List.reverse !tokens) with
+  let (_, tokens) =
+    Syn.Ast.Node.fold_token
+      (Syn.Ast.TypeExpr.as_node type_expr)
+      ~init:(false, [])
+      ~fn:(fun token (seen_coercion, tokens) ->
+        if seen_coercion then
+          Continue (seen_coercion, token :: tokens)
+        else if token_kind_is token Syn.SyntaxKind.GT then
+          Continue (true, tokens)
+        else
+          Continue (seen_coercion, tokens))
+  in
+  match drop_final_rparen (List.reverse tokens) with
   | [] -> build_failed origin "missing coercion target type"
   | tokens -> tokens
 
 let arrow_label_from_syn_type = fun origin label ->
   match label with
   | None -> NoLabel
-  | Some { SynAst.TypeExpr.name = Some label; optional_ = false } -> Labelled (token_text label)
+  | Some { Syn.Ast.TypeExpr.name = Some label; optional_ = false } -> Labelled (token_text label)
   | Some { name = Some label; optional_ = true } -> Optional (token_text label)
   | Some { name = None; _ } -> build_failed origin "missing labeled type label"
 
@@ -988,16 +1018,16 @@ let source_slice = fun source ->
   IO.IoVec.IoSlice.from_string source
   |> Result.expect ~msg:"failed to create typ AST parser source slice"
 
-let rec build_core_type = fun context type_expr ->
-  let origin = origin_from_node type_expr in
+let rec build_core_type = fun context (type_expr: Syn.Ast.TypeExpr.t) ->
+  let origin = origin_from_type_expr type_expr in
   (
-    match SynAst.TypeExpr.view type_expr with
-    | SynAst.TypeExpr.Wildcard -> make_core_type origin Wildcard
-    | SynAst.TypeExpr.Var { name } -> make_core_type origin (Var (Some (token_text name)))
-    | SynAst.TypeExpr.Ident { path = syntax_path } ->
-        make_core_type origin (TypeIdent (ident_from_syn_path syntax_path))
-    | SynAst.TypeExpr.Apply { ident; args } ->
-        let constructor = make_core_type origin (TypeIdent (ident_from_syn_path ident)) in
+    match Syn.Ast.TypeExpr.view type_expr with
+    | Syn.Ast.TypeExpr.Wildcard -> make_core_type origin Wildcard
+    | Syn.Ast.TypeExpr.Var { name } -> make_core_type origin (Var (Some (token_text name)))
+    | Syn.Ast.TypeExpr.Ident { ident } ->
+        make_core_type origin (TypeIdent (ident_from_syn_ident ident))
+    | Syn.Ast.TypeExpr.Apply { ident; args } ->
+        let constructor = make_core_type origin (TypeIdent (ident_from_syn_ident ident)) in
         let arguments =
           args
           |> Vector.iter
@@ -1005,7 +1035,7 @@ let rec build_core_type = fun context type_expr ->
           |> Iter.Iterator.to_list
         in
         make_core_type origin (Apply { constructor; arguments })
-    | SynAst.TypeExpr.Arrow { label; arg; ret } ->
+    | Syn.Ast.TypeExpr.Arrow { label; arg; ret } ->
         make_core_type
           origin
           (Arrow {
@@ -1013,7 +1043,7 @@ let rec build_core_type = fun context type_expr ->
             parameter = build_core_type context arg;
             result = build_core_type context ret;
           })
-    | SynAst.TypeExpr.Tuple { parts } ->
+    | Syn.Ast.TypeExpr.Tuple { parts } ->
         let parts =
           parts
           |> Vector.iter
@@ -1021,27 +1051,27 @@ let rec build_core_type = fun context type_expr ->
           |> Iter.Iterator.to_list
         in
         make_core_type origin (Tuple parts)
-    | SynAst.TypeExpr.Poly { body } ->
+    | Syn.Ast.TypeExpr.Poly { body } ->
         make_core_type
           origin
           (ForAll {
             parameters = poly_type_parameters type_expr;
             body = build_core_type context body;
           })
-    | SynAst.TypeExpr.Unknown node -> (
+    | Syn.Ast.TypeExpr.Unknown node -> (
         match poly_variant_type_fields_from_node origin node with
         | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
         | [] -> (
             match inherited_poly_variant_type_fields_from_node context origin node with
             | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
             | [] -> (
-                match SynAst.TypeExpr.inner_without_attribute_suffix type_expr with
+                match Syn.Ast.TypeExpr.inner_without_attribute_suffix type_expr with
                 | Some inner -> build_core_type context inner
                 | None -> unsupported_node node (node_summary node)
               )
           )
       )
-    | SynAst.TypeExpr.Error node -> unsupported_node node (node_summary node)
+    | Syn.Ast.TypeExpr.Error node -> unsupported_node node (node_summary node)
   )
 
 and build_type_application = fun context origin argument constructor ->
@@ -1060,8 +1090,8 @@ and build_type_application = fun context origin argument constructor ->
   | _ -> make_core_type origin (Apply { constructor; arguments })
 
 and build_arrow_parameter = fun context origin type_expr ->
-  match SynAst.TypeExpr.view type_expr with
-  | SynAst.TypeExpr.Arrow { label; arg; _ } -> (
+  match Syn.Ast.TypeExpr.view type_expr with
+  | Syn.Ast.TypeExpr.Arrow { label; arg; _ } -> (
     arrow_label_from_syn_type origin label,
     build_core_type context arg
   )
@@ -1075,8 +1105,8 @@ and core_type_application_arguments = fun (type_: core_type) ->
 
 and tuple_type_elements = fun context origin left right ->
   let rec flatten type_expr =
-    match SynAst.TypeExpr.view type_expr with
-    | SynAst.TypeExpr.Tuple { parts } ->
+    match Syn.Ast.TypeExpr.view type_expr with
+    | Syn.Ast.TypeExpr.Tuple { parts } ->
         parts
         |> Vector.iter
         |> Iter.Iterator.map ~fn:(build_core_type context)
@@ -1088,30 +1118,33 @@ and tuple_type_elements = fun context origin left right ->
     (flatten (require_some origin "missing tuple type right" right))
 
 and child_type_exprs = fun context type_expr ->
-  let children = ref [] in
-  SynAst.TypeExpr.for_each_child_type
-    type_expr
-    ~fn:(fun child -> children := build_core_type context child :: !children);
-  List.reverse !children
+  let children =
+    Syn.Ast.TypeExpr.fold_child_type
+      type_expr
+      ~init:[]
+      ~fn:(fun child children -> Continue (build_core_type context child :: children))
+  in
+  List.reverse children
 
 and build_core_type_from_source = fun context origin source ->
   let parse_result = Syn.parse_interface (source_slice ("val __typ : " ^ source ^ "\n")) in
-  let source_file = SynAst.SourceFile.make parse_result.tree in
-  match SynAst.SourceFile.view source_file with
+  let source_file = Syn.Ast.SourceFile.make parse_result.tree in
+  match Syn.Ast.SourceFile.view source_file with
   | Interface interface ->
-      let annotation = ref None in
-      SynAst.Interface.for_each_item
-        interface
-        ~fn:(fun item ->
-          match (!annotation, SynAst.SignatureItem.view item) with
-          | (None, Value declaration) ->
-              annotation := SynAst.ValueDeclaration.type_annotation declaration
-          | _ -> ());
+      let annotation =
+        Syn.Ast.Interface.fold_item
+          interface
+          ~init:None
+          ~fn:(fun item annotation ->
+            match (annotation, Syn.Ast.SignatureItem.view item) with
+            | (None, Value declaration) ->
+                Return (Syn.Ast.ValueDeclaration.type_annotation declaration)
+            | _ -> Continue annotation)
+      in
       build_core_type
         context
-        (require_some origin ("failed to parse package constraint type: " ^ source) !annotation)
-  | Implementation _
-  | Empty -> build_failed origin ("failed to parse package constraint type: " ^ source)
+        (require_some origin ("failed to parse package constraint type: " ^ source) annotation)
+  | Implementation _ -> build_failed origin ("failed to parse package constraint type: " ^ source)
 
 and build_core_type_from_tokens = fun context origin tokens ->
   build_core_type_from_source
@@ -1216,39 +1249,35 @@ and module_body_unpack = fun context node ->
     None
 
 let rec build_parameter = fun context parameter ->
-  let origin = origin_from_node parameter in
+  let origin = origin_from_node (Syn.Ast.Parameter.as_node parameter) in
   (
-    match SynAst.Parameter.view parameter with
-    | SynAst.Parameter.Positional { pattern } ->
-        let pattern = build_pattern context pattern in
+    match Syn.Ast.Parameter.view parameter with
+    | Syn.Ast.Parameter.Param { label = NoLabel; pattern } ->
+        let pattern =
+          require_some origin "missing parameter pattern" pattern
+          |> build_pattern context
+        in
         let (pattern, annotation) = extract_parameter_annotation pattern in
         make_parameter ?annotation origin Unlabeled pattern
-    | SynAst.Parameter.Labeled { label; pattern } ->
-        let label_token = require_some origin "missing labeled parameter label" label in
+    | Syn.Ast.Parameter.Param { label = Labeled { name }; pattern } ->
+        let label_token = require_some origin "missing labeled parameter label" name in
         let label_text = token_text label_token in
         let pattern = build_parameter_pattern context origin label_text pattern in
         let (pattern, annotation) = extract_parameter_annotation pattern in
         make_parameter ?annotation origin (Labeled (SurfacePath.from_name label_text)) pattern
-    | SynAst.Parameter.Optional { label; pattern } ->
-        let label_token = require_some origin "missing optional parameter label" label in
+    | Syn.Ast.Parameter.Param { label = Optional { name; default }; pattern } ->
+        let label_token = require_some origin "missing optional parameter label" name in
         let label_text = token_text label_token in
         let pattern = build_parameter_pattern context origin label_text pattern in
         let (pattern, annotation) = extract_parameter_annotation pattern in
-        make_parameter ?annotation origin (Optional (SurfacePath.from_name label_text)) pattern
-    | SynAst.Parameter.OptionalDefault { label; pattern; default } ->
-        let label_token = require_some origin "missing optional parameter label" label in
-        let label_text = token_text label_token in
-        let pattern = build_parameter_pattern context origin label_text pattern in
-        let (pattern, annotation) = extract_parameter_annotation pattern in
+        let default = Option.map default ~fn:(build_expression context) in
         make_parameter
           ?annotation
-          ~default:(build_expression
-            context
-            (require_some origin "missing optional parameter default" default))
+          ?default
           origin
           (Optional (SurfacePath.from_name label_text))
           pattern
-    | SynAst.Parameter.Unknown node -> (unsupported_node node (node_summary node)): parameter
+    | Syn.Ast.Parameter.Unknown node -> (unsupported_node node (node_summary node)): parameter
   )
 
 and build_parameter_pattern = fun context origin label_text pattern ->
@@ -1263,85 +1292,80 @@ and extract_parameter_annotation = fun (pattern: pattern) ->
 
 and locally_abstract_type_names = fun origin syntax_pattern ->
   let pattern =
-    SynAst.LocallyAbstractTypePattern.cast syntax_pattern
-    |> require_some origin "invalid locally abstract type pattern"
+    Syn.Ast.LocallyAbstractTypePattern.cast syntax_pattern
+    |> require_cast "invalid locally abstract type pattern"
   in
-  let names = ref [] in
-  SynAst.LocallyAbstractTypePattern.for_each_type_name
-    pattern
-    ~fn:(fun token -> names := token_text token :: !names);
-  List.reverse !names
-
-and build_parameter_from_pattern = fun context syntax_pattern ->
-  let origin = origin_from_node syntax_pattern in
-  match SynAst.Parameter.cast syntax_pattern with
-  | Some parameter -> build_parameter context parameter
-  | None -> (
-      match SynAst.LocallyAbstractTypePattern.cast syntax_pattern with
-      | Some _ -> build_failed origin "locally abstract type binder outside function parameter list"
-      | None ->
-          let pattern = build_pattern context syntax_pattern in
-          let (pattern, annotation) = extract_parameter_annotation pattern in
-          make_parameter ?annotation origin Unlabeled pattern
-    )
+  let names =
+    Syn.Ast.LocallyAbstractTypePattern.fold_type_name
+      pattern
+      ~init:[]
+      ~fn:(fun token names -> Continue (token_text token :: names))
+  in
+  List.reverse names
 
 and build_function_parameters = fun context syntax_parameters ->
-  let type_binders = ref [] in
-  let parameters = ref [] in
-  syntax_parameters
-  |> List.for_each
-    ~fn:(fun syntax_parameter ->
-      let origin = origin_from_node syntax_parameter in
-      match SynAst.LocallyAbstractTypePattern.cast syntax_parameter with
-      | Some _ ->
-          type_binders := List.append
-            (
-              locally_abstract_type_names origin syntax_parameter
-              |> List.reverse
+  let (type_binders, parameters) =
+    syntax_parameters
+    |> List.fold_left
+      ~init:([], [])
+      ~fn:(fun (type_binders, parameters) syntax_parameter ->
+        let origin = origin_from_node (Syn.Ast.Parameter.as_node syntax_parameter) in
+        match Syn.Ast.Parameter.view syntax_parameter with
+        | Syn.Ast.Parameter.Param { label = NoLabel; pattern = Some pattern } -> (
+            match Syn.Ast.LocallyAbstractTypePattern.cast pattern with
+            | Syn.Ast.Node _ -> (
+              List.append
+                (
+                  locally_abstract_type_names origin pattern
+                  |> List.reverse
+                )
+                type_binders,
+              parameters
             )
-            !type_binders
-      | None -> parameters := build_parameter_from_pattern context syntax_parameter :: !parameters);
-  (List.reverse !type_binders, List.reverse !parameters)
+            | Syn.Ast.Unknown _
+            | Syn.Ast.Error _ -> (
+              type_binders,
+              build_parameter context syntax_parameter :: parameters
+            )
+          )
+        | _ -> (type_binders, build_parameter context syntax_parameter :: parameters))
+  in
+  (List.reverse type_binders, List.reverse parameters)
 
 and strip_let_return_annotation_from_parameter = fun return_annotation syntax_parameter ->
-  match (return_annotation, SynAst.Node.kind syntax_parameter) with
-  | (Some _, Syn.SyntaxKind.CONSTRAINT_PATTERN) -> (
-      match SynAst.Pattern.view syntax_parameter with
-      | Constraint { pattern = parameter; _ } -> parameter
-      | _ -> syntax_parameter
-    )
-  | _ -> syntax_parameter
+  let _ = return_annotation in
+  syntax_parameter
 
 and strip_built_let_return_annotation_from_parameter = fun
   return_annotation
   (parameter: parameter) ->
   let pattern =
     match (return_annotation, parameter.pattern.kind) with
-    | (Some return_annotation, Constraint { pattern; annotation }) when origin_has_same_span_as_node
+    | (Some return_annotation, Constraint { pattern; annotation }) when origin_has_same_span_as_type_expr
       annotation.origin
       return_annotation -> pattern
     | _ -> parameter.pattern
   in
   let annotation =
     match (return_annotation, parameter.annotation) with
-    | (Some return_annotation, Some annotation) when origin_has_same_span_as_node
+    | (Some return_annotation, Some annotation) when origin_has_same_span_as_type_expr
       annotation.origin
       return_annotation -> None
     | _ -> parameter.annotation
   in
   { parameter with pattern; annotation }
 
-and build_first_class_module_pattern = fun context origin syntax_pattern ->
+and build_first_class_module_pattern = fun context origin (syntax_pattern: Syn.Ast.Pattern.t) ->
   let pattern =
-    SynAst.FirstClassModulePattern.cast syntax_pattern
-    |> require_some origin "invalid first-class module pattern"
+    Syn.Ast.FirstClassModulePattern.cast syntax_pattern
+    |> require_cast "invalid first-class module pattern"
   in
   let binder =
-    match SynAst.FirstClassModulePattern.binder pattern with
+    match Syn.Ast.FirstClassModulePattern.binder pattern with
     | Some token when not (token_kind_is token Syn.SyntaxKind.UNDERSCORE) -> Some (token_text token)
     | _ -> None
   in
-  let tokens = direct_child_tokens syntax_pattern in
+  let tokens = direct_child_tokens (Syn.Ast.Pattern.as_node syntax_pattern) in
   make_pattern
     origin
     (FirstClassModule {
@@ -1349,32 +1373,31 @@ and build_first_class_module_pattern = fun context origin syntax_pattern ->
       package_type = first_class_package_type_from_tokens context origin ?binder tokens;
     })
 
-and build_pattern = fun context syntax_pattern ->
-  let origin = origin_from_node syntax_pattern in
+and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
+  let origin = origin_from_node (Syn.Ast.Pattern.as_node syntax_pattern) in
   (
-    match SynAst.Pattern.view syntax_pattern with
-    | SynAst.Pattern.Unit -> make_pattern origin (Bind unit_constructor_ident)
-    | SynAst.Pattern.Wildcard -> make_pattern origin Wildcard
-    | SynAst.Pattern.Ident { path = syntax_path } ->
-        make_pattern origin (Bind (ident_from_syn_path syntax_path))
-    | SynAst.Pattern.Construct { constructor; payload } ->
-        let callee = make_pattern origin (Bind (ident_from_syn_path constructor)) in
+    match Syn.Ast.Pattern.view syntax_pattern with
+    | Syn.Ast.Pattern.Unit -> make_pattern origin (Bind unit_constructor_ident)
+    | Syn.Ast.Pattern.Wildcard -> make_pattern origin Wildcard
+    | Syn.Ast.Pattern.Ident { ident } -> make_pattern origin (Bind (ident_from_syn_ident ident))
+    | Syn.Ast.Pattern.Construct { constructor; payload } ->
+        let callee = make_pattern origin (Bind (ident_from_syn_ident constructor)) in
         (
           match payload with
           | Some payload ->
               make_pattern origin (Apply { callee; argument = build_pattern context payload })
           | None -> callee
         )
-    | SynAst.Pattern.Literal { token } ->
+    | Syn.Ast.Pattern.Literal { token } ->
         make_pattern origin (Literal (literal_from_token origin token))
-    | SynAst.Pattern.PolyVariant { payload; _ } ->
+    | Syn.Ast.Pattern.PolyVariant { tag; payload } ->
         make_pattern
           origin
           (PolyVariant {
-            tag = poly_variant_tag_from_node origin syntax_pattern;
+            tag = token_text tag;
             payload = Option.map payload ~fn:(build_pattern context);
           })
-    | SynAst.Pattern.Tuple { parts } ->
+    | Syn.Ast.Pattern.Tuple { parts } ->
         make_pattern
           origin
           (
@@ -1385,7 +1408,7 @@ and build_pattern = fun context syntax_pattern ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Pattern.List { items } ->
+    | Syn.Ast.Pattern.List { items } ->
         make_pattern
           origin
           (
@@ -1396,64 +1419,74 @@ and build_pattern = fun context syntax_pattern ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Pattern.Record { fields; _ } ->
+    | Syn.Ast.Pattern.Record { fields; _ } ->
         make_pattern
           origin
           (
             Record (
               fields
               |> Vector.iter
-              |> Iter.Iterator.map ~fn:(build_record_pattern_field context)
+              |> Iter.Iterator.filter_map ~fn:(build_record_pattern_field context)
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Pattern.Or { left; right } ->
+    | Syn.Ast.Pattern.Or { left; right } ->
         make_pattern
           origin
           (Or { left = build_pattern context left; right = build_pattern context right })
-    | SynAst.Pattern.Cons { head; tail } ->
+    | Syn.Ast.Pattern.Cons { head; tail } ->
         make_pattern
           origin
           (Cons { head = build_pattern context head; tail = build_pattern context tail })
-    | SynAst.Pattern.Constraint { pattern; annotation } ->
+    | Syn.Ast.Pattern.Constraint { pattern; annotation } ->
         make_pattern
           origin
           (Constraint {
             pattern = build_pattern context pattern;
             annotation = build_core_type context annotation;
           })
-    | SynAst.Pattern.Alias { pattern; alias } ->
+    | Syn.Ast.Pattern.Alias { pattern; alias } ->
         make_pattern
           origin
           (Alias {
             pattern = build_pattern context pattern;
             alias = build_pattern context alias;
           })
-    | SynAst.Pattern.FirstClassModule _ ->
+    | Syn.Ast.Pattern.FirstClassModule _ ->
         build_first_class_module_pattern context origin syntax_pattern
-    | SynAst.Pattern.Error node -> unsupported_node node (node_summary node)
-    | SynAst.Pattern.Unknown node -> unsupported_node node (node_summary node)
-    | SynAst.Pattern.Array _
-    | SynAst.Pattern.Interval _
-    | SynAst.Pattern.Lazy _
-    | SynAst.Pattern.Exception _ ->
+    | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
+    | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
+    | Syn.Ast.Pattern.Array _
+    | Syn.Ast.Pattern.Interval _
+    | Syn.Ast.Pattern.Lazy _
+    | Syn.Ast.Pattern.Exception _ ->
         (build_failed origin (Syn.SyntaxKind.to_string origin.kind)): pattern
   )
 
-and build_record_pattern_field = fun context (field: SynAst.RecordPattern.field) ->
-  let origin = origin_from_node field.node in
-  ({
-    origin;
-    name = ident_from_syn_path (require_some origin "missing record pattern field name" field.path);
-    pattern = Option.map field.pattern ~fn:(build_pattern context);
-  }: record_pattern_field)
+and build_record_pattern_field = fun context (field: Syn.Ast.RecordPattern.field) ->
+  match field with
+  | Syn.Ast.RecordPatternField { ident; pattern; node } ->
+      let origin = origin_from_node (Syn.Ast.Pattern.as_node node) in
+      let field: record_pattern_field = {
+        origin;
+        name = ident_from_syn_ident ident;
+        pattern = Option.map pattern ~fn:(build_pattern context);
+      }
+      in
+      Some field
+  | Syn.Ast.UnknownRecordPatternField _ -> None
 
 and build_record_pattern_fields = fun context record ->
-  let fields = ref [] in
-  SynAst.RecordPattern.for_each_field
-    record
-    ~fn:(fun field -> fields := build_record_pattern_field context field :: !fields);
-  List.reverse !fields
+  let fields =
+    Syn.Ast.RecordPattern.fold_field
+      record
+      ~init:[]
+      ~fn:(fun field fields ->
+        match build_record_pattern_field context field with
+        | Some field -> Continue (field :: fields)
+        | None -> Continue fields)
+  in
+  List.reverse fields
 
 and flatten_pattern_application = fun pattern ->
   let rec loop acc (pattern: pattern) =
@@ -1463,19 +1496,20 @@ and flatten_pattern_application = fun pattern ->
   in
   loop [] pattern
 
-and build_let_binding = fun context binding ->
-  let origin = origin_from_node binding in
-  let syntax_type_annotation = SynAst.LetBinding.type_annotation binding in
-  let syntax_parameters = ref [] in
-  SynAst.LetBinding.for_each_parameter
-    binding
-    ~fn:(fun parameter -> syntax_parameters := strip_let_return_annotation_from_parameter
-      syntax_type_annotation
-      parameter
-    :: !syntax_parameters);
+and build_let_binding = fun context (binding: Syn.Ast.LetBinding.t) ->
+  let origin = origin_from_node (Syn.Ast.LetBinding.as_node binding) in
+  let syntax_type_annotation = Syn.Ast.LetBinding.type_annotation binding in
+  let syntax_parameters =
+    Syn.Ast.LetBinding.fold_parameter
+      binding
+      ~init:[]
+      ~fn:(fun parameter syntax_parameters ->
+        Continue (strip_let_return_annotation_from_parameter syntax_type_annotation parameter
+        :: syntax_parameters))
+  in
   let type_annotation = Option.map syntax_type_annotation ~fn:(build_core_type context) in
   let (type_binders, parameters) =
-    build_function_parameters context (List.reverse !syntax_parameters)
+    build_function_parameters context (List.reverse syntax_parameters)
   in
   let parameters =
     parameters
@@ -1485,67 +1519,78 @@ and build_let_binding = fun context binding ->
     origin;
     pattern = build_pattern
       context
-      (require_some origin "missing let binding pattern" (SynAst.LetBinding.pattern binding));
+      (require_some origin "missing let binding pattern" (Syn.Ast.LetBinding.pattern binding));
     type_binders;
     parameters;
     body = build_expression
       context
-      (require_some origin "missing let binding body" (SynAst.LetBinding.body binding));
+      (require_some origin "missing let binding body" (Syn.Ast.LetBinding.body binding));
     type_annotation;
   }: let_binding)
 
-and build_match_case = fun context match_case ->
-  let origin = origin_from_node match_case in
-  match SynAst.MatchCase.view match_case with
-  | SynAst.MatchCase.Case { pattern; guard; body } ->
+and build_match_case = fun context (match_case: Syn.Ast.MatchCase.t) ->
+  let origin = origin_from_node (Syn.Ast.MatchCase.as_node match_case) in
+  match Syn.Ast.MatchCase.view match_case with
+  | Syn.Ast.MatchCase.Case { pattern; guard; body } ->
       ({
         origin;
         pattern = build_pattern context pattern;
         guard = Option.map guard ~fn:(build_expression context);
         body = build_expression context body;
       }: match_case)
-  | SynAst.MatchCase.Unknown node -> unsupported_node node (node_summary node)
+  | Syn.Ast.MatchCase.Unknown node -> unsupported_node node (node_summary node)
 
 and build_match_case_option = fun context match_case ->
-  match SynAst.MatchCase.view match_case with
-  | SynAst.MatchCase.Unknown _ -> None
-  | SynAst.MatchCase.Case _ -> Some (build_match_case context match_case)
+  match Syn.Ast.MatchCase.view match_case with
+  | Syn.Ast.MatchCase.Unknown _ -> None
+  | Syn.Ast.MatchCase.Case _ -> Some (build_match_case context match_case)
 
 and build_match_cases = fun context syntax_expression ->
-  let cases = ref [] in
-  SynAst.Expr.for_each_match_case
-    syntax_expression
-    ~fn:(fun match_case ->
-      match build_match_case_option context match_case with
-      | Some match_case -> cases := match_case :: !cases
-      | None -> ());
-  List.reverse !cases
+  let cases =
+    Syn.Ast.Expr.fold_match_case
+      syntax_expression
+      ~init:[]
+      ~fn:(fun match_case cases ->
+        match build_match_case_option context match_case with
+        | Some match_case -> Continue (match_case :: cases)
+        | None -> Continue cases)
+  in
+  List.reverse cases
 
-and build_record_expression_field = fun context (field: SynAst.RecordExpr.field) ->
-  let origin = origin_from_node field.node in
-  ({
-    origin;
-    name = ident_from_syn_path (require_some origin "missing record field name" field.path);
-    value = build_expression context (require_some origin "missing record field value" field.value);
-  }: record_expression_field)
+and build_record_expression_field = fun context (field: Syn.Ast.RecordExpr.field) ->
+  match field with
+  | Syn.Ast.RecordExprField { ident; value; node } ->
+      let origin = origin_from_node (Syn.Ast.RecordExprField.as_node node) in
+      let field: record_expression_field = {
+        origin;
+        name = ident_from_syn_ident ident;
+        value = build_expression context (require_some origin "missing record field value" value);
+      }
+      in
+      Some field
+  | Syn.Ast.UnknownRecordExprField _ -> None
 
 and build_record_expression_fields = fun context record ->
-  let fields = ref [] in
-  SynAst.RecordExpr.for_each_field
-    record
-    ~fn:(fun field -> fields := build_record_expression_field context field :: !fields);
-  List.reverse !fields
+  let fields =
+    Syn.Ast.RecordExpr.fold_field
+      record
+      ~init:[]
+      ~fn:(fun field fields ->
+        match build_record_expression_field context field with
+        | Some field -> Continue (field :: fields)
+        | None -> Continue fields)
+  in
+  List.reverse fields
 
-and build_expression = fun context syntax_expression ->
-  let origin = origin_from_node syntax_expression in
+and build_expression = fun context (syntax_expression: Syn.Ast.Expr.t) ->
+  let origin = origin_from_node (Syn.Ast.Expr.as_node syntax_expression) in
   (
-    match SynAst.Expr.view syntax_expression with
-    | SynAst.Expr.Unit -> make_expression origin (Ident unit_constructor_ident)
-    | SynAst.Expr.Literal { token } ->
+    match Syn.Ast.Expr.view syntax_expression with
+    | Syn.Ast.Expr.Unit -> make_expression origin (Ident unit_constructor_ident)
+    | Syn.Ast.Expr.Literal { token } ->
         make_expression origin (Literal (literal_from_token origin token))
-    | SynAst.Expr.Ident { path = syntax_path } ->
-        make_expression origin (Ident (ident_from_syn_path syntax_path))
-    | SynAst.Expr.Annotated { expr; annotation } ->
+    | Syn.Ast.Expr.Ident { ident } -> make_expression origin (Ident (ident_from_syn_ident ident))
+    | Syn.Ast.Expr.Annotated { expr; annotation } ->
         let (kind, type_) =
           if type_expr_is_coercion annotation then
             (
@@ -1562,7 +1607,7 @@ and build_expression = fun context syntax_expression ->
           kind
           type_
           (build_expression context expr)
-    | SynAst.Expr.Tuple { items } ->
+    | Syn.Ast.Expr.Tuple { items } ->
         make_expression
           origin
           (
@@ -1573,7 +1618,7 @@ and build_expression = fun context syntax_expression ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.List { items } ->
+    | Syn.Ast.Expr.List { items } ->
         make_expression
           origin
           (
@@ -1584,7 +1629,7 @@ and build_expression = fun context syntax_expression ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.Array { items } ->
+    | Syn.Ast.Expr.Array { items } ->
         make_expression
           origin
           (
@@ -1595,17 +1640,17 @@ and build_expression = fun context syntax_expression ->
               |> Iter.Iterator.to_list
             )
           )
-    | SynAst.Expr.PolyVariant { payload; _ } ->
+    | Syn.Ast.Expr.PolyVariant { tag; payload } ->
         make_expression
           origin
           (PolyVariant {
-            tag = poly_variant_tag_from_node origin syntax_expression;
+            tag = token_text tag;
             payload = Option.map payload ~fn:(build_expression context);
           })
-    | SynAst.Expr.Record { base; _ } ->
+    | Syn.Ast.Expr.Record { base; _ } ->
         let record =
-          SynAst.RecordExpr.cast syntax_expression
-          |> require_some origin "invalid record expression"
+          Syn.Ast.RecordExpr.cast syntax_expression
+          |> require_cast "invalid record expression"
         in
         (
           match base with
@@ -1621,30 +1666,30 @@ and build_expression = fun context syntax_expression ->
                 origin
                 (Record { update = None; fields = build_record_expression_fields context record })
         )
-    | SynAst.Expr.FieldAccess { target; field } ->
+    | Syn.Ast.Expr.FieldAccess { target; field } ->
         make_expression
           origin
           (FieldAccess {
             receiver = build_expression context target;
             field = SurfacePath.from_name (token_text field);
           })
-    | SynAst.Expr.Assign { target; value; _ } ->
+    | Syn.Ast.Expr.Assign { target; value; _ } ->
         make_expression
           origin
           (Assign {
             target = build_expression context target;
             value = build_expression context value;
           })
-    | SynAst.Expr.Sequence { left; right = Some right } ->
+    | Syn.Ast.Expr.Sequence { left; right = Some right } ->
         make_expression
           origin
           (Sequence {
             left = build_expression context left;
             right = build_expression context right;
           })
-    | SynAst.Expr.Sequence { right = None; _ } ->
+    | Syn.Ast.Expr.Sequence { right = None; _ } ->
         build_failed origin "incomplete sequence expression"
-    | SynAst.Expr.If { condition; then_branch; else_branch } ->
+    | Syn.Ast.Expr.If { condition; then_branch; else_branch } ->
         make_expression
           origin
           (If {
@@ -1652,28 +1697,28 @@ and build_expression = fun context syntax_expression ->
             then_branch = build_expression context then_branch;
             else_branch = Option.map else_branch ~fn:(build_expression context);
           })
-    | SynAst.Expr.Match { scrutinee; first_case = _ } ->
+    | Syn.Ast.Expr.Match { scrutinee; first_case = _ } ->
         make_expression
           origin
           (Match {
             scrutinee = build_expression context scrutinee;
             cases = build_match_cases context syntax_expression;
           })
-    | SynAst.Expr.Try { body; first_case = _ } ->
+    | Syn.Ast.Expr.Try { body; first_case = _ } ->
         make_expression
           origin
           (Try {
             body = build_expression context body;
             cases = build_match_cases context syntax_expression;
           })
-    | SynAst.Expr.While { condition; body } ->
+    | Syn.Ast.Expr.While { condition; body } ->
         make_expression
           origin
           (While {
             condition = build_expression context condition;
             body = build_expression context body;
           })
-    | SynAst.Expr.For {
+    | Syn.Ast.Expr.For {
       pattern;
       start_;
       stop;
@@ -1689,14 +1734,19 @@ and build_expression = fun context syntax_expression ->
               body = build_expression context body;
             }
           )
-    | SynAst.Expr.Fun { body = Body_expr body } ->
-        let (type_binders, parameters) =
-          build_function_parameters context (direct_child_patterns syntax_expression)
+    | Syn.Ast.Expr.Fun { body = Body_expr body } ->
+        let syntax_parameters =
+          Syn.Ast.Expr.fold_parameter
+            syntax_expression
+            ~init:[]
+            ~fn:(fun parameter syntax_parameters -> Continue (parameter :: syntax_parameters))
+          |> List.reverse
         in
+        let (type_binders, parameters) = build_function_parameters context syntax_parameters in
         make_expression
           origin
           (Function { type_binders; parameters; body = Body (build_expression context body) })
-    | SynAst.Expr.Fun { body = Body_cases { first_case = _ } } ->
+    | Syn.Ast.Expr.Fun { body = Body_cases { first_case = _ } } ->
         make_expression
           origin
           (Function {
@@ -1704,10 +1754,10 @@ and build_expression = fun context syntax_expression ->
             parameters = [];
             body = Cases (build_match_cases context syntax_expression);
           })
-    | SynAst.Expr.Apply { callee; argument } ->
+    | Syn.Ast.Expr.Apply { callee; argument } ->
         let arguments = [ build_argument context argument ] in
         make_expression origin (Apply { callee = build_expression context callee; arguments })
-    | SynAst.Expr.Infix { left; operator; right } ->
+    | Syn.Ast.Expr.Infix { left; operator; right } ->
         make_expression
           origin
           (Infix {
@@ -1715,34 +1765,34 @@ and build_expression = fun context syntax_expression ->
             operator = SurfacePath.from_name (token_text operator);
             right = build_expression context right;
           })
-    | SynAst.Expr.Prefix { operator; operand } ->
+    | Syn.Ast.Expr.Prefix { operator; operand } ->
         let callee = make_expression origin (Ident (SurfacePath.from_name (token_text operator))) in
         let argument = build_expression context operand in
         make_expression
           origin
           (Apply { callee; arguments = [ make_argument argument.origin (Positional argument) ] })
-    | SynAst.Expr.Let { first_binding; body } ->
+    | Syn.Ast.Expr.Let { first_binding; body } ->
         make_expression
           origin
           (Let {
             first_binding = build_let_binding context first_binding;
             body = build_expression context body;
           })
-    | SynAst.Expr.LetModule _ -> build_let_module_expression context origin syntax_expression
-    | SynAst.Expr.LocalOpen _ -> build_local_open_expression context origin syntax_expression
-    | SynAst.Expr.Error node -> unsupported_node node (node_summary node)
-    | SynAst.Expr.Unknown node -> (
-        match SynAst.Node.kind node with
+    | Syn.Ast.Expr.LetModule _ -> build_let_module_expression context origin syntax_expression
+    | Syn.Ast.Expr.LocalOpen _ -> build_local_open_expression context origin syntax_expression
+    | Syn.Ast.Expr.Error node -> unsupported_node node (node_summary node)
+    | Syn.Ast.Expr.Unknown node -> (
+        match Syn.Ast.Node.kind node with
         | Syn.SyntaxKind.FIRST_CLASS_MODULE_EXPR ->
             build_first_class_module_expression context origin syntax_expression
         | _ -> unsupported_node node (node_summary node)
       )
-    | SynAst.Expr.LetException _ ->
+    | Syn.Ast.Expr.LetException _ ->
         (build_failed origin (Syn.SyntaxKind.to_string origin.kind)): expression
   )
 
-and build_first_class_module_expression = fun context origin syntax_expression ->
-  let tokens = direct_child_tokens syntax_expression in
+and build_first_class_module_expression = fun context origin (syntax_expression: Syn.Ast.Expr.t) ->
+  let tokens = direct_child_tokens (Syn.Ast.Expr.as_node syntax_expression) in
   make_expression
     origin
     (FirstClassModule {
@@ -1750,19 +1800,19 @@ and build_first_class_module_expression = fun context origin syntax_expression -
       package_type = first_class_package_type_from_tokens context origin tokens;
     })
 
-and build_argument = fun context syntax_expression ->
-  let origin = origin_from_node syntax_expression in
+and build_argument = fun context (syntax_expression: Syn.Ast.Expr.t) ->
+  let node = Syn.Ast.Expr.as_node syntax_expression in
+  let origin = origin_from_node node in
   let first_ident_token =
-    let found = ref None in
-    SynAst.Node.for_each_token
-      syntax_expression
-      ~fn:(fun token ->
-        match (!found, SynAst.Token.kind token) with
-        | (None, Syn.SyntaxKind.IDENT) -> found := Some token
-        | _ -> ());
-    !found
+    Syn.Ast.Node.fold_token
+      node
+      ~init:None
+      ~fn:(fun token found ->
+        match (found, Syn.Ast.Token.kind token) with
+        | (None, Syn.SyntaxKind.IDENT) -> Return (Some token)
+        | _ -> Continue found)
   in
-  match SynAst.Node.kind syntax_expression with
+  match Syn.Ast.Node.kind node with
   | Syn.SyntaxKind.LABELED_ARG ->
       make_argument
         origin
@@ -1794,22 +1844,22 @@ and build_argument = fun context syntax_expression ->
 
 and build_let_module_expression = fun context origin syntax_expression ->
   let let_module =
-    SynAst.LetModuleExpr.cast syntax_expression
-    |> require_some origin "invalid let module expression"
+    Syn.Ast.LetModuleExpr.cast syntax_expression
+    |> require_cast "invalid let module expression"
   in
   let body =
-    SynAst.LetModuleExpr.body let_module
+    Syn.Ast.LetModuleExpr.body let_module
     |> require_some origin "missing let module body"
   in
   let name =
-    SynAst.LetModuleExpr.name let_module
+    Syn.Ast.LetModuleExpr.name let_module
     |> require_some origin "missing let module name"
     |> token_text
   in
-  let module_body_node = SynAst.LetModuleExpr.module_body_node let_module in
+  let module_body_node = Syn.Ast.LetModuleExpr.module_body_node let_module in
   let alias =
     match module_body_node with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) ->
+    | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) ->
         Some (ident_from_node node)
     | _ -> None
   in
@@ -1820,9 +1870,9 @@ and build_let_module_expression = fun context origin syntax_expression ->
   in
   let items =
     match module_body_node with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = STRUCT_MODULE_EXPR) ->
+    | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = STRUCT_MODULE_EXPR) ->
         build_structure_items_from_module_expr context node
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) -> []
+    | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) -> []
     | Some node when Option.is_some (module_body_unpack context node) -> []
     | _ -> build_failed origin "unsupported let module body"
   in
@@ -1840,37 +1890,38 @@ and build_let_module_expression = fun context origin syntax_expression ->
 
 and build_local_open_expression = fun context origin syntax_expression ->
   let local_open =
-    SynAst.LocalOpenExpr.cast syntax_expression
-    |> require_some origin "invalid local open expression"
+    Syn.Ast.LocalOpenExpr.cast syntax_expression
+    |> require_cast "invalid local open expression"
   in
-  let (module_syntax_path, body) =
-    match SynAst.LocalOpenExpr.view local_open with
-    | LetOpen { module_path = module_syntax_path; body; _ }
-    | Delimited { module_path = module_syntax_path; body; _ } -> (module_syntax_path, body)
+  let (module_ident, body) =
+    match Syn.Ast.LocalOpenExpr.view local_open with
+    | LetOpen { module_ident; body; _ }
+    | Delimited { module_ident; body; _ } -> (module_ident, body)
+    | Unknown node -> unsupported_node node (node_summary node)
   in
   make_expression
     origin
     (LocalOpen {
-      module_ = ident_from_syn_path
-        (require_some origin "missing local open module path" module_syntax_path);
-      body = build_expression context (require_some origin "missing local open body" body);
+      module_ = ident_from_syn_ident module_ident;
+      body = build_expression context body;
     })
 
-and build_let_declaration = fun context declaration ->
-  let bindings = ref [] in
-  SynAst.LetDeclaration.for_each_binding
-    declaration
-    ~fn:(fun binding -> bindings := build_let_binding context binding :: !bindings);
+and build_let_declaration = fun context (declaration: Syn.Ast.LetDeclaration.t) ->
+  let bindings =
+    Syn.Ast.LetDeclaration.fold_binding
+      declaration
+      ~init:[]
+      ~fn:(fun binding bindings -> Continue (build_let_binding context binding :: bindings))
+  in
   ({
-    origin = origin_from_node declaration;
-    recursive = Option.is_some (SynAst.LetDeclaration.rec_token declaration);
-    bindings = List.reverse !bindings;
+    origin = origin_from_node (Syn.Ast.LetDeclaration.as_node declaration);
+    recursive = Option.is_some (Syn.Ast.LetDeclaration.rec_token declaration);
+    bindings = List.reverse bindings;
   }: let_declaration)
 
-and name_from_declaration_tokens = fun for_each_token fallback ->
-  let tokens = ref [] in
-  for_each_token ~fn:(fun token -> tokens := token :: !tokens);
-  match List.reverse !tokens with
+and name_from_declaration_tokens = fun fold_token fallback ->
+  let tokens = fold_token ~init:[] ~fn:(fun token tokens -> Syn.Ast.Continue (token :: tokens)) in
+  match List.reverse tokens with
   | [] -> Option.map fallback ~fn:token_text
   | tokens ->
       Some (
@@ -1878,115 +1929,124 @@ and name_from_declaration_tokens = fun for_each_token fallback ->
         |> SurfacePath.to_string
       )
 
-and build_value_declaration = fun context declaration ->
-  let origin = origin_from_node declaration in
+and build_value_declaration = fun context (declaration: Syn.Ast.ValueDeclaration.t) ->
+  let origin = origin_from_node (Syn.Ast.ValueDeclaration.as_node declaration) in
   ({
     origin;
     name =
       name_from_declaration_tokens
-        (SynAst.ValueDeclaration.for_each_name_token declaration)
-        (SynAst.ValueDeclaration.name declaration)
+        (Syn.Ast.ValueDeclaration.fold_name_token declaration)
+        (Syn.Ast.ValueDeclaration.name declaration)
       |> require_some origin "missing value declaration name";
     type_annotation =
-      SynAst.ValueDeclaration.type_annotation declaration
+      Syn.Ast.ValueDeclaration.type_annotation declaration
       |> require_some origin "missing value declaration type annotation"
       |> build_core_type context;
   }: value_declaration)
 
-and build_external_declaration = fun context declaration ->
-  let origin = origin_from_node declaration in
-  let primitives = ref [] in
-  SynAst.ExternalDeclaration.for_each_primitive_string
-    declaration
-    ~fn:(fun token -> primitives := token_text token :: !primitives);
+and build_external_declaration = fun context (declaration: Syn.Ast.ExternalDeclaration.t) ->
+  let origin = origin_from_node (Syn.Ast.ExternalDeclaration.as_node declaration) in
+  let primitives =
+    Syn.Ast.ExternalDeclaration.fold_primitive_string
+      declaration
+      ~init:[]
+      ~fn:(fun token primitives -> Continue (token_text token :: primitives))
+  in
   ({
     origin;
     name =
       name_from_declaration_tokens
-        (SynAst.ExternalDeclaration.for_each_name_token declaration)
-        (SynAst.ExternalDeclaration.name declaration)
+        (Syn.Ast.ExternalDeclaration.fold_name_token declaration)
+        (Syn.Ast.ExternalDeclaration.name declaration)
       |> require_some origin "missing external declaration name";
     type_annotation =
-      SynAst.ExternalDeclaration.type_annotation declaration
+      Syn.Ast.ExternalDeclaration.type_annotation declaration
       |> require_some origin "missing external declaration type annotation"
       |> build_core_type context;
-    primitives = List.reverse !primitives;
+    primitives = List.reverse primitives;
   }: external_declaration)
 
 and build_type_parameter = function
-  | SynAst.TypeDeclaration.Named { name; _ } -> Some (token_text name)
-  | SynAst.TypeDeclaration.Wildcard _ -> None
+  | Syn.Ast.TypeDeclaration.Named { name; _ } -> Some (token_text name)
+  | Syn.Ast.TypeDeclaration.Wildcard _ -> None
 
-and build_type_constructor = fun context constructor ->
-  let origin = origin_from_node constructor in
+and build_type_constructor = fun context (constructor: Syn.Ast.VariantConstructor.t) ->
+  let origin = origin_from_node (Syn.Ast.VariantConstructor.as_node constructor) in
   ({
     origin;
     name =
-      SynAst.VariantConstructor.name constructor
+      Syn.Ast.VariantConstructor.name constructor
       |> require_some origin "missing variant constructor name"
       |> token_text;
     payload = Option.map
-      (SynAst.VariantConstructor.payload_type constructor)
+      (Syn.Ast.VariantConstructor.payload_type constructor)
       ~fn:(build_core_type context);
     result = Option.map
-      (SynAst.VariantConstructor.result_type constructor)
+      (Syn.Ast.VariantConstructor.result_type constructor)
       ~fn:(build_core_type context);
     inline_record = Option.map
-      (SynAst.VariantConstructor.record_payload constructor)
+      (Syn.Ast.VariantConstructor.record_payload constructor)
       ~fn:(build_record_field_declarations context);
   }: type_constructor)
 
-and build_record_field_declaration = fun context field ->
-  let origin = origin_from_node field in
+and build_record_field_declaration = fun context (field: Syn.Ast.RecordField.t) ->
+  let origin = origin_from_node (Syn.Ast.RecordField.as_node field) in
   ({
     origin;
     name =
-      SynAst.RecordField.name field
+      Syn.Ast.RecordField.name field
       |> require_some origin "missing record field name"
       |> token_text;
-    mutable_ = Option.is_some (SynAst.RecordField.mutable_token field);
+    mutable_ = Option.is_some (Syn.Ast.RecordField.mutable_token field);
     type_annotation =
-      SynAst.RecordField.type_annotation field
+      Syn.Ast.RecordField.type_annotation field
       |> require_some origin "missing record field type annotation"
       |> build_core_type context;
   }: record_field_declaration)
 
 and build_record_field_declarations = fun context record ->
-  let fields = ref [] in
-  SynAst.RecordType.for_each_field
-    record
-    ~fn:(fun field -> fields := build_record_field_declaration context field :: !fields);
-  List.reverse !fields
+  let fields =
+    Syn.Ast.RecordType.fold_field
+      record
+      ~init:[]
+      ~fn:(fun field fields -> Continue (build_record_field_declaration context field :: fields))
+  in
+  List.reverse fields
 
 and build_type_declaration_member = fun context member ->
-  let origin = origin_from_node (SynAst.TypeDeclaration.Member.declaration member) in
-  let parameters = ref [] in
-  SynAst.TypeDeclaration.Member.for_each_parameter
-    member
-    ~fn:(fun parameter -> parameters := build_type_parameter parameter :: !parameters);
+  let declaration = Syn.Ast.TypeDeclaration.Member.declaration member in
+  let origin = origin_from_node (Syn.Ast.TypeDeclaration.as_node declaration) in
+  let parameters =
+    Syn.Ast.TypeDeclaration.Member.fold_parameter
+      member
+      ~init:[]
+      ~fn:(fun parameter parameters -> Continue (build_type_parameter parameter :: parameters))
+  in
   let definition: type_definition =
     match (
-      SynAst.TypeDeclaration.Member.manifest member,
-      SynAst.TypeDeclaration.Member.variant_type member,
-      SynAst.TypeDeclaration.Member.record_type member
+      Syn.Ast.TypeDeclaration.Member.manifest member,
+      Syn.Ast.TypeDeclaration.Member.variant_type member,
+      Syn.Ast.TypeDeclaration.Member.record_type member
     ) with
     | (Some manifest, _, _) when type_expr_is_extensible manifest ->
         make_type_definition origin Extensible
     | (Some manifest, _, _) ->
         make_type_definition origin (Alias (build_core_type context manifest))
     | (None, Some variant, _) ->
-        let constructors = ref [] in
-        SynAst.VariantType.for_each_constructor
-          variant
-          ~fn:(fun constructor -> constructors := build_type_constructor context constructor
-          :: !constructors);
-        make_type_definition origin (Variant (List.reverse !constructors))
+        let constructors =
+          Syn.Ast.VariantType.fold_constructor
+            variant
+            ~init:[]
+            ~fn:(fun constructor constructors ->
+              Continue (build_type_constructor context constructor :: constructors))
+        in
+        make_type_definition origin (Variant (List.reverse constructors))
     | (None, None, Some record) ->
         make_type_definition origin (Record (build_record_field_declarations context record))
     | (None, None, None) -> make_type_definition origin Abstract
   in
   let name =
-    SynAst.TypeDeclaration.Member.name member
+    Syn.Ast.TypeDeclaration.Member.name member
     |> require_some origin "missing type declaration name"
     |> token_text
   in
@@ -1999,87 +2059,101 @@ and build_type_declaration_member = fun context member ->
   ({
     origin;
     name;
-    parameters = List.reverse !parameters;
+    parameters = List.reverse parameters;
     definition;
   }: type_declaration)
 
 and build_type_declarations = fun context declaration ->
-  let declarations = ref [] in
-  SynAst.TypeDeclaration.for_each_member
-    declaration
-    ~fn:(fun member -> declarations := build_type_declaration_member context member :: !declarations);
-  List.reverse !declarations
+  let declarations =
+    Syn.Ast.TypeDeclaration.fold_member
+      declaration
+      ~init:[]
+      ~fn:(fun member declarations ->
+        Continue (build_type_declaration_member context member :: declarations))
+  in
+  List.reverse declarations
 
-and build_type_extension_declaration = fun context declaration ->
-  let origin = origin_from_node declaration in
-  let name_tokens = ref [] in
-  let constructors = ref [] in
-  SynAst.TypeExtensionDeclaration.for_each_name_ident
-    declaration
-    ~fn:(fun token -> name_tokens := token :: !name_tokens);
-  (
-    match SynAst.TypeExtensionDeclaration.variant_type declaration with
+and build_type_extension_declaration = fun
+  context
+  (declaration: Syn.Ast.TypeExtensionDeclaration.t) ->
+  let origin = origin_from_node (Syn.Ast.TypeExtensionDeclaration.as_node declaration) in
+  let name_tokens =
+    Syn.Ast.TypeExtensionDeclaration.fold_name_ident
+      declaration
+      ~init:[]
+      ~fn:(fun token tokens -> Continue (token :: tokens))
+  in
+  let constructors =
+    match Syn.Ast.TypeExtensionDeclaration.variant_type declaration with
     | Some variant ->
-        SynAst.VariantType.for_each_constructor
+        Syn.Ast.VariantType.fold_constructor
           variant
-          ~fn:(fun constructor -> constructors := build_type_constructor context constructor
-          :: !constructors)
-    | None -> ()
-  );
+          ~init:[]
+          ~fn:(fun constructor constructors ->
+            Continue (build_type_constructor context constructor :: constructors))
+    | None -> []
+  in
   ({
     origin;
-    name = ident_from_tokens_as_segments (List.reverse !name_tokens);
-    constructors = List.reverse !constructors;
+    name = ident_from_tokens_as_segments (List.reverse name_tokens);
+    constructors = List.reverse constructors;
   }: type_extension_declaration)
 
-and build_exception_declaration = fun context declaration ->
-  let origin = origin_from_node declaration in
+and build_exception_declaration = fun context (declaration: Syn.Ast.ExceptionDeclaration.t) ->
+  let origin = origin_from_node (Syn.Ast.ExceptionDeclaration.as_node declaration) in
   let payload =
-    match SynAst.ExceptionDeclaration.view declaration with
-    | SynAst.ExceptionDeclaration.Payload { payload = Some (TypeExpr type_expr); _ } ->
+    match Syn.Ast.ExceptionDeclaration.view declaration with
+    | Syn.Ast.ExceptionDeclaration.Payload { payload = TypeExpr type_expr; _ } ->
         Some (build_core_type context type_expr)
-    | SynAst.ExceptionDeclaration.Payload { payload = Some (Record _); _ } ->
+    | Syn.Ast.ExceptionDeclaration.Payload { payload = Record _; _ } ->
         build_failed origin "exception record payload"
-    | SynAst.ExceptionDeclaration.Payload { payload = None; _ }
-    | SynAst.ExceptionDeclaration.Bare -> None
-    | SynAst.ExceptionDeclaration.Alias _ -> build_failed origin "exception alias"
+    | Syn.Ast.ExceptionDeclaration.Bare -> None
+    | Syn.Ast.ExceptionDeclaration.Alias _ -> build_failed origin "exception alias"
+    | Syn.Ast.ExceptionDeclaration.Unknown node -> unsupported_node node (node_summary node)
   in
   ({
     origin;
     name =
-      SynAst.ExceptionDeclaration.name declaration
+      Syn.Ast.ExceptionDeclaration.name declaration
       |> require_some origin "missing exception name"
       |> token_text;
     payload;
   }: exception_declaration)
 
 and build_structure_items_from_module_expr = fun context node ->
-  let items = ref [] in
-  SynAst.Node.for_each_child_node
-    node
-    ~fn:(fun child ->
-      match SynAst.Node.kind child with
-      | Syn.SyntaxKind.STRUCTURE_ITEM -> (
-          match build_structure_item_option context child with
-          | Some item -> items := item :: !items
-          | None -> ()
-        )
-      | _ -> ());
-  List.reverse !items
+  let items =
+    Syn.Ast.Node.fold_child_node
+      node
+      ~init:[]
+      ~fn:(fun child items ->
+        match Syn.Ast.Node.kind child with
+        | Syn.SyntaxKind.STRUCTURE_ITEM -> (
+            match Syn.Ast.StructureItem.cast child with
+            | Syn.Ast.Node child_item -> (
+                match build_structure_item_option context child_item with
+                | Some item -> Continue (item :: items)
+                | None -> Continue items
+              )
+            | Syn.Ast.Unknown _
+            | Syn.Ast.Error _ -> Continue items
+          )
+        | _ -> Continue items)
+  in
+  List.reverse items
 
 and build_module_declaration_member = fun context member ->
-  let declaration = SynAst.ModuleDeclaration.Member.declaration member in
-  let origin = origin_from_node declaration in
-  let module_expr = SynAst.ModuleDeclaration.Member.module_expr member in
+  let declaration = Syn.Ast.ModuleDeclaration.Member.declaration member in
+  let origin = origin_from_node (Syn.Ast.ModuleDeclaration.as_node declaration) in
+  let module_expr = Syn.Ast.ModuleDeclaration.Member.module_expr member in
   let parameters = functor_parameters_from_member origin member in
   let module_type =
-    match SynAst.ModuleDeclaration.Member.module_type member with
+    match Syn.Ast.ModuleDeclaration.Member.module_type member with
     | Some node -> module_type_ident_from_node node
     | None -> None
   in
   let alias =
     match module_expr with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = PATH_MODULE_EXPR) ->
+    | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) ->
         Some (ident_from_node node)
     | _ -> None
   in
@@ -2090,25 +2164,27 @@ and build_module_declaration_member = fun context member ->
   in
   let items =
     match module_expr with
-    | Some node when Syn.SyntaxKind.(SynAst.Node.kind node = STRUCT_MODULE_EXPR) ->
+    | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = STRUCT_MODULE_EXPR) ->
         build_structure_items_from_module_expr context node
     | _ ->
-        let items = ref [] in
-        SynAst.ModuleDeclaration.for_each_structure_item
-          declaration
-          ~fn:(fun item ->
-            match build_structure_item_option context item with
-            | Some item -> items := item :: !items
-            | None -> ());
-        List.reverse !items
+        let items =
+          Syn.Ast.ModuleDeclaration.fold_structure_item
+            declaration
+            ~init:[]
+            ~fn:(fun item items ->
+              match build_structure_item_option context item with
+              | Some item -> Continue (item :: items)
+              | None -> Continue items)
+        in
+        List.reverse items
   in
   ({
     origin;
     name =
-      SynAst.ModuleDeclaration.Member.name member
+      Syn.Ast.ModuleDeclaration.Member.name member
       |> require_some origin "missing module declaration name"
       |> token_text;
-    recursive = SynAst.ModuleDeclaration.is_recursive declaration;
+    recursive = Syn.Ast.ModuleDeclaration.is_recursive declaration;
     parameters;
     items;
     alias;
@@ -2117,48 +2193,52 @@ and build_module_declaration_member = fun context member ->
   }: module_declaration)
 
 and build_module_declarations = fun context declaration ->
-  let declarations = ref [] in
-  SynAst.ModuleDeclaration.for_each_member
-    declaration
-    ~fn:(fun member -> declarations := build_module_declaration_member context member
-    :: !declarations);
-  List.reverse !declarations
+  let declarations =
+    Syn.Ast.ModuleDeclaration.fold_member
+      declaration
+      ~init:[]
+      ~fn:(fun member declarations ->
+        Continue (build_module_declaration_member context member :: declarations))
+  in
+  List.reverse declarations
 
-and build_module_type_declaration = fun context declaration ->
-  let origin = origin_from_node declaration in
-  let items = ref [] in
-  SynAst.ModuleTypeDeclaration.for_each_signature_item
-    declaration
-    ~fn:(fun item ->
-      match build_signature_item_option context item with
-      | Some item -> items := item :: !items
-      | None -> ());
+and build_module_type_declaration = fun context (declaration: Syn.Ast.ModuleTypeDeclaration.t) ->
+  let origin = origin_from_node (Syn.Ast.ModuleTypeDeclaration.as_node declaration) in
+  let items =
+    Syn.Ast.ModuleTypeDeclaration.fold_signature_item
+      declaration
+      ~init:[]
+      ~fn:(fun item items ->
+        match build_signature_item_option context item with
+        | Some item -> Continue (item :: items)
+        | None -> Continue items)
+  in
   ({
     origin;
     name =
-      SynAst.ModuleTypeDeclaration.name declaration
+      Syn.Ast.ModuleTypeDeclaration.name declaration
       |> require_some origin "missing module type declaration name"
       |> token_text;
-    items = List.reverse !items;
+    items = List.reverse items;
   }: module_type_declaration)
 
-and build_structure_item = fun context item ->
-  let origin = origin_from_node item in
+and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
+  let origin = origin_from_node (Syn.Ast.StructureItem.as_node item) in
   (
-    match SynAst.StructureItem.view item with
+    match Syn.Ast.StructureItem.view item with
     | Let declaration ->
         make_structure_item origin (Let (build_let_declaration context declaration))
     | Expr expr_item -> (
-        match SynAst.ExprItem.expr expr_item with
+        match Syn.Ast.ExprItem.expr expr_item with
         | Some expression ->
             make_structure_item origin (Expression (build_expression context expression))
         | None -> build_failed origin "missing structure expression"
       )
     | External declaration ->
         make_structure_item origin (External (build_external_declaration context declaration))
-    | Type (SynAst.TypeDeclarationItem declaration) ->
+    | Type (Syn.Ast.TypeDeclarationItem declaration) ->
         make_structure_item origin (Type (build_type_declarations context declaration))
-    | Type (SynAst.TypeExtensionItem declaration) ->
+    | Type (Syn.Ast.TypeExtensionItem declaration) ->
         make_structure_item
           origin
           (TypeExtension (build_type_extension_declaration context declaration))
@@ -2169,54 +2249,52 @@ and build_structure_item = fun context item ->
     | ModuleType declaration ->
         make_structure_item origin (ModuleType (build_module_type_declaration context declaration))
     | Include declaration ->
-        let tokens = ref [] in
-        SynAst.IncludeDeclaration.for_each_path_ident
-          declaration
-          ~fn:(fun token -> tokens := token :: !tokens);
-        make_structure_item origin (Include (ident_from_tokens_as_segments (List.reverse !tokens)))
+        let tokens =
+          Syn.Ast.IncludeDeclaration.fold_ident_segment
+            declaration
+            ~init:[]
+            ~fn:(fun token tokens -> Continue (token :: tokens))
+        in
+        make_structure_item origin (Include (ident_from_tokens_as_segments (List.reverse tokens)))
     | Attribute attribute ->
-        build_failed
-          (origin_from_node attribute)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind attribute))
+        let node = Syn.Ast.AttributeItem.as_node attribute in
+        build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
     | Extension extension ->
-        build_failed
-          (origin_from_node extension)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
+        let node = Syn.Ast.ExtensionItem.as_node extension in
+        build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
     | Open _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind)
     | Error node -> unsupported_node node (node_summary node)
     | Unknown node -> (unsupported_node node (node_summary node)): structure_item
   )
 
-and build_structure_item_option = fun context item ->
-  match SynAst.StructureItem.view item with
+and build_structure_item_option = fun context (item: Syn.Ast.StructureItem.t) ->
+  match Syn.Ast.StructureItem.view item with
   | Error _
   | Unknown _ -> None
   | _ -> Some (build_structure_item context item)
 
-and build_signature_item = fun context item ->
-  let origin = origin_from_node item in
+and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
+  let origin = origin_from_node (Syn.Ast.SignatureItem.as_node item) in
   (
-    match SynAst.SignatureItem.view item with
+    match Syn.Ast.SignatureItem.view item with
     | Value declaration ->
         make_signature_item origin (Value (build_value_declaration context declaration))
     | External declaration ->
         make_signature_item origin (External (build_external_declaration context declaration))
-    | Type (SynAst.TypeDeclarationItem declaration) ->
+    | Type (Syn.Ast.TypeDeclarationItem declaration) ->
         make_signature_item origin (Type (build_type_declarations context declaration))
-    | Type (SynAst.TypeExtensionItem declaration) ->
+    | Type (Syn.Ast.TypeExtensionItem declaration) ->
         make_signature_item
           origin
           (TypeExtension (build_type_extension_declaration context declaration))
     | Exception declaration ->
         make_signature_item origin (Exception (build_exception_declaration context declaration))
     | Attribute attribute ->
-        build_failed
-          (origin_from_node attribute)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind attribute))
+        let node = Syn.Ast.AttributeItem.as_node attribute in
+        build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
     | Extension extension ->
-        build_failed
-          (origin_from_node extension)
-          (Syn.SyntaxKind.to_string (SynAst.Node.kind extension))
+        let node = Syn.Ast.ExtensionItem.as_node extension in
+        build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
     | Module _
     | ModuleType _
     | Open _
@@ -2225,8 +2303,8 @@ and build_signature_item = fun context item ->
     | Unknown node -> (unsupported_node node (node_summary node)): signature_item
   )
 
-and build_signature_item_option = fun context item ->
-  match SynAst.SignatureItem.view item with
+and build_signature_item_option = fun context (item: Syn.Ast.SignatureItem.t) ->
+  match Syn.Ast.SignatureItem.view item with
   | Error _
   | Unknown _ -> None
   | _ -> Some (build_signature_item context item)
@@ -2234,34 +2312,35 @@ and build_signature_item_option = fun context item ->
 let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
   try
     let context = make_build_context () in
-    let source_file = SynAst.SourceFile.make parse_result.tree in
+    let source_file = Syn.Ast.SourceFile.make parse_result.tree in
     let ast =
-      match SynAst.SourceFile.view source_file with
+      match Syn.Ast.SourceFile.view source_file with
       | Implementation implementation ->
-          let items = ref [] in
-          SynAst.Implementation.for_each_item
-            implementation
-            ~fn:(fun item ->
-              match build_structure_item_option context item with
-              | Some item -> items := item :: !items
-              | None -> ());
-          make_source_file (origin_from_node source_file) (Implementation (List.reverse !items))
-      | Interface interface ->
-          let items = ref [] in
-          SynAst.Interface.for_each_item
-            interface
-            ~fn:(fun item ->
-              match build_signature_item_option context item with
-              | Some item -> items := item :: !items
-              | None -> ());
-          make_source_file (origin_from_node source_file) (Interface (List.reverse !items))
-      | Empty ->
-          let kind =
-            match parse_result.kind with
-            | `Implementation -> Implementation []
-            | `Interface -> Interface []
+          let items =
+            Syn.Ast.Implementation.fold_item
+              implementation
+              ~init:[]
+              ~fn:(fun item items ->
+                match build_structure_item_option context item with
+                | Some item -> Continue (item :: items)
+                | None -> Continue items)
           in
-          make_source_file (origin_from_node source_file) kind
+          make_source_file
+            (origin_from_node (Syn.Ast.SourceFile.as_node source_file))
+            (Implementation (List.reverse items))
+      | Interface interface ->
+          let items =
+            Syn.Ast.Interface.fold_item
+              interface
+              ~init:[]
+              ~fn:(fun item items ->
+                match build_signature_item_option context item with
+                | Some item -> Continue (item :: items)
+                | None -> Continue items)
+          in
+          make_source_file
+            (origin_from_node (Syn.Ast.SourceFile.as_node source_file))
+            (Interface (List.reverse items))
     in
     Ok ast
   with
@@ -2272,8 +2351,8 @@ let span_serializer =
     (
       Serde.Ser.fields
         [
-          Serde.Ser.field "start" Serde.Ser.int (fun (span: Syn.Ceibo.Span.t) -> span.start);
-          Serde.Ser.field "end" Serde.Ser.int (fun (span: Syn.Ceibo.Span.t) -> span.end_);
+          Serde.Ser.field "start" Serde.Ser.int (fun (span: Ceibo.Span.t) -> span.start);
+          Serde.Ser.field "end" Serde.Ser.int (fun (span: Ceibo.Span.t) -> span.end_);
         ]
     )
 
