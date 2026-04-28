@@ -1,3 +1,0 @@
-val const : 'a -> 'b -> 'a
-val keep : unit -> int list -> int list
-val answer : int list

@@ -1,1 +1,1 @@
-val answer : string * char
+val answer : 'a

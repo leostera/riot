@@ -1,3 +1,0 @@
-type answer = Yes | No | Maybe
-val id : answer -> answer
-val answer : answer

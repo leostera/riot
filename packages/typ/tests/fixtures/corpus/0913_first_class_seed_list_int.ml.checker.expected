@@ -1,5 +1,0 @@
-module type BOX = sig type t val value : t end
-module Seed : sig type t = int list val value : t end
-val packed : (module BOX with type t = int list)
-val seed_of : (module BOX with type t = 'a) -> 'a
-val answer : int list

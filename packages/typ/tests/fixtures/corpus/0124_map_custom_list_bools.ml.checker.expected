@@ -1,3 +1,0 @@
-type 'a my_list = Nil | Cons of 'a * 'a my_list
-val map : ('a -> 'b) -> 'a my_list -> 'b my_list
-val answer : (bool * unit) my_list

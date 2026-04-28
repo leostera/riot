@@ -1,3 +1,0 @@
-val value : 'a list
-val id : 'a -> 'a
-val answer : 'a list

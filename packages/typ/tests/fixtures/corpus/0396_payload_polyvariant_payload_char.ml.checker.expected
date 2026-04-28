@@ -1,2 +1,0 @@
-val keep : [< `Mark of 'a | `Word of 'b ] -> [> `Mark of 'a | `Word of 'b ]
-val answer : [> `Mark of char | `Word of 'a ]

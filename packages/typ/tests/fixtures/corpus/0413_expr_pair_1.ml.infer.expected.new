@@ -1,2 +1,0 @@
-val eval : a expr -> a
-val answer : '1

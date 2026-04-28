@@ -1,2 +1,0 @@
-val view : int list -> int * int list
-val answer : int * int list

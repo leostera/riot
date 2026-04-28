@@ -1,3 +1,2 @@
-type named = { name : string; mark : char; }
-val get : named -> string
-val answer : string
+val get : 'a
+val answer : 'a

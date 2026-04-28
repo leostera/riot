@@ -51,12 +51,16 @@ let render_interface = fun (intf: Typ.Infer.ModuleInterface.t) ->
     ~fn:(fun (name, (type_scheme: Typ.Infer.TypeScheme.t)) -> (name, type_scheme.body))
   |> Typ.SignatureGenerator.from_values
 
+type rendered_result =
+  | Interface of string
+  | Diagnostics of string
+
 let render_result = fun (result: Typ.Infer.infer_result) ->
   let diagnostics = render_infer_diagnostics result.diagnostics in
   if String.equal diagnostics "" then
-    render_interface result.intf
+    Interface (render_interface result.intf)
   else
-    diagnostics
+    Diagnostics diagnostics
 
 let validate_interface_source = fun source ->
   let parse_result =
@@ -76,15 +80,16 @@ let infer_test = fun (ctx: Test.FixtureRunner.ctx) ->
   in
   let parse_result = Syn.parse ~filename:ctx.fixture_path (source_slice file) in
   let source = Typ.Model.Source.make ~text:file in
-  let* ast =
-    Typ.Ast.from_parse_result ~source parse_result
-    |> Result.map_err ~fn:render_diagnostics
+  let* actual =
+    match Typ.Ast.from_parse_result ~source parse_result with
+    | Error diagnostics -> Ok (render_diagnostics diagnostics)
+    | Ok ast ->
+        Typ.Infer.check ast
+        |> render_result
+        |> function
+          | Interface source -> validate_interface_source source
+          | Diagnostics diagnostics -> Ok diagnostics
   in
-  let actual =
-    Typ.Infer.check ast
-    |> render_result
-  in
-  let* actual = validate_interface_source actual in
   Test.Snapshot.assert_text ~ctx:ctx.test ~actual
 
 let tests =

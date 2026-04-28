@@ -1,3 +1,2 @@
-type color = Red | Blue | Green
-val choose : color -> color
-val answer : color
+val choose : 'a
+val answer : 'a

@@ -1,2 +1,0 @@
-val view : (int * bool) list -> (int * bool) * (int * bool) list
-val answer : (int * bool) * (int * bool) list

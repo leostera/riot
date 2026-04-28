@@ -1,2 +1,2 @@
-val build : ?value:char -> unit -> char
-val answer : char
+val build : 'a
+val answer : 'a

@@ -1,3 +1,0 @@
-type _ maybe = Nothing : unit maybe | Just : 'a -> 'a maybe
-val view : 'a maybe -> 'a maybe
-val answer : unit maybe * int maybe

@@ -1,2 +1,2 @@
-val project : string * 'a -> string
-val answer : string
+val project : 'a
+val answer : 'a

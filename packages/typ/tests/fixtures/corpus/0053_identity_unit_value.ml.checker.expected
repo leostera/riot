@@ -1,3 +1,0 @@
-val value : unit
-val id : 'a -> 'a
-val answer : unit

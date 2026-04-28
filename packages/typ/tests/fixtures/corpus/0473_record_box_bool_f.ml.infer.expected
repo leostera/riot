@@ -1,3 +1,2 @@
-type t = { value : bool; }
-val get : t -> bool
-val answer : bool
+val get : 'a
+val answer : 'a

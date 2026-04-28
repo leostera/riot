@@ -1,3 +1,0 @@
-val flip : '0
-val pair : '1 * '2
-val answer : '3

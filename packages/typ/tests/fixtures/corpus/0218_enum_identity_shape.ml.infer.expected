@@ -1,3 +1,2 @@
-type shape = Dot | Line | Area
-val id : shape -> shape
-val answer : shape
+val id : 'a
+val answer : 'a

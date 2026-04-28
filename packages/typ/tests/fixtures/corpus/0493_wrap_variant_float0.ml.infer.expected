@@ -1,3 +1,2 @@
-type t = Wrap of float
-val unwrap : t -> float
-val answer : float
+val unwrap : 'a
+val answer : 'a

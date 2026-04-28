@@ -1,2 +1,2 @@
-val duplicate : 'a -> 'a * 'a
-val answer : (int * char) * (int * char)
+val duplicate : 'a * 'b
+val answer : 'a

@@ -1,5 +1,0 @@
-module A : sig type t = { value : int; } end
-module B : sig type t = { value : bool; } end
-val get_a : A.t -> int
-val get_b : B.t -> bool
-val answer : int * bool

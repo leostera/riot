@@ -1,3 +1,0 @@
-val value : int option
-val id : 'a -> 'a
-val answer : int option

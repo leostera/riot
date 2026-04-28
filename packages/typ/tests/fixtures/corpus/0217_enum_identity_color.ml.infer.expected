@@ -1,3 +1,2 @@
-type color = Red | Blue | Green
-val id : color -> color
-val answer : color
+val id : 'a
+val answer : 'a

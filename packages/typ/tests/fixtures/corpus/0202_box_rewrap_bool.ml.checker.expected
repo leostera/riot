@@ -1,3 +1,0 @@
-type box = Box of bool
-val id : box -> box
-val answer : box

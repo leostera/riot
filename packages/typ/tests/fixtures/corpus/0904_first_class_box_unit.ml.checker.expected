@@ -1,4 +1,0 @@
-module type BOX = sig type t val value : t end
-module Seed : sig type t = unit val value : t end
-val packed : (module BOX with type t = unit)
-val answer : unit

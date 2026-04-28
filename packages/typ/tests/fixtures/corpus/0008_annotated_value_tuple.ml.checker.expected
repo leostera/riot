@@ -1,2 +1,0 @@
-val value : int * bool
-val answer : int * bool

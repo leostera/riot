@@ -1,3 +1,0 @@
-type shape = Dot | Line | Area
-val id : shape -> shape
-val answer : shape

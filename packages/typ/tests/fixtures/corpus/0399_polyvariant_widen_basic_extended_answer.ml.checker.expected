@@ -1,4 +1,0 @@
-type small = [ `No | `Yes ]
-type large = [ `Maybe | `No | `Yes ]
-val widen : small -> large
-val answer : large

@@ -1,3 +1,0 @@
-val value : bool
-val const : 'a -> 'b -> 'a
-val answer : bool

@@ -1,4 +1,0 @@
-val pair : bool * int
-val left : bool
-val right : int
-val answer : bool

@@ -1,2 +1,2 @@
-val swap : 'a * 'b -> 'b * 'a
-val answer : unit * (int * char)
+val swap : 'a * 'b
+val answer : 'a

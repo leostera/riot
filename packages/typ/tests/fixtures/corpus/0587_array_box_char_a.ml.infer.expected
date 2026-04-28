@@ -1,2 +1,1 @@
-val touch : char array -> char * char
-val answer : char * char
+unsupported syntax: ARRAY_INDEX_EXPR

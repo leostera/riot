@@ -1,3 +1,0 @@
-type point = { x : int; y : int; }
-val project : point -> int
-val answer : int

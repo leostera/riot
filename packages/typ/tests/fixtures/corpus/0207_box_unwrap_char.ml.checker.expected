@@ -1,3 +1,0 @@
-type box = Box of char
-val unwrap : box -> char
-val answer : char

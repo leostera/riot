@@ -1,2 +1,2 @@
-val id : 'a -> 'a
-val const : 'a -> 'b -> 'a
+val id : 'a
+val const : 'a

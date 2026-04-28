@@ -1,3 +1,2 @@
-type t = Wrap of unit
-val unwrap : t -> unit
-val answer : unit
+val unwrap : 'a
+val answer : 'a

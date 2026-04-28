@@ -1,4 +1,2 @@
-module Prim : sig external raise_ : exn -> 'a = "%raise" end
-exception E of float
-val run : bool -> float
-val answer : float
+val run : 'a
+val answer : 'a

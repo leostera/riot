@@ -1,3 +1,2 @@
-type t = { value : float; }
-val get : t -> float
-val answer : float
+val get : 'a
+val answer : 'a

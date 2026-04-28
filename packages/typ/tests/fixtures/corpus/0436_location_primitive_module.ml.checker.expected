@@ -1,2 +1,0 @@
-module Prim : sig external value : string = "%loc_MODULE" end
-val answer : string

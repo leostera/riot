@@ -1,3 +1,0 @@
-type t = { value : unit; }
-val get : t -> unit
-val answer : unit

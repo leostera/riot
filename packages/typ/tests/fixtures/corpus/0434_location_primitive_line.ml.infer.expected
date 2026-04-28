@@ -1,2 +1,1 @@
-module Prim : sig external value : int = "%loc_LINE" end
-val answer : int
+val answer : 'a

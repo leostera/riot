@@ -1,3 +1,0 @@
-module Source : sig type t = string val value : t end
-module Alias = Source
-val answer : Alias.t

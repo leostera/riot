@@ -1,3 +1,0 @@
-type t = { value : int list; }
-val get : t -> int list
-val answer : int list

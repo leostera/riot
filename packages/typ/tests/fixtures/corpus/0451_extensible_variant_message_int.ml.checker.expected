@@ -1,5 +1,0 @@
-type message = ..
-type message += Payload of int
-type message += Empty
-val id : message -> message
-val answer : message

@@ -1,3 +1,2 @@
-type t = Wrap of bool
-val unwrap : t -> bool
-val answer : bool
+val unwrap : 'a
+val answer : 'a

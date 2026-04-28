@@ -1,2 +1,0 @@
-val build : ?value:char option -> unit -> char option
-val answer : char option

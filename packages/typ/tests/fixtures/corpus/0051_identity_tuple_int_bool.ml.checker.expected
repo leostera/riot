@@ -1,3 +1,0 @@
-val value : int * bool
-val id : 'a -> 'a
-val answer : int * bool

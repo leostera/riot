@@ -1,4 +1,2 @@
 val pair : string * char
-val left : string
-val right : char
-val answer : string
+val answer : 'a

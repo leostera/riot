@@ -1,3 +1,2 @@
-type t = Wrap of string
-val unwrap : t -> string
-val answer : string
+val unwrap : 'a
+val answer : 'a

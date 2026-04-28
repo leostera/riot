@@ -1,2 +1,1 @@
-val touch : unit array -> unit * unit
-val answer : unit * unit
+unsupported syntax: ARRAY_INDEX_EXPR

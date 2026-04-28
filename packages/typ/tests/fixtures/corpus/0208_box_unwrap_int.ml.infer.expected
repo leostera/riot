@@ -1,3 +1,2 @@
-type box = Box of int
-val unwrap : box -> int
-val answer : int
+val unwrap : 'a
+val answer : 'a

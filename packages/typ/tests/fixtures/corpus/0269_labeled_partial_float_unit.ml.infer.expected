@@ -1,3 +1,3 @@
-val choose : left:'a -> right:'a -> bool -> 'a
-val pick_left : bool -> float
-val answer : float
+val choose : 'a
+val pick_left : 'a
+val answer : 'a

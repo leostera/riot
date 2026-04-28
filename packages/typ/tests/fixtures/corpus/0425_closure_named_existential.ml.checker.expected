@@ -1,3 +1,0 @@
-type _ closure = Closure : ('a -> 'b) * 'a -> 'b closure
-val eval : 'a closure -> 'a
-val answer : int

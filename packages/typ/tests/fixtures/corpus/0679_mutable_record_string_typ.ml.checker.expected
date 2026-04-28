@@ -1,3 +1,0 @@
-type t = { mutable value : string; }
-val touch : t -> string * string
-val answer : string * string

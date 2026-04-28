@@ -1,2 +1,0 @@
-val build : left:'a -> ?right:string * char -> unit -> 'a * (string * char)
-val answer : (string * char) * (string * char)

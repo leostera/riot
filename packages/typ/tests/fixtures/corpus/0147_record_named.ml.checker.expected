@@ -1,3 +1,0 @@
-type named = { name : string; mark : char; }
-val project : named -> string
-val answer : string

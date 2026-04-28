@@ -1,3 +1,0 @@
-type ('a, 'b) either = Left of 'a | Right of 'b
-val project : (string, 'a) either -> string
-val answer : string

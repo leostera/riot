@@ -1,2 +1,0 @@
-val id : ([> `Red ] as 'a) -> 'a
-val answer : [> `Red ] * [> `Blue | `Red ]

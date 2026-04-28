@@ -1,2 +1,2 @@
-val duplicate : 'a -> 'a * 'a
-val answer : string * string
+val duplicate : 'a * 'b
+val answer : 'a

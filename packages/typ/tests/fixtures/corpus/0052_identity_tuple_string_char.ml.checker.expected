@@ -1,3 +1,0 @@
-val value : string * char
-val id : 'a -> 'a
-val answer : string * char

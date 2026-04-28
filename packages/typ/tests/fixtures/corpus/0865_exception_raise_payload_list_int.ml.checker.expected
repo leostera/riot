@@ -1,4 +1,0 @@
-module Prim : sig external raise_ : exn -> 'a = "%raise" end
-exception E of int list
-val run : bool -> int list
-val answer : int list

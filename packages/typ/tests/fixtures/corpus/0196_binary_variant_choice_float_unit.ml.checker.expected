@@ -1,3 +1,0 @@
-type ('a, 'b) choice = This of 'a | That of 'b
-val project : (float, 'a) choice -> float
-val answer : float

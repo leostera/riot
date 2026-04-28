@@ -1,3 +1,0 @@
-type ('a, 'b) either = Left of 'a | Right of 'b
-val unwrap : (int, 'a) either -> int
-val answer : int

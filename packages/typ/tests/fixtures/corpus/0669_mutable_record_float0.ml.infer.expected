@@ -1,3 +1,2 @@
-type t = { mutable value : float; }
-val touch : t -> float * float
-val answer : float * float
+val touch : 'a
+val answer : 'a

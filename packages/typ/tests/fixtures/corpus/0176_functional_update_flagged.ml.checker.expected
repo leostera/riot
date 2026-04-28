@@ -1,3 +1,0 @@
-type flagged = { flag : bool; code : int; }
-val bump : flagged -> flagged
-val answer : flagged

@@ -1,4 +1,0 @@
-type t = ..
-type t += Payload of int * bool
-val id : t -> t
-val answer : t

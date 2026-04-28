@@ -1,2 +1,1 @@
-val touch : float array -> float * float
-val answer : float * float
+unsupported syntax: ARRAY_INDEX_EXPR

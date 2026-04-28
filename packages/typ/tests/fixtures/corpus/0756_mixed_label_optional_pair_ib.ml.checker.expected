@@ -1,2 +1,0 @@
-val build : left:'a -> ?right:int * bool -> unit -> 'a * (int * bool)
-val answer : (int * bool) * (int * bool)

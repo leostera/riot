@@ -1,2 +1,2 @@
-val make_left : 'a -> 'b -> 'a * 'b
-val answer : string * char
+val make_left : 'a
+val answer : 'a

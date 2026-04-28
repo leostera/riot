@@ -1,6 +1,0 @@
-type _ expr =
-    Int : int -> int expr
-  | Bool : bool -> bool expr
-  | Pair : 'a expr * 'b expr -> ('a * 'b) expr
-val eval : 'a expr -> 'a
-val answer : int * bool

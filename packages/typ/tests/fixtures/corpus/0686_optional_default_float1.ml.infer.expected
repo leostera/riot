@@ -1,2 +1,2 @@
-val build : ?value:float -> unit -> float
-val answer : float
+val build : 'a
+val answer : 'a

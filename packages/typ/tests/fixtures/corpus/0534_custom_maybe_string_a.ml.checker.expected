@@ -1,3 +1,0 @@
-type maybe = Nothing | Just of string
-val id : maybe -> maybe
-val answer : maybe

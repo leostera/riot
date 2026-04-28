@@ -1,4 +1,2 @@
-val left : float
-val right : unit
-val both : float * unit
-val answer : float * unit * (float * unit)
+val both : float * 'a
+val answer : 'a * 'b * float * 'c

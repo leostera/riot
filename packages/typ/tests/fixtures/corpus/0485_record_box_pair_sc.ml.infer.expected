@@ -1,3 +1,2 @@
-type t = { value : string * char; }
-val get : t -> string * char
-val answer : string * char
+val get : 'a
+val answer : 'a

@@ -1,3 +1,0 @@
-val value : bool
-val id : 'a -> 'a
-val answer : bool

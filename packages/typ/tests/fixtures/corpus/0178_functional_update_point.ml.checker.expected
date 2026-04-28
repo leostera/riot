@@ -1,3 +1,0 @@
-type point = { x : int; y : int; }
-val bump : point -> point
-val answer : point

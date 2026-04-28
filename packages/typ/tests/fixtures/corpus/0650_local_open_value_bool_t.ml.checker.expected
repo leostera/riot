@@ -1,2 +1,0 @@
-module M : sig type t = bool val value : t end
-val answer : M.t

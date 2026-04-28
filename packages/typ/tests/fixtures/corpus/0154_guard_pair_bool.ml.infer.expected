@@ -1,2 +1,2 @@
-val choose : 'a * 'a -> 'a
-val answer : bool
+val choose : 'a
+val answer : 'a

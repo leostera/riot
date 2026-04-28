@@ -1,2 +1,0 @@
-module M : sig type t = float val value : t end
-val answer : M.t

@@ -1,2 +1,0 @@
-val build : ?value:string -> unit -> string
-val answer : string

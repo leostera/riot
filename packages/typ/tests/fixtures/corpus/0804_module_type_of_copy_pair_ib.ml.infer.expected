@@ -1,3 +1,1 @@
-module Original : sig val value : int * bool val id : 'a -> 'a end
-module Copy : sig val value : int * bool val id : 'a -> 'a end
-val answer : int * bool
+val answer : 'a

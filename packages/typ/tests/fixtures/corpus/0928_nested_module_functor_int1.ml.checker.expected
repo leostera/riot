@@ -1,7 +1,0 @@
-module type BOX = sig type t val value : t end
-module Lift :
-  (X : BOX) -> sig module Inner : sig type t = X.t val value : X.t end end
-module Seed : sig type t = int val value : t end
-module Result :
-  sig module Inner : sig type t = Seed.t val value : Seed.t end end
-val answer : Seed.t

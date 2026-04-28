@@ -1,2 +1,2 @@
-val build : ?value:string * char -> unit -> string * char
-val answer : string * char
+val build : 'a
+val answer : 'a

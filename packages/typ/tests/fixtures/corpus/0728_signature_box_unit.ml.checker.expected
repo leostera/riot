@@ -1,3 +1,0 @@
-module type BOX = sig type t val value : t end
-module M : sig type t = unit val value : t end
-val answer : M.t

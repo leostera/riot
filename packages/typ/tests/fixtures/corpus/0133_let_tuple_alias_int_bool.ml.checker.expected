@@ -1,4 +1,0 @@
-val left : int
-val right : bool
-val both : int * bool
-val answer : int * bool * (int * bool)

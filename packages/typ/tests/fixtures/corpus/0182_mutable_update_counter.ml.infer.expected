@@ -1,3 +1,2 @@
-type counter = { mutable count : int; }
-val set : counter -> counter
-val answer : counter
+val set : 'a
+val answer : 'a

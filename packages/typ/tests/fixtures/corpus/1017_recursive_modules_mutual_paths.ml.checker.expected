@@ -1,3 +1,0 @@
-module rec Left : sig type t = This of Right.t | Done val done_ : t end
-and Right : sig type t = That of Left.t | Stop val stop : t end
-val answer : Left.t * Right.t

@@ -1,3 +1,0 @@
-type point = { x : int; y : int; }
-val get : point -> int
-val answer : int

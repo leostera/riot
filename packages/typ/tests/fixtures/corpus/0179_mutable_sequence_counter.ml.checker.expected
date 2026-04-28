@@ -1,3 +1,0 @@
-type counter = { mutable count : int; }
-val touch : counter -> int * int
-val answer : int * int

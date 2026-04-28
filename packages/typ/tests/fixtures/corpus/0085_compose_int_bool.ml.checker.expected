@@ -1,4 +1,0 @@
-val to_pair : 'a -> 'a * bool
-val first : 'a * 'b -> 'a
-val compose : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
-val answer : int

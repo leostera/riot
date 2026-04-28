@@ -1,4 +1,0 @@
-module Base : sig type t = int * bool val value : t end
-module Derived :
-  sig type t = int * bool val value : t val pair : 'a -> 'a * 'a end
-val answer : Derived.t * Derived.t

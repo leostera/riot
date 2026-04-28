@@ -1,3 +1,0 @@
-type box = Box of int
-val unwrap : box -> int
-val answer : int

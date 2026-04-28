@@ -1,2 +1,0 @@
-val choose : bool -> 'a -> 'a -> 'a
-val answer : char

@@ -1,4 +1,2 @@
-module Prim : sig external raise_ : exn -> 'a = "%raise" end
-exception E of char option
-val run : bool -> char option
-val answer : char option
+val run : 'a
+val answer : 'a

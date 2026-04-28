@@ -1,3 +1,0 @@
-val curry : ('a * 'b -> 'c) -> 'a -> 'b -> 'c
-val pair : 'a * 'b -> 'a * 'b
-val answer : int * bool

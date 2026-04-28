@@ -1,3 +1,0 @@
-type t = { mutable value : bool; }
-val touch : t -> bool * bool
-val answer : bool * bool

@@ -1,2 +1,0 @@
-val project : int * 'a -> int
-val answer : int

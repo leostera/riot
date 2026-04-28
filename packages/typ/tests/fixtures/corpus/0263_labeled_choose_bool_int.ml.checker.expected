@@ -1,2 +1,0 @@
-val choose : left:'a -> right:'a -> bool -> 'a
-val answer : bool

@@ -1,4 +1,0 @@
-val left : char
-val right : string
-val both : char * string
-val answer : char * string * (char * string)

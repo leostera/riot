@@ -1,2 +1,0 @@
-val default : a tag -> a
-val answer : '1 * '2

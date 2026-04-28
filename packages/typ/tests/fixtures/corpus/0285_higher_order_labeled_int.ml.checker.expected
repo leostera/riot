@@ -1,3 +1,0 @@
-val use : (left:int -> right:int -> bool -> 'a) -> 'a
-val choose : left:'a -> right:'a -> bool -> 'a
-val answer : int

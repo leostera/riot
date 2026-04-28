@@ -1,2 +1,0 @@
-val build : ?value:int list -> unit -> int list
-val answer : int list

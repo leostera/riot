@@ -1,3 +1,0 @@
-type tri = A | B | C
-val classify : tri -> tri
-val answer : tri

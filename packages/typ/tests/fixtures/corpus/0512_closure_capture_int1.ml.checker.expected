@@ -1,2 +1,0 @@
-val make : 'a -> 'b -> 'a * 'b
-val answer : int * int

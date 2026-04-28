@@ -1,2 +1,2 @@
-val build : left:'a -> ?right:int option -> unit -> 'a * int option
-val answer : 'a option * int option
+val build : 'a * 'b
+val answer : 'a

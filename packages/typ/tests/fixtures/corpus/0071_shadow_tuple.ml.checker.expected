@@ -1,2 +1,0 @@
-val seed : int * bool
-val answer : (int * bool) * (int * bool)

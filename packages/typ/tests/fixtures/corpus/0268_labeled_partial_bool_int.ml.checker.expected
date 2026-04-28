@@ -1,3 +1,0 @@
-val choose : left:'a -> right:'a -> bool -> 'a
-val pick_left : bool -> bool
-val answer : bool

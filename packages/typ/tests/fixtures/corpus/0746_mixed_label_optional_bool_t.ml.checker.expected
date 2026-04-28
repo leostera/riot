@@ -1,2 +1,0 @@
-val build : left:'a -> ?right:bool -> unit -> 'a * bool
-val answer : bool * bool

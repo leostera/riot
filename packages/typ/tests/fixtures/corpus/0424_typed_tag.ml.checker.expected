@@ -1,3 +1,0 @@
-type _ tag = TInt : int tag | TBool : bool tag
-val default : 'a tag -> 'a
-val answer : int * bool

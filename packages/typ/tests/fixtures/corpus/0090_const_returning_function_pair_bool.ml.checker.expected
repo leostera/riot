@@ -1,3 +1,0 @@
-val const : 'a -> 'b -> 'a
-val keep : unit -> bool * bool -> bool * bool
-val answer : bool * bool

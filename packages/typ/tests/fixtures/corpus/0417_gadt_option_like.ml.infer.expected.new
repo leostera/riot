@@ -1,2 +1,0 @@
-val view : a maybe -> a maybe
-val answer : '1 * '2

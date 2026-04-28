@@ -1,3 +1,0 @@
-type point = { x : int; y : int; }
-type wrapper = { point : point; flag : bool; }
-val answer : wrapper

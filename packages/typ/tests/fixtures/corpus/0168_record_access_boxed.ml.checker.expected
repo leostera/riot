@@ -1,3 +1,0 @@
-type 'a box = { value : 'a; }
-val get : 'a box -> 'a
-val answer : int

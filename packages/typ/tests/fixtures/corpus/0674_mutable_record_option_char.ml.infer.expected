@@ -1,3 +1,2 @@
-type t = { mutable value : char option; }
-val touch : t -> char option * char option
-val answer : char option * char option
+val touch : 'a
+val answer : 'a

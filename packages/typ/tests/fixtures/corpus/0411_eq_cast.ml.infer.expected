@@ -1,3 +1,2 @@
-type (_, _) eq = Refl : ('a, 'a) eq
-val cast : ('a, 'b) eq -> 'a -> 'b
-val answer : int
+val cast : (a, b) eq -> a -> b
+val answer : 'a

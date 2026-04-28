@@ -1,3 +1,0 @@
-type packed = Pack : 'a * ('a -> 'a) -> packed
-val run : packed -> packed
-val answer : packed

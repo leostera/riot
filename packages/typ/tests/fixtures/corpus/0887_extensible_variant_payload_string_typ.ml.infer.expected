@@ -1,4 +1,2 @@
-type t = ..
-type t += Payload of string
-val id : t -> t
-val answer : t
+val id : 'a
+val answer : 'a

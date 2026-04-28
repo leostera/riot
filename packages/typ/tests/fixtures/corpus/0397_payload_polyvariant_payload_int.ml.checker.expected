@@ -1,2 +1,0 @@
-val keep : [< `Count of 'a | `Flag of 'b ] -> [> `Count of 'a | `Flag of 'b ]
-val answer : [> `Count of int | `Flag of 'a ]

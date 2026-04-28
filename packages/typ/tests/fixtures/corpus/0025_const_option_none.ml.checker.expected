@@ -1,3 +1,0 @@
-val value : 'a option
-val const : 'a -> 'b -> 'a
-val answer : 'a option

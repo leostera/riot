@@ -1,2 +1,0 @@
-module M : sig type t = char val value : t val id : t -> t end
-val answer : M.t

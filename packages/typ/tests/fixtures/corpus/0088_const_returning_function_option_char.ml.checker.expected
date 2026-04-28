@@ -1,3 +1,0 @@
-val const : 'a -> 'b -> 'a
-val keep : unit -> char option -> char option
-val answer : char option

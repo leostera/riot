@@ -1,3 +1,0 @@
-type toggle = { mutable flag : bool; }
-val set : toggle -> toggle
-val answer : toggle

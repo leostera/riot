@@ -1,2 +1,2 @@
-val id : [< `Payload of 'a ] -> [> `Payload of 'a ]
-val answer : [> `Payload of string * char ]
+val id : 'a
+val answer : 'a

@@ -1,5 +1,0 @@
-module type BOX = sig type t val value : t end
-module Make : (X : BOX) -> sig type t = X.t val value : X.t end
-module Seed : sig type t = char val value : t end
-module Result : sig type t = Seed.t val value : Seed.t end
-val answer : Seed.t

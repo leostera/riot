@@ -1,4 +1,4 @@
-val to_pair : 'a -> 'a * unit
-val first : 'a * 'b -> 'a
-val compose : ('a -> 'b) -> ('c -> 'a) -> 'c -> 'b
-val answer : bool
+val to_pair : 'a * 'b
+val first : 'a
+val compose : 'a
+val answer : 'a

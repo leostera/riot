@@ -1,2 +1,0 @@
-module Packet : sig type t = Open of int | Closed val value : t end
-val answer : Packet.t

@@ -1,4 +1,0 @@
-module type BOX = sig type t val value : t end
-module M : sig type t = int val value : t end
-module Use : sig val project : M.t -> M.t end
-val answer : M.t

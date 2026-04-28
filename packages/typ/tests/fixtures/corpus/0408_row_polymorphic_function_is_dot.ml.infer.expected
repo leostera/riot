@@ -1,2 +1,2 @@
-val id : ([> `Dot ] as 'a) -> 'a
-val answer : [> `Dot ] * [> `Dot | `Line ]
+val id : 'a
+val answer : 'a * 'b

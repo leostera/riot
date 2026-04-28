@@ -1,4 +1,0 @@
-module Base : sig type t = unit val value : t end
-module Alias = Base
-module Derived : sig type t = unit val value : t val id : 'a -> 'a end
-val answer : Derived.t

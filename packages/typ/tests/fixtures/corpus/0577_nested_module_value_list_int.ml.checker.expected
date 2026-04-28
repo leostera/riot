@@ -1,2 +1,0 @@
-module Outer : sig module Inner : sig type t = int list val value : t end end
-val answer : Outer.Inner.t

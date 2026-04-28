@@ -1,5 +1,0 @@
-type _ tree =
-    Leaf : 'a -> 'a tree
-  | Pair : 'a tree * 'b tree -> ('a * 'b) tree
-val left_size : 'a tree -> int
-val answer : int

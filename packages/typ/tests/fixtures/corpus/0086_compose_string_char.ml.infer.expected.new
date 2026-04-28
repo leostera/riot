@@ -1,4 +1,0 @@
-val to_pair : '0 * char
-val first : '1
-val compose : '2
-val answer : '3

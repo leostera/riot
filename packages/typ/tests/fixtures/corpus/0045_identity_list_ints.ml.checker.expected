@@ -1,3 +1,0 @@
-val value : int list
-val id : 'a -> 'a
-val answer : int list

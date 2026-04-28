@@ -1,3 +1,0 @@
-val flip : ('a -> 'b -> 'c) -> 'b -> 'a -> 'c
-val pair : 'a -> 'b -> 'a * 'b
-val answer : string * unit

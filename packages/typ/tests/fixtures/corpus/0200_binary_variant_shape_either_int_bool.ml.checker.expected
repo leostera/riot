@@ -1,3 +1,0 @@
-type ('a, 'b) either = Left of 'a | Right of 'b
-val keep : ('a, 'b) either -> ('a, 'b) either
-val answer : ('a, bool) either

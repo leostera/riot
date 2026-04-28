@@ -1,2 +1,0 @@
-val touch : bool array -> bool * bool
-val answer : bool * bool

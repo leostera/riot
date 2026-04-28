@@ -1,3 +1,0 @@
-type 'a slot = { mutable value : 'a; }
-val set : char slot -> char slot
-val answer : char slot

@@ -1,3 +1,2 @@
-type t = { mutable value : int list; }
-val touch : t -> int list * int list
-val answer : int list * int list
+val touch : 'a
+val answer : 'a

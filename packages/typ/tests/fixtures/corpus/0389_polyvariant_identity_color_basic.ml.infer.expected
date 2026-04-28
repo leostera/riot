@@ -1,3 +1,2 @@
-type t = [ `Blue | `Red ]
-val swap : [< `Blue | `Red ] -> [> `Blue | `Red ]
-val answer : [> `Blue | `Red ]
+val swap : 'a
+val answer : 'a

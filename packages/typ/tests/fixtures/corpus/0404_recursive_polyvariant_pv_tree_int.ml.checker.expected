@@ -1,4 +1,0 @@
-val map :
-  ([< `Leaf of 'b | `Node of 'a * 'a ] as 'a) ->
-  ([> `Leaf of 'b * 'b | `Node of 'c * 'c ] as 'c)
-val answer : [> `Leaf of int * int | `Node of 'a * 'a ] as 'a

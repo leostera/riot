@@ -1,4 +1,0 @@
-type 'a my_list = Nil | Cons of 'a * 'a my_list
-val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b my_list -> 'a
-val step : 'a my_list -> 'a -> 'a my_list
-val answer : int my_list

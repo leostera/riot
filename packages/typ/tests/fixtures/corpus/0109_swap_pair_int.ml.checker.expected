@@ -1,2 +1,0 @@
-val swap : 'a * 'b -> 'b * 'a
-val answer : unit * int

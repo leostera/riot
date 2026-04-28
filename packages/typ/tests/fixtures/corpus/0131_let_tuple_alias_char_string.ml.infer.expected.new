@@ -1,2 +1,0 @@
-val both : char * string
-val answer : '0 * '1 * char * string

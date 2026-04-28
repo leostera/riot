@@ -1,2 +1,0 @@
-val describe : 'a * 'b -> 'a * 'b * ('a * 'b)
-val answer : string * char * (string * char)

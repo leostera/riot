@@ -1,4 +1,0 @@
-val pair : float * unit
-val left : float
-val right : unit
-val answer : float

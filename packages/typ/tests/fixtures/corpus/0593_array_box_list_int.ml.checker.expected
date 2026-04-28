@@ -1,2 +1,0 @@
-val touch : 'a list array -> 'a list * 'a list
-val answer : int list * int list

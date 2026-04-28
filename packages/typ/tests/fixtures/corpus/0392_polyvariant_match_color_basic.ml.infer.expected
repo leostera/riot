@@ -1,3 +1,2 @@
-type t = [ `Blue | `Red ]
-val id : [< `Blue | `Red ] -> [> `Blue | `Red ]
-val answer : [> `Blue | `Red ]
+val id : 'a
+val answer : 'a

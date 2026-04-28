@@ -1,2 +1,1 @@
-type color = Red | Blue
-val pick : bool -> color
+val pick : 'a

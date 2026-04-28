@@ -1,3 +1,0 @@
-type expr = Atom of int | Block of stmt
-and stmt = Let of expr
-val answer : expr

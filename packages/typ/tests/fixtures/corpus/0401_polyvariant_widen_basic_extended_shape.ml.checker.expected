@@ -1,4 +1,0 @@
-type small = [ `Dot | `Line ]
-type large = [ `Area | `Dot | `Line ]
-val widen : small -> large
-val answer : large

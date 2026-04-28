@@ -1,3 +1,0 @@
-type ('a, 'b) resultish = Good of 'a | Bad of 'b
-val map_good : ('a -> 'b) -> ('a, 'c) resultish -> ('b, 'c) resultish
-val answer : (int, 'a) resultish

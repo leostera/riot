@@ -1,3 +1,0 @@
-type t = [ `No | `Yes ]
-val id : [< `No | `Yes ] -> [> `No | `Yes ]
-val answer : [> `No | `Yes ]

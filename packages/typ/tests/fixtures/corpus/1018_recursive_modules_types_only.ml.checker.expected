@@ -1,3 +1,0 @@
-module rec A : sig type t = Leaf | Node of B.t end
-and B : sig type t = A.t list end
-val answer : A.t

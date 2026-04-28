@@ -1,2 +1,1 @@
-val touch : 'a list array -> 'a list * 'a list
-val answer : int list * int list
+unsupported syntax: ARRAY_INDEX_EXPR

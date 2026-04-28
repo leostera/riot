@@ -1,2 +1,0 @@
-module M : sig type t = Wrap of int list val value : t end
-val answer : M.t

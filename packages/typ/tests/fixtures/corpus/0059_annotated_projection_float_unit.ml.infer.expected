@@ -1,2 +1,2 @@
-val project : float * 'a -> float
-val answer : float
+val project : 'a
+val answer : 'a

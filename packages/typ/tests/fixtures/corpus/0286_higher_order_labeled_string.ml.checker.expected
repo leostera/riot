@@ -1,3 +1,0 @@
-val use : (left:string -> right:string -> bool -> 'a) -> 'a
-val choose : left:'a -> right:'a -> bool -> 'a
-val answer : string

@@ -1,2 +1,2 @@
 val seed : char
-val answer : char
+val answer : 'a

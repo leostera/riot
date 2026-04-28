@@ -1,2 +1,0 @@
-val touch : (string * char) array -> (string * char) * (string * char)
-val answer : (string * char) * (string * char)

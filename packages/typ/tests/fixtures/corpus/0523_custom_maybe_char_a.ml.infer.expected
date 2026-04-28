@@ -1,3 +1,2 @@
-type maybe = Nothing | Just of char
-val id : maybe -> maybe
-val answer : maybe
+val id : 'a
+val answer : 'a

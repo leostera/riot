@@ -1,3 +1,0 @@
-val value : float
-val const : 'a -> 'b -> 'a
-val answer : float

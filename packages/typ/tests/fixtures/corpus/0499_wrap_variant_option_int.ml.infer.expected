@@ -1,3 +1,2 @@
-type t = Wrap of int option
-val unwrap : t -> int option
-val answer : int option
+val unwrap : 'a
+val answer : 'a

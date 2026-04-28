@@ -18,15 +18,15 @@ Start with:
 Then use the feature slices that match the work you are doing.
 
 The active implementation direction is deliberately small while the checker is
-being rebuilt: `Typ.Check.check` receives a `Syn.Parser.parse_result`, builds a
-single `Typ.Ast`, runs checking over that tree, and returns a result that keeps
-the checked `Typ.Ast`. Do not reintroduce a separate semtree/lowering output.
+being rebuilt: parse with `Syn`, build a single `Typ.Ast`, run
+`Typ.Infer.check` over that tree, and return an inferred module interface plus
+diagnostics. Do not reintroduce a separate semtree/lowering output.
 
 The package currently keeps only the minimum runtime surface needed for that
 path:
 
 - `Typ.Ast`
-- `Typ.Check`
+- `Typ.Infer`
 - `Typ.Diagnostics`
 - `Typ.Model` source/path/id helpers
 

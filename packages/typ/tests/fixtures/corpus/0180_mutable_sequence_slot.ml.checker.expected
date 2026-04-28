@@ -1,3 +1,0 @@
-type 'a slot = { mutable value : 'a; }
-val touch : char slot -> char * char
-val answer : char * char

@@ -1,3 +1,0 @@
-type poly = { f : 'a. 'a -> 'a * 'a; }
-val value : poly
-val answer : (int * int) * (bool * bool)

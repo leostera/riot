@@ -1,2 +1,2 @@
 val seed : bool
-val answer : bool * bool
+val answer : 'a

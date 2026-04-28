@@ -1,3 +1,0 @@
-val apply : ('a -> 'b) -> 'a -> 'b
-val id : 'a -> 'a
-val answer : char

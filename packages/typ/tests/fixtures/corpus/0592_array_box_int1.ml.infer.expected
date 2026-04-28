@@ -1,2 +1,1 @@
-val touch : int array -> int * int
-val answer : int * int
+unsupported syntax: ARRAY_INDEX_EXPR

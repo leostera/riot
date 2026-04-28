@@ -1,2 +1,0 @@
-type 'a box = Box of 'a
-val unbox : 'a box -> 'a

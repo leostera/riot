@@ -1,3 +1,0 @@
-type ('a, 'b) choice = This of 'a | That of 'b
-val keep : ('a, 'b) choice -> ('a, 'b) choice
-val answer : ('a, unit) choice

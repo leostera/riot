@@ -1,3 +1,0 @@
-val value : string
-val id : 'a -> 'a
-val answer : string

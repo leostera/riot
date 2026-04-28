@@ -1,3 +1,0 @@
-type ('a, 'b) choice = This of 'a | That of 'b
-val unwrap : (string, 'a) choice -> string
-val answer : string

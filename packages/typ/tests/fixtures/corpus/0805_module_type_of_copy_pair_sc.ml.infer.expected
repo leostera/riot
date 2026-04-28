@@ -1,3 +1,1 @@
-module Original : sig val value : string * char val id : 'a -> 'a end
-module Copy : sig val value : string * char val id : 'a -> 'a end
-val answer : string * char
+val answer : 'a

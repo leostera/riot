@@ -1,3 +1,0 @@
-type named = { name : string; mark : char; }
-val bump : named -> named
-val answer : named

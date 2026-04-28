@@ -1,3 +1,0 @@
-type toggle = { mutable flag : bool; }
-val touch : toggle -> bool * bool
-val answer : bool * bool
