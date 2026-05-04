@@ -60,6 +60,17 @@ riot run riot -- bench -p <package> -f "<filter>" --warmup 10 --compare 5 --json
 
 Compare benchmark functions only when they do the same work.
 
+## Fuzzing
+
+```sh
+riot run riot -- fuzz --list --json
+riot run riot -- fuzz -p <package> -f "<filter>" --duration 10m --json
+riot run riot -- fuzz -p <package> -f "<filter>" --replay <input-path> --json
+riot run riot -- fuzz minimize-corpus -p <package> -f "<filter>" --json
+```
+
+Keep generated `.riot/fuzzing/**/corpus/` state local and commit only small, intentional seeds or minimized crash examples.
+
 ## Bootstrap
 
 Use bootstrap validation only when the first-build path is touched:

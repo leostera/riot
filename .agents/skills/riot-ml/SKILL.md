@@ -57,6 +57,11 @@ For test authoring, selectors, fixture runners, and snapshot workflow, read:
 
 - [Riot testing workflow](references/testing.md)
 
+## Fuzzing
+For fuzz case authoring, campaign runs, replay, and corpus handling, read:
+
+- [Riot fuzzing workflow](references/fuzzing.md)
+
 ## Benchmarking
 For benchmark grouping, regression checks, and comparison workflow, read:
 
@@ -65,6 +70,9 @@ For benchmark grouping, regression checks, and comparison workflow, read:
 ## Common Riot commands
 - `riot build --json` : compile packages and dependencies.
 - `riot test --json` : run project tests.
+- `riot fuzz --list --json` : list fuzz cases.
+- `riot fuzz -p <package> -f <filter> --duration 10m --json` : run a focused fuzz campaign.
+- `riot fuzz minimize-corpus -p <package> -f <filter> --json` : delete coverage-redundant local corpus inputs.
 - `riot bench --json` : run benchmarks.
 - `riot run --json` : run a target package/binary.
 - `riot upgrade` : upgrade the Riot binary.
