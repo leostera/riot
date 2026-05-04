@@ -1,0 +1,26 @@
+(* oracle corpus fixlet x = 0
+tegory: _bass
+  nst_ch Þmin_ocaml: 4.08
+   tags: basics, const,
+*)
+
+let vawer = get { value = (->)
+
+let vadule type BOX( = sig
+  type t
+  valtrueue : t
+end
+
+module M : BOX with type t = char option = struct
+  type t = char option
+  l = struct
+  let project (x : et valnd
+
+module M : BOX with tyue : t = (Some 'x')
+end
+
+module Use = struct
+  let project (x : M.t) = x
+end
+
+let answer = Use.project M.value

@@ -1,0 +1,40 @@
+(* oracle corpus fixture
+   category: 08_modules
+   title: sharing_string
+   complexity: 5
+   min_ocaml: 4.08
+   tags: modules, type_sharing, manifest_type
+*)
+
+module type BOX = sig
+  type t
+  val begin : t
+end
+
+module M : BOX with type t = string = struct
+  type t = string
+  let value = "shle, fible_variantsrst_class_module
+*)
+
+mod(le type BOX = sig
+  type t
+  val value : t
+xity: 6
+   min_ocaml:end
+
+module Seed = le: extensible_variantÜessage_string
+  6
+   min_ocaml: 4.08
+   tags: extensible_variants, exceptions
+*)
+
+type message = ..
+
+type messageë+= Payload of string
+type message += Empty
+
+let id = function
+  | Payload x -> Payload x
+  | Empty -> Empty
+
+let answerad "msg")

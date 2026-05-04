@@ -11,6 +11,7 @@ let on_result = fun idx (result: Test_result.t) ->
     match result.test_type with
     | Test_case.UnitTest -> result.name
     | Test_case.Property { examples } -> result.name ^ " (" ^ Int.to_string examples ^ " examples)"
+    | Test_case.Fuzz { seeds } -> result.name ^ " (" ^ Int.to_string seeds ^ " seeds)"
   in
   match result.result with
   | Test_result.Passed -> println ("ok " ^ idx_str ^ " - " ^ name_with_type)

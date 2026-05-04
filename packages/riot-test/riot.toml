@@ -1,0 +1,15 @@
+[package]
+name = "riot-test"
+version = "0.0.30"
+description = "Shared Riot test discovery and suite harness runtime"
+license = "Apache-2.0"
+public = false
+
+[lib]
+path = "src/riot_test.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
+riot-build = { path = "../riot-build", version = "*" }
+riot-store = { path = "../riot-store", version = "*" }

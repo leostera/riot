@@ -13,12 +13,53 @@ let test_type_fields = fun __tmp1 ->
   | Test_case.UnitTest -> [ ("type", Data.Json.String "test"); ]
   | Test_case.Property { examples } ->
       [ ("type", Data.Json.String "property"); ("examples", Data.Json.Int examples); ]
+  | Test_case.Fuzz { seeds } ->
+      [ ("type", Data.Json.String "fuzz"); ("seeds", Data.Json.Int seeds); ]
+
+let string_array = fun values ->
+  Data.Json.Array (List.map values ~fn:(fun value -> Data.Json.String value))
+
+let fuzz_corpus_json = fun (corpus: Fuzz.Corpus.t) ->
+  Data.Json.Object [
+    ("inputs", string_array (Fuzz.Corpus.inline_inputs corpus));
+    (
+      "files",
+      Fuzz.Corpus.file_paths corpus
+      |> List.map ~fn:(fun path -> Path.to_string path)
+      |> string_array
+    );
+  ]
+
+let fuzz_mutator_json = fun (mutator: Fuzz.Mutator.t) ->
+  Data.Json.Object [
+    ("dictionary", string_array mutator.dictionary);
+    ("splicing", Data.Json.Bool mutator.splicing);
+    ("max_len", match mutator.max_len with
+    | Some max_len -> Data.Json.Int max_len
+    | None -> Data.Json.Null);
+  ]
+
+let fuzz_metadata_fields = fun (test: Test_case.t) ->
+  match (test.fuzz_corpus, test.fuzz_mutator) with
+  | (None, None) -> []
+  | (corpus, mutator) ->
+      (
+        match corpus with
+        | Some corpus -> [ ("corpus", fuzz_corpus_json corpus); ]
+        | None -> []
+      ) @ (
+        match mutator with
+        | Some mutator -> [ ("mutator", fuzz_mutator_json mutator); ]
+        | None -> []
+      )
 
 let event_test_type_fields = fun __tmp1 ->
   match __tmp1 with
   | Test_case.UnitTest -> [ ("test_type", Data.Json.String "test"); ]
   | Test_case.Property { examples } ->
       [ ("test_type", Data.Json.String "property"); ("examples", Data.Json.Int examples); ]
+  | Test_case.Fuzz { seeds } ->
+      [ ("test_type", Data.Json.String "fuzz"); ("seeds", Data.Json.Int seeds); ]
 
 let size_to_json = fun __tmp1 ->
   match __tmp1 with
@@ -279,8 +320,9 @@ let write_tests_json = fun tests ->
           ("skip", Data.Json.Bool test.skip);
         ]
         in
-        Data.Json.Object ((base_fields @ test_type_fields test.test_type)
+        Data.Json.Object (((base_fields @ test_type_fields test.test_type)
         @ reliability_fields test.reliability)
+        @ fuzz_metadata_fields test)
         :: to_json_items (index + 1) rest
   in
   let tests_json = to_json_items 1 tests in
@@ -448,6 +490,26 @@ let list_tests_cmd =
       |> help "Structured runner context JSON";
     ]
 
+let run_fuzz_case_cmd =
+  let open Arg_parser.Arg in
+  command "run-fuzz-case"
+  |> about "Run one fuzz case with one input"
+  |> args
+    [
+      positional "query"
+      |> required true
+      |> help "Fuzz case name substring";
+      option "input"
+      |> long "input"
+      |> help "Path to the fuzz input file";
+      flag "json"
+      |> long "json"
+      |> help "Emit machine-readable JSON output";
+      option "ctx"
+      |> long "ctx"
+      |> help "Structured runner context JSON";
+    ]
+
 let get_suite_info name args: Reporter.suite_info =
   let suite_ctx = suite_ctx_from_args args in
   let fallback_binary_path =
@@ -505,6 +567,85 @@ let report_teardown_failure = fun ~(reporter:(module Reporter.Intf)) message ->
   let module R = (val reporter : Reporter.Intf) in
   R.warn ("test suite teardown failed: " ^ message)
 
+let fuzz_ctx = fun ~(suite_info:Reporter.suite_info) ~index (test: Test_case.t) ->
+  Test_context.{
+    suite_name = suite_info.name;
+    test_name = test.name;
+    test_index = index;
+    source_file = suite_info.source_file;
+    binary_path = suite_info.binary_path;
+    built_binaries = suite_info.built_binaries;
+    workspace_root = suite_info.workspace_root;
+    package_name = suite_info.package_name;
+    fixture = None;
+    progress_handler = Test_context.no_progress_handler;
+  }
+
+let fuzz_input_from_matches = fun sub_matches ->
+  match get_one sub_matches "input" with
+  | None -> Ok ""
+  | Some path ->
+      Fs.read (Path.v path)
+      |> Result.map_err ~fn:IO.error_message
+
+let write_fuzz_case_json = fun ~name ~status ?message () ->
+  let fields = [
+    ("type", Data.Json.String "FuzzCaseCompleted");
+    ("name", Data.Json.String name);
+    ("status", Data.Json.String status);
+  ]
+  in
+  let fields =
+    match message with
+    | None -> fields
+    | Some message -> fields @ [ ("message", Data.Json.String message); ]
+  in
+  println (Data.Json.to_string (Data.Json.Object fields))
+
+let run_fuzz_case = fun ~suite_info ~json ~query ~input tests ->
+  let fuzz_tests =
+    tests
+    |> List.enumerate
+    |> List.filter_map
+      ~fn:(fun (idx, (test: Test_case.t)) ->
+        match test.fuzz_fn with
+        | Some fuzz_fn when String.contains test.name query -> Some (idx + 1, test, fuzz_fn)
+        | Some _
+        | None -> None)
+  in
+  match fuzz_tests with
+  | [] ->
+      let message = "no fuzz case matched '" ^ query ^ "'" in
+      if json then
+        write_fuzz_case_json ~name:query ~status:"not_found" ~message ()
+      else
+        eprintln message;
+      System.exit 2
+  | _ :: _ :: _ ->
+      let message = "fuzz case query matched multiple cases: " ^ query in
+      if json then
+        write_fuzz_case_json ~name:query ~status:"ambiguous" ~message ()
+      else
+        eprintln message;
+      System.exit 2
+  | [ (index, test, fuzz_fn) ] ->
+      let ctx = fuzz_ctx ~suite_info ~index test in
+      let result =
+        try fuzz_fn ctx input with
+        | exn -> Error (Exception.to_string exn)
+      in
+      match result with
+      | Ok () ->
+          if json then
+            write_fuzz_case_json ~name:test.name ~status:"passed" ();
+          Ok ()
+      | Error message ->
+          if json then
+            write_fuzz_case_json ~name:test.name ~status:"failed" ~message ()
+          else
+            eprintln message;
+          System.exit 1
+
 let run_tests_with_hooks = fun ?setup ?teardown ~(config:Runner.config) tests ->
   let selected_tests = Runner.filter_tests config.target tests in
   if List.is_empty selected_tests then
@@ -538,7 +679,7 @@ let main = fun ?(execution_mode = Concurrent) ?setup ?teardown ~name ~tests ~arg
   let cmd =
     command name
     |> about ("Test runner for " ^ name)
-    |> subcommands [ list_tests_cmd; run_tests_cmd ]
+    |> subcommands [ list_tests_cmd; run_tests_cmd; run_fuzz_case_cmd ]
   in
   match get_matches cmd args with
   | Error err ->
@@ -635,6 +776,21 @@ let main = fun ?(execution_mode = Concurrent) ?setup ?teardown ~name ~tests ~arg
                 if summary.failed > 0 then
                   System.exit 1;
               Ok ()
+        )
+      | Some ("run-fuzz-case", sub_matches) -> (
+          let query =
+            get_one sub_matches "query"
+            |> Option.unwrap_or ~default:""
+          in
+          let json = get_flag sub_matches "json" in
+          match fuzz_input_from_matches sub_matches with
+          | Error message ->
+              if json then
+                write_fuzz_case_json ~name:query ~status:"input_error" ~message ()
+              else
+                eprintln message;
+              Error (Failure message)
+          | Ok input -> run_fuzz_case ~suite_info ~json ~query ~input tests
         )
       | _ ->
           let reporter = (module Reporter.Pretty : Reporter.Intf) in

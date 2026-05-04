@@ -1580,6 +1580,20 @@ let test_release_profile_defaults_to_strict_native_optimization = fun _ctx ->
   else
     Ok ()
 
+let test_fuzz_profile_enables_afl_instrumentation = fun _ctx ->
+  let profile = Riot_model.Profile.fuzz in
+  let flags = Riot_model.Profile.to_compiler_flags profile in
+  if not (profile.kind = Riot_model.Ocaml_compiler.Native) then
+    Error "expected fuzz profile to stay native"
+  else if not (String.equal profile.name "fuzz") then
+    Error "expected fuzz profile name to be fuzz"
+  else if not (List.contains flags ~value:"-afl-instrument") then
+    Error "expected fuzz profile to include -afl-instrument"
+  else if not (List.contains flags ~value:"-g") then
+    Error "expected fuzz profile to include debug symbols"
+  else
+    Ok ()
+
 let tests =
   Test.[
     case
@@ -1695,6 +1709,7 @@ let tests =
     case
       "profile: release defaults to strict native optimization"
       test_release_profile_defaults_to_strict_native_optimization;
+    case "profile: fuzz enables AFL instrumentation" test_fuzz_profile_enables_afl_instrumentation;
   ]
 
 let name = "Riot Model Tests"

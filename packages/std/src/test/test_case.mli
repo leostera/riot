@@ -11,6 +11,7 @@ type test_result =
 type test_type =
   | UnitTest
   | Property of { examples: int }
+  | Fuzz of { seeds: int }
 (** Coarse execution policy bucket for a test. *)
 type size =
   | Small
@@ -30,6 +31,12 @@ type t = {
   reliability: reliability;
   (** Test implementation. *)
   fn: ctx -> (unit, string) result;
+  (** Fuzz implementation, when [test_type] is [Fuzz]. *)
+  fuzz_fn: (ctx -> string -> (unit, string) result) option;
+  (** Declared fuzz corpus, when [test_type] is [Fuzz]. *)
+  fuzz_corpus: Fuzz.Corpus.t option;
+  (** Declared fuzz mutator hints, when [test_type] is [Fuzz]. *)
+  fuzz_mutator: Fuzz.Mutator.t option;
   (** Whether the test should be skipped. *)
   skip: bool;
 }
@@ -47,6 +54,22 @@ val property:
   string ->
   examples:int ->
   (ctx -> (unit, string) result) ->
+  t
+
+(**
+   [fuzz name ~seeds fn] creates a fuzz case.
+
+   The normal test runner replays [seeds]. The fuzz runner invokes [fn] with
+   generated inputs through the test binary's [run-fuzz-case] command.
+*)
+val fuzz:
+  ?size:size ->
+  ?reliability:reliability ->
+  ?seeds:string list ->
+  ?corpus:Fuzz.Corpus.t ->
+  ?mutator:Fuzz.Mutator.t ->
+  string ->
+  (ctx -> string -> (unit, string) result) ->
   t
 
 (** [skip name fn] creates a skipped test. *)

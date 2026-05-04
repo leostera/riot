@@ -50,3 +50,7 @@ __pycache__
 
 # Add this to avoid accidentally committing .new files snapshot files
 *.expected.new
+
+.riot/fuzzing/**/corpus/
+.riot/fuzzing/**/redundant/
+.riot/fuzzing/**/findings/

@@ -32,9 +32,9 @@
 
    ## Error Handling
 
-   All command execution returns a [`Result`] type. Commands that exit with
+   All command execution returns a `Result` type. Commands that exit with
    non-zero status are NOT considered errors - only system-level failures
-   (command not found, permission denied, etc.) return [`Error`].
+   (command not found, permission denied, etc.) return `Error`.
 *)
 open Global
 
@@ -62,7 +62,7 @@ type t
    System-level errors when spawning or running commands.
 
    Note: A command exiting with non-zero status is NOT an error. Only
-   failures to start the process return [`Error`].
+   failures to start the process return `Error`.
 *)
 type error =
   | SystemError of string
@@ -115,6 +115,11 @@ val to_string: t -> string
    Runs the command as a child process, waits for completion, and returns
    stdout, stderr, and exit status.
 
+   When `timeout` is provided, the child is sent SIGKILL after the duration
+   elapses and the returned status is 137. When `max_output_bytes` is provided,
+   captured stdout and stderr are each truncated to that many bytes while the
+   child streams are still drained.
+
    ## Examples
 
    ```ocaml (* Capture command output *) match Command.make "git"
@@ -130,8 +135,9 @@ val to_string: t -> string
 
    ## Output Limits
 
-   Both stdout and stderr are fully captured in memory. For commands that
-   produce large output, consider using pipes or temporary files.
+   By default, both stdout and stderr are fully captured in memory. For commands
+   that produce large output, consider `max_output_bytes`, pipes, or temporary
+   files.
 
    ## Character Encoding
 
@@ -142,6 +148,8 @@ val output:
   ?on_stdout_line:(string -> unit) ->
   ?on_idle:(Time.Duration.t -> unit) ->
   ?idle_interval:Time.Duration.t ->
+  ?max_output_bytes:int ->
+  ?timeout:Time.Duration.t ->
   t ->
   (output, error) result
 
@@ -168,7 +176,7 @@ val output:
 
    ## Use Cases
 
-   Prefer [`status`] over [`output`] when:
+   Prefer `status` over `output` when:
    - You only care about success/failure
    - The command produces large output you don't need
    - The command is interactive
@@ -176,6 +184,6 @@ val output:
 
    ## See Also
 
-   - [`output`] - When you need to capture stdout/stderr
+   - `output` - When you need to capture stdout/stderr
 *)
 val status: t -> (status, error) result

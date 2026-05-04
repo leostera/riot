@@ -2780,8 +2780,9 @@ and parse_type_atom = fun p ~stop_at_arrow ->
 and parse_type_bp = fun p ~stop_at_arrow min_bp ->
   let rec loop lhs =
     if is_attribute_suffix p then (
+      let marker = precede p lhs in
       consume_attribute_suffix p;
-      loop lhs
+      loop (complete p marker Syntax_kind.OPAQUE_TYPE)
     ) else if type_expr_boundary p ~stop_at_arrow then
       lhs
     else if (not stop_at_arrow) && at p Syntax_kind.ARROW && min_bp <= 5 then (
@@ -3549,18 +3550,16 @@ and parse_nested_phrase_separators = fun p ->
   )
 
 and module_decl_head_boundary = fun p ~signature depth ->
-  Int.equal depth 0
-  && (
-    is_eof p
-    || at p Syntax_kind.COLON
-    || at p Syntax_kind.EQ
-    || at p Syntax_kind.AND_KW
-    || at p Syntax_kind.STRUCT_KW
-    || at p Syntax_kind.FUNCTOR_KW
-    || at p Syntax_kind.IDENT
-    || at_end_keyword p
-    || at_item_boundary p ~signature
-  )
+  is_eof p
+  || (Int.equal depth 0
+  && (at p Syntax_kind.COLON
+  || at p Syntax_kind.EQ
+  || at p Syntax_kind.AND_KW
+  || at p Syntax_kind.STRUCT_KW
+  || at p Syntax_kind.FUNCTOR_KW
+  || at p Syntax_kind.IDENT
+  || at_end_keyword p
+  || at_item_boundary p ~signature))
 
 and consume_module_decl_head_tail = fun p ~signature ->
   let next_depth depth =
@@ -3649,7 +3648,9 @@ and parse_struct_module_expr = fun p ->
   let rec loop () =
     parse_nested_phrase_separators p;
     if not (is_eof p || at_end_keyword p) then (
+      let before = p.pos in
       parse_structure_item p;
+      ensure_progress p before (invalid_expression p);
       loop ()
     )
   in
@@ -3663,10 +3664,12 @@ and parse_signature_module_type = fun p ->
   let rec loop () =
     parse_nested_phrase_separators p;
     if not (is_eof p || at_end_keyword p) then (
+      let before = p.pos in
       if starts_signature_item_at p then
         parse_signature_item p
       else
         recover_current_as_error p (unexpected_signature_item p);
+      ensure_progress p before (unexpected_signature_item p);
       loop ()
     )
   in
@@ -4176,14 +4179,18 @@ and parse_file = fun kind source ->
   let rec parse_structure_items () =
     consume_phrase_separators p;
     if not (is_eof p) then (
+      let before = p.pos in
       parse_structure_item p;
+      ensure_progress p before (invalid_expression p);
       parse_structure_items ()
     )
   in
   let rec parse_signature_items () =
     consume_phrase_separators p;
     if not (is_eof p) then (
+      let before = p.pos in
       parse_signature_item p;
+      ensure_progress p before (unexpected_signature_item p);
       parse_signature_items ()
     )
   in

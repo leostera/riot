@@ -456,6 +456,8 @@ let listed_test_json = fun
     | Test_runtime.Test -> [ ("type", Data.Json.String "test"); ]
     | Test_runtime.Property { examples } ->
         [ ("type", Data.Json.String "property"); ("examples", Data.Json.Int examples); ]
+    | Test_runtime.Fuzz { seeds } ->
+        [ ("type", Data.Json.String "fuzz"); ("seeds", Data.Json.Int seeds); ]
   in
   let reliability_fields =
     match test.reliability with
@@ -562,6 +564,7 @@ let write_test_list = fun
             match test.test_type with
             | Test_runtime.Test -> "test"
             | Test_runtime.Property _ -> "prop"
+            | Test_runtime.Fuzz _ -> "fuzz"
           in
           let skip_suffix =
             if test.skip then
@@ -602,6 +605,7 @@ let print_test_result = fun
     match result.test_type with
     | Test_runtime.Test -> "test"
     | Test_runtime.Property _ -> "prop"
+    | Test_runtime.Fuzz _ -> "fuzz"
   in
   let metadata = metadata_suffix result.size result.reliability in
   let name = qualified_test_name suite result in
@@ -611,6 +615,7 @@ let print_test_result = fun
         match result.test_type with
         | Test_runtime.Test -> "ok"
         | Test_runtime.Property { examples } -> Int.to_string examples ^ " examples ok"
+        | Test_runtime.Fuzz { seeds } -> Int.to_string seeds ^ " seeds ok"
       in
       println
         (prefix
@@ -824,7 +829,14 @@ let run = fun ~(workspace:Riot_model.Workspace.t) matches ->
             failed_suite_count := !failed_suite_count + 1;
             write_test_suite_list_failed_json ~command_started_at suite err
           in
+          let on_event (event: Test_runtime.test_event) =
+            match event with
+            | Test_runtime.Build build_event ->
+                Build.write_build_event ~mode:output_mode ~seen_registry_updates build_event
+            | _ -> ()
+          in
           match Test_runtime.list_tests
+            ~on_event
             ?on_suite:(
               if output_mode = Build.Json then
                 Some on_suite

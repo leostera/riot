@@ -31,6 +31,8 @@ Use this file as the route map for package-specific guidance. General contributo
 - `packages/riot-store/AGENTS.md`: artifact store and cache layout
 - `packages/riot-toolchain/AGENTS.md`: compiler/toolchain invocation wrappers
 - `packages/riot-build/AGENTS.md`: in-process build session/runtime entrypoints
+- `packages/riot-fuzz/AGENTS.md`: coverage-guided fuzzing engine, AFL forkserver/native coverage map, and corpus/crash persistence
+- `packages/riot-test/AGENTS.md`: shared test selection, suite binary discovery, and test harness execution contracts
 - `packages/riot-cli/AGENTS.md`: CLI commands and user-facing flows
 - `packages/riot-bench/AGENTS.md`: benchmark history storage and regression-tracking contracts
 - `packages/riot-check/AGENTS.md`: `riot check` command implementation and package-aware typechecking flow

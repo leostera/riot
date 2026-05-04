@@ -77,6 +77,7 @@ let on_result = fun _idx (result: Test_result.t) ->
     match result.test_type with
     | Test_case.UnitTest -> "test"
     | Test_case.Property _ -> "prop"
+    | Test_case.Fuzz _ -> "fuzz"
   in
   let metadata = metadata_suffix result.size result.reliability in
   match result.result with
@@ -85,6 +86,7 @@ let on_result = fun _idx (result: Test_result.t) ->
         match result.test_type with
         | Test_case.UnitTest -> "ok"
         | Test_case.Property { examples } -> Int.to_string examples ^ " examples ok"
+        | Test_case.Fuzz { seeds } -> Int.to_string seeds ^ " seeds ok"
       in
       println
         (prefix

@@ -93,6 +93,23 @@ let release = {
   ocamlc_flags = [];
 }
 
+(** Default fuzz profile - native debug build with AFL-compatible instrumentation *)
+let fuzz = {
+  name = "fuzz";
+  kind = Ocaml_compiler.Native;
+  inline = Some 0;
+  no_assert = false;
+  compact = false;
+  unsafe = false;
+  no_alias_deps = false;
+  open_modules = [];
+  warnings = [];
+  errors = Ocaml_compiler.[ LabelsOmitted; PartialMatch; UnusedVariable; UnusedOpen; UnusedMatch; ];
+  cc_flags = [];
+  ld_flags = [];
+  ocamlc_flags = [ "-g"; "-afl-instrument" ];
+}
+
 (** Merge two profiles - override takes precedence per-field *)
 let merge = fun base override ->
   {

@@ -62,6 +62,9 @@ val debug: t
 (** Default release profile - optimized, strict *)
 val release: t
 
+(** Default fuzz profile - native debug build with AFL-compatible instrumentation *)
+val fuzz: t
+
 (**
    Merge two profiles - override takes precedence per-field
    For booleans and kind: replaced

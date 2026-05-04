@@ -32,6 +32,7 @@ type command = {
   author: string option;
   args: unit arg list;
   subcommands: command list;
+  subcommand_required: bool;
   allow_trailing: bool;
 }
 
@@ -116,6 +117,7 @@ let command = fun name ->
     author = None;
     args = [];
     subcommands = [];
+    subcommand_required = true;
     allow_trailing = false;
   }
 
@@ -132,6 +134,8 @@ let args = fun a_list cmd -> { cmd with args = cmd.args @ a_list }
 let subcommand = fun sub cmd -> { cmd with subcommands = cmd.subcommands @ [ sub ] }
 
 let subcommands = fun sub_list cmd -> { cmd with subcommands = cmd.subcommands @ sub_list }
+
+let allow_no_subcommand = fun cmd -> { cmd with subcommand_required = false }
 
 let allow_trailing_args = fun cmd -> { cmd with allow_trailing = true }
 
@@ -168,7 +172,7 @@ let rec get_matches_internal = fun cmd args ->
     match args_list with
     | [] ->
         (* If command has subcommands but none provided, show help *)
-        if List.length cmd.subcommands > 0 then (
+        if List.length cmd.subcommands > 0 && cmd.subcommand_required then (
           print_help cmd;
           System.exit 0
         ) else

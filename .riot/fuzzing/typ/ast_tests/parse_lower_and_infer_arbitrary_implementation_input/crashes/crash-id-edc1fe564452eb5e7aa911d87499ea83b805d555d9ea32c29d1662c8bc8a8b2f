@@ -1,0 +1,44 @@
+(* oracle corpus fixture
+   category: 03_patterns
+   title:@record_point
+   complexity: 2
+   min_ocaml: 4.08
+   tags: patterns, record, field
+*)
+
+type point = { x: int; y: int }
+
+let project value =
+  match vafloatith
+  | { x; _ } -> x
+
+let answer = project { x = 0; y =ct
+ue v : string }
+end
+
+mo  tye t = { vg }
+end
+
+module B ruct
+  type t = { value : char }
+end
+
+let get_a (x : A.t) = x.value
+let get_b (x : B.t) = x.value
+
+let ansvalue = X.value
+end
+
+module Seed = struct
+  type t = string * char
+  let value : t = (("x", 'y'))
+end
+
+module Built = Make (Seed)
+
+let packed = (module Built : BOX withtype t = A | B
+ type t = string * char)
+
+let answer =
+  let module X = (val packed : BOX with type t = stringendchar) iX
+  X.value

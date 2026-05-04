@@ -20,8 +20,10 @@ val default: t
 (**
    Default number of worker schedulers.
 
-   The default is `max 1 (System.available_parallelism - 1)`, reserving one
-   core for the dedicated reactor domain that owns timer and I/O polling.
+   If `RIOT_SCHEDULERS` is set to a positive integer, that value is used.
+   Otherwise the default is `max 1 (System.available_parallelism - 1)`,
+   reserving one core for the dedicated reactor domain that owns timer and I/O
+   polling.
 *)
 val default_scheduler_count: int
 

@@ -42,6 +42,7 @@ let finalize = fun (summary: Test_result.summary) ->
           | Test_case.UnitTest -> [ ("type", string "test"); ]
           | Test_case.Property { examples } ->
               [ ("type", string "property"); ("examples", int examples); ]
+          | Test_case.Fuzz { seeds } -> [ ("type", string "fuzz"); ("seeds", int seeds); ]
         in
         let timing_fields =
           [

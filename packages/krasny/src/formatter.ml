@@ -3079,123 +3079,146 @@ and render_type_apply_argument = fun state argument ->
       emit_text state ")"
   | _ -> render_type_expr state argument
 
+and type_expr_attribute_suffix_flat_width = fun type_expr ->
+  let tokens = Vector.with_capacity ~size:(Ast.TypeExpr.attribute_suffix_token_count type_expr) in
+  iter_fold
+    Ast.TypeExpr.fold_attribute_suffix_token
+    type_expr
+    ~fn:(fun token -> Vector.push tokens ~value:token);
+  if Vector.is_empty tokens then
+    Some 0
+  else
+    match attribute_token_vector_spaced_flat_width tokens with
+    | Some width -> Some (Int.add 1 width)
+    | None -> None
+
 and type_expr_flat_width = fun type_expr ->
-  match TypeExprView.view type_expr with
-  | Ident { ident } ->
-      let tokens = collect_ident_tokens ident in
-      let length = Vector.length tokens in
-      let rec loop index previous total =
-        if Int.(index >= length) then
-          Some total
-        else
-          let token = Vector.get_unchecked tokens ~at:index in
-          let token_width = Slice.length (Ast.Token.slice token) in
-          let extra_space =
-            match previous with
-            | Some previous when token_wants_space_before previous token -> 1
-            | _ -> 0
-          in
-          loop
-            (Int.add index 1)
-            (Some token)
-            (Int.add total (Int.add extra_space token_width))
-      in
-      loop 0 None 0
-  | Var { name = Some name } -> Some (Int.add 1 (Slice.length (Ast.Token.slice name)))
-  | Var { name = None } -> None
-  | Wildcard -> Some 1
-  | Arrow { left = Some left; right = Some right } -> (
-      match (type_expr_flat_width left, type_expr_flat_width right) with
-      | (Some left_width, Some right_width) ->
-          let left_width =
-            match TypeExprView.view left with
-            | Arrow _ -> Int.add left_width 2
-            | _ -> left_width
-          in
-          Some Int.(left_width + 4 + right_width)
+  match Ast.TypeExpr.inner_without_attribute_suffix type_expr with
+  | Some inner -> (
+      match (type_expr_flat_width inner, type_expr_attribute_suffix_flat_width type_expr) with
+      | (Some inner_width, Some suffix_width) -> Some (Int.add inner_width suffix_width)
       | _ -> None
     )
-  | Arrow _ -> None
-  | Apply { argument = Some argument; constructor = Some constructor } -> (
-      match (type_expr_flat_width argument, type_expr_flat_width constructor) with
-      | (Some argument_width, Some constructor_width) ->
-          let argument_width =
-            match TypeExprView.view argument with
-            | Arrow _
-            | Poly _
-            | Tuple _ -> Int.add argument_width 2
-            | _ -> argument_width
+  | None -> (
+      match TypeExprView.view type_expr with
+      | Ident { ident } ->
+          let tokens = collect_ident_tokens ident in
+          let length = Vector.length tokens in
+          let rec loop index previous total =
+            if Int.(index >= length) then
+              Some total
+            else
+              let token = Vector.get_unchecked tokens ~at:index in
+              let token_width = Slice.length (Ast.Token.slice token) in
+              let extra_space =
+                match previous with
+                | Some previous when token_wants_space_before previous token -> 1
+                | _ -> 0
+              in
+              loop
+                (Int.add index 1)
+                (Some token)
+                (Int.add total (Int.add extra_space token_width))
           in
-          Some Int.(argument_width + 1 + constructor_width)
-      | _ -> None
-    )
-  | Apply _ -> None
-  | Parenthesized { inner = Some inner } -> (
-      match type_expr_flat_width inner with
-      | Some inner_width -> Some (Int.add inner_width 2)
-      | None -> None
-    )
-  | Parenthesized { inner = None } -> Some 2
-  | Tuple _ -> type_tuple_flat_width type_expr
-  | Labeled { optional_token; label = Some label; annotation = Some annotation } -> (
-      match type_expr_flat_width annotation with
-      | Some annotation_width ->
-          let optional_width =
-            match optional_token with
-            | Some token -> Slice.length (Ast.Token.slice token)
-            | None -> 0
-          in
-          Some Int.(optional_width + Slice.length (Ast.Token.slice label) + 1 + annotation_width)
-      | None -> None
-    )
-  | Labeled _ -> None
-  | Poly { body = Some body } -> (
-      match type_expr_flat_width body with
-      | None -> None
-      | Some body_width ->
-          let names = Vector.with_capacity ~size:(Ast.TypeExpr.poly_type_name_count type_expr) in
-          iter_fold
-            Ast.TypeExpr.fold_poly_type_name
-            type_expr
-            ~fn:(fun name -> Vector.push names ~value:name);
-          let length = Vector.length names in
-          if Int.equal length 0 then
-            Some body_width
-          else
-            let keyword_width =
-              match Ast.TypeExpr.poly_type_keyword_token type_expr with
-              | Some token -> Int.add (token_flat_width token) 1
-              | None -> 0
-            in
-            let rec loop index total =
-              if Int.(index >= length) then
-                Some Int.(keyword_width + total + 2 + body_width)
+          loop 0 None 0
+      | Var { name = Some name } -> Some (Int.add 1 (Slice.length (Ast.Token.slice name)))
+      | Var { name = None } -> None
+      | Wildcard -> Some 1
+      | Arrow { left = Some left; right = Some right } -> (
+          match (type_expr_flat_width left, type_expr_flat_width right) with
+          | (Some left_width, Some right_width) ->
+              let left_width =
+                match TypeExprView.view left with
+                | Arrow _ -> Int.add left_width 2
+                | _ -> left_width
+              in
+              Some Int.(left_width + 4 + right_width)
+          | _ -> None
+        )
+      | Arrow _ -> None
+      | Apply { argument = Some argument; constructor = Some constructor } -> (
+          match (type_expr_flat_width argument, type_expr_flat_width constructor) with
+          | (Some argument_width, Some constructor_width) ->
+              let argument_width =
+                match TypeExprView.view argument with
+                | Arrow _
+                | Poly _
+                | Tuple _ -> Int.add argument_width 2
+                | _ -> argument_width
+              in
+              Some Int.(argument_width + 1 + constructor_width)
+          | _ -> None
+        )
+      | Apply _ -> None
+      | Parenthesized { inner = Some inner } -> (
+          match type_expr_flat_width inner with
+          | Some inner_width -> Some (Int.add inner_width 2)
+          | None -> None
+        )
+      | Parenthesized { inner = None } -> Some 2
+      | Tuple _ -> type_tuple_flat_width type_expr
+      | Labeled { optional_token; label = Some label; annotation = Some annotation } -> (
+          match type_expr_flat_width annotation with
+          | Some annotation_width ->
+              let optional_width =
+                match optional_token with
+                | Some token -> Slice.length (Ast.Token.slice token)
+                | None -> 0
+              in
+              Some Int.(optional_width + Slice.length (Ast.Token.slice label) + 1 + annotation_width)
+          | None -> None
+        )
+      | Labeled _ -> None
+      | Poly { body = Some body } -> (
+          match type_expr_flat_width body with
+          | None -> None
+          | Some body_width ->
+              let names =
+                Vector.with_capacity ~size:(Ast.TypeExpr.poly_type_name_count type_expr)
+              in
+              iter_fold
+                Ast.TypeExpr.fold_poly_type_name
+                type_expr
+                ~fn:(fun name -> Vector.push names ~value:name);
+              let length = Vector.length names in
+              if Int.equal length 0 then
+                Some body_width
               else
-                let name = Vector.get_unchecked names ~at:index in
-                let name_width =
-                  Int.add
-                    (token_flat_width name)
-                    (
-                      if Option.is_some (Ast.TypeExpr.poly_type_keyword_token type_expr) then
+                let keyword_width =
+                  match Ast.TypeExpr.poly_type_keyword_token type_expr with
+                  | Some token -> Int.add (token_flat_width token) 1
+                  | None -> 0
+                in
+                let rec loop index total =
+                  if Int.(index >= length) then
+                    Some Int.(keyword_width + total + 2 + body_width)
+                  else
+                    let name = Vector.get_unchecked names ~at:index in
+                    let name_width =
+                      Int.add
+                        (token_flat_width name)
+                        (
+                          if Option.is_some (Ast.TypeExpr.poly_type_keyword_token type_expr) then
+                            0
+                          else
+                            1
+                        )
+                    in
+                    let separator_width =
+                      if Int.equal index 0 then
                         0
                       else
                         1
-                    )
+                    in
+                    loop (Int.add index 1) Int.(total + separator_width + name_width)
                 in
-                let separator_width =
-                  if Int.equal index 0 then
-                    0
-                  else
-                    1
-                in
-                loop (Int.add index 1) Int.(total + separator_width + name_width)
-            in
-            loop 0 0
+                loop 0 0
+        )
+      | Poly { body = None } -> None
+      | Opaque node -> node_spaced_flat_width node
+      | Error _
+      | Unknown _ -> None
     )
-  | Poly { body = None } -> None
-  | Opaque node -> node_spaced_flat_width node
-  | Error _
-  | Unknown _ -> None
 
 and render_poly_type_prefix = fun state (type_expr: Ast.TypeExpr.t) ->
   let names = Vector.with_capacity ~size:(Ast.TypeExpr.poly_type_name_count type_expr) in
@@ -8639,25 +8662,29 @@ and record_type_fields_have_leading_comment = fun (fields: Ast.RecordField.t Vec
   loop 0
 
 and type_expr_is_light_record_field_annotation = fun annotation ->
-  match TypeExprView.view annotation with
-  | Ident { ident } ->
-      let tokens = collect_ident_tokens ident in
-      if Int.equal (Vector.length tokens) 1 then
-        let token = Vector.get_unchecked tokens ~at:0 in
-        let text = token_text token in
-        String.equal text "int"
-        || String.equal text "string"
-        || String.equal text "bool"
-        || String.equal text "float"
-        || String.equal text "char"
-        || String.equal text "unit"
-        || String.equal text "bytes"
-        || String.equal text "t"
-      else
-        false
-  | Var _
-  | Wildcard -> true
-  | _ -> false
+  match Ast.TypeExpr.inner_without_attribute_suffix annotation with
+  | Some inner -> type_expr_is_light_record_field_annotation inner
+  | None -> (
+      match TypeExprView.view annotation with
+      | Ident { ident } ->
+          let tokens = collect_ident_tokens ident in
+          if Int.equal (Vector.length tokens) 1 then
+            let token = Vector.get_unchecked tokens ~at:0 in
+            let text = token_text token in
+            String.equal text "int"
+            || String.equal text "string"
+            || String.equal text "bool"
+            || String.equal text "float"
+            || String.equal text "char"
+            || String.equal text "unit"
+            || String.equal text "bytes"
+            || String.equal text "t"
+          else
+            false
+      | Var _
+      | Wildcard -> true
+      | _ -> false
+    )
 
 and record_type_fields_are_light_inline = fun (fields: Ast.RecordField.t Vector.t) ->
   let length = Vector.length fields in

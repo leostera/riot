@@ -36,3 +36,4 @@
 30. User-facing aliases such as `docs` -> `doc`, `toolchains` -> `toolchain`, and top-level `help` -> `--help` should normalize before parsing into the canonical command.
 31. `riot --version` and `riot version` should prefer installed release metadata, include release id and build sha, and keep dev-build fallback explicit.
 32. `riot upgrade` should stay workspace-free and use published Riot release metadata and archives.
+33. `riot fuzz` should stay a thin CLI over `riot-fuzz`: parse flags, render events, and leave fuzz case discovery, selector handling, campaign scheduling, and corpus/crash state under `.riot/fuzzing` to `riot-fuzz`/`riot-test`.

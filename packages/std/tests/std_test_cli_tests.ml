@@ -56,6 +56,17 @@ let sample_tests = [
       Ok ());
   Test.case "beta" (fun _ctx -> Ok ());
   Propane.property "gamma_property" Arbitrary.int (fun _ -> true);
+  Test.fuzz
+    ~seeds:[ "seed"; ]
+    ~mutator:Test.Fuzz.Mutator.(bytes
+    |> with_dictionary [ "crash"; "delta"; ]
+    |> with_max_len 128)
+    "delta_fuzz"
+    (fun _ctx input ->
+      if String.equal input "crash" then
+        Error "fuzz crash"
+      else
+        Ok ());
   Test.case
     "inline_snapshot_probe"
     (fun ctx ->
@@ -241,6 +252,16 @@ let run_hook_sample_capture = fun sample log_path args ->
   Command.output cmd
   |> Result.expect ~msg:"failed to run hook sample test cli"
 
+let suite_ctx_json = fun ~workspace_root ~package_name ->
+  Data.Json.Object [
+    ("workspace_root", Data.Json.String (Path.to_string workspace_root));
+    ("package_name", Data.Json.String package_name);
+    ("binary_path", Data.Json.String "/tmp/sample-suite");
+    ("source_file", Data.Json.Null);
+    ("built_binaries", Data.Json.Array []);
+  ]
+  |> Data.Json.to_string
+
 let ansi_reset = "\027[0m"
 
 let ansi_gray = "\027[38;5;245m"
@@ -263,6 +284,7 @@ let test_list_tests_lists_all_cases = fun _ctx ->
         "alpha_large";
         "large_timeout_probe";
         "beta";
+        "delta_fuzz";
         "gamma_property";
         "inline_snapshot_probe";
         "middle_large_case";
@@ -302,6 +324,85 @@ let test_list_tests_json_includes_metadata = fun _ctx ->
         else
           Error "expected list-tests --json to include metadata fields"
     | [] -> Error "expected list-tests --json to include tests"
+
+let test_list_tests_json_includes_fuzz_metadata = fun _ctx ->
+  let output = run_sample_capture [ "list-tests"; "--json"; "delta_fuzz"; ] in
+  if not (Int.equal output.status 0) then
+    Error ("expected list-tests --json delta_fuzz to succeed, got " ^ Int.to_string output.status)
+  else
+    match listed_test_fields_from_json output.stdout with
+    | [ fields ] ->
+        let has name value = assoc_value name fields = Some value in
+        if
+          has "name" (Data.Json.String "delta_fuzz")
+          && has "type" (Data.Json.String "fuzz")
+          && has "seeds" (Data.Json.Int 1)
+          && Option.is_some (assoc_value "corpus" fields)
+          && Option.is_some (assoc_value "mutator" fields)
+        then
+          Ok ()
+        else
+          Error "expected list-tests --json to include fuzz metadata"
+    | _ -> Error "expected only delta_fuzz to be listed"
+
+let test_run_fuzz_case_executes_single_input = fun _ctx ->
+  with_tempdir
+    "std_test_fuzz_case"
+    (fun dir ->
+      let input_path = Path.(dir / Path.v "input") in
+      let* () = Result.map_err (Fs.write "crash" input_path) ~fn:IO.error_message in
+      let output =
+        run_sample_capture
+          [ "run-fuzz-case"; "delta_fuzz"; "--input"; Path.to_string input_path; "--json"; ]
+      in
+      if Int.equal output.status 0 then
+        Error "expected crashing fuzz input to fail"
+      else
+        let lines = parse_json_lines output.stdout in
+        match lines with
+        | [ json ] -> (
+            match (Data.Json.get_field "type" json, Data.Json.get_field "status" json) with
+            | (Some (Data.Json.String "FuzzCaseCompleted"), Some (Data.Json.String "failed")) ->
+                Ok ()
+            | _ -> Error "expected run-fuzz-case to emit a failed fuzz case event"
+          )
+        | _ -> Error "expected run-fuzz-case to emit one JSON line")
+
+let test_run_tests_replays_workspace_fuzz_corpus = fun _ctx ->
+  with_tempdir
+    "std_test_fuzz_replay"
+    (fun workspace_root ->
+      let corpus_dir =
+        Path.(workspace_root
+        / Path.v ".riot"
+        / Path.v "fuzzing"
+        / Path.v "demo"
+        / Path.v "sample"
+        / Path.v "delta_fuzz"
+        / Path.v "corpus")
+      in
+      let* () = Result.map_err (Fs.create_dir_all corpus_dir) ~fn:IO.error_message in
+      let* () =
+        Fs.write "crash" Path.(corpus_dir / Path.v "repro")
+        |> Result.map_err ~fn:IO.error_message
+      in
+      let ctx_json = suite_ctx_json ~workspace_root ~package_name:"demo" in
+      let output = run_sample_capture [ "run-tests"; "delta_fuzz"; "--json"; "--ctx"; ctx_json; ] in
+      if Int.equal output.status 0 then
+        Error "expected corpus replay to fail on the saved fuzz input"
+      else
+        let json = last_summary_json output.stdout in
+        match Data.Json.get_field "tests" json with
+        | Some (Data.Json.Array [ Data.Json.Object fields ]) ->
+            let has name value = assoc_value name fields = Some value in
+            (
+              match assoc_value "message" fields with
+              | Some (Data.Json.String message) when has "status" (Data.Json.String "failed")
+              && String.contains message "corpus/repro"
+              && String.contains message "fuzz crash" -> Ok ()
+              | _ -> Error "expected corpus replay failure message to name the replay file"
+            )
+        | _ -> Error "expected exactly one delta_fuzz result")
 
 let test_list_tests_respects_filters = fun _ctx ->
   let output = run_sample_capture [ "list-tests"; "--json"; "--flaky"; "flaky"; ] in
@@ -419,6 +520,7 @@ let test_run_tests_small_flag_filters_small_tests = fun _ctx ->
     let expected =
       [
         "beta";
+        "delta_fuzz";
         "gamma_property";
         "inline_snapshot_probe";
         "flaky_then_ok";
@@ -691,6 +793,7 @@ let test_run_tests_timeout_does_not_abort_suite = fun _ctx ->
     let expected =
       [
         "beta";
+        "delta_fuzz";
         "gamma_property";
         "inline_snapshot_probe";
         "flaky_then_ok";
@@ -855,8 +958,28 @@ let test_run_tests_teardown_failure_warns_without_failing = fun _ctx ->
           Error ("unexpected hook order after teardown warning: " ^ String.concat ", " lines))
 
 let meta_tests = [
+  Test.fuzz
+    ~seeds:[ "seed"; ]
+    "meta_fuzz_probe"
+    (fun _ctx input ->
+      if String.equal input "crash" then
+        Error "meta fuzz crash"
+      else
+        Ok ());
   Test.case ~size:Large "list-tests lists all sample cases" test_list_tests_lists_all_cases;
   Test.case ~size:Large "list-tests --json includes metadata" test_list_tests_json_includes_metadata;
+  Test.case
+    ~size:Large
+    "list-tests --json includes fuzz metadata"
+    test_list_tests_json_includes_fuzz_metadata;
+  Test.case
+    ~size:Large
+    "run-fuzz-case executes one fuzz input"
+    test_run_fuzz_case_executes_single_input;
+  Test.case
+    ~size:Large
+    "run-tests replays workspace fuzz corpus"
+    test_run_tests_replays_workspace_fuzz_corpus;
   Test.case ~size:Large "list-tests respects filters" test_list_tests_respects_filters;
   Test.case ~size:Large "list-tests accepts --ctx" test_list_tests_accepts_ctx_flag;
   Test.case

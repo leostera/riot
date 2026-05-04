@@ -721,9 +721,12 @@ let rec syn_ident_from_tokens = fun __tmp1 ->
         (syn_ident_from_tokens rest)
         ~fn:(fun rest -> Syn.Ast.Ident.Qualified (token, rest))
 
-let ident_from_tokens_as_segments = fun tokens ->
+let ident_from_tokens_as_segments_option = fun tokens ->
   syn_ident_from_tokens tokens
   |> Option.map ~fn:ident_from_syn_ident
+
+let ident_from_tokens_as_segments = fun tokens ->
+  ident_from_tokens_as_segments_option tokens
   |> Option.expect ~msg:"expected identifier token list to contain at least one segment"
 
 let ident_tokens = fun tokens ->
@@ -734,6 +737,11 @@ let ident_from_tokens_in_tokens = fun tokens ->
   tokens
   |> ident_tokens
   |> ident_from_tokens_as_segments
+
+let ident_from_tokens_in_tokens_option = fun tokens ->
+  tokens
+  |> ident_tokens
+  |> ident_from_tokens_as_segments_option
 
 let ident_from_node = fun node ->
   let tokens =
@@ -746,6 +754,18 @@ let ident_from_node = fun node ->
         | _ -> Continue tokens)
   in
   ident_from_tokens_as_segments (List.reverse tokens)
+
+let ident_from_node_option = fun node ->
+  let tokens =
+    Syn.Ast.Node.fold_token
+      node
+      ~init:[]
+      ~fn:(fun token tokens ->
+        match Syn.Ast.Token.kind token with
+        | Syn.SyntaxKind.IDENT -> Continue (token :: tokens)
+        | _ -> Continue tokens)
+  in
+  ident_from_tokens_as_segments_option (List.reverse tokens)
 
 let rec module_expr_ident = fun module_expr ->
   match Syn.Ast.ModuleExpr.view module_expr with
@@ -866,7 +886,7 @@ let functor_parameters_from_member = fun origin member ->
           let module_type =
             match member_ident_tokens_between member ~start:(index + 3) ~stop:close_index with
             | [] -> None
-            | tokens -> Some (ident_from_tokens_as_segments tokens)
+            | tokens -> ident_from_tokens_as_segments_option tokens
           in
           let parameter = { origin; name = ident_from_token name; module_type } in
           loop (close_index + 1) (parameter :: parameters)
@@ -1218,9 +1238,13 @@ and build_package_constraints = fun context origin tokens ->
           | Some tokens -> package_constraint_manifest_tokens tokens
           | None -> build_failed origin "missing package type constraint manifest"
         in
+        let type_name =
+          ident_from_tokens_in_tokens_option name_tokens
+          |> require_some origin "missing package type constraint name"
+        in
         let constraint_: package_type_constraint = {
           origin;
-          type_name = ident_from_tokens_in_tokens name_tokens;
+          type_name;
           manifest = build_core_type_from_tokens context origin manifest_tokens;
         }
         in
@@ -1231,7 +1255,10 @@ and build_package_constraints = fun context origin tokens ->
 
 and build_package_type_from_ascription_tokens = fun context origin ?binder tokens ->
   let (module_type_tokens, constraint_tokens) = split_at_token_kind Syn.SyntaxKind.WITH_KW tokens in
-  let module_type = ident_from_tokens_in_tokens module_type_tokens in
+  let module_type =
+    ident_from_tokens_in_tokens_option module_type_tokens
+    |> require_some origin "missing first-class module type"
+  in
   let constraints =
     match constraint_tokens with
     | Some tokens -> build_package_constraints context origin tokens
@@ -1251,7 +1278,8 @@ and first_class_module_ident_from_tokens = fun origin tokens ->
   in
   after_module
   |> tokens_until_any [ Syn.SyntaxKind.COLON; Syn.SyntaxKind.RPAREN ]
-  |> ident_from_tokens_in_tokens
+  |> ident_from_tokens_in_tokens_option
+  |> require_some origin "missing first-class module name"
 
 and first_class_package_type_from_tokens = fun context origin ?binder tokens ->
   match tokens_after_token_kind Syn.SyntaxKind.COLON tokens with
@@ -1270,7 +1298,10 @@ and first_class_module_unpack_expression_from_tokens = fun origin tokens ->
   in
   match ident_tokens expression_tokens with
   | [] -> build_failed origin "missing first-class module unpack expression"
-  | identifiers -> make_expression origin (Ident (ident_from_tokens_as_segments identifiers))
+  | identifiers ->
+      ident_from_tokens_as_segments_option identifiers
+      |> require_some origin "missing first-class module unpack expression"
+      |> fun ident -> make_expression origin (Ident ident)
 
 and first_class_module_unpack_from_tokens = fun context origin tokens ->
   ({
@@ -1876,7 +1907,7 @@ and build_let_module_expression = fun context origin syntax_expression ->
   let alias =
     match module_body_node with
     | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) ->
-        Some (ident_from_node node)
+        ident_from_node_option node
     | _ -> None
   in
   let unpack =
@@ -2150,7 +2181,7 @@ and build_module_declaration_member = fun context member ->
   let alias =
     match module_expr with
     | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) ->
-        Some (ident_from_node node)
+        ident_from_node_option node
     | _ -> None
   in
   let application =

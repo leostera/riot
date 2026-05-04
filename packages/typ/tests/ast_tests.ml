@@ -168,6 +168,135 @@ let test_from_syn_keeps_constructor_expression_payloads _ctx =
       assert_path_string ~expected:"Some" ident
   | _ -> Error "expected Some 1 to lower as constructor expression with payload"
 
+let test_fuzz_parse_lower_and_infer = fun _ctx source ->
+  let parse_result = Syn.parse ~filename:(Path.v "fuzz.ml") (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error _diagnostics -> Ok ()
+  | Ok ast ->
+      let _infer_result = Typ.Infer.check ast in
+      Ok ()
+
+let record_pattern_empty_ident_recovery_seed =
+  "let project value =\n" ^ "  match value with\n" ^ "  | { x; _\030 } -> x\n"
+
+let path_expression_empty_ident_recovery_seed = "let value = (->)\n"
+
+let first_class_module_empty_type_recovery_seed = "let packed = (module Seed : )\n"
+
+let first_class_module_empty_name_recovery_seed = "let packed = (module : BOX)\n"
+
+let package_constraint_empty_name_recovery_seed =
+  "let packed = (module Seed : BOX with type = char)\n"
+
+let value_declaration_empty_name_recovery_seed =
+  "module type BOX = sig\n" ^ "  val begin : t\n" ^ "end\n"
+
+let typ_fuzz_fixture_root = Path.v "packages/typ/tests/fixtures/corpus"
+
+let typ_source_dictionary = [
+  "let";
+  "let rec";
+  "and";
+  "in";
+  "fun";
+  "function";
+  "match";
+  "with";
+  "when";
+  "if";
+  "then";
+  "else";
+  "type";
+  "of";
+  "as";
+  "module";
+  "module type";
+  "struct";
+  "sig";
+  "end";
+  "open";
+  "include";
+  "val";
+  "external";
+  "exception";
+  "try";
+  "raise";
+  "while";
+  "for";
+  "to";
+  "downto";
+  "do";
+  "done";
+  "begin";
+  "true";
+  "false";
+  "None";
+  "Some";
+  "Ok";
+  "Error";
+  "int";
+  "bool";
+  "string";
+  "char";
+  "float";
+  "unit";
+  "list";
+  "option";
+  "result";
+  "array";
+  "ref";
+  "->";
+  "=>";
+  "|";
+  "::";
+  ":";
+  ":>";
+  ":=";
+  "=";
+  "==";
+  "<>";
+  "+";
+  "-";
+  "*";
+  "/";
+  "&&";
+  "||";
+  "(";
+  ")";
+  "[";
+  "]";
+  "[|";
+  "|]";
+  "{";
+  "}";
+  "`";
+  "'";
+  "\"";
+  ";;";
+  ".";
+  ",";
+  ";";
+  "_";
+  "?";
+  "~";
+  "@";
+  "let value = 1\n";
+  "let id x = x\n";
+  "type t = A | B\n";
+  "type 'a box = Box of 'a\n";
+  "let value : int option = Some 1\n";
+  "let choose ~left ?right () = left\n";
+  "module M = struct let value = true end\n";
+  "module type S = sig val value : int end\n";
+  "match value with | Some x -> x | None -> 0\n";
+]
+
+let typ_source_mutator =
+  Test.Fuzz.Mutator.(text
+  |> with_dictionary typ_source_dictionary
+  |> with_max_len 8_192)
+
 let tests =
   Test.[
     case
@@ -189,6 +318,24 @@ let tests =
     case
       "from syn keeps constructor expression payloads"
       test_from_syn_keeps_constructor_expression_payloads;
+    fuzz
+      "parse lower and infer arbitrary implementation input"
+      ~seeds:[
+        "";
+        "let value = 1\n";
+        "let id x = x\n";
+        "type t = A | B\nlet value = A\n";
+        "module M = struct let value = true end\n";
+        record_pattern_empty_ident_recovery_seed;
+        path_expression_empty_ident_recovery_seed;
+        first_class_module_empty_type_recovery_seed;
+        first_class_module_empty_name_recovery_seed;
+        package_constraint_empty_name_recovery_seed;
+        value_declaration_empty_name_recovery_seed;
+      ]
+      ~corpus:(Test.Fuzz.Corpus.dir typ_fuzz_fixture_root ~extensions:[ ".ml"; ".mli"; ])
+      ~mutator:typ_source_mutator
+      test_fuzz_parse_lower_and_infer;
   ]
 
 let main ~args = Test.Cli.main ~name:"typ:ast" ~tests ~args ()

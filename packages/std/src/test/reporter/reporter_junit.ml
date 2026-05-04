@@ -19,6 +19,8 @@ let finalize = fun (summary: Test_result.summary) ->
           | Test_case.UnitTest -> base_attrs
           | Test_case.Property { examples } ->
               base_attrs @ [ ("type", "property"); ("examples", Int.to_string examples); ]
+          | Test_case.Fuzz { seeds } ->
+              base_attrs @ [ ("type", "fuzz"); ("seeds", Int.to_string seeds); ]
         in
         let attrs =
           match r.reliability with

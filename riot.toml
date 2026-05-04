@@ -60,6 +60,8 @@ members = [
   "packages/riot-store",
   "packages/riot-toolchain",
   "packages/riot-doc",
+  "packages/riot-fuzz",
+  "packages/riot-test",
 ]
 
 [dependencies]

@@ -92,6 +92,25 @@ let test_suite_progress_test_case_result_parses_completed_case = fun _ctx ->
   | Ok None -> Error "expected completed case progress to parse"
   | Error err -> Error ("expected completed case progress to parse: " ^ err)
 
+let test_suite_progress_test_case_result_parses_fuzz_case = fun _ctx ->
+  let json = Data.Json.Object [
+    ("type", Data.Json.String "TestCaseCompleted");
+    ("index", Data.Json.Int 4);
+    ("name", Data.Json.String "fuzzer");
+    ("test_type", Data.Json.String "fuzz");
+    ("seeds", Data.Json.Int 2);
+    ("status", Data.Json.String "passed");
+  ]
+  in
+  match Riot_cli.Test_runtime.suite_progress_test_case_result json with
+  | Ok (Some Riot_cli.Test_runtime.{ test_type = Fuzz { seeds }; name; result = Passed; _ }) when Int.equal
+    seeds
+    2
+  && String.equal name "fuzzer" -> Ok ()
+  | Ok (Some _) -> Error "expected completed case to parse into a fuzz test result"
+  | Ok None -> Error "expected completed fuzz case progress to parse"
+  | Error err -> Error ("expected completed fuzz case progress to parse: " ^ err)
+
 let test_suite_progress_test_case_result_ignores_non_completed_event = fun _ctx ->
   let json = Data.Json.Object [
     ("type", Data.Json.String "TestCaseStarted");
@@ -130,6 +149,9 @@ let tests = [
   Test.case
     "suite progress completed case parses into a test result"
     test_suite_progress_test_case_result_parses_completed_case;
+  Test.case
+    "suite progress completed fuzz case parses into a test result"
+    test_suite_progress_test_case_result_parses_fuzz_case;
   Test.case
     "suite progress ignores non-completed events"
     test_suite_progress_test_case_result_ignores_non_completed_event;

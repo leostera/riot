@@ -80,10 +80,14 @@ module Snapshot = Snapshot
 (** Shared fixture discovery and test expansion helpers. *)
 module FixtureRunner = Fixture_runner
 
+(** Fuzzing corpus and mutator metadata helpers. *)
+module Fuzz = Fuzz
+
 (** The type of test: regular unit test or property test with example count. *)
 type test_type =
   | UnitTest
   | Property of { examples: int }
+  | Fuzz of { seeds: int }
 type size = Test_case.size =
   | Small
   | Large
@@ -119,6 +123,22 @@ val property:
   string ->
   examples:int ->
   (ctx -> (unit, string) result) ->
+  test_case
+
+(**
+   [fuzz name fn] creates a fuzz case.
+
+   Fuzz cases are replayed by [riot test] with their seed inputs and selected
+   by [riot fuzz] for generated input campaigns.
+*)
+val fuzz:
+  ?size:size ->
+  ?reliability:reliability ->
+  ?seeds:string list ->
+  ?corpus:Fuzz.Corpus.t ->
+  ?mutator:Fuzz.Mutator.t ->
+  string ->
+  (ctx -> string -> (unit, string) result) ->
   test_case
 
 (** [skip name fn] creates a skipped test. *)

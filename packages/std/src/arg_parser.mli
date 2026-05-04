@@ -162,6 +162,8 @@ val subcommand: command -> command -> command
 
 val subcommands: command list -> command -> command
 
+val allow_no_subcommand: command -> command
+
 val allow_trailing_args: command -> command
 
 val get_matches: command -> string list -> (matches, error) result

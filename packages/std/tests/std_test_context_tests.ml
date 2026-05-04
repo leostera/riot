@@ -69,8 +69,14 @@ let test_ctx_derives_workspace_root =
     "ctx derives workspace root"
     (fun ctx ->
       match ctx.workspace_root with
-      | Some workspace_root when String.contains (Path.to_string workspace_root) "riot" -> Ok ()
-      | Some workspace_root -> Error ("unexpected workspace root: " ^ Path.to_string workspace_root)
+      | Some workspace_root ->
+          let manifest = Path.(workspace_root / Path.v "riot.toml") in
+          if Path.is_file manifest then
+            Ok ()
+          else
+            Error
+              ("expected workspace root to contain riot.toml, got "
+              ^ Path.to_string workspace_root)
       | None -> Error "expected ctx.workspace_root to be present")
 
 let tests = [

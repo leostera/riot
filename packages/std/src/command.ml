@@ -140,14 +140,31 @@ let process_exit_poll_interval = Time.Duration.from_millis 1
 
 let blocking_sleep = fun duration -> Kernel.Thread.sleep_ns (Time.Duration.to_nanos duration)
 
-let wait_for_exit = fun proc ->
+let timeout_status_code = 137
+
+let timeout_elapsed = fun started timeout ->
+  match timeout with
+  | None -> false
+  | Some timeout -> Time.Duration.compare (Time.Instant.elapsed started) timeout != Order.LT
+
+let maybe_kill_for_timeout = fun ~started ~timeout ~timed_out proc ->
+  if (not !timed_out) && timeout_elapsed started timeout then (
+    timed_out := true;
+    let _ = Kernel.Process.kill proc ~signal:9 in
+    ()
+  )
+
+let wait_for_exit = fun ?timeout proc ->
+  let started = Time.Instant.now () in
+  let timed_out = ref false in
   let rec loop () =
     match Kernel.Process.try_wait proc with
     | Error err -> Error (SystemError (Kernel.Process.error_to_string err))
     | Ok None ->
+        maybe_kill_for_timeout ~started ~timeout ~timed_out proc;
         blocking_sleep process_exit_poll_interval;
         loop ()
-    | Ok (Some status) -> Ok status
+    | Ok (Some status) -> Ok (status, !timed_out)
   in
   loop ()
 
@@ -161,7 +178,7 @@ let fs_error = fun action err -> Error (SystemError (action ^ ": " ^ IO.error_me
 let fs_file_error = fun action err ->
   Error (SystemError (action ^ ": " ^ Fs.File.error_to_string err))
 
-let output_to_temp_files = fun t ->
+let output_to_temp_files = fun ?timeout t ->
   match Fs.with_tempdir
     ~prefix:"std-command-"
     (fun tempdir ->
@@ -195,17 +212,22 @@ let output_to_temp_files = fun t ->
                   let _ = Fs.File.close stdout_file in
                   let _ = Fs.File.close stderr_file in
                   t.state <- Running { proc; stdout = None; stderr = None };
-                  match wait_for_exit proc with
+                  match wait_for_exit ?timeout proc with
                   | Error _ as err ->
                       let _ = Kernel.Process.close proc in
                       err
-                  | Ok exit_status -> (
+                  | Ok (exit_status, timed_out) -> (
                       let _ = Kernel.Process.close proc in
                       match (Fs.read stdout_path, Fs.read stderr_path) with
                       | (Error err, _) -> fs_error "failed to read stdout capture file" err
                       | (_, Error err) -> fs_error "failed to read stderr capture file" err
                       | (Ok stdout, Ok stderr) ->
-                          let status = kernel_status_code exit_status in
+                          let status =
+                            if timed_out then
+                              timeout_status_code
+                            else
+                              kernel_status_code exit_status
+                          in
                           let result = { stdout; stderr; status } in
                           t.state <- Exited result;
                           Ok result
@@ -230,8 +252,23 @@ let read_pipe_once = fun file buffer ->
   | Error err when is_file_would_block err -> Ok Pipe_would_block
   | Error err -> Error err
 
-let append_stdout_chunk = fun ~on_stdout_line ~stdout_buffer ~line_buffer buffer bytes_read ->
-  StringBuilder.add_subbytes stdout_buffer buffer 0 bytes_read;
+let append_limited_chunk = fun ?max_output_bytes builder buffer bytes_read ->
+  let bytes_to_add =
+    match max_output_bytes with
+    | None -> bytes_read
+    | Some max_output_bytes ->
+        let remaining = max_output_bytes - StringBuilder.length builder in
+        if remaining <= 0 then
+          0
+        else
+          Int.min remaining bytes_read
+  in
+  if bytes_to_add > 0 then
+    StringBuilder.add_subbytes builder buffer 0 bytes_to_add
+
+let append_stdout_chunk = fun
+  ?max_output_bytes ~on_stdout_line ~stdout_buffer ~line_buffer buffer bytes_read ->
+  append_limited_chunk ?max_output_bytes stdout_buffer buffer bytes_read;
   Option.for_each
     on_stdout_line
     ~fn:(fun on_stdout_line ->
@@ -254,7 +291,8 @@ let flush_stdout_line = fun ~on_stdout_line ~line_buffer ->
         StringBuilder.clear line_buffer
       ))
 
-let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdout_fd stderr_fd ->
+let output_with_pipes = fun
+  ?max_output_bytes ?timeout ~on_stdout_line ~on_idle ~idle_interval t proc stdout_fd stderr_fd ->
   let stdout_buffer = StringBuilder.create ~size:4_096 in
   let stderr_buffer = StringBuilder.create ~size:4_096 in
   let stdout_line_buffer = StringBuilder.create ~size:256 in
@@ -265,6 +303,7 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
   let process_status = ref None in
   let drain_retries = ref 0 in
   let started = Time.Instant.now () in
+  let timed_out = ref false in
   let last_idle_us = ref 0 in
   let finish_error err =
     let _ = Kernel.Process.close proc in
@@ -282,6 +321,7 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
       | Ok Pipe_would_block -> Ok false
       | Ok (Pipe_read bytes_read) ->
           append_stdout_chunk
+            ?max_output_bytes
             ~on_stdout_line
             ~stdout_buffer
             ~line_buffer:stdout_line_buffer
@@ -300,7 +340,7 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
           Ok false
       | Ok Pipe_would_block -> Ok false
       | Ok (Pipe_read bytes_read) ->
-          StringBuilder.add_subbytes stderr_buffer stderr_chunk 0 bytes_read;
+          append_limited_chunk ?max_output_bytes stderr_buffer stderr_chunk bytes_read;
           Ok true
   in
   let rec drain read_any =
@@ -308,9 +348,10 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
     | (Error err, _)
     | (_, Error err) -> Error err
     | (Ok stdout_read, Ok stderr_read) ->
-        if stdout_read || stderr_read then
+        if stdout_read || stderr_read then (
+          maybe_kill_for_timeout ~started ~timeout ~timed_out proc;
           drain true
-        else
+        ) else
           Ok read_any
   in
   let observe_process () =
@@ -350,6 +391,7 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
         match observe_process () with
         | Error _ as err -> finish_error err
         | Ok () ->
+            maybe_kill_for_timeout ~started ~timeout ~timed_out proc;
             let process_done = Option.is_some !process_status in
             if data_read then
               drain_retries := 0
@@ -364,7 +406,11 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
               let _ = Kernel.Process.close proc in
               let exit_status = Option.unwrap !process_status in
               let result = {
-                status = kernel_status_code exit_status;
+                status =
+                  if !timed_out then
+                    timeout_status_code
+                  else
+                    kernel_status_code exit_status;
                 stdout = StringBuilder.contents stdout_buffer;
                 stderr = StringBuilder.contents stderr_buffer;
               }
@@ -381,13 +427,15 @@ let output_with_pipes = fun ~on_stdout_line ~on_idle ~idle_interval t proc stdou
   in
   loop ()
 
-let output = fun ?on_stdout_line ?on_idle ?idle_interval t ->
+let output = fun ?on_stdout_line ?on_idle ?idle_interval ?max_output_bytes ?timeout t ->
   match t.state with
   | Exited out -> Ok out
   | Running _ -> Error (SystemError "Command is already running")
-  | Pending when Option.is_none on_stdout_line && Option.is_none on_idle ->
+  | Pending when Option.is_none on_stdout_line
+  && Option.is_none on_idle
+  && Option.is_none max_output_bytes ->
       let _ = idle_interval in
-      output_to_temp_files t
+      output_to_temp_files ?timeout t
   | Pending -> (
       (* Build stdio config to capture stdout and stderr *)
       let stdio = stdio_of_config Stdio.Null Stdio.Pipe Stdio.Pipe in
@@ -416,6 +464,8 @@ let output = fun ?on_stdout_line ?on_idle ?idle_interval t ->
               (* Update state to Running *)
               t.state <- Running { proc; stdout = Some stdout_fd; stderr = Some stderr_fd };
               output_with_pipes
+                ?max_output_bytes
+                ?timeout
                 ~on_stdout_line
                 ~on_idle
                 ~idle_interval:(Option.unwrap_or ~default:default_idle_interval idle_interval)
@@ -448,7 +498,7 @@ let status = fun t ->
           | Ok proc ->
               match wait_for_exit proc with
               | Error _ as err -> err
-              | Ok exit_status ->
+              | Ok (exit_status, _timed_out) ->
                   let _ = Kernel.Process.close proc in
                   let status_code = kernel_status_code exit_status in
                   t.state <- Exited { status = status_code; stdout = ""; stderr = "" };

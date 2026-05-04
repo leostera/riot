@@ -11,6 +11,7 @@
 5. Workspace build-path configuration lives in the root `riot.toml` under `[riot].target_dir`; treat that as the source of truth for `_build`-style paths.
 6. Formatter ignore configuration lives under `[riot.fmt]` (`ignore = ["substring", ...]`) on both workspace and package manifests. Bare `[fmt]` is only a compatibility fallback.
 7. The default `debug` profile is the debugger-friendly baseline: native code with debug symbols and minimal optimization (currently `-inline 0` plus `-g`).
+7a. The default `fuzz` profile is the fuzzing baseline: native debug code plus AFL-compatible OCaml instrumentation. Keep it suitable for `riot fuzz`, not release benchmarking.
 8. `Ocaml_compiler` owns the shared OCaml warning/flag vocabulary and its string codec for planner and toolchain packages.
 9. `User_config` is the shared `~/.riot/config.toml` vocabulary. Registry entries carry `api_url`, `cdn_url`, and `api_token`; preserve those fields across parse/save/update paths.
 10. Test support trees under `tests/fixtures/`, `tests/generated/`, and `tests/diagnostics/` are non-compilable inputs. Keep them out of `Package.sources.tests` and test-binary autodiscovery.

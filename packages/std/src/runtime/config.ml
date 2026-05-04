@@ -11,7 +11,20 @@ type t = {
   scheduler_count: int;
 }
 
-let default_scheduler_count = Int.max 1 (Thread.available_parallelism - 1)
+let requested_scheduler_count =
+  match Env.get ~var:"RIOT_SCHEDULERS" with
+  | Some value -> (
+      match Int.parse value with
+      | Some count when count > 0 -> Some count
+      | Some _
+      | None -> None
+    )
+  | None -> None
+
+let default_scheduler_count =
+  match requested_scheduler_count with
+  | Some count -> count
+  | None -> Int.max 1 (Thread.available_parallelism - 1)
 
 let default = { timer_resolution = Millisecond; scheduler_count = default_scheduler_count }
 

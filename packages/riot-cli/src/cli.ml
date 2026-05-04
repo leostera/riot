@@ -12,6 +12,7 @@ let build_cli = fun () ->
     Clean.command;
     Completions.command;
     Fix_cmd.command;
+    Fuzz_cmd.command;
     Riot_fmt.command;
     Info_cmd.command;
     Riot_init.command;
@@ -351,26 +352,16 @@ let run = fun ~args ->
           let verbose = ArgParser.get_count matches "verbose" in
           set_verbosity verbose;
           match ArgParser.get_subcommand matches with
-          | Some ("build", build_matches) -> (
-              match require_clean_workspace (get_workspace_scan ()) with
-              | Ok workspace -> (
-                  let () = trace_cli "ensure-toolchain-start" in
-                  match ensure_toolchain workspace with
-                  | Ok () ->
-                      let () = trace_cli "ensure-toolchain-done" in
-                      let () = trace_cli "build-prepare-start" in
-                      (
-                        match ensure_workspace workspace with
-                        | Error _ as e -> e
-                        | Ok workspace ->
-                            let () = trace_cli "build-prepare-done" in
-                            let () = trace_cli "build-run-start" in
-                            Build.run ~workspace build_matches
-                      )
-                  | Error _ as e -> e
-                )
-              | Error _ as e -> e
-            )
+          | Some ("build", build_matches) ->
+              let* workspace = require_clean_workspace (get_workspace_scan ()) in
+              let () = trace_cli "ensure-toolchain-start" in
+              let* () = ensure_toolchain workspace in
+              let () = trace_cli "ensure-toolchain-done" in
+              let () = trace_cli "build-prepare-start" in
+              let* workspace = ensure_workspace workspace in
+              let () = trace_cli "build-prepare-done" in
+              let () = trace_cli "build-run-start" in
+              Build.run ~workspace build_matches
           | Some ("run", run_matches) -> (
               let workspace_scan = get_workspace_scan () in
               let (workspace, workspace_error) =
@@ -390,41 +381,25 @@ let run = fun ~args ->
               Run.run_with_workspace_info ~workspace ~workspace_error run_matches
             )
           | Some ("search", search_matches) -> Search.run search_matches
-          | Some ("snapshots", snapshots_matches) -> (
-              match require_clean_workspace (get_workspace_scan ()) with
-              | Ok workspace -> (
-                  match ensure_workspace workspace with
-                  | Ok workspace -> Snapshots.run ~workspace snapshots_matches
-                  | Error _ as e -> e
-                )
-              | Error _ as e -> e
-            )
-          | Some ("test", test_matches) -> (
-              match require_clean_workspace (get_workspace_scan ()) with
-              | Ok workspace -> (
-                  match ensure_toolchain workspace with
-                  | Ok () -> (
-                      match ensure_workspace workspace with
-                      | Ok workspace -> Test_cmd.run ~workspace test_matches
-                      | Error _ as e -> e
-                    )
-                  | Error _ as e -> e
-                )
-              | Error _ as e -> e
-            )
-          | Some ("bench", bench_matches) -> (
-              match require_clean_workspace (get_workspace_scan ()) with
-              | Ok workspace -> (
-                  match ensure_toolchain workspace with
-                  | Ok () -> (
-                      match ensure_workspace workspace with
-                      | Ok workspace -> Bench_cmd.run ~workspace bench_matches
-                      | Error _ as e -> e
-                    )
-                  | Error _ as e -> e
-                )
-              | Error _ as e -> e
-            )
+          | Some ("snapshots", snapshots_matches) ->
+              let* workspace = require_clean_workspace (get_workspace_scan ()) in
+              let* workspace = ensure_workspace workspace in
+              Snapshots.run ~workspace snapshots_matches
+          | Some ("test", test_matches) ->
+              let* workspace = require_clean_workspace (get_workspace_scan ()) in
+              let* () = ensure_toolchain workspace in
+              let* workspace = ensure_workspace workspace in
+              Test_cmd.run ~workspace test_matches
+          | Some ("fuzz", fuzz_matches) ->
+              let* workspace = require_clean_workspace (get_workspace_scan ()) in
+              let* () = ensure_toolchain workspace in
+              let* workspace = ensure_workspace workspace in
+              Fuzz_cmd.run ~workspace fuzz_matches
+          | Some ("bench", bench_matches) ->
+              let* workspace = require_clean_workspace (get_workspace_scan ()) in
+              let* () = ensure_toolchain workspace in
+              let* workspace = ensure_workspace workspace in
+              Bench_cmd.run ~workspace bench_matches
           | Some ("add", add_matches) -> (
               match get_workspace_scan () with
               | Loaded (_workspace, load_errors) when not (List.is_empty load_errors) -> (

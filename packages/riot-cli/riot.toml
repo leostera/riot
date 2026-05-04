@@ -20,8 +20,10 @@ riot-install = { path = "../riot-install", version = "*" }
 riot-model = { path = "../riot-model", version = "*" }
 riot-planner = { path = "../riot-planner", version = "*" }
 riot-build = { path = "../riot-build", version = "*" }
+riot-test = { path = "../riot-test", version = "*" }
 riot-store = { path = "../riot-store", version = "*" }
 riot-bench = { path = "../riot-bench", version = "*" }
+riot-fuzz = { path = "../riot-fuzz", version = "*" }
 riot-toolchain = { path = "../riot-toolchain", version = "*" }
 riot-fix = { path = "../riot-fix", version = "*" }
 riot-fmt = { path = "../riot-fmt", version = "*" }

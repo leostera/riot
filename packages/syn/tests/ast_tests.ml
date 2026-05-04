@@ -1545,6 +1545,30 @@ let test_abstract_type_attribute_boundary_views = fun _ctx ->
   | Ast.StructureItem.Let _ -> Ok ()
   | _ -> Error "expected trailing let declaration after abstract type attribute"
 
+let test_manifest_type_attribute_suffix_views = fun _ctx ->
+  let root =
+    parse_ml "type t = int [@@immediate]\n"
+    |> Result.expect ~msg:"expected parse source file"
+  in
+  let type_item =
+    nth_structure_item root 0
+    |> require_some ~msg:"expected type item"
+  in
+  match Ast.StructureItem.view type_item with
+  | Ast.StructureItem.Type (Ast.TypeDeclarationItem decl) ->
+      let manifest =
+        Ast.TypeDeclaration.manifest decl
+        |> require_some ~msg:"expected type manifest"
+      in
+      let inner =
+        Ast.TypeExpr.inner_without_attribute_suffix manifest
+        |> require_some ~msg:"expected manifest inner type"
+      in
+      assert_type_ident_last_segment inner "int";
+      Test.assert_equal ~expected:4 ~actual:(Ast.TypeExpr.attribute_suffix_token_count manifest);
+      Ok ()
+  | _ -> Error "expected type declaration"
+
 let test_open_declaration_ident_tokens = fun _ctx ->
   let root =
     parse_ml "open Foo.Bar\n"
@@ -4077,6 +4101,9 @@ let tests =
     case
       "ast preserves abstract type attributes before later structure items"
       test_abstract_type_attribute_boundary_views;
+    case
+      "ast exposes manifest type attribute suffix views"
+      test_manifest_type_attribute_suffix_views;
     case
       "ast exposes type extensions and structured exception views"
       test_type_extension_and_exception_views;

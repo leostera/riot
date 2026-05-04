@@ -95,6 +95,37 @@ let test_command_output_emits_idle_callbacks = fun _ctx ->
       else
         Ok ()
 
+let test_command_output_times_out = fun _ctx ->
+  let cmd = Command.make "sh" ~args:[ "-c"; "exec sleep 2" ] in
+  let started = Time.Instant.now () in
+  match Command.output ~timeout:(Time.Duration.from_millis 20) cmd with
+  | Error (Command.SystemError message) ->
+      Error ("expected timeout command to return output, got: " ^ message)
+  | Ok output ->
+      let elapsed_ms = Time.Duration.to_millis (Time.Instant.elapsed started) in
+      if not (Int.equal output.status 137) then
+        Error ("expected timeout status 137, got " ^ Int.to_string output.status)
+      else if elapsed_ms > 1_000 then
+        Error ("expected timeout command to return promptly, elapsed ms: "
+        ^ Int.to_string elapsed_ms)
+      else
+        Ok ()
+
+let test_command_output_limits_captured_streams = fun _ctx ->
+  let cmd = Command.make (self_executable ()) ~args:[ "capture-both-streams" ] in
+  match Command.output ~max_output_bytes:6 cmd with
+  | Error (Command.SystemError message) ->
+      Error ("expected limited capture helper to succeed, got: " ^ message)
+  | Ok output ->
+      if not (Int.equal output.status 0) then
+        Error ("expected limited capture helper to exit 0, got " ^ Int.to_string output.status)
+      else if not (String.equal output.stdout "stdout") then
+        Error ("unexpected limited stdout payload: " ^ output.stdout)
+      else if not (Int.equal (String.length output.stderr) 6) then
+        Error ("unexpected limited stderr length: " ^ Int.to_string (String.length output.stderr))
+      else
+        Ok ()
+
 let test_command_output_returns_when_child_exits_with_inherited_writer = fun _ctx ->
   let cmd = Command.make "sh" ~args:[ "-c"; "printf parent-done; (sleep 2) &" ] in
   let started = Time.Instant.now () in
@@ -221,6 +252,10 @@ let meta_tests = [
     test_command_output_handles_delayed_shell_stdout;
   Test.case "command output streams stdout lines" test_command_output_streams_stdout_lines;
   Test.case "command output emits idle callbacks" test_command_output_emits_idle_callbacks;
+  Test.case "command output times out long-running processes" test_command_output_times_out;
+  Test.case
+    "command output limits captured stream sizes"
+    test_command_output_limits_captured_streams;
   Test.case
     "command output returns after child exit even when another process inherited stdout"
     test_command_output_returns_when_child_exits_with_inherited_writer;

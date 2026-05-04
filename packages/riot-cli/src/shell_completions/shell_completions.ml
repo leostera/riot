@@ -165,6 +165,7 @@ _riot() {
         'update:Update locked dependencies'
         'run:Run a binary'
         'test:Run tests'
+        'fuzz:Run fuzz campaigns'
         'bench:Run benchmarks'
         'clean:Clean build artifacts'
         'install:Install dependencies'
@@ -278,6 +279,30 @@ _riot() {
                 '--large[Run only tests marked large]' \
                 '--flaky[Run only tests marked flaky]' \
                 '(-v --verbose)'{-v,--verbose}'[Verbose output]'
+
+            case $state in
+                packages)
+                    local -a packages
+                    packages=(${(f)"$(riot completions --packages 2>/dev/null)"})
+                    _describe 'package' packages
+                    ;;
+            esac
+            ;;
+        fuzz)
+            _arguments \
+                '1:subcommand:(minimize-corpus)' \
+                '(-p --package)'{-p,--package}'[Fuzz cases from package]:package:->packages' \
+                '(-f --filter)'{-f,--filter}'[Filter fuzz suites and cases by substring]:filter:' \
+                '--list[List fuzz cases without running them]' \
+                '--runs[Number of generated inputs to execute]:count:' \
+                '--duration[Maximum campaign duration, such as 30s, 10m, or 1h]:duration:' \
+                '--max-len[Maximum generated input length]:bytes:' \
+                '--seed[Deterministic fuzzer seed]:seed:' \
+                '--concurrency[Number of fuzz campaigns to run in parallel]:count:' \
+                '--timeout-ms[Maximum time for one generated input]:milliseconds:' \
+                '--replay[Replay a saved input against one selected fuzz case]:path:_files' \
+                '--minimize-corpus[Deprecated alias for riot fuzz minimize-corpus]' \
+                '--json[Emit machine-readable JSONL events]'
             
             case $state in
                 packages)

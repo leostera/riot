@@ -8,6 +8,7 @@ end
 
 module Snapshot = Snapshot
 module FixtureRunner = Fixture_runner
+module Fuzz = Fuzz
 
 type test_result = Test_case.test_result
 
@@ -27,6 +28,7 @@ type ctx = Test_context.t = {
 type test_type =
   | UnitTest
   | Property of { examples: int }
+  | Fuzz of { seeds: int }
 
 type size = Test_case.size =
   | Small
@@ -41,6 +43,8 @@ type test_case = Test_case.t
 let case = Test_case.case
 
 let property = Test_case.property
+
+let fuzz = Test_case.fuzz
 
 let skip = Test_case.skip
 

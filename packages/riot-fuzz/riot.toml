@@ -1,0 +1,17 @@
+[package]
+name = "riot-fuzz"
+version = "0.0.30"
+description = "Coverage-guided fuzzing engine for Riot test binaries"
+license = "Apache-2.0"
+public = false
+
+[lib]
+path = "src/riot_fuzz.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
+riot-test = { path = "../riot-test", version = "*" }
+
+[dev-dependencies]
+propane = { path = "../propane", version = "*" }

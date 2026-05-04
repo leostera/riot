@@ -1451,7 +1451,9 @@ let collect_record_pattern_fields = fun (record: pattern) ->
             fields
             ~value:(
               if node_matches child Ident.is_ident_kind then
-                RecordPatternField { ident = Ident.from_node child; pattern; node = child }
+                match Ident.from_node_option child with
+                | Some ident -> RecordPatternField { ident; pattern; node = child }
+                | None -> UnknownRecordPatternField { node = child }
               else
                 UnknownRecordPatternField { node = child }
             );
@@ -1490,10 +1492,10 @@ let first_class_module_pattern_binder = fun pattern ->
       match child_token_at pattern (module_index + 1) with
       | Some token when token_kind_is token Syntax_kind.IDENT
       || token_kind_is token Syntax_kind.UNDERSCORE ->
-          Some (Ident.from_child_range
+          Ident.from_child_range_option
             pattern
             ~start_index:(module_index + 1)
-            ~stop_index:(module_index + 2))
+            ~stop_index:(module_index + 2)
       | _ -> None
     )
   | None -> None
@@ -1539,7 +1541,7 @@ let first_class_module_pattern_ascription = fun pattern ->
 let first_class_module_pattern_ascription_ident = fun pattern ->
   match first_class_module_pattern_ascription_bounds pattern with
   | Some (start, stop) when first_class_module_pattern_range_is_ident pattern start stop ->
-      Some (Ident.from_child_range pattern ~start_index:start ~stop_index:stop)
+      Ident.from_child_range_option pattern ~start_index:start ~stop_index:stop
   | _ -> None
 
 module TypeExpr = struct
@@ -1770,11 +1772,13 @@ module TypeExpr = struct
           )
         | _ -> Unknown type_expr
       )
-    | Syntax_kind.PATH_TYPE ->
-        if Ident.node_is_single_text type_expr "unit" then
-          Apply { ident = Ident.from_node type_expr; args = Vector.with_capacity ~size:0 }
-        else
-          Ident { ident = Ident.from_node type_expr }
+    | Syntax_kind.PATH_TYPE -> (
+        match Ident.from_node_option type_expr with
+        | Some ident when Ident.node_is_single_text type_expr "unit" ->
+            Apply { ident; args = Vector.with_capacity ~size:0 }
+        | Some ident -> Ident { ident }
+        | None -> Unknown type_expr
+      )
     | Syntax_kind.VAR_TYPE -> (
         match Ident.last_token type_expr with
         | Some name -> Var { name }
@@ -1809,7 +1813,11 @@ module TypeExpr = struct
         let (ident, args) = apply_parts type_expr in
         (
           match ident with
-          | Some ident -> Apply { ident = Ident.from_node ident; args }
+          | Some ident -> (
+              match Ident.from_node_option ident with
+              | Some ident -> Apply { ident; args }
+              | None -> Unknown type_expr
+            )
           | None -> Unknown type_expr
         )
     | Syntax_kind.PAREN_TYPE -> (
@@ -1884,7 +1892,20 @@ module TypeExpr = struct
     in
     loop Int.(Node.child_count node - 1)
 
+  let rec attribute_suffix_host = fun type_expr ->
+    match Node.kind type_expr with
+    | Syntax_kind.TYPE_EXPR -> (
+        match (
+          first_child_node_matching type_expr ~matches:is_type_expr_kind,
+          nth_child_node_matching type_expr 1 ~matches:is_type_expr_kind
+        ) with
+        | (Some child, None) -> attribute_suffix_host child
+        | _ -> type_expr
+      )
+    | _ -> type_expr
+
   let first_attribute_suffix_child_index = fun (type_expr: type_expr) ->
+    let type_expr = attribute_suffix_host type_expr in
     let last_body_index = last_non_attribute_suffix_child_index type_expr in
     let first_suffix_index = Int.add last_body_index 1 in
     if Int.(first_suffix_index < Node.child_count type_expr) then
@@ -1895,6 +1916,7 @@ module TypeExpr = struct
       None
 
   let inner_without_attribute_suffix = fun (type_expr: type_expr) ->
+    let type_expr = attribute_suffix_host type_expr in
     match first_attribute_suffix_child_index type_expr with
     | None -> None
     | Some first_suffix_index ->
@@ -1916,6 +1938,7 @@ module TypeExpr = struct
         loop 0
 
   let fold_attribute_suffix_token = fun (type_expr: type_expr) ~init ~fn ->
+    let type_expr = attribute_suffix_host type_expr in
     match first_attribute_suffix_child_index type_expr with
     | None -> init
     | Some first_suffix_index ->
@@ -3056,11 +3079,15 @@ end = struct
         | Some tag -> PolyVariant { tag; payload = normalize_expr_option (first_expr_child expr) }
         | None -> Unknown expr
       )
-    | Syntax_kind.PATH_EXPR ->
-        if ident_is_constructor expr then
-          Constructor { constructor = Ident.from_node expr; payload = None }
-        else
-          Ident { ident = Ident.from_node expr }
+    | Syntax_kind.PATH_EXPR -> (
+        match Ident.from_node_option expr with
+        | None -> Unknown expr
+        | Some ident ->
+            if ident_is_constructor expr then
+              Constructor { constructor = ident; payload = None }
+            else
+              Ident { ident }
+      )
     | Syntax_kind.LITERAL_EXPR -> (
         match literal_token expr with
         | Some token -> Literal { token }
@@ -3540,10 +3567,10 @@ end = struct
     | Some module_index -> (
         match child_token_at expr (module_index + 1) with
         | Some token when token_kind_is token Syntax_kind.IDENT ->
-            Some (Ident.from_child_range
+            Ident.from_child_range_option
               expr
               ~start_index:(module_index + 1)
-              ~stop_index:(module_index + 2))
+              ~stop_index:(module_index + 2)
         | _ -> None
       )
     | None -> None
@@ -3599,7 +3626,7 @@ end = struct
 
   let module_body_ident = fun expr ->
     match module_body_node expr with
-    | Some node when node_kind_is node Syntax_kind.PATH_MODULE_EXPR -> Some (Ident.from_node node)
+    | Some node when node_kind_is node Syntax_kind.PATH_MODULE_EXPR -> Ident.from_node_option node
     | _ -> None
 end
 
@@ -3689,10 +3716,10 @@ end = struct
     | Some exception_index -> (
         match child_token_at expr (exception_index + 1) with
         | Some token when token_kind_is token Syntax_kind.IDENT ->
-            Some (Ident.from_child_range
+            Ident.from_child_range_option
               expr
               ~start_index:(exception_index + 1)
-              ~stop_index:(exception_index + 2))
+              ~stop_index:(exception_index + 2)
         | _ -> None
       )
     | None -> None
@@ -3871,7 +3898,7 @@ end = struct
   let module_ident = fun expr ->
     match module_ident_bounds expr with
     | Some (start, stop) when range_is_ident expr start stop ->
-        Some (Ident.from_child_range expr ~start_index:start ~stop_index:stop)
+        Ident.from_child_range_option expr ~start_index:start ~stop_index:stop
     | _ -> None
 
   let ascription = fun expr ->
@@ -3883,7 +3910,7 @@ end = struct
   let ascription_ident = fun expr ->
     match ascription_bounds expr with
     | Some (start, stop) when range_is_ident expr start stop ->
-        Some (Ident.from_child_range expr ~start_index:start ~stop_index:stop)
+        Ident.from_child_range_option expr ~start_index:start ~stop_index:stop
     | _ -> None
 end
 
@@ -4172,11 +4199,15 @@ end = struct
         | None -> Unknown pattern
       )
     | Syntax_kind.WILDCARD_PATTERN -> Wildcard
-    | Syntax_kind.PATH_PATTERN ->
-        if ident_is_constructor pattern then
-          Constructor { constructor = Ident.from_node pattern; payload = None }
-        else
-          Ident { ident = Ident.from_node pattern }
+    | Syntax_kind.PATH_PATTERN -> (
+        match Ident.from_node_option pattern with
+        | None -> Unknown pattern
+        | Some ident ->
+            if ident_is_constructor pattern then
+              Constructor { constructor = ident; payload = None }
+            else
+              Ident { ident }
+      )
     | Syntax_kind.CONSTRUCT_PATTERN -> (
         let callee = nth_pattern_child pattern 0 in
         let payload = normalize_pattern_option (nth_pattern_child pattern 1) in
@@ -4679,7 +4710,7 @@ end = struct
     in
     match last_dot_before 0 None with
     | Some dot_index when dot_index > 0 ->
-        Some (Ident.from_child_range pattern ~start_index:0 ~stop_index:dot_index)
+        Ident.from_child_range_option pattern ~start_index:0 ~stop_index:dot_index
     | Some _
     | None -> (
         match direct_child_token_index
@@ -4687,7 +4718,7 @@ end = struct
           ~matches:(fun kind ->
             Syntax_kind.(kind = LPAREN || kind = LBRACE || kind = LBRACKET || kind = LBRACKET_BAR)) with
         | Some opening_index when opening_index > 0 ->
-            Some (Ident.from_child_range pattern ~start_index:0 ~stop_index:opening_index)
+            Ident.from_child_range_option pattern ~start_index:0 ~stop_index:opening_index
         | Some _
         | None -> None
       )
@@ -5301,7 +5332,7 @@ module TypeDeclaration = struct
           else
             None
       | Some token when token_kind_is token Syntax_kind.IDENT ->
-          Some (Ident.from_child_range node ~start_index:index ~stop_index:(index + 1))
+          Ident.from_child_range_option node ~start_index:index ~stop_index:(index + 1)
       | _ -> None
     in
     loop 0
@@ -5523,7 +5554,7 @@ module TypeDeclaration = struct
             else
               None
         | Some token when token_kind_is token Syntax_kind.IDENT ->
-            Some (Ident.from_child_range member.node ~start_index:index ~stop_index:(index + 1))
+            Ident.from_child_range_option member.node ~start_index:index ~stop_index:(index + 1)
         | _ -> None
       in
       loop 0
@@ -5893,7 +5924,7 @@ module TypeExtensionDeclaration = struct
         in
         let stop = stop start in
         if stop > start then
-          Some (Ident.from_child_range head ~start_index:start ~stop_index:stop)
+          Ident.from_child_range_option head ~start_index:start ~stop_index:stop
         else
           None
 
@@ -6530,7 +6561,7 @@ module ModuleTypeDeclaration = struct
 
   let body_ident = fun decl ->
     match body_specific_node decl with
-    | Some node when node_kind_is node Syntax_kind.PATH_MODULE_TYPE -> Some (Ident.from_node node)
+    | Some node when node_kind_is node Syntax_kind.PATH_MODULE_TYPE -> Ident.from_node_option node
     | _ -> None
 
   let fold_signature_item = fun decl ~init ~fn ->
@@ -6791,7 +6822,7 @@ module IncludeDeclaration = struct
   let body_ident = fun decl ->
     match first_specific_body decl with
     | Some node when node_kind_is node Syntax_kind.PATH_MODULE_EXPR
-    || node_kind_is node Syntax_kind.PATH_MODULE_TYPE -> Some (Ident.from_node node)
+    || node_kind_is node Syntax_kind.PATH_MODULE_TYPE -> Ident.from_node_option node
     | _ -> None
 end
 
@@ -6849,7 +6880,7 @@ let declaration_name_ident = fun decl ~keyword ->
       in
       match find_colon start_index with
       | Some stop_index when stop_index > start_index ->
-          Some (Ident.from_child_range decl ~start_index ~stop_index)
+          Ident.from_child_range_option decl ~start_index ~stop_index
       | _ -> None
 
 module ValueDeclaration = struct

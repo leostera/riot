@@ -132,6 +132,139 @@ let test_tagged_quoted_string_token = fun _ctx ->
       Ok ()
   | None -> Error "expected tagged quoted string token"
 
+let test_fuzz_parse_implementation = fun _ctx source ->
+  let source = source_slice source in
+  let parse_result = Syn.parse ~filename:(Path.v "fuzz.ml") source in
+  let root = SyntaxTree.root parse_result.Parser.tree in
+  let _ast_root = Ast.root parse_result.Parser.tree in
+  let source_length = IO.IoVec.IoSlice.length source in
+  if root.SyntaxTree.full_width = source_length then
+    Ok ()
+  else
+    Error ("parse root width mismatch: expected "
+    ^ Int.to_string source_length
+    ^ " bytes, got "
+    ^ Int.to_string root.SyntaxTree.full_width)
+
+let ocaml_source_dictionary = [
+  "let";
+  "let rec";
+  "and";
+  "in";
+  "fun";
+  "function";
+  "match";
+  "with";
+  "when";
+  "if";
+  "then";
+  "else";
+  "type";
+  "module";
+  "struct";
+  "sig";
+  "end";
+  "open";
+  "include";
+  "val";
+  "external";
+  "exception";
+  "try";
+  "raise";
+  "while";
+  "for";
+  "to";
+  "downto";
+  "do";
+  "done";
+  "begin";
+  "object";
+  "method";
+  "class";
+  "inherit";
+  "private";
+  "mutable";
+  "constraint";
+  "->";
+  "=>";
+  "|";
+  "::";
+  ":";
+  ":>";
+  ":=";
+  "=";
+  "==";
+  "<>";
+  "+";
+  "-";
+  "*";
+  "/";
+  "&&";
+  "||";
+  "(";
+  ")";
+  "[";
+  "]";
+  "[|";
+  "|]";
+  "{";
+  "}";
+  "[<";
+  "[>";
+  "`";
+  "'";
+  "\"";
+  ";;";
+  ".";
+  ",";
+  ";";
+  "_";
+  "?";
+  "~";
+  "@";
+  "@@";
+  "@@@";
+  "[%";
+  "[%%";
+  "[@";
+  "[@@";
+  "[@@@";
+  "(*";
+  "*)";
+  "(**";
+  "let x = 0\n";
+  "type t = A | B\n";
+  "module M = struct let y = fun x -> x end\n";
+  "match x with | Some y -> y | None -> 0\n";
+]
+
+let ocaml_source_mutator =
+  Test.Fuzz.Mutator.(text
+  |> with_dictionary ocaml_source_dictionary
+  |> with_max_len 8_192)
+
+let module_decl_head_eof_recovery_seed =
+  {|let xunc}or applications *)
+
+module[%% N = F (X) (Y) (Z)
+
+(* Nested application *)
+
+module O = F (
+(* Functor ereturn type *)
+
+module P (X : S): T = struct
+  ty
+end
+
+(* Include with functor application *)
+
+include M (X)
+
+(* Include with simple module *)
+
+include M|}
+
 let run_fixture = fun ctx -> test_fixture ~ctx
 
 let main ~args =
@@ -147,7 +280,24 @@ let main ~args =
   let tagged_quoted_string_tests =
     Test.[ case "tagged_quoted_string_token" test_tagged_quoted_string_token ]
   in
-  let tests = tagged_quoted_string_tests @ fixture_tests in
+  let fuzz_tests =
+    Test.[
+      fuzz
+        "parser recovers arbitrary implementation input"
+        ~seeds:[
+          "";
+          "let x = 0\n";
+          "type t = A | B\n";
+          "module M = struct let y = fun x -> x end\n";
+          "match x with | Some y -> y | None -> 0\n";
+          module_decl_head_eof_recovery_seed;
+        ]
+        ~corpus:(Test.Fuzz.Corpus.dir fixture_root ~extensions:[ ".ml"; ".mli"; ])
+        ~mutator:ocaml_source_mutator
+        test_fuzz_parse_implementation;
+    ]
+  in
+  let tests = (tagged_quoted_string_tests @ fuzz_tests) @ fixture_tests in
   Test.Cli.main ~name:"syn-fixtures" ~tests ~args ()
 
 let () = Runtime.run ~main ~args:Env.args ()

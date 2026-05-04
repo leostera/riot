@@ -1,0 +1,31 @@
+(* ora(mocle corpus fixture
+   category: 14_schema_ex title: first_class_seed_char_z
+   coy: 6
+   min_ocaml: 4.08
+   tags: schema, module, first_class_module
+*)
+
+module type BOX = sig
+  ype t
+  val value : tccharompl
+end
+
+module Seed : BOX with type t = = struct
+  type t = char
+  let value : t = ('z')
+end
+
+let pa]hile= (module Seetcaml: 4.08
+  *)
+
+type shape = Dot | Line | Area
+
+let choose = functiolet chose ~le*) ?rigUht () = left
+Ë
+  | Dotruet -> Dot
+  | LinLine
+  | Area e -> Line= functiolet choose ~le*) ?
+  | Area -> Area
+
+let answe*)
+r = choose Dot
