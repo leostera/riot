@@ -18,12 +18,13 @@ let manifest_name = fun (manifest: Riot_model.Package_manifest.t) -> manifest.na
 let package_result_name = Riot_build.Build_result.package_name
 
 let package_name_in = fun package_name package_names ->
-  Std.List.any package_names ~fn:(Riot_model.Package_name.equal package_name)
+  Std.List.any
+    package_names
+    ~fn:(Riot_model.Package_name.equal package_name)
 
 let new_package_names = fun ~previous requested ->
   requested
-  |> Std.List.filter ~fn:(fun package_name ->
-    not (package_name_in package_name previous))
+  |> Std.List.filter ~fn:(fun package_name -> not (package_name_in package_name previous))
 
 let find_manifest = fun workspace package_name ->
   Std.List.find
@@ -34,8 +35,7 @@ let sort_package_results = fun workspace package_results ->
   let find_result package_name =
     Std.List.find
       package_results
-      ~fn:(fun result ->
-        Riot_model.Package_name.equal (package_result_name result) package_name)
+      ~fn:(fun result -> Riot_model.Package_name.equal (package_result_name result) package_name)
   in
   let rec visit visited acc package_name =
     if Std.List.any visited ~fn:(Riot_model.Package_name.equal package_name) then
@@ -47,10 +47,10 @@ let sort_package_results = fun workspace package_results ->
         | None -> []
         | Some manifest ->
             Riot_model.Package_manifest.all_dependencies manifest
-            |> Std.List.map ~fn:(fun (dependency: Riot_model.Package_manifest.dependency) ->
-              dependency.name)
-            |> Std.List.filter ~fn:(fun dependency_name ->
-              Std.Option.is_some (find_result dependency_name))
+            |> Std.List.map
+              ~fn:(fun (dependency: Riot_model.Package_manifest.dependency) -> dependency.name)
+            |> Std.List.filter
+              ~fn:(fun dependency_name -> Std.Option.is_some (find_result dependency_name))
       in
       let (visited, acc) =
         Std.List.fold_left
@@ -71,12 +71,13 @@ let sort_package_results = fun workspace package_results ->
   |> fun (_visited, sorted) -> sorted
 
 let public_root_of_package_name = fun package_name ->
-  Riot_model.Module_name.(
-    from_string (Riot_model.Package_name.to_string package_name)
-    |> to_string)
+  Riot_model.Module_name.(from_string (Riot_model.Package_name.to_string package_name)
+  |> to_string)
 
 let cmxa_entry = fun (entry: Riot_store.Manifest.export_entry) ->
-  Std.String.ends_with ~suffix:".cmxa" entry.name
+  Std.String.ends_with
+    ~suffix:".cmxa"
+    entry.name
 
 let compiled_root_of_archive = fun archive ->
   let basename = Std.Path.basename archive in
@@ -123,22 +124,25 @@ let library_archives = fun workspace store build_result ->
     Riot_build.Build_result.packages build_result
     |> sort_package_results workspace
     |> Std.List.filter_map
-    ~fn:(fun package_result ->
-      let package_name = Riot_build.Build_result.package_name package_result in
-      archive_path_of_package_result store package_result
-      |> Std.Option.map
-        ~fn:(fun archive -> Context.{
-          package_name;
-          public_root = public_root_of_package_name package_name;
-          compiled_root = compiled_root_of_archive archive;
-          archive;
-        }))
+      ~fn:(fun package_result ->
+        let package_name = Riot_build.Build_result.package_name package_result in
+        archive_path_of_package_result store package_result
+        |> Std.Option.map
+          ~fn:(fun archive ->
+            Context.{
+              package_name;
+              public_root = public_root_of_package_name package_name;
+              compiled_root = compiled_root_of_archive archive;
+              archive;
+            }))
   in
   let take package_name =
     Std.List.filter
       libraries
       ~fn:(fun (library: Context.library_archive) ->
-        Riot_model.Package_name.equal library.package_name package_name)
+        Riot_model.Package_name.equal
+          library.package_name
+          package_name)
   in
   let runtime = take Context.kernel_package_name @ take Context.std_package_name in
   let runtime_package package_name =
@@ -148,11 +152,9 @@ let library_archives = fun workspace store build_result ->
   runtime
   @ Std.List.filter
     libraries
-    ~fn:(fun (library: Context.library_archive) ->
-      not (runtime_package library.package_name))
+    ~fn:(fun (library: Context.library_archive) -> not (runtime_package library.package_name))
 
-let is_detached = fun (session: Context.session) ->
-  Std.Option.is_some session.detached
+let is_detached = fun (session: Context.session) -> Std.Option.is_some session.detached
 
 let ready_message = fun session package_count ->
   let label =
@@ -167,19 +169,18 @@ let build_packages = fun (session: Context.session) ~package_names ->
   let build_package_names = Context.package_request_for_session session ~package_names in
   Riot_build.build
     ~on_event:session.on_event
-    (
-      Riot_build.Request.make
-        ~workspace:session.workspace
-        ~packages:build_package_names
-        ~targets:Riot_model.Target.Host
-        ~scope:Riot_build.Request.Runtime
-        ~profile:Context.profile
-        ()
-    )
+    (Riot_build.Request.make
+      ~workspace:session.workspace
+      ~packages:build_package_names
+      ~targets:Riot_model.Target.Host
+      ~scope:Riot_build.Request.Runtime
+      ~profile:Context.profile
+      ())
   |> Std.Result.map_err ~fn:Riot_build.error_message
 
 let protect = fun label fn ->
-  try fn () with exn -> Error (label ^ ": " ^ Std.Exception.to_string exn)
+  try fn () with
+  | exn -> Error (label ^ ": " ^ Std.Exception.to_string exn)
 
 let session_includes = fun (session: Context.session) includes ~merge ->
   let includes = Context.base_includes session.session_dir (includes @ session.host_includes) in
@@ -208,16 +209,14 @@ let refresh = fun ?(merge_includes = false) (session: Context.session) ~package_
   let* () =
     if load then
       let* libraries =
-        protect "collecting libraries for eval raised" (fun () ->
-          Ok (library_archives session.workspace store build_result))
+        protect
+          "collecting libraries for eval raised"
+          (fun () -> Ok (library_archives session.workspace store build_result))
       in
       let* (loaded, skipped) = Loader.load_library_archives session libraries in
       eprintln
         (
-          "loaded "
-          ^ Std.Int.to_string loaded
-          ^ " libraries"
-          ^ (
+          "loaded " ^ Std.Int.to_string loaded ^ " libraries" ^ (
             if skipped = 0 then
               ""
             else
@@ -231,11 +230,15 @@ let refresh = fun ?(merge_includes = false) (session: Context.session) ~package_
   eprintln (ready_message session package_count);
   Ok ()
 
-let refresh_workspace = fun session ->
-  refresh session ~package_names:[] ~load:false
+let refresh_workspace = fun session -> refresh session ~package_names:[] ~load:false
 
 let refresh_eval = fun session ~packages ->
-  let package_names = Context.unique_package_names (Context.std_package_name :: packages) in
+  let package_names =
+    if is_detached session then
+      Context.unique_package_names (Context.std_package_name :: packages)
+    else
+      Context.unique_package_names packages
+  in
   refresh session ~package_names ~load:(not (Std.List.is_empty packages)) ~merge_includes:true
 
 let load = fun (session: Context.session) ~packages ->

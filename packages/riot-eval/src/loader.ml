@@ -8,16 +8,17 @@ let load_cmxs = fun cmxs_path ->
   try
     Dynlink.loadfile (Std.Path.to_string cmxs_path);
     Ok `Loaded
-  with exn ->
-    let message =
-      match exn with
-      | Dynlink.Error error -> Dynlink.error_message error
-      | _ -> Std.Exception.to_string exn
-    in
-    if already_loaded_error message then
-      Ok (`Skipped message)
-    else
-      Error message
+  with
+  | exn ->
+      let message =
+        match exn with
+        | Dynlink.Error error -> Dynlink.error_message error
+        | _ -> Std.Exception.to_string exn
+      in
+      if already_loaded_error message then
+        Ok (`Skipped message)
+      else
+        Error message
 
 let library_set_key = fun libraries ->
   libraries
@@ -36,16 +37,14 @@ let library_set_key = fun libraries ->
       Std.String.sub hash ~offset:0 ~len:16
 
 let library_plugin_path = fun (session: Context.session) libraries ->
-  Std.Path.(
-    session.session_dir
-    / Std.Path.v (session.module_prefix ^ "_libs_" ^ library_set_key libraries ^ ".cmxs")
-  )
+  Std.Path.(session.session_dir
+  / Std.Path.v (session.module_prefix ^ "_libs_" ^ library_set_key libraries ^ ".cmxs"))
 
 let library_object_dir = fun (session: Context.session) libraries ->
-  Std.Path.(session.session_dir / Std.Path.v (session.module_prefix ^ "_objs_" ^ library_set_key libraries))
+  Std.Path.(session.session_dir
+  / Std.Path.v (session.module_prefix ^ "_objs_" ^ library_set_key libraries))
 
-let unique_strings = fun values ->
-  Std.List.unique values ~compare:Std.String.compare
+let unique_strings = fun values -> Std.List.unique values ~compare:Std.String.compare
 
 let library_key = fun (library: Context.library_archive) ->
   Riot_model.Package_name.to_string library.package_name
@@ -61,26 +60,30 @@ let fresh_libraries = fun (session: Context.session) libraries ->
       let key = library_key library in
       not (Std.List.any session.loaded_libraries ~fn:(Std.String.equal key)))
 
+let loadable_libraries = fun libraries ->
+  Std.List.filter
+    libraries
+    ~fn:(fun (library: Context.library_archive) ->
+      not
+        (Context.is_runtime_package_name library.package_name))
+
 let remember_alias = fun aliases (library: Context.library_archive) ->
   let aliases =
     Std.List.filter
       aliases
       ~fn:(fun (alias: Context.package_alias) ->
-        not (Std.String.equal alias.public_root library.public_root))
+        not
+          (Std.String.equal alias.public_root library.public_root))
   in
   aliases @ [ Context.{ public_root = library.public_root; compiled_root = library.compiled_root } ]
 
 let remember_libraries = fun (session: Context.session) libraries ->
-  let loaded =
-    session.loaded_libraries
-    @ Std.List.map libraries ~fn:library_key
-  in
+  let loaded = session.loaded_libraries @ Std.List.map libraries ~fn:library_key in
   session.loaded_libraries <- unique_strings loaded;
-  session.package_aliases <-
-    Std.List.fold_left
-      libraries
-      ~init:session.package_aliases
-      ~fn:remember_alias
+  session.package_aliases <- Std.List.fold_left
+    libraries
+    ~init:session.package_aliases
+    ~fn:remember_alias
 
 let object_files_in_dir = fun dir ->
   match Std.Fs.read_dir dir with
@@ -89,7 +92,8 @@ let object_files_in_dir = fun dir ->
       entries
       |> Std.Iter.MutIterator.to_list
       |> Std.List.map ~fn:(Std.Path.join dir)
-      |> Std.List.filter ~fn:(fun path -> Std.String.ends_with ~suffix:".o" (Std.Path.basename path))
+      |> Std.List.filter
+        ~fn:(fun path -> Std.String.ends_with ~suffix:".o" (Std.Path.basename path))
 
 let stage_object_file = fun ~link_dir object_file ->
   let dst = Std.Path.(link_dir / Std.Path.v (Std.Path.basename object_file)) in
@@ -104,12 +108,10 @@ let stage_object_file = fun ~link_dir object_file ->
           ^ ": "
           ^ Std.IO.error_message error)
   | Error error ->
-      Error (
-        "failed to check staged native object "
-        ^ Std.Path.to_string dst
-        ^ ": "
-        ^ Std.IO.error_message error
-      )
+      Error ("failed to check staged native object "
+      ^ Std.Path.to_string dst
+      ^ ": "
+      ^ Std.IO.error_message error)
 
 let stage_library_objects = fun session libraries ->
   let link_dir = library_object_dir session libraries in
@@ -137,7 +139,8 @@ let stage_library_objects = fun session libraries ->
   Ok link_dir
 
 let load_library_archives = fun session libraries ->
-  let fresh = fresh_libraries session libraries in
+  let loadable = loadable_libraries libraries in
+  let fresh = fresh_libraries session loadable in
   let skipped = Std.List.length libraries - Std.List.length fresh in
   if Std.List.is_empty fresh then
     Ok (0, skipped)
