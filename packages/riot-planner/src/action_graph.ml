@@ -68,6 +68,23 @@ let opens = fun mods ->
       | MLI mod_ -> Some (Riot_toolchain.Ocamlc.Open (Module.namespaced_name mod_))
       | _ -> None)
 
+let concrete_module_source = fun ~canonical_path mod_ path ->
+  let source_name =
+    path
+    |> Module_name.from_filename
+    |> Module_name.qualified_name
+  in
+  let module_name =
+    mod_
+    |> Module.module_name
+    |> Module_name.qualified_name
+  in
+  if String.equal source_name module_name then
+    ([], path)
+  else
+    let source = canonical_path (Module.module_name mod_) in
+    ([ Action.CopyFile { source = path; destination = source } ], source)
+
 (** Determine compiler flags for stdlib handling based on package dependencies *)
 let stdlib_flags = fun (package: Package.t) ->
   (* Check if this package has stdlib as a dependency *)
@@ -168,46 +185,72 @@ let module_to_actions
   (module_node: Module_node.t)
   (deps: G.Node_id.t list) =
   let base_compile_flags = stdlib_flags package @ profile_compile_flags profile in
+  let has_interface_dependency = fun mod_ ->
+    List.any
+      deps
+      ~fn:(fun dep_id ->
+        match get_dep_kind dep_id with
+        | Some (Module_node.MLI interface_mod) -> Module.eq mod_ interface_mod
+        | _ -> false)
+  in
   match module_node with
   | { kind = MLI mod_; file = Concrete path; open_modules; _ } ->
+      let (copy_actions, source) =
+        concrete_module_source ~canonical_path:Module_name.canonical_mli mod_ path
+      in
       let cmi_output = Module.cmi mod_ in
       let cmti_output = Module.cmti mod_ in
       let outputs = [ cmti_output; cmi_output ] in
       let sources = [ path ] in
       let compile = Action.CompileInterface {
-        source = path;
+        source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules;
       }
       in
-      ([ compile ], outputs, sources)
+      (copy_actions @ [ compile ], outputs, sources)
   | { kind = ML mod_; file = Concrete path; open_modules; _ } ->
+      let (copy_actions, source) =
+        concrete_module_source ~canonical_path:Module_name.canonical_ml mod_ path
+      in
       let native_object_output = Module.o mod_ in
       let cmx_output = Module.cmx mod_ in
-      let cmi_output = Module.cmi mod_ in
       let cmt_output = Module.cmt mod_ in
-      let outputs = [ cmt_output; cmi_output; cmx_output; native_object_output; ] in
+      let outputs =
+        if has_interface_dependency mod_ then
+          [ cmt_output; cmx_output; native_object_output; ]
+        else
+          [ cmt_output; Module.cmi mod_; cmx_output; native_object_output; ]
+      in
       let sources = [ path ] in
       let compile = Action.CompileImplementation {
-        source = path;
+        source;
         outputs;
         includes = Path.v "." :: dep_includes;
         flags = base_compile_flags @ opens open_modules;
       }
       in
-      ([ compile ], outputs, sources)
+      (copy_actions @ [ compile ], outputs, sources)
   | { kind = ML mod_; file = Generated { path; contents }; open_modules; _ } ->
       let write_action = Action.WriteFile { destination = path; content = contents } in
       let native_object_output = Module.o mod_ in
       let cmx_output = Module.cmx mod_ in
-      let cmi_output = Module.cmi mod_ in
       let cmt_output = Module.cmt mod_ in
-      let outputs = [ cmt_output; cmi_output; cmx_output; native_object_output; ] in
+      let outputs =
+        if has_interface_dependency mod_ then
+          [ cmt_output; cmx_output; native_object_output; ]
+        else
+          [ cmt_output; Module.cmi mod_; cmx_output; native_object_output; ]
+      in
       let sources = [] in
-      let is_alias_file = String.ends_with ~suffix:"Aliases.ml-gen" (Path.to_string path) in
+      let requires_impl_flag =
+        match Path.extension path with
+        | Some ".ml" -> false
+        | _ -> true
+      in
       let flags =
-        if is_alias_file then
+        if requires_impl_flag then
           base_compile_flags
           @ (Riot_toolchain.Ocamlc.Impl path
           :: Riot_toolchain.Ocamlc.NoAliasDeps
@@ -509,7 +552,7 @@ let from_module_graph
             ())
     | None -> ()
   in
-  let package_namespace = Package.root_module_name package in
+  let package_namespace = Package_namespace.compiled_root package in
   let library_root_candidates =
     if Option.is_none package.Package.library then
       []

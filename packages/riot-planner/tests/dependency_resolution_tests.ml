@@ -41,6 +41,7 @@ let make_src_graph_builder = fun
                 | Some _ ->
                     Riot_planner.Module_graph.Library_root {
                       library_name = Package_name.to_string package.name;
+                      public_root_name = Package_name.to_string package.name;
                     }
                 | None -> Riot_planner.Module_graph.Loose_sources
               );

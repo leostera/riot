@@ -12,11 +12,7 @@ type t = {
 }
 
 let library_cmxa: t -> Path.t = fun dep ->
-  let cmxa =
-    Module_name.(from_string (Package_name.to_string dep.package.name)
-    |> cmxa)
-  in
-  Path.(dep.artifact_dir / cmxa)
+  Path.(dep.artifact_dir / Package_namespace.library_cmxa dep.package)
 
 let transitive_closure = fun deps ->
   let seen = HashSet.create () in

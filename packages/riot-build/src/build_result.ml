@@ -189,6 +189,8 @@ let package_status = fun (t: package_result) -> t.status
 
 let package_artifact = fun (t: package_result) -> artifact_of_status t.status
 
+let package_artifacts = fun (t: package_result) -> t.artifacts
+
 let rec find_export_in_artifacts = fun artifacts export_name ->
   match artifacts with
   | [] -> None

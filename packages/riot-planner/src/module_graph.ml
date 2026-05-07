@@ -49,7 +49,10 @@ let iter_fold = fun fold value ~fn ->
 module G = Std.Graph.SimpleGraph
 
 type root_mode =
-  | Library_root of { library_name: string }
+  | Library_root of {
+      library_name: string;
+      public_root_name: string;
+    }
   | Loose_sources
 
 type source_group = {
@@ -507,7 +510,7 @@ and handle_ocaml_module = fun ~t ~ctx path ->
    - Concrete foo.ml only depends on child FILES, not subdirectories
    - Generated foo.ml depends on everything (safe because it's explicit)
 *)
-and handle_library = fun ~t ~ctx dir name children ->
+and handle_library = fun ?public_root_name ~t ~ctx dir name children ->
   let { ns; aliases } = ctx in
   let lib_module_name = Module_name.from_string name in
   let intf_file = Module_name.canonical_mli lib_module_name in
@@ -581,11 +584,16 @@ and handle_library = fun ~t ~ctx dir name children ->
         in
         Some (G.add_node t.graph intf)
     in
-    let () =
-      match intf_node with
-      | Some intf_node -> Module_registry.register t.registry intf_mod (G.id intf_node)
-      | None -> ()
-    in
+  let () =
+    match intf_node with
+    | Some intf_node ->
+        Module_registry.register t.registry intf_mod (G.id intf_node);
+        Option.for_each
+          public_root_name
+          ~fn:(fun public_root_name ->
+            Module_registry.register_qualified_name t.registry public_root_name (G.id intf_node))
+    | None -> ()
+  in
     let impl_node =
       let impl =
         Library_interface.make_node
@@ -598,6 +606,10 @@ and handle_library = fun ~t ~ctx dir name children ->
       G.add_node t.graph impl
     in
     Module_registry.register t.registry impl_mod (G.id impl_node);
+  Option.for_each
+    public_root_name
+    ~fn:(fun public_root_name ->
+      Module_registry.register_qualified_name t.registry public_root_name (G.id impl_node));
   (
     match intf_node with
     | Some intf_node ->
@@ -654,7 +666,8 @@ let scan_sources = fun t (group: source_group) (sources: Module_scanner.entry li
   let _ = G.add_node t.graph root_node in
   let ctx = { ns = group.namespace; aliases = [] } in
   match group.root_mode with
-  | Library_root { library_name } -> handle_library ~t ~ctx group.source_dir library_name sources
+  | Library_root { library_name; public_root_name } ->
+      handle_library ~t ~ctx group.source_dir library_name sources ~public_root_name
   | Loose_sources -> do_scan ~t ~ctx sources
 
 let module_name_segments = fun module_name ->
@@ -662,6 +675,33 @@ let module_name_segments = fun module_name ->
     Module_name.namespace module_name
     |> Namespace.to_list
   ) @ [ Module_name.to_string module_name ]
+
+let public_module_segments = fun ~public_root_name module_segments ->
+  match module_segments with
+  | [] -> []
+  | _compiled_root :: rest -> public_root_name :: rest
+
+let string_list_equal = fun left right ->
+  List.length left = List.length right
+  && List.all (List.zip left right) ~fn:(fun (left, right) -> String.equal left right)
+
+let add_public_module_path = fun env ~module_segments ~public_root_name ->
+  let public_segments = public_module_segments ~public_root_name module_segments in
+  if string_list_equal module_segments public_segments then
+    env
+  else
+    Syn.Deps.Env.add_path env ~path:public_segments ~free_names:[ public_root_name ]
+
+let add_public_module_binding = fun env ~module_segments ~public_root_name ~exports ->
+  let public_segments = public_module_segments ~public_root_name module_segments in
+  if string_list_equal module_segments public_segments then
+    env
+  else
+    Syn.Deps.Env.add_binding
+      env
+      ~path:public_segments
+      ~free_names:[ public_root_name ]
+      ~exports
 
 let ocaml_stdlib_module_names = [
   "Arg";
@@ -770,11 +810,13 @@ let rec build_deps_env_for_library = fun
   in
   let library_module_name = Module_name.from_string ~namespace library_name in
   let qualified_root_name = Module_name.qualified_name library_module_name in
+  let library_module_segments = module_name_segments library_module_name in
   let env =
     Syn.Deps.Env.add_path
       env
-      ~path:(module_name_segments library_module_name)
+      ~path:library_module_segments
       ~free_names:[ public_root_name ]
+    |> add_public_module_path ~module_segments:library_module_segments ~public_root_name
   in
   let alias_namespace = Namespace.append namespace (Module_name.to_string library_module_name) in
   let alias_module_name =
@@ -894,11 +936,7 @@ let build_deps_env_for_group = fun
   config (env, root_export_sources) (group: source_group) group_entries ->
   match group.root_mode with
   | Loose_sources -> (env, root_export_sources)
-  | Library_root { library_name } ->
-      let public_root_name =
-        Module_name.from_string library_name
-        |> Module_name.to_string
-      in
+  | Library_root { library_name; public_root_name } ->
       build_deps_env_for_library
         (env, root_export_sources)
         ~package_path:config.package.path
@@ -941,7 +979,11 @@ let dependency_source_groups = fun (package: Package.t) ->
         let root_mode =
           if Path.equal source_dir (Path.v "src") then
             match package.library with
-            | Some _ -> Library_root { library_name = Package_name.to_string package.name }
+            | Some _ ->
+                Library_root {
+                  library_name = Package_namespace.compiled_root package;
+                  public_root_name = Package_namespace.public_root package;
+                }
             | None -> Loose_sources
           else
             Loose_sources
@@ -960,11 +1002,7 @@ let dependency_group_entries = fun ~root (group: source_group) ->
 let dependency_root_export_env = fun config env (group: source_group) group_entries ->
   match group.root_mode with
   | Loose_sources -> env
-  | Library_root { library_name } ->
-      let public_root_name =
-        Module_name.from_string library_name
-        |> Module_name.to_string
-      in
+  | Library_root { library_name; public_root_name } ->
       let lib_def =
         Library_definition.from_entries
           ~namespace:group.namespace
@@ -1011,12 +1049,17 @@ let dependency_root_export_env = fun config env (group: source_group) group_entr
                 let parse_result = Syn.parse ~filename:display_path (source_slice source) in
                 match Syn.Deps.from_parse_result ~env:parse_env parse_result with
                 | Error _ -> env
-                | Ok deps ->
-                    Syn.Deps.Env.add_binding
-                      env
-                      ~path:(module_name_segments library_module_name)
-                      ~free_names:[ public_root_name ]
-                      ~exports:(Syn.Deps.exports deps)
+          | Ok deps ->
+              let module_segments = module_name_segments library_module_name in
+              Syn.Deps.Env.add_binding
+                env
+                ~path:module_segments
+                ~free_names:[ public_root_name ]
+                ~exports:(Syn.Deps.exports deps)
+              |> add_public_module_binding
+                ~module_segments
+                ~public_root_name
+                ~exports:(Syn.Deps.exports deps)
       )
 
 let create = fun config ->
@@ -1070,6 +1113,133 @@ let add_direct_dependency_root = fun t ~package_name ~root_module ->
       |> add_ocaml_stdlib_exports ~root_module
     )
 
+let add_relocation_aliases = fun t ~aliases ->
+  let aliases =
+    aliases
+    |> List.filter
+      ~fn:(fun (public_root, compiled_root) -> not (String.equal public_root compiled_root))
+    |> List.sort ~compare:(fun (left, _) (right, _) -> String.compare left right)
+    |> List.unique ~compare:(fun (left, _) (right, _) -> String.compare left right)
+  in
+  if List.is_empty aliases then
+    ()
+  else
+    let alias_module_name = Package_namespace.compiled_root t.config.package ^ "__Relocation_aliases" in
+    let contents =
+      "(* Relocation aliases generated by riot *)\n"
+      ^ (
+        aliases
+        |> List.map ~fn:(fun (public_root, compiled_root) ->
+          "module " ^ public_root ^ " = " ^ compiled_root)
+        |> String.concat "\n"
+      )
+      ^ "\n"
+    in
+    let path = Path.v (alias_module_name ^ ".ml-gen") in
+    let mod_ = Module.make ~namespace:Namespace.empty ~filename:path in
+    let node_value =
+      Module_node.make_ml mod_ (Module_node.Generated { path; contents })
+    in
+    let alias_node = G.add_node t.graph node_value in
+    Module_registry.register t.registry mod_ (G.id alias_node);
+    let own_public_root = Package_namespace.public_root t.config.package in
+    let own_compiled_root = Package_namespace.compiled_root t.config.package in
+    let has_own_alias =
+      List.any aliases ~fn:(fun (public_root, compiled_root) ->
+        String.equal public_root own_public_root && String.equal compiled_root own_compiled_root)
+    in
+    if has_own_alias then
+      (
+        try
+          Module_registry.get_by_qualified_name t.registry own_compiled_root
+          |> List.filter_map
+            ~fn:(fun node_id ->
+              match G.get_node t.graph node_id with
+              | Some node -> (
+                  match (G.value node).kind with
+                  | Module_node.MLI _ -> Some node
+                  | _ -> None
+                )
+              | None -> None)
+          |> List.for_each ~fn:(fun root_node -> G.add_edge alias_node ~depends_on:root_node)
+        with
+        | Not_found -> ()
+      );
+    G.iter
+      t.graph
+      ~fn:(fun node_id node ->
+        if not (G.Node_id.eq node_id (G.id alias_node)) then (
+          let value = G.value node in
+          match value.kind with
+          | Module_node.ML mod_
+          | Module_node.MLI mod_ ->
+              if not (
+                match value.file with
+                | Module_node.Concrete _ -> true
+                | Module_node.Generated _ -> false
+              ) then
+                ()
+              else if has_own_alias && String.equal (Module.namespaced_name mod_) own_compiled_root then
+                ()
+              else (
+                Module_node.set_open_modules value (value.open_modules @ [ alias_node ]);
+                G.add_edge node ~depends_on:alias_node
+              )
+          | _ -> ()
+        ))
+
+let add_self_relocation_alias = fun t ->
+  let public_root = Package_namespace.public_root t.config.package in
+  let compiled_root = Package_namespace.compiled_root t.config.package in
+  if String.equal public_root compiled_root then
+    ()
+  else
+    let alias_module_name = compiled_root ^ "__Self_relocation_aliases" in
+    let contents =
+      "(* Self relocation alias generated by riot *)\n"
+      ^ "module "
+      ^ public_root
+      ^ " = "
+      ^ compiled_root
+      ^ "\n"
+    in
+    let path = Path.v (alias_module_name ^ ".ml-gen") in
+    let mod_ = Module.make ~namespace:Namespace.empty ~filename:path in
+    let node_value =
+      Module_node.make_ml mod_ (Module_node.Generated { path; contents })
+    in
+    let alias_node = G.add_node t.graph node_value in
+    Module_registry.register t.registry mod_ (G.id alias_node);
+    let root_interface_nodes =
+      try
+        Module_registry.get_by_qualified_name t.registry compiled_root
+        |> List.filter_map
+          ~fn:(fun node_id ->
+            match G.get_node t.graph node_id with
+            | Some node -> (
+                match (G.value node).kind with
+                | Module_node.MLI _ -> Some node
+                | _ -> None
+              )
+            | None -> None)
+      with
+      | Not_found -> []
+    in
+    List.for_each root_interface_nodes ~fn:(fun root_node -> G.add_edge alias_node ~depends_on:root_node);
+    G.iter
+      t.graph
+      ~fn:(fun node_id node ->
+        if not (G.Node_id.eq node_id (G.id alias_node)) then (
+          let value = G.value node in
+          match (value.kind, value.file) with
+          | ((Module_node.ML _ | Module_node.MLI _), Module_node.Concrete path)
+              when Option.is_some (binary_for_path t.config path) ->
+              Module_node.set_open_modules value (value.open_modules @ [ alias_node ]);
+              G.add_edge node ~depends_on:alias_node;
+              List.for_each root_interface_nodes ~fn:(fun root_node -> G.add_edge node ~depends_on:root_node)
+          | _ -> ()
+        ))
+
 let dependency_export_source_path = fun
   (Export_from_ml { source_path; _ } | Export_from_mli { source_path; _ }) -> source_path
 
@@ -1113,14 +1283,22 @@ let prime_dependency_root_exports = fun dependency_config env root_export_source
           match Syn.Deps.from_parse_result ~env:parse_env parse_result with
           | Error _ -> env
           | Ok deps ->
-              Syn.Deps.Env.add_binding
+              let public_root_name = dependency_export_public_root_name source in
+              let env =
+                Syn.Deps.Env.add_binding
+                  env
+                  ~path:module_segments
+                  ~free_names:[ public_root_name ]
+                  ~exports:(Syn.Deps.exports deps)
+              in
+              add_public_module_binding
                 env
-                ~path:module_segments
-                ~free_names:[ dependency_export_public_root_name source ]
+                ~module_segments
+                ~public_root_name
                 ~exports:(Syn.Deps.exports deps))
 
 let add_direct_dependency_package = fun t (package: Package.t) ->
-  let root_module = Package.root_module_name package in
+  let root_module = Package_namespace.public_root package in
   add_direct_dependency_root t ~package_name:package.name ~root_module;
   let source_groups = dependency_source_groups package in
   let scanned_groups =
@@ -1377,7 +1555,7 @@ let wire_dependencies = fun ?(on_source_analyzed = fun (_:source_analysis_progre
     | Some group ->
         let base_namespace =
           match group.root_mode with
-          | Library_root { library_name } ->
+          | Library_root { library_name; _ } ->
               Module_name.from_string library_name
               |> Module_name.to_string
               |> fun name -> Namespace.from_list [ name ]

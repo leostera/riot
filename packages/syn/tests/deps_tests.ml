@@ -232,6 +232,19 @@ let test_deps_collect_opened_module_root_for_exported_child = fun _ctx ->
   | Ok modules -> Error ("expected deps [Iter], got [" ^ String.concat ", " modules ^ "]")
   | Error err -> Error err
 
+let test_deps_collect_known_root_for_opaque_qualified_open = fun _ctx ->
+  let env =
+    Syn.Deps.Env.empty
+    |> Syn.Deps.Env.add_path ~path:[ "Kernel" ] ~free_names:[ "Kernel" ]
+  in
+  match parse_modules
+    ~env
+    ~filename:"tcp_listener.ml"
+    "open Kernel.Async\nlet readable = Interest.readable\n" with
+  | Ok modules when modules = [ "Kernel" ] -> Ok ()
+  | Ok modules -> Error ("expected deps [Kernel], got [" ^ String.concat ", " modules ^ "]")
+  | Error err -> Error err
+
 let test_deps_collect_super_alias_child_module = fun _ctx ->
   let env =
     Syn.Deps.Env.empty
@@ -475,6 +488,9 @@ let tests =
     case
       "deps collect opened module root for exported child"
       test_deps_collect_opened_module_root_for_exported_child;
+    case
+      "deps collect known root for opaque qualified open"
+      test_deps_collect_known_root_for_opaque_qualified_open;
     case "deps collect Super alias child module" test_deps_collect_super_alias_child_module;
     case "deps ignore lowercase field access roots" test_deps_ignore_lowercase_field_access_roots;
     case

@@ -32,6 +32,7 @@ Use this file as the route map for package-specific guidance. General contributo
 - `packages/riot-store/AGENTS.md`: artifact store and cache layout
 - `packages/riot-toolchain/AGENTS.md`: compiler/toolchain invocation wrappers
 - `packages/riot-build/AGENTS.md`: in-process build session/runtime entrypoints
+- `packages/riot-eval/AGENTS.md`: ephemeral source execution substrate for eval, script files, and REPL phrases
 - `packages/riot-fuzz/AGENTS.md`: coverage-guided fuzzing engine, AFL forkserver/native coverage map, and corpus/crash persistence
 - `packages/riot-test/AGENTS.md`: shared test selection, suite binary discovery, and test harness execution contracts
 - `packages/riot-cli/AGENTS.md`: CLI commands and user-facing flows
@@ -42,6 +43,7 @@ Use this file as the route map for package-specific guidance. General contributo
 - `packages/riot-fmt/AGENTS.md`: `riot fmt` wrapper around krasny-based formatting checks
 - `packages/riot-init/AGENTS.md`: workspace/package scaffolding
 - `packages/riot-run/AGENTS.md`: binary selection and execution on top of `riot-build`
+- `packages/riot-repl/AGENTS.md`: interactive REPL shell, prompts, and directives on top of `riot-eval`
 - `packages/riot-install/AGENTS.md`: binary promotion/install orchestration on top of `riot-build`
 - `packages/riot-fix/AGENTS.md`: linting and auto-fix pipeline
 - `packages/fixme/AGENTS.md`: shared rule-authoring types used by riot-fix and generated `fixme-runner` providers

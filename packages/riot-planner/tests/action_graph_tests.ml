@@ -703,6 +703,7 @@ let test_library_actions_exclude_unreachable_modules = fun _ctx ->
                   allowed_source_files = package.sources.src;
                   root_mode = Riot_planner.Module_graph.Library_root {
                     library_name = Package_name.to_string package.name;
+                    public_root_name = Package_name.to_string package.name;
                   };
                   namespace = Namespace.empty;
                 };
@@ -923,6 +924,7 @@ let plan_actions_for_package = fun ~tmpdir ~package_name ~files ?(binaries = [])
                   | Some _ ->
                       Riot_planner.Module_graph.Library_root {
                         library_name = Package_name.to_string package.name;
+                        public_root_name = Package_name.to_string package.name;
                       }
                   | None -> Riot_planner.Module_graph.Loose_sources
                 );
@@ -1051,6 +1053,7 @@ let plan_action_graph_for_package = fun ~tmpdir ~package_name ~files ?(binaries 
                   | Some _ ->
                       Riot_planner.Module_graph.Library_root {
                         library_name = Package_name.to_string package.name;
+                        public_root_name = Package_name.to_string package.name;
                       }
                   | None -> Riot_planner.Module_graph.Loose_sources
                 );
@@ -1365,6 +1368,7 @@ let test_real_kernel_unix_addr_interface_keeps_sibling_modules = fun _ctx ->
               allowed_source_files = package.sources.src;
               root_mode = Riot_planner.Module_graph.Library_root {
                 library_name = Package_name.to_string package.name;
+                public_root_name = Package_name.to_string package.name;
               };
               namespace = Namespace.empty;
             };

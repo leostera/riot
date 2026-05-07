@@ -1,9 +1,9 @@
 open Std
 
-module Protocol = Protocol
 module Transport = Transport
-module Connection = Connection
+module Protocol = Protocol
 module WebSocket = Websocket
+module Connection = Connection
 module Error = Error
 module SSE = Sse
 module Client = Client

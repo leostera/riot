@@ -26,6 +26,7 @@ module Alias_module = Alias_module
 module Library_interface = Library_interface
 module Library_definition = Library_definition
 module Dependency = Dependency
+module Package_namespace = Package_namespace
 module Planning_error = Planning_error
 module Package_layout_validator = Package_layout_validator
 module Build_unit = Build_unit

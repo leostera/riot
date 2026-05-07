@@ -657,6 +657,14 @@ type human_build_renderer =
   | LoggedBuildEvents
   | BuildDashboard of build_dashboard
 
+type event_renderer = {
+  mode: output_mode;
+  profile: string option;
+  render_state: render_state;
+  human_renderer: human_build_renderer option;
+  seen_registry_updates: string HashSet.t;
+}
+
 let is_interactive_stderr = fun () -> Tty.is_tty (Tty.stderr_fd ())
 
 let build_dashboard_create_state = fun ?profile () ->
@@ -1962,6 +1970,42 @@ let write_build_event = fun ?render_state ?profile ~mode ~seen_registry_updates 
     ~mode
     ~seen_registry_updates
     event
+
+let create_event_renderer = fun ?profile ~mode () ->
+  let profile_name = Option.map profile ~fn:(fun (profile: Riot_model.Profile.t) -> profile.name) in
+  let render_state = create_render_state ?profile:profile_name () in
+  let human_renderer =
+    match mode with
+    | Human -> Some (create_human_build_renderer ?profile:profile_name ())
+    | Json -> None
+  in
+  {
+    mode;
+    profile = profile_name;
+    render_state;
+    human_renderer;
+    seen_registry_updates = HashSet.create ();
+  }
+
+let finish_event_renderer = fun renderer ->
+  Option.for_each renderer.human_renderer ~fn:human_renderer_clear
+
+let event_stream_finished = fun __tmp1 ->
+  match __tmp1 with
+  | Riot_build.Event.Phase (Riot_build.Event.ReturningResults _) -> true
+  | Riot_build.Event.Telemetry (Build_telemetry.BuildFailed _) -> true
+  | _ -> false
+
+let render_event = fun renderer event ->
+  write_build_event_with_renderer
+    ~render_state:renderer.render_state
+    ?profile:renderer.profile
+    ?human_renderer:renderer.human_renderer
+    ~mode:renderer.mode
+    ~seen_registry_updates:renderer.seen_registry_updates
+    event;
+  if event_stream_finished event then
+    finish_event_renderer renderer
 
 let write_package_not_found_error = fun ~mode ~package_name ~available_packages ->
   let package_name = Riot_model.Package_name.to_string package_name in

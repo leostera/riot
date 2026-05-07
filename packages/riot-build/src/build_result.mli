@@ -41,6 +41,8 @@ val package_status: package_result -> package_status
 
 val package_artifact: package_result -> Riot_store.Artifact.t option
 
+val package_artifacts: package_result -> Riot_store.Artifact.t list
+
 val find_export: package_result -> string -> Riot_store.Manifest.export_entry option
 
 val failures_of_build_results: Package_builder.build_result list -> failure list

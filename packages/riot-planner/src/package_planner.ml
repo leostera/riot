@@ -133,7 +133,10 @@ let planning_groups_for_package = fun (package: Package.t) ->
           if Path.equal source_dir (Path.v "src") then
             match package.library with
             | Some _ ->
-                Module_graph.Library_root { library_name = Package_name.to_string package.name }
+                Module_graph.Library_root {
+                  library_name = Package_namespace.planning_library_name package;
+                  public_root_name = Package_namespace.public_root package;
+                }
             | None -> Module_graph.Loose_sources
           else
             Module_graph.Loose_sources
@@ -632,7 +635,7 @@ let package_hash_key = fun (unit_key: Build_unit.key) ->
    If input_hash hasn't changed, we know the full hash is the same!
 *)
 let compute_input_hash_with_cache = fun
-  ?(planner_version = "planner-artifacts:v27")
+  ?(planner_version = "planner-artifacts:v39")
   ?package_hash_key
   ~input_hash_cache
   ~package
@@ -649,6 +652,7 @@ let compute_input_hash_with_cache = fun
      change in ways that must invalidate cached package artifacts.
   *)
   H.write state planner_version;
+  H.write state (Package_namespace.mode_key ());
   (* Build context (includes resolved profile) *)
   Build_ctx.hash state build_ctx;
   (* Toolchain identity must participate in package cache invalidation so

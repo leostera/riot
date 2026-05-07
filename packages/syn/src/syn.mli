@@ -59,6 +59,15 @@ val parse_interface: IO.IoVec.IoSlice.t -> Parser.parse_result
 (** Parse .ml source from an existing source slice. *)
 val parse_implementation: IO.IoVec.IoSlice.t -> Parser.parse_result
 
+(** Returns true when a source slice ends in a lexical toplevel [`;;`] phrase terminator. *)
+val phrase_complete: IO.IoVec.IoSlice.t -> bool
+
+(** Parse one implementation phrase as a single structure item. *)
+val parse_structure_phrase: IO.IoVec.IoSlice.t -> Parser.parse_result
+
+(** Parse one interface phrase as a single signature item. *)
+val parse_signature_phrase: IO.IoVec.IoSlice.t -> Parser.parse_result
+
 (**
    Parse an existing source slice with file-kind selection based on the
    filename extension.

@@ -52,6 +52,11 @@ let profile_of_matches = fun matches ->
   else
     "debug"
 
+let build_profile_of_name = fun name ->
+  match name with
+  | "release" -> Riot_model.Profile.release
+  | _ -> Riot_model.Profile.debug
+
 let trailing_args = fun matches ->
   let args = ArgParser.trailing_args matches in
   match args with
@@ -264,6 +269,30 @@ let write_workspace_error = fun ~mode message ->
         ])
   | Build.Human -> out ("error: " ^ message)
 
+let script_path_of_target = fun target ->
+  let path = Path.v target in
+  if String.ends_with ~suffix:".ml" target then
+    match Fs.exists path with
+    | Ok true -> Some path
+    | Ok false
+    | Error _ -> None
+  else
+    None
+
+let run_script_file = fun ~request ~output_mode ~path ~packages ~args ->
+  match Riot_eval.run_file request ~path ~packages ~args with
+  | Ok () -> Ok ()
+  | Error message ->
+      write_workspace_error ~mode:output_mode message;
+      Error (Failure message)
+
+let detached_eval_request = fun ?on_event ~output_mode () ->
+  match Riot_eval.detached_request ?on_event () with
+  | Ok request -> Ok request
+  | Error message ->
+      write_workspace_error ~mode:output_mode message;
+      Error (Failure message)
+
 let binary_source_label = fun
   ~(workspace:Riot_model.Workspace.t) (binary: Run_runtime.runnable_binary) ->
   match Path.strip_prefix binary.source_path ~prefix:workspace.root with
@@ -311,7 +340,6 @@ let write_binary_list_json = fun ~(workspace:Riot_model.Workspace.t) binaries ->
     ])
 
 let run_with_workspace_info = fun ~workspace ~workspace_error matches ->
-  let seen_registry_updates = Collections.HashSet.create () in
   let extra = trailing_args matches in
   let _verbose = ArgParser.get_count matches "verbose" in
   let list_mode = ArgParser.get_flag matches "list" in
@@ -363,71 +391,110 @@ let run_with_workspace_info = fun ~workspace ~workspace_error matches ->
           );
         Ok ()
   else
+    let renderer =
+      Build.create_event_renderer
+        ~profile:(build_profile_of_name profile)
+        ~mode:output_mode
+        ()
+    in
     let on_event (event: Run_runtime.run_event) =
       match event with
-      | Run_runtime.Build build_event ->
-          Build.write_build_event ~mode:output_mode ~profile ~seen_registry_updates build_event
+      | Run_runtime.Build build_event -> Build.render_event renderer build_event
       | _ -> write_run_event ~mode:output_mode event
     in
-    let resolved_target =
-      match ArgParser.get_one matches "name" with
-      | Some name -> parse_target ?package_filter:pkg_filter name
-      | None -> (
+    let eval_on_event event = on_event (Run_runtime.Build event) in
+    let result =
+      let target_name = ArgParser.get_one matches "name" in
+      match Option.and_then target_name ~fn:script_path_of_target with
+      | Some path -> (
           match workspace with
           | Some workspace ->
-              resolve_implicit_local_target ?package_filter:pkg_filter workspace
-              |> Result.map
-                ~fn:(fun { package_name; binary_name } ->
-                  Local { package_name = Some package_name; binary_name })
-              |> Result.map_err ~fn:(fun err -> Failure err)
+              let request = Riot_eval.request_of_workspace ~on_event:eval_on_event workspace in
+              let packages =
+                match pkg_filter with
+                | None -> []
+                | Some package_name -> [ package_name ]
+              in
+              run_script_file ~request ~output_mode ~path ~packages ~args:extra
           | None ->
-              Error (Failure (Option.unwrap_or ~default:"Not in a riot workspace" workspace_error))
+              if Option.is_some workspace_error then
+                let message = Option.unwrap_or ~default:"Not in a riot workspace" workspace_error in
+                (
+                  write_workspace_error ~mode:output_mode message;
+                  Error (Failure message)
+                )
+              else
+                let* request = detached_eval_request ~on_event:eval_on_event ~output_mode () in
+                let packages =
+                  match pkg_filter with
+                  | None -> []
+                  | Some package_name -> [ package_name ]
+                in
+                run_script_file ~request ~output_mode ~path ~packages ~args:extra
         )
+      | None ->
+          let resolved_target =
+            match target_name with
+            | Some name -> parse_target ?package_filter:pkg_filter name
+            | None -> (
+                match workspace with
+                | Some workspace ->
+                    resolve_implicit_local_target ?package_filter:pkg_filter workspace
+                    |> Result.map
+                      ~fn:(fun { package_name; binary_name } ->
+                        Local { package_name = Some package_name; binary_name })
+                    |> Result.map_err ~fn:(fun err -> Failure err)
+                | None ->
+                    Error (Failure (Option.unwrap_or ~default:"Not in a riot workspace" workspace_error))
+              )
+          in
+          match resolved_target with
+          | Error (Failure message as err) ->
+              write_workspace_error ~mode:output_mode message;
+              Error err
+          | Error _ as err -> err
+          | Ok target ->
+              let result =
+                match target with
+                | Remote_source { source_spec; binary_name } ->
+                    Run_runtime.run_source
+                      ~on_event
+                      {
+                        source_spec;
+                        binary_name;
+                        profile;
+                        update;
+                        args = extra;
+                      }
+                    |> Result.map_err ~fn:(fun err -> `Run err)
+                | Local { package_name; binary_name } -> (
+                    match workspace with
+                    | Some workspace ->
+                        Run_runtime.run
+                          ~on_event
+                          {
+                            workspace;
+                            package_name;
+                            binary_name;
+                            profile;
+                            args = extra;
+                          }
+                        |> Result.map_err ~fn:(fun err -> `Run err)
+                    | None ->
+                        Error (`Cli (Option.unwrap_or ~default:"Not in a riot workspace" workspace_error))
+                  )
+              in
+              match result with
+              | Ok () -> Ok ()
+              | Error (`Cli message) ->
+                  write_workspace_error ~mode:output_mode message;
+                  Error (Failure message)
+              | Error (`Run err) ->
+                  write_run_error ~mode:output_mode err;
+                  Error (Failure (Run_runtime.run_error_message err))
     in
-    match resolved_target with
-    | Error (Failure message as err) ->
-        write_workspace_error ~mode:output_mode message;
-        Error err
-    | Error _ as err -> err
-    | Ok target ->
-        let result =
-          match target with
-          | Remote_source { source_spec; binary_name } ->
-              Run_runtime.run_source
-                ~on_event
-                {
-                  source_spec;
-                  binary_name;
-                  profile;
-                  update;
-                  args = extra;
-                }
-              |> Result.map_err ~fn:(fun err -> `Run err)
-          | Local { package_name; binary_name } -> (
-              match workspace with
-              | Some workspace ->
-                  Run_runtime.run
-                    ~on_event
-                    {
-                      workspace;
-                      package_name;
-                      binary_name;
-                      profile;
-                      args = extra;
-                    }
-                  |> Result.map_err ~fn:(fun err -> `Run err)
-              | None ->
-                  Error (`Cli (Option.unwrap_or ~default:"Not in a riot workspace" workspace_error))
-            )
-        in
-        match result with
-        | Ok () -> Ok ()
-        | Error (`Cli message) ->
-            write_workspace_error ~mode:output_mode message;
-            Error (Failure message)
-        | Error (`Run err) ->
-            write_run_error ~mode:output_mode err;
-            Error (Failure (Run_runtime.run_error_message err))
+    Build.finish_event_renderer renderer;
+    result
 
 let run = fun ~workspace matches ->
   run_with_workspace_info

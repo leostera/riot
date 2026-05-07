@@ -23,6 +23,12 @@ let parse_interface = Parser.parse_interface
 
 let parse_implementation = Parser.parse_implementation
 
+let phrase_complete = Parser.phrase_complete
+
+let parse_structure_phrase = Parser.parse_structure_phrase
+
+let parse_signature_phrase = Parser.parse_signature_phrase
+
 let parse = Parser.parse
 
 let source_slice = fun source ->

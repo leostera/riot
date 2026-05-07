@@ -1,4 +1,5 @@
 open Std
+open Std.Result.Syntax
 open Std.Data
 open Std.Collections
 open Syn
@@ -131,6 +132,49 @@ let test_tagged_quoted_string_token = fun _ctx ->
       Test.assert_equal ~expected:"{explain|hello|explain}" ~actual:(Ast.Token.text token);
       Ok ()
   | None -> Error "expected tagged quoted string token"
+
+let require_clean_parse = fun parse_result ->
+  if Vector.length parse_result.Parser.diagnostics > 0 then
+    Error ("unexpected parse diagnostics:\n" ^ diagnostics_to_string parse_result.Parser.diagnostics)
+  else
+    Ok ()
+
+let implementation_item_count = fun parse_result ->
+  let source_file = Ast.SourceFile.make parse_result.Parser.tree in
+  match Ast.SourceFile.view source_file with
+  | Ast.SourceFile.Implementation implementation -> Ast.Implementation.item_count implementation
+  | Ast.SourceFile.Interface _ -> 0
+
+let signature_item_count = fun parse_result ->
+  let source_file = Ast.SourceFile.make parse_result.Parser.tree in
+  match Ast.SourceFile.view source_file with
+  | Ast.SourceFile.Interface interface -> Ast.Interface.item_count interface
+  | Ast.SourceFile.Implementation _ -> 0
+
+let test_phrase_complete_uses_tokens = fun _ctx ->
+  Test.assert_false (Syn.phrase_complete (source_slice "let text = \";;\""));
+  Test.assert_false (Syn.phrase_complete (source_slice "let value = 1 (* ;; *)"));
+  Test.assert_true (Syn.phrase_complete (source_slice "let text = \";;\";;"));
+  Test.assert_true (Syn.phrase_complete (source_slice "let value = 1 (* ;; *)  ;;\n"));
+  Ok ()
+
+let test_parse_structure_phrase = fun _ctx ->
+  let parse_result = Syn.parse_structure_phrase (source_slice "open Std.Net;;") in
+  let* () = require_clean_parse parse_result in
+  Test.assert_equal ~expected:1 ~actual:(implementation_item_count parse_result);
+  Ok ()
+
+let test_open_followed_by_expr_item = fun _ctx ->
+  let parse_result = Syn.parse_implementation (source_slice "open Std\n\nprintln \"hi\"") in
+  let* () = require_clean_parse parse_result in
+  Test.assert_equal ~expected:2 ~actual:(implementation_item_count parse_result);
+  Ok ()
+
+let test_parse_signature_phrase = fun _ctx ->
+  let parse_result = Syn.parse_signature_phrase (source_slice "val run : unit -> unit;;") in
+  let* () = require_clean_parse parse_result in
+  Test.assert_equal ~expected:1 ~actual:(signature_item_count parse_result);
+  Ok ()
 
 let test_fuzz_parse_implementation = fun _ctx source ->
   let source = source_slice source in
@@ -278,7 +322,13 @@ let main ~args =
       ~run:run_fixture
   in
   let tagged_quoted_string_tests =
-    Test.[ case "tagged_quoted_string_token" test_tagged_quoted_string_token ]
+    Test.[
+      case "tagged_quoted_string_token" test_tagged_quoted_string_token;
+      case "phrase_complete uses lexical tokens" test_phrase_complete_uses_tokens;
+      case "parse_structure_phrase parses one structure item" test_parse_structure_phrase;
+      case "open followed by expression item" test_open_followed_by_expr_item;
+      case "parse_signature_phrase parses one signature item" test_parse_signature_phrase;
+    ]
   in
   let fuzz_tests =
     Test.[

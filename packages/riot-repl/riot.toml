@@ -5,6 +5,12 @@ description = "REPL support for Riot tooling"
 license = "Apache-2.0"
 public = false
 
+[lib]
+path = "src/Riot_repl.ml"
+
 [dependencies]
-std = "*"
-# Add dependencies here
+kernel = { path = "../kernel", version = "*" }
+std = { path = "../std", version = "*" }
+riot-eval = { path = "../riot-eval", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
+tty = { path = "../tty", version = "*" }

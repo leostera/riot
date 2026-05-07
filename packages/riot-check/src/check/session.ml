@@ -243,7 +243,10 @@ let planner_source_groups_for_package = fun ?(include_dev = false) (pkg: Package
 let planner_source_group = fun (pkg: Package.t) planning_root allowed_source_files ->
   let root_mode =
     if Path.equal planning_root (Path.v "src") then
-      Riot_planner.Module_graph.Library_root { library_name = Package_name.to_string pkg.name }
+      Riot_planner.Module_graph.Library_root {
+        library_name = Riot_planner.Package_namespace.planning_library_name pkg;
+        public_root_name = Riot_planner.Package_namespace.public_root pkg;
+      }
     else
       Riot_planner.Module_graph.Loose_sources
   in

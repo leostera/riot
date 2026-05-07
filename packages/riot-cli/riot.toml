@@ -31,7 +31,9 @@ riot-fmt = { path = "../riot-fmt", version = "*" }
 riot-lsp = { path = "../riot-lsp", version = "*" }
 riot-doc = { path = "../riot-doc", version = "*" }
 riot-deps = { path = "../riot-deps", version = "*" }
+riot-eval = { path = "../riot-eval", version = "*" }
 riot-publish = { path = "../riot-publish", version = "*" }
+riot-repl = { path = "../riot-repl", version = "*" }
 pkgs-ml = { path = "../pkgs-ml", version = "*" }
 tty = { path = "../tty", version = "*" }
 contentstore = { path = "../contentstore", version = "*" }

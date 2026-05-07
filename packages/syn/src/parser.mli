@@ -38,6 +38,22 @@ val parse_implementation: IO.IoVec.IoSlice.t -> parse_result
 val parse_interface: IO.IoVec.IoSlice.t -> parse_result
 
 (**
+   Returns true when the source slice ends in a lexical toplevel phrase
+   terminator [`;;`], ignoring trailing trivia and EOF.
+
+   This is intended for REPL-style buffering. It does not mean the phrase is
+   syntactically valid; callers should still parse the completed phrase and
+   inspect diagnostics.
+*)
+val phrase_complete: IO.IoVec.IoSlice.t -> bool
+
+(** Parse one implementation phrase as a single structure item. *)
+val parse_structure_phrase: IO.IoVec.IoSlice.t -> parse_result
+
+(** Parse one interface phrase as a single signature item. *)
+val parse_signature_phrase: IO.IoVec.IoSlice.t -> parse_result
+
+(**
    Parse a source slice, choosing interface grammar for `.mli` filenames and
    implementation grammar otherwise.
 *)

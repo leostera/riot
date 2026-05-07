@@ -120,7 +120,7 @@ let hash = fun action ->
       includes;
       flags;
     } ->
-      Sha256.write hasher "CompileImplementation";
+      Sha256.write hasher "CompileImplementation:v2";
       Sha256.write hasher (Path.to_string source);
       write_sorted_paths hasher outputs;
       write_sorted_paths hasher includes;

@@ -4,7 +4,10 @@ open Riot_model
 module G = Std.Graph.SimpleGraph
 
 type root_mode =
-  | Library_root of { library_name: string }
+  | Library_root of {
+      library_name: string;
+      public_root_name: string;
+    }
   | Loose_sources
 type source_group = {
   source_dir: Path.t;
@@ -41,6 +44,10 @@ val create: config -> t
 val add_direct_dependency_root: t -> package_name:Package_name.t -> root_module:string -> unit
 
 val add_direct_dependency_package: t -> Package.t -> unit
+
+val add_relocation_aliases: t -> aliases:(string * string) list -> unit
+
+val add_self_relocation_alias: t -> unit
 
 val wire_dependencies:
   ?on_source_analyzed:(source_analysis_progress -> unit) ->

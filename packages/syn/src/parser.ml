@@ -4061,9 +4061,12 @@ and parse_exception_decl = fun p ~signature ->
 and parse_open_decl = fun p ~signature ->
   let marker = start_node p in
   expect p Syntax_kind.OPEN_KW (invalid_expression p);
+  ignore (bump_if p Syntax_kind.BANG);
   if is_eof p || at_item_boundary p ~signature then
     Event.Buffer.error p.events (missing_module_path p)
   else
+    ignore (parse_module_expr p ~signature);
+  if not (is_eof p || at_item_boundary p ~signature || leading_trivia_contains_newline p) then
     consume_until_item_boundary p ~signature;
   ignore (complete p marker Syntax_kind.OPEN_DECL)
 
@@ -4172,7 +4175,75 @@ and consume_phrase_separators = fun p ->
     consume_phrase_separators p
   )
 
-and parse_file = fun kind source ->
+let phrase_complete = fun source ->
+  let token_stream =
+    Lexer.tokenize source
+    |> Raw_token.from_lexer_tokens ~source
+  in
+  let significant = token_stream.Raw_token.significant in
+  let significant_len = Vector.length significant in
+  if significant_len < 3 then
+    false
+  else
+    let raw_tokens = token_stream.Raw_token.raw in
+    let token_at significant_index =
+      let raw_index = Vector.get_unchecked significant ~at:significant_index in
+      (Vector.get_unchecked raw_tokens ~at:raw_index).Raw_token.kind
+    in
+    Syntax_kind.(token_at (significant_len - 3) = SEMI
+    && token_at (significant_len - 2) = SEMI
+    && token_at (significant_len - 1) = EOF)
+
+let recover_rest_as_errors = fun p diagnostic ->
+  let rec loop () =
+    if not (is_eof p) then (
+      let before = p.pos in
+      recover_current_as_error p diagnostic;
+      ensure_progress p before diagnostic;
+      loop ()
+    )
+  in
+  loop ()
+
+let parse_phrase = fun kind source ->
+  let p = create source in
+  let root = start_node p in
+  let body = start_node p in
+  consume_phrase_separators p;
+  (
+    match kind with
+    | `Implementation ->
+        if not (is_eof p) then (
+          let before = p.pos in
+          parse_structure_item p;
+          ensure_progress p before (invalid_expression p)
+        );
+        consume_phrase_separators p;
+        recover_rest_as_errors p (invalid_expression p);
+        ignore (complete p body Syntax_kind.IMPLEMENTATION)
+    | `Interface ->
+        if not (is_eof p) then (
+          let before = p.pos in
+          parse_signature_item p;
+          ensure_progress p before (unexpected_signature_item p)
+        );
+        consume_phrase_separators p;
+        recover_rest_as_errors p (unexpected_signature_item p);
+        ignore (complete p body Syntax_kind.INTERFACE)
+  );
+  if is_eof p then
+    bump p;
+  ignore (complete p root Syntax_kind.SOURCE_FILE);
+  let tree = Syntax_tree.Builder.finish p.events in
+  {
+    source;
+    kind;
+    tokens = p.token_stream;
+    tree;
+    diagnostics = Event.Buffer.diagnostics p.events;
+  }
+
+let parse_file = fun kind source ->
   let p = create source in
   let root = start_node p in
   let body = start_node p in
@@ -4218,6 +4289,10 @@ and parse_file = fun kind source ->
 let parse_implementation = fun source -> parse_file `Implementation source
 
 let parse_interface = fun source -> parse_file `Interface source
+
+let parse_structure_phrase = fun source -> parse_phrase `Implementation source
+
+let parse_signature_phrase = fun source -> parse_phrase `Interface source
 
 let parse = fun ~filename source ->
   match Path.extension filename with

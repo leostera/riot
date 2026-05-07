@@ -21,3 +21,4 @@
 15. Package-layout validation runs after reachability has produced the actual planned closure. Reject target code that reaches library-internal modules or another target's root module; shared helper modules are fine, target entrypoints are not.
 16. Executable target entry files are validated during dependency wiring. Binary, test, example, and bench entry modules must define exactly one top-level `let main ~args = ...` binding.
 17. Package input hashes must consume dependency `output_hash` values, not dependency lookup keys. This keeps downstream packages rebuilding when a cached dependency artifact changes under the same planned input.
+18. Package root relocation is planner-owned. Keep public package roots separate from compiled roots through `Package_namespace`, and include relocation mode in package input hashes when changing this behavior.

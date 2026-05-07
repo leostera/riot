@@ -31,6 +31,7 @@ type plan_result = {
 type direct_dependency_root = {
   package_name: Package_name.t;
   root_module: string;
+  compiled_root_module: string;
   package: Package.t option;
 }
 
@@ -72,9 +73,9 @@ let input_dependency_package_by_name = fun (input: plan_input) package_name ->
 let direct_dependency_roots = fun (input: plan_input) ->
   let seen = HashSet.create () in
   let roots = ref [] in
-  let add ~package_name ~root_module ~package =
+  let add ~package_name ~root_module ~compiled_root_module ~package =
     if HashSet.insert seen ~value:root_module then
-      roots := { package_name; root_module; package } :: !roots
+      roots := { package_name; root_module; compiled_root_module; package } :: !roots
     else
       ()
   in
@@ -87,12 +88,15 @@ let direct_dependency_roots = fun (input: plan_input) ->
         else
           input_dependency_package_by_name input dep.name
       in
-      let root_module =
+      let (root_module, compiled_root_module) =
         match package with
-        | Some package -> Package.root_module_name package
-        | None -> root_module_name_of_package_name dep.name
+        | Some package ->
+            (Package_namespace.public_root package, Package_namespace.compiled_root package)
+        | None ->
+            let root = root_module_name_of_package_name dep.name in
+            (root, root)
       in
-      add ~package_name:dep.name ~root_module ~package);
+      add ~package_name:dep.name ~root_module ~compiled_root_module ~package);
   let () =
     if Option.is_none input.package.library then
       match Dependency.transitive_closure input.depset
@@ -104,7 +108,8 @@ let direct_dependency_roots = fun (input: plan_input) ->
       | Some (dep: Dependency.t) ->
           add
             ~package_name:dep.package.name
-            ~root_module:(Package.root_module_name dep.package)
+            ~root_module:(Package_namespace.public_root dep.package)
+            ~compiled_root_module:(Package_namespace.compiled_root dep.package)
             ~package:(Some dep.package)
     else
       ()
@@ -134,6 +139,16 @@ let plan_node = fun (input: plan_input) ->
               graph_builder
               ~package_name:direct_dependency.package_name
               ~root_module:direct_dependency.root_module);
+    Module_graph.add_relocation_aliases
+      graph_builder
+      ~aliases:(List.filter_map
+        direct_dependency_roots
+        ~fn:(fun direct_dependency ->
+          if String.equal direct_dependency.root_module direct_dependency.compiled_root_module then
+            None
+          else
+            Some (direct_dependency.root_module, direct_dependency.compiled_root_module)));
+    Module_graph.add_self_relocation_alias graph_builder;
     (
       match input.package.sources.native with
       | [] -> ()
@@ -150,7 +165,7 @@ let plan_node = fun (input: plan_input) ->
           | Some _lib ->
               Module_graph.add_library_node
                 graph_builder
-                ~name:(Package_name.to_string input.package.name)
+                ~name:(Package_namespace.planning_library_name input.package)
                 ~includes:[]
           | None -> ()
         );
@@ -221,11 +236,7 @@ let plan_node = fun (input: plan_input) ->
           in
           let own_lib =
             match input.package.library with
-            | Some _ ->
-                [
-                  Module_name.(from_string (Package_name.to_string input.package.name)
-                  |> cmxa);
-                ]
+            | Some _ -> [ Package_namespace.library_cmxa input.package ]
             | None -> []
           in
           let seen_libraries = HashSet.create () in

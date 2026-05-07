@@ -63,6 +63,7 @@ members = [
   "packages/riot-doc",
   "packages/riot-fuzz",
   "packages/riot-test",
+  "packages/riot-eval",
 ]
 ignore = [
   "tests/fixtures",

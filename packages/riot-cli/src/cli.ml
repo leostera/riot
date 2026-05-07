@@ -11,6 +11,7 @@ let build_cli = fun () ->
     Remove.command;
     Clean.command;
     Completions.command;
+    Eval_cmd.command;
     Fix_cmd.command;
     Fuzz_cmd.command;
     Riot_fmt.command;
@@ -23,6 +24,7 @@ let build_cli = fun () ->
     New.command;
     Plan.command;
     Publish.command;
+    Repl_cmd.command;
     Run.command;
     Search.command;
     Snapshots.command;
@@ -153,13 +155,22 @@ let current_manifest_status = fun () ->
         | Error err -> Error ("failed to read riot.toml status: " ^ IO.error_message err)
       )
 
-let ensure_workspace = fun ?overrides (workspace: Riot_model.Workspace_manifest.t) ->
+let pm_emit_of_build_event = fun on_event ->
+  let session_id = Riot_model.Session_id.make () in
+  fun kind ->
+    on_event
+      (Riot_build.Event.Pm
+        (Riot_model.Event.create ~session_id ~level:Riot_model.Event.Info kind))
+
+let ensure_workspace = fun ?overrides ?on_event (workspace: Riot_model.Workspace_manifest.t) ->
   let workspace_manager = Riot_model.Workspace_manager.create () in
   let* registry =
     Pkgs_ml.Registry.create_filesystem ?riot_home:None ~registry_name:"pkgs.ml" ()
     |> Result.map_err ~fn:(fun err -> Failure (Pkgs_ml.Registry_cache.create_error_message err))
   in
+  let emit = Option.map on_event ~fn:pm_emit_of_build_event in
   Riot_deps.ensure_workspace
+    ?emit
     ?overrides
     ~workspace_manager
     ~mode:Riot_deps.Dep_solver.Refresh
@@ -253,6 +264,26 @@ let ensure_toolchain = fun (workspace: Riot_model.Workspace_manifest.t) ->
       eprintln "";
       Error (Failure "Toolchain not available")
 
+let eval_request_from_workspace_scan = fun ~on_event workspace_scan ->
+  match workspace_scan with
+  | Loaded (workspace, load_errors) when List.is_empty load_errors ->
+      let* () = ensure_toolchain workspace in
+      let* workspace = ensure_workspace ~on_event workspace in
+      Ok (Riot_eval.request_of_workspace ~on_event workspace)
+  | Loaded (_workspace, load_errors) ->
+      report_workspace_load_errors load_errors;
+      Error (Failure "Workspace load failed")
+  | NoWorkspace -> (
+      match Riot_eval.detached_request ~on_event () with
+      | Ok request -> Ok request
+      | Error message ->
+          eprintln ("\027[1;31mError\027[0m: " ^ message);
+          Error (Failure message)
+    )
+  | ScanFailed err ->
+      eprintln ("\027[1;31mError\027[0m: " ^ Info_cmd.workspace_scan_error_message err);
+      Error (Failure "Workspace scan failed")
+
 let initialize_runtime = fun () ->
   (* Load config BEFORE starting logger - handlers need config *)
   Std.Config.load_string {|
@@ -265,6 +296,21 @@ format = "full"
   let _ = Std.Log.start_link () in
   let _ = Std.Telemetry.start () in
   ()
+
+let run_eval_command = fun workspace_scan fn ->
+  let renderer =
+    Build.create_event_renderer
+      ~profile:Riot_model.Profile.debug
+      ~mode:Build.Human
+      ()
+  in
+  let on_event event = Build.render_event renderer event in
+  let result =
+    let* request = eval_request_from_workspace_scan ~on_event workspace_scan in
+    fn request
+  in
+  Build.finish_event_renderer renderer;
+  result
 
 let is_lsp_invocation = fun args ->
   let rec loop = fun __tmp1 ->
@@ -383,6 +429,14 @@ let run = fun ~args ->
               let* workspace = ensure_workspace ?overrides workspace in
               let () = trace_cli "plan-prepare-done" in
               Plan.run ~workspace plan_matches
+          | Some ("repl", repl_matches) ->
+              run_eval_command
+                (get_workspace_scan ())
+                (fun request -> Repl_cmd.run ~request repl_matches)
+          | Some ("eval", eval_matches) ->
+              run_eval_command
+                (get_workspace_scan ())
+                (fun request -> Eval_cmd.run ~request eval_matches)
           | Some ("run", run_matches) -> (
               let workspace_scan = get_workspace_scan () in
               let (workspace, workspace_error) =

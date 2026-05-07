@@ -52,6 +52,38 @@ type run_error =
 
 let no_event: run_event -> unit = fun _ -> ()
 
+let eval_host_includes_env = "RIOT_EVAL_HOST_INCLUDES"
+
+let unique_paths = fun paths ->
+  let rec loop seen acc = fun __tmp1 ->
+    match __tmp1 with
+    | [] -> List.reverse acc
+    | path :: rest ->
+        let rendered = Path.to_string path in
+        if List.any seen ~fn:(String.equal rendered) then
+          loop seen acc rest
+        else
+          loop (rendered :: seen) (path :: acc) rest
+  in
+  loop [] [] paths
+
+let build_artifact_dirs = fun ~(store:Riot_store.Store.t) ~(output:Riot_build.Build_result.t) ->
+  Riot_build.Build_result.packages output
+  |> List.flat_map
+    ~fn:(fun package_result ->
+      let artifacts =
+        Option.to_list (Riot_build.Build_result.package_artifact package_result)
+        @ Riot_build.Build_result.package_artifacts package_result
+      in
+      artifacts
+      |> List.map ~fn:(Riot_store.Store.get_artifact_dir store))
+  |> unique_paths
+
+let eval_host_includes_env_value = fun ~store ~output ->
+  build_artifact_dirs ~store ~output
+  |> List.map ~fn:Path.to_string
+  |> String.concat "\n"
+
 let realized_runnable_packages = fun ?package_filter (workspace: Riot_model.Workspace.t) ->
   Riot_model.Workspace.realize_packages ~intent:Riot_model.Package.Run workspace
   |> List.filter ~fn:Riot_model.Package.is_workspace_member
@@ -247,7 +279,12 @@ let run = fun ?(on_event = no_event) (request: run_request) ->
   let* path = find_built_binary_path ~store ~output ~package_name ~binary_name:request.binary_name in
   on_event
     (RunningBinary { package = package_name; binary = request.binary_name; args = request.args });
-  let cmd = Command.make (Path.to_string path) ~args:request.args in
+  let cmd =
+    Command.make
+      (Path.to_string path)
+      ~args:request.args
+      ~env:[ (eval_host_includes_env, eval_host_includes_env_value ~store ~output); ]
+  in
   match Command.status cmd with
   | Ok 0 -> Ok ()
   | Ok code -> Error (ProcessExited code)

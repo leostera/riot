@@ -164,6 +164,8 @@ _riot() {
         'rm:Remove dependencies'
         'update:Update locked dependencies'
         'run:Run a binary'
+        'repl:Start the Riot REPL'
+        'eval:Evaluate Riot code'
         'test:Run tests'
         'fuzz:Run fuzz campaigns'
         'bench:Run benchmarks'
@@ -434,6 +436,19 @@ _riot() {
                 '--json[Emit machine-readable JSON output]' \
                 ':path:_files'
             ;;
+        eval)
+            _arguments \
+                '(-p --package)'{-p,--package}'[Build and load package before evaluation]:package:->packages' \
+                '*:code:'
+
+            case $state in
+                packages)
+                    local -a packages
+                    packages=(${(f)"$(riot completions --packages 2>/dev/null)"})
+                    _describe 'package' packages
+                    ;;
+            esac
+            ;;
         fmt)
             _arguments \
                 '--check[Check if files need formatting]' \
@@ -445,7 +460,7 @@ _riot() {
                 compadd stdio
             fi
             ;;
-        clean|install|login|logout|new|doc|docs|version)
+        clean|install|login|logout|new|doc|docs|repl|version)
             # These commands have their own completion logic
             # Can be extended later
             ;;

@@ -21,7 +21,7 @@ let analyzed_modules_by_id = fun analyzed_modules ->
   by_id
 
 let library_root_candidates = fun ~package nodes ->
-  let package_namespace = Package.root_module_name package in
+  let package_namespace = Package_namespace.compiled_root package in
   if Option.is_none package.Package.library then
     []
   else
@@ -349,7 +349,7 @@ let available_module_names = fun ~package ~direct_dependency_modules module_grap
     sorted_nodes module_graph
     |> List.flat_map ~fn:module_node_suggestion_names
   in
-  unique_sorted_strings ((Package.root_module_name package :: direct_dependency_modules) @ node_names)
+  unique_sorted_strings ((Package_namespace.public_root package :: direct_dependency_modules) @ node_names)
 
 let suggested_modules = fun ~requested_module ~available_modules ->
   let threshold = suggestion_threshold requested_module in
@@ -375,7 +375,7 @@ let suggested_modules = fun ~requested_module ~available_modules ->
 let validate_dependency_edges = fun
   ~package ~direct_dependency_modules ~module_graph ~analyzed_modules ->
   let allowed_modules =
-    unique_sorted_strings (Package.root_module_name package :: direct_dependency_modules)
+    unique_sorted_strings (Package_namespace.public_root package :: direct_dependency_modules)
   in
   let available_modules = available_module_names ~package ~direct_dependency_modules module_graph in
   List.fold_left
@@ -419,7 +419,7 @@ let validate = fun ~direct_dependency_modules ~package ~module_graph ~analyzed_m
             ())
       in
       let library_reachable_set = concrete_library_reachable_set public_roots module_graph in
-      let public_module = Package.root_module_name package in
+      let public_module = Package_namespace.public_root package in
       let target_root_nodes = target_root_nodes package nodes in
       List.fold_left
         nodes

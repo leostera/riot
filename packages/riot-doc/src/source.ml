@@ -129,7 +129,8 @@ let collect_interfaces = fun
               match package.library with
               | Some _ ->
                   Riot_planner.Module_graph.Library_root {
-                    library_name = Riot_model.Package_name.to_string package.name;
+                    library_name = Riot_planner.Package_namespace.planning_library_name package;
+                    public_root_name = Riot_planner.Package_namespace.public_root package;
                   }
               | None -> Riot_planner.Module_graph.Loose_sources
             );

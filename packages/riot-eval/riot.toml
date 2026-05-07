@@ -1,0 +1,20 @@
+[package]
+name = "riot-eval"
+version = "0.0.32"
+description = "Ephemeral Riot source execution"
+license = "Apache-2.0"
+public = false
+
+[lib]
+path = "src/riot_eval.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+riot-build = { path = "../riot-build", version = "*" }
+riot-deps = { path = "../riot-deps", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
+riot-store = { path = "../riot-store", version = "*" }
+riot-toolchain = { path = "../riot-toolchain", version = "*" }
+pkgs-ml = { path = "../pkgs-ml", version = "*" }
+syn = { path = "../syn", version = "*" }
+dynlink = "*"

@@ -28,6 +28,7 @@ type build_progress = {
   mutable skipped_count: int;
 }
 type render_state
+type event_renderer
 type request = {
   workspace: Riot_model.Workspace.t;
   packages: Riot_model.Package_name.t list;
@@ -41,6 +42,16 @@ type request = {
 }
 
 val create_render_state: ?profile:string -> unit -> render_state
+
+val create_event_renderer:
+  ?profile:Riot_model.Profile.t ->
+  mode:output_mode ->
+  unit ->
+  event_renderer
+
+val render_event: event_renderer -> Riot_build.Event.t -> unit
+
+val finish_event_renderer: event_renderer -> unit
 
 (** Shared [riot build]-compatible argument surface. *)
 val build_args: unit Std.ArgParser.arg list

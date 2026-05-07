@@ -35,6 +35,8 @@ module Env = struct
 
   let make_leaf name = Node (Names.singleton name, [])
 
+  let make_leaf_from_names names = Node (names, [])
+
   let make_node map = Node (Names.empty, map)
 
   let rec remove = fun name ->
@@ -358,6 +360,7 @@ module Ast_deps = struct
 
   let module_alias = fun env deps segments ->
     let deps = add_module_segments env deps segments in
+    let resolved_free_names = Env.lookup_free ~use_open_fallback:true segments env in
     let binding =
       match Env.lookup_map segments env with
       | Some node -> (
@@ -366,8 +369,9 @@ module Ast_deps = struct
           | free_names -> Env.rebind free_names node
         )
       | None -> (
-          match segments with
-          | [ name ] -> Env.make_leaf name
+          match (segments, resolved_free_names) with
+          | (_, Some names) -> Env.make_leaf_from_names names
+          | ([ name ], None) -> Env.make_leaf name
           | _ -> Env.bound
         )
     in
@@ -375,11 +379,12 @@ module Ast_deps = struct
 
   let open_alias = fun ?(fallback = false) env deps segments ->
     let binding_known = Option.is_some (Env.lookup_map segments env) in
+    let binding_resolves = Option.is_some (Env.lookup_free ~use_open_fallback:true segments env) in
     let (deps, binding) = module_alias env deps segments in
     let deps = add_names deps (Env.top_free binding) in
     let env = Env.merge_children env binding in
     let env =
-      if fallback && binding_known && not (Env.has_children binding) then
+      if fallback && not (Env.has_children binding) && (binding_known || binding_resolves) then
         match segments with
         | head :: _ when is_module_head head ->
             let free_names =
@@ -1125,14 +1130,27 @@ module Ast_deps = struct
       )
 
   and collect_open_decl env deps node =
-    let count = A.Node.child_count node in
-    match direct_path_between node 1 count with
-    | Some (head :: _ as segments) when is_module_head head ->
-        Ok (open_alias ~fallback:true env deps segments)
-    | Some _ -> Ok (deps, env)
+    match first_child_node_matching node ~matches:is_module_expr_kind with
+    | Some module_expr -> (
+        let module_expr = unwrap_module_expr module_expr in
+        match path_segments module_expr with
+        | head :: _ as segments when node_kind_is module_expr Syntax_kind.PATH_MODULE_EXPR
+        && is_module_head head ->
+            Ok (open_alias ~fallback:true env deps segments)
+        | _ ->
+            let* (deps, binding) = module_binding env deps module_expr in
+            let deps = add_names deps (Env.collect_free binding) in
+            Ok (deps, Env.merge_children env binding)
+      )
     | None ->
-        let deps = collect_direct_module_refs_between env deps node 1 count in
-        Ok (deps, env)
+        let count = A.Node.child_count node in
+        match direct_path_between node 1 count with
+        | Some (head :: _ as segments) when is_module_head head ->
+            Ok (open_alias ~fallback:true env deps segments)
+        | Some _ -> Ok (deps, env)
+        | None ->
+            let deps = collect_direct_module_refs_between env deps node 1 count in
+            Ok (deps, env)
 
   and collect_include_structure env deps node =
     let* (deps, binding) = include_structure_binding env deps node in
