@@ -17,6 +17,7 @@ These are the RFDs that are still only `presented` and therefore the most obviou
 - `RFD0041` - A New Kernel for Riot
 - `RFD0043` - Unified Build Session and Work Scheduler
 - `RFD0045` - Target-Specific Module Reachability
+- `RFD0048` - Riot Trace
 
 ## Rejected
 
