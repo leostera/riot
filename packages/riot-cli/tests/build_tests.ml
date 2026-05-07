@@ -75,6 +75,11 @@ let parse_run = fun args ->
   | Ok matches -> Ok matches
   | Error err -> Error (ArgParser.error_message err)
 
+let parse_trace = fun args ->
+  match ArgParser.get_matches Riot_cli.Trace_cmd.command args with
+  | Ok matches -> Ok matches
+  | Error err -> Error (ArgParser.error_message err)
+
 let parse_test = fun args ->
   match ArgParser.get_matches Riot_cli.Test_cmd.command args with
   | Ok matches -> Ok matches
@@ -974,6 +979,132 @@ let test_run_accepts_update_flag = fun _ctx ->
       else
         Error "expected run --update flag to be parsed"
 
+let test_run_rejects_removed_trace_flag = fun _ctx ->
+  match Riot_cli.Run.run_with_workspace_info
+    ~workspace:None
+    ~workspace_error:None
+    (
+      parse_run [ "run"; "--trace"; "out.trace"; "syn" ]
+      |> Result.expect ~msg:"expected legacy trace args to parse as forwarded args"
+    ) with
+  | Ok () -> Error "expected riot run --trace to fail with migration guidance"
+  | Error (Failure message) ->
+      if String.contains message "riot run no longer accepts --trace" then
+        Ok ()
+      else
+        Error ("unexpected riot run --trace error: " ^ message)
+  | Error err -> Error ("unexpected error kind: " ^ Exception.to_string err)
+
+let test_trace_accepts_missing_name = fun _ctx ->
+  match parse_trace [ "trace" ] with
+  | Error err -> Error ("expected trace args to parse without a name: " ^ err)
+  | Ok matches ->
+      Test.assert_equal ~expected:None ~actual:(ArgParser.get_one matches "name");
+      Ok ()
+
+let test_trace_accepts_output_option = fun _ctx ->
+  match parse_trace [ "trace"; "--output"; "out.trace"; "riot" ] with
+  | Error err -> Error ("expected trace args to parse with --output: " ^ err)
+  | Ok matches ->
+      Test.assert_equal ~expected:(Some "out.trace") ~actual:(ArgParser.get_one matches "output");
+      Ok ()
+
+let test_trace_accepts_profiler_option = fun _ctx ->
+  match parse_trace [ "trace"; "--profiler"; "xctrace"; "riot" ] with
+  | Error err -> Error ("expected trace args to parse with --profiler: " ^ err)
+  | Ok matches ->
+      Test.assert_equal ~expected:(Some "xctrace") ~actual:(ArgParser.get_one matches "profiler");
+      Ok ()
+
+let test_trace_accepts_output_policy_options = fun _ctx ->
+  match parse_trace [ "trace"; "--output"; "out.trace"; "--force"; "riot" ] with
+  | Error err -> Error ("expected trace args to parse with --force: " ^ err)
+  | Ok matches ->
+      if not (ArgParser.get_flag matches "force") then
+        Error "expected trace --force flag to be parsed"
+      else
+        match parse_trace [ "trace"; "--output"; "out.trace"; "--append"; "riot" ] with
+        | Error err -> Error ("expected trace args to parse with --append: " ^ err)
+        | Ok matches ->
+            if ArgParser.get_flag matches "append" then
+              Ok ()
+            else
+              Error "expected trace --append flag to be parsed"
+
+let test_trace_accepts_sampling_options = fun _ctx ->
+  match
+    parse_trace [
+      "trace";
+      "--sample-rate";
+      "997";
+      "--time-limit";
+      "5s";
+      "--window";
+      "1s";
+      "--xctrace-template";
+      "Time Profiler";
+      "--perf-call-graph";
+      "dwarf";
+      "--perf-call-graph-stack-size";
+      "8192";
+      "riot";
+    ]
+  with
+  | Error err -> Error ("expected trace args to parse sampling options: " ^ err)
+  | Ok matches ->
+      Test.assert_equal ~expected:(Some "997") ~actual:(ArgParser.get_one matches "sample-rate");
+      Test.assert_equal ~expected:(Some "5s") ~actual:(ArgParser.get_one matches "time-limit");
+      Test.assert_equal ~expected:(Some "1s") ~actual:(ArgParser.get_one matches "window");
+      Test.assert_equal
+        ~expected:(Some "Time Profiler")
+        ~actual:(ArgParser.get_one matches "xctrace-template");
+      Test.assert_equal
+        ~expected:(Some "dwarf")
+        ~actual:(ArgParser.get_one matches "perf-call-graph");
+      Test.assert_equal
+        ~expected:(Some "8192")
+        ~actual:(ArgParser.get_one matches "perf-call-graph-stack-size");
+      Ok ()
+
+let test_trace_accepts_summary_json = fun _ctx ->
+  match parse_trace [ "trace"; "summary"; "--json"; "out.trace" ] with
+  | Error err -> Error ("expected trace summary args to parse with --json: " ^ err)
+  | Ok matches -> (
+      match ArgParser.get_subcommand matches with
+      | Some ("summary", summary_matches) ->
+          if ArgParser.get_flag summary_matches "json" then
+            Ok ()
+          else
+            Error "expected trace summary --json flag to be parsed"
+      | _ -> Error "expected trace summary subcommand to be parsed"
+    )
+
+let test_trace_accepts_summary_filter = fun _ctx ->
+  match parse_trace [ "trace"; "summary"; "-f"; "*Prelude*"; "out.trace" ] with
+  | Error err -> Error ("expected trace summary args to parse with -f: " ^ err)
+  | Ok matches -> (
+      match ArgParser.get_subcommand matches with
+      | Some ("summary", summary_matches) ->
+          Test.assert_equal
+            ~expected:(Some "*Prelude*")
+            ~actual:(ArgParser.get_one summary_matches "filter");
+          Ok ()
+      | _ -> Error "expected trace summary subcommand to be parsed"
+    )
+
+let test_trace_accepts_call_tree_filter = fun _ctx ->
+  match parse_trace [ "trace"; "call-tree"; "--filter"; "*Prelude*"; "out.trace" ] with
+  | Error err -> Error ("expected trace call-tree args to parse with --filter: " ^ err)
+  | Ok matches -> (
+      match ArgParser.get_subcommand matches with
+      | Some ("call-tree", call_tree_matches) ->
+          Test.assert_equal
+            ~expected:(Some "*Prelude*")
+            ~actual:(ArgParser.get_one call_tree_matches "filter");
+          Ok ()
+      | _ -> Error "expected trace call-tree subcommand to be parsed"
+    )
+
 let test_install_accepts_update_flag = fun _ctx ->
   match parse_install [ "install"; "--update"; "leostera/hello-world" ] with
   | Error err -> Error ("expected install args to parse with --update: " ^ err)
@@ -1455,6 +1586,15 @@ let tests =
     case "run: parse --list --json flags" test_run_accepts_list_json_flag;
     case "run: parse --release flag" test_run_accepts_release_flag;
     case "run: parse --update flag" test_run_accepts_update_flag;
+    case "run: parse rejects removed --trace flag" test_run_rejects_removed_trace_flag;
+    case "trace: parse missing name" test_trace_accepts_missing_name;
+    case "trace: parse --output option" test_trace_accepts_output_option;
+    case "trace: parse --profiler option" test_trace_accepts_profiler_option;
+    case "trace: parse output policy options" test_trace_accepts_output_policy_options;
+    case "trace: parse sampling options" test_trace_accepts_sampling_options;
+    case "trace: parse summary --json" test_trace_accepts_summary_json;
+    case "trace: parse summary -f" test_trace_accepts_summary_filter;
+    case "trace: parse call-tree -f" test_trace_accepts_call_tree_filter;
     case "install: parse missing name" test_install_accepts_missing_name;
     case "install: parse --update flag" test_install_accepts_update_flag;
     case "install: parse --package flag" test_install_accepts_package_flag;

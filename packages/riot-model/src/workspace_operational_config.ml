@@ -11,9 +11,28 @@ type test_policy = {
   flaky_max_retries: int;
 }
 
+type perf_trace_policy = {
+  sample_rate_hz: int option;
+  call_graph: string option;
+  call_graph_stack_size: int option;
+}
+
+type xctrace_trace_policy = {
+  template_: string option;
+  time_limit: string option;
+  window: string option;
+}
+
+type trace_policy = {
+  profiler: string option;
+  perf: perf_trace_policy;
+  xctrace: xctrace_trace_policy;
+}
+
 type t = {
   cache: cache_policy;
   test: test_policy;
+  trace: trace_policy;
 }
 
 type value_error =
@@ -34,12 +53,29 @@ type test_error =
   | FlakyMaxRetriesMustBeNonNegativeInt
   | FlakyMaxRetriesMustBeInt
 
+type trace_error =
+  | TraceProfilerMustBeString
+  | PerfSampleRateMustBePositiveInt
+  | PerfSampleRateMustBeInt
+  | PerfCallGraphMustBeString
+  | PerfCallGraphStackSizeMustBePositiveInt
+  | PerfCallGraphStackSizeMustBeInt
+  | XctraceTemplateMustBeString
+  | XctraceTimeLimitMustBeDurationString
+  | InvalidXctraceTimeLimit of value_error
+  | XctraceWindowMustBeDurationString
+  | InvalidXctraceWindow of value_error
+
 type invalid_config_error =
   | RiotMustBeTable
   | RiotCacheMustBeTable
   | RiotTestMustBeTable
+  | RiotTraceMustBeTable
+  | RiotTracePerfMustBeTable
+  | RiotTraceXctraceMustBeTable
   | CacheConfig of cache_error
   | TestConfig of test_error
+  | TraceConfig of trace_error
 
 type error =
   | ReadFailed of {
@@ -62,7 +98,29 @@ let default_cache_policy = {
 
 let default_test_policy = { small_test_timeout = None; flaky_max_retries = 0 }
 
-let default = { cache = default_cache_policy; test = default_test_policy }
+let default_perf_trace_policy = {
+  sample_rate_hz = None;
+  call_graph = None;
+  call_graph_stack_size = None;
+}
+
+let default_xctrace_trace_policy = {
+  template_ = None;
+  time_limit = None;
+  window = None;
+}
+
+let default_trace_policy = {
+  profiler = None;
+  perf = default_perf_trace_policy;
+  xctrace = default_xctrace_trace_policy;
+}
+
+let default = {
+  cache = default_cache_policy;
+  test = default_test_policy;
+  trace = default_trace_policy;
+}
 
 let value_error_message = fun __tmp1 ->
   match __tmp1 with
@@ -85,13 +143,35 @@ let test_error_message = fun __tmp1 ->
   | FlakyMaxRetriesMustBeNonNegativeInt -> "riot.test.flaky_max_retries must be greater than or equal to 0"
   | FlakyMaxRetriesMustBeInt -> "riot.test.flaky_max_retries must be an integer"
 
+let trace_error_message = fun __tmp1 ->
+  match __tmp1 with
+  | TraceProfilerMustBeString -> "riot.trace.profiler must be a string"
+  | PerfSampleRateMustBePositiveInt -> "riot.trace.perf.sample_rate must be greater than 0"
+  | PerfSampleRateMustBeInt -> "riot.trace.perf.sample_rate must be an integer"
+  | PerfCallGraphMustBeString -> "riot.trace.perf.call_graph must be a string"
+  | PerfCallGraphStackSizeMustBePositiveInt ->
+      "riot.trace.perf.call_graph_stack_size must be greater than 0"
+  | PerfCallGraphStackSizeMustBeInt ->
+      "riot.trace.perf.call_graph_stack_size must be an integer"
+  | XctraceTemplateMustBeString -> "riot.trace.xctrace.template must be a string"
+  | XctraceTimeLimitMustBeDurationString ->
+      "riot.trace.xctrace.time_limit must be a duration string like \"5s\""
+  | InvalidXctraceTimeLimit error -> "riot.trace.xctrace.time_limit " ^ value_error_message error
+  | XctraceWindowMustBeDurationString ->
+      "riot.trace.xctrace.window must be a duration string like \"1s\""
+  | InvalidXctraceWindow error -> "riot.trace.xctrace.window " ^ value_error_message error
+
 let invalid_config_error_message = fun __tmp1 ->
   match __tmp1 with
   | RiotMustBeTable -> "top-level [riot] must be a table"
   | RiotCacheMustBeTable -> "top-level [riot.cache] must be a table"
   | RiotTestMustBeTable -> "top-level [riot.test] must be a table"
+  | RiotTraceMustBeTable -> "top-level [riot.trace] must be a table"
+  | RiotTracePerfMustBeTable -> "top-level [riot.trace.perf] must be a table"
+  | RiotTraceXctraceMustBeTable -> "top-level [riot.trace.xctrace] must be a table"
   | CacheConfig error -> cache_error_message error
   | TestConfig error -> test_error_message error
+  | TraceConfig error -> trace_error_message error
 
 let message = fun __tmp1 ->
   match __tmp1 with
@@ -312,6 +392,145 @@ let parse_test_policy = fun ~path fields ->
   | (Error error, _)
   | (_, Error error) -> Error (InvalidConfig { path; error = TestConfig error })
 
+let optional_non_empty_string = fun raw ->
+  let trimmed = String.trim raw in
+  if String.equal trimmed "" then
+    None
+  else
+    Some trimmed
+
+let parse_optional_string_field = fun fields names non_string_error ->
+  match find_field names fields with
+  | None -> Ok None
+  | Some (Toml.String raw) -> Ok (optional_non_empty_string raw)
+  | Some _ -> Error non_string_error
+
+let parse_optional_positive_int_field = fun fields names ~positive_error ~int_error ->
+  match find_field names fields with
+  | None -> Ok None
+  | Some value -> (
+      match Toml.get_int value with
+      | Some n when n > 0 -> Ok (Some n)
+      | Some _ -> Error positive_error
+      | None -> Error int_error
+    )
+
+let xctrace_duration_unit = fun normalized ->
+  let len = String.length normalized in
+  let rec split idx =
+    if idx >= len then
+      ""
+    else
+      match String.get_unchecked normalized ~at:idx with
+      | '0' .. '9'
+      | '.' -> split (idx + 1)
+      | _ -> String.sub normalized ~offset:idx ~len:(len - idx)
+  in
+  split 0
+
+let parse_xctrace_duration = fun raw ->
+  let normalized = normalize_duration raw in
+  match parse_duration raw with
+  | Error error -> Error error
+  | Ok _ -> (
+      match xctrace_duration_unit normalized with
+      | ""
+      | "ms"
+      | "s"
+      | "m"
+      | "h" -> Ok normalized
+      | unit_name -> Error (UnsupportedUnit unit_name)
+    )
+
+let parse_optional_xctrace_duration_field = fun fields names ~string_error ~invalid_error ->
+  match find_field names fields with
+  | None -> Ok None
+  | Some (Toml.String raw) ->
+      parse_xctrace_duration raw
+      |> Result.map ~fn:Option.some
+      |> Result.map_err ~fn:invalid_error
+  | Some _ -> Error string_error
+
+let parse_perf_trace_policy = fun ~path fields ->
+  let sample_rate_hz =
+    parse_optional_positive_int_field
+      fields
+      [ "sample_rate"; "sample_frequency"; "frequency" ]
+      ~positive_error:PerfSampleRateMustBePositiveInt
+      ~int_error:PerfSampleRateMustBeInt
+  in
+  let call_graph =
+    parse_optional_string_field
+      fields
+      [ "call_graph" ]
+      PerfCallGraphMustBeString
+  in
+  let call_graph_stack_size =
+    parse_optional_positive_int_field
+      fields
+      [ "call_graph_stack_size"; "stack_size" ]
+      ~positive_error:PerfCallGraphStackSizeMustBePositiveInt
+      ~int_error:PerfCallGraphStackSizeMustBeInt
+  in
+  match (sample_rate_hz, call_graph, call_graph_stack_size) with
+  | (Ok sample_rate_hz, Ok call_graph, Ok call_graph_stack_size) ->
+      Ok { sample_rate_hz; call_graph; call_graph_stack_size }
+  | (Error error, _, _)
+  | (_, Error error, _)
+  | (_, _, Error error) -> Error (InvalidConfig { path; error = TraceConfig error })
+
+let parse_xctrace_trace_policy = fun ~path fields ->
+  let template_ =
+    parse_optional_string_field
+      fields
+      [ "template" ]
+      XctraceTemplateMustBeString
+  in
+  let time_limit =
+    parse_optional_xctrace_duration_field
+      fields
+      [ "time_limit"; "time-limit" ]
+      ~string_error:XctraceTimeLimitMustBeDurationString
+      ~invalid_error:(fun error -> InvalidXctraceTimeLimit error)
+  in
+  let window =
+    parse_optional_xctrace_duration_field
+      fields
+      [ "window" ]
+      ~string_error:XctraceWindowMustBeDurationString
+      ~invalid_error:(fun error -> InvalidXctraceWindow error)
+  in
+  match (template_, time_limit, window) with
+  | (Ok template_, Ok time_limit, Ok window) -> Ok { template_; time_limit; window }
+  | (Error error, _, _)
+  | (_, Error error, _)
+  | (_, _, Error error) -> Error (InvalidConfig { path; error = TraceConfig error })
+
+let parse_trace_policy = fun ~path fields ->
+  let profiler =
+    parse_optional_string_field
+      fields
+      [ "profiler" ]
+      TraceProfilerMustBeString
+  in
+  let perf =
+    match Fields.get "perf" fields with
+    | None -> Ok default_perf_trace_policy
+    | Some (Toml.Table perf_fields) -> parse_perf_trace_policy ~path perf_fields
+    | Some _ -> Error (InvalidConfig { path; error = RiotTracePerfMustBeTable })
+  in
+  let xctrace =
+    match Fields.get "xctrace" fields with
+    | None -> Ok default_xctrace_trace_policy
+    | Some (Toml.Table xctrace_fields) -> parse_xctrace_trace_policy ~path xctrace_fields
+    | Some _ -> Error (InvalidConfig { path; error = RiotTraceXctraceMustBeTable })
+  in
+  match (profiler, perf, xctrace) with
+  | (Ok profiler, Ok perf, Ok xctrace) -> Ok { profiler; perf; xctrace }
+  | (Error error, _, _) -> Error (InvalidConfig { path; error = TraceConfig error })
+  | (_, Error err, _)
+  | (_, _, Error err) -> Error err
+
 let from_toml = fun ~path toml ->
   match toml with
   | Toml.Table fields -> (
@@ -330,11 +549,18 @@ let from_toml = fun ~path toml ->
             | Some (Toml.Table test_fields) -> parse_test_policy ~path test_fields
             | Some _ -> Error (InvalidConfig { path; error = RiotTestMustBeTable })
           in
+          let trace =
+            match Fields.get "trace" riot_fields with
+            | None -> Ok default_trace_policy
+            | Some (Toml.Table trace_fields) -> parse_trace_policy ~path trace_fields
+            | Some _ -> Error (InvalidConfig { path; error = RiotTraceMustBeTable })
+          in
           (
-            match (cache, test) with
-            | (Ok cache, Ok test) -> Ok { cache; test }
-            | (Error err, _)
-            | (_, Error err) -> Error err
+            match (cache, test, trace) with
+            | (Ok cache, Ok test, Ok trace) -> Ok { cache; test; trace }
+            | (Error err, _, _)
+            | (_, Error err, _)
+            | (_, _, Error err) -> Error err
           )
         )
       | Some _ -> Error (InvalidConfig { path; error = RiotMustBeTable })

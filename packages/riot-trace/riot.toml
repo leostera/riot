@@ -1,0 +1,17 @@
+[package]
+name = "riot-trace"
+version = "0.0.32"
+description = "Trace command orchestration on top of riot-run"
+license = "Apache-2.0"
+public = false
+
+[lib]
+path = "src/riot_trace.ml"
+
+[dependencies]
+std = { path = "../std", version = "*" }
+riot-build = { path = "../riot-build", version = "*" }
+riot-model = { path = "../riot-model", version = "*" }
+riot-run = { path = "../riot-run", version = "*" }
+serde = { path = "../serde", version = "*" }
+serde-json = { path = "../serde-json", version = "*" }

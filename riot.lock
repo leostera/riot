@@ -1,6 +1,6 @@
 format_version = 1
 
-dependency_hash = "09e87e526cdae92d"
+dependency_hash = "8c5ed232650ddbce"
 
 [[packages]]
 name = "blink"
@@ -310,7 +310,7 @@ dev_dependencies = []
 name = "riot-cli"
 root = "packages/riot-cli"
 provenance = { kind = "workspace" }
-dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "jollyroger", package = { name = "jollyroger" } }, { name = "pkgs-ml", package = { name = "pkgs-ml" } }, { name = "riot-bench", package = { name = "riot-bench" } }, { name = "riot-build", package = { name = "riot-build" } }, { name = "riot-deps", package = { name = "riot-deps" } }, { name = "riot-doc", package = { name = "riot-doc" } }, { name = "riot-fix", package = { name = "riot-fix" } }, { name = "riot-fmt", package = { name = "riot-fmt" } }, { name = "riot-fuzz", package = { name = "riot-fuzz" } }, { name = "riot-init", package = { name = "riot-init" } }, { name = "riot-install", package = { name = "riot-install" } }, { name = "riot-lsp", package = { name = "riot-lsp" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-publish", package = { name = "riot-publish" } }, { name = "riot-run", package = { name = "riot-run" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-test", package = { name = "riot-test" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "serde", package = { name = "serde" } }, { name = "serde-json", package = { name = "serde-json" } }, { name = "std", package = { name = "std" } }, { name = "tty", package = { name = "tty" } }]
+dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "jollyroger", package = { name = "jollyroger" } }, { name = "pkgs-ml", package = { name = "pkgs-ml" } }, { name = "riot-bench", package = { name = "riot-bench" } }, { name = "riot-build", package = { name = "riot-build" } }, { name = "riot-deps", package = { name = "riot-deps" } }, { name = "riot-doc", package = { name = "riot-doc" } }, { name = "riot-fix", package = { name = "riot-fix" } }, { name = "riot-fmt", package = { name = "riot-fmt" } }, { name = "riot-fuzz", package = { name = "riot-fuzz" } }, { name = "riot-init", package = { name = "riot-init" } }, { name = "riot-install", package = { name = "riot-install" } }, { name = "riot-lsp", package = { name = "riot-lsp" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-planner", package = { name = "riot-planner" } }, { name = "riot-publish", package = { name = "riot-publish" } }, { name = "riot-run", package = { name = "riot-run" } }, { name = "riot-store", package = { name = "riot-store" } }, { name = "riot-test", package = { name = "riot-test" } }, { name = "riot-toolchain", package = { name = "riot-toolchain" } }, { name = "riot-trace", package = { name = "riot-trace" } }, { name = "serde", package = { name = "serde" } }, { name = "serde-json", package = { name = "serde-json" } }, { name = "std", package = { name = "std" } }, { name = "tty", package = { name = "tty" } }]
 build_dependencies = []
 dev_dependencies = []
 
@@ -423,6 +423,14 @@ name = "riot-store"
 root = "packages/riot-store"
 provenance = { kind = "workspace" }
 dependencies = [{ name = "contentstore", package = { name = "contentstore" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "serde", package = { name = "serde" } }, { name = "serde-bin", package = { name = "serde-bin" } }, { name = "std", package = { name = "std" } }]
+build_dependencies = []
+dev_dependencies = []
+
+[[packages]]
+name = "riot-trace"
+root = "packages/riot-trace"
+provenance = { kind = "workspace" }
+dependencies = [{ name = "riot-build", package = { name = "riot-build" } }, { name = "riot-model", package = { name = "riot-model" } }, { name = "riot-run", package = { name = "riot-run" } }, { name = "serde", package = { name = "serde" } }, { name = "serde-json", package = { name = "serde-json" } }, { name = "std", package = { name = "std" } }]
 build_dependencies = []
 dev_dependencies = []
 

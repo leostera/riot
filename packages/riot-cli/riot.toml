@@ -17,6 +17,7 @@ std = { path = "../std", version = "*" }
 jollyroger = { path = "../jollyroger", version = "*" }
 riot-init = { path = "../riot-init", version = "*" }
 riot-run = { path = "../riot-run", version = "*" }
+riot-trace = { path = "../riot-trace", version = "*" }
 riot-install = { path = "../riot-install", version = "*" }
 riot-model = { path = "../riot-model", version = "*" }
 riot-planner = { path = "../riot-planner", version = "*" }

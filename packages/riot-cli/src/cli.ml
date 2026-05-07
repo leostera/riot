@@ -24,6 +24,7 @@ let build_cli = fun () ->
     Plan.command;
     Publish.command;
     Run.command;
+    Trace_cmd.command;
     Search.command;
     Snapshots.command;
     Test_cmd.command;
@@ -400,6 +401,30 @@ let run = fun ~args ->
                 | ScanFailed err -> (None, Some (Info_cmd.workspace_scan_error_message err))
               in
               Run.run_with_workspace_info ~workspace ~workspace_error run_matches
+            )
+          | Some ("trace", trace_matches) -> (
+              if Trace_cmd.is_summary trace_matches then
+                Trace_cmd.run_with_workspace_info
+                  ~workspace:None
+                  ~workspace_error:None
+                  trace_matches
+              else
+                let workspace_scan = get_workspace_scan () in
+                let (workspace, workspace_error) =
+                  match workspace_scan with
+                  | Loaded (workspace, load_errors) when List.is_empty load_errors -> (
+                      match ensure_workspace workspace with
+                      | Ok workspace -> (Some workspace, None)
+                      | Error err -> (None, Some (Exception.to_string err))
+                    )
+                  | Loaded (workspace, load_errors) -> (
+                      let _ = workspace in
+                      (None, Some (workspace_load_error_message load_errors))
+                    )
+                  | NoWorkspace -> (None, None)
+                  | ScanFailed err -> (None, Some (Info_cmd.workspace_scan_error_message err))
+                in
+                Trace_cmd.run_with_workspace_info ~workspace ~workspace_error trace_matches
             )
           | Some ("search", search_matches) -> Search.run search_matches
           | Some ("snapshots", snapshots_matches) ->

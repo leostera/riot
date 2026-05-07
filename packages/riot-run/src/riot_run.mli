@@ -19,6 +19,12 @@ type runnable_binary = {
   binary_name: string;
   source_path: Path.t;
 }
+type built_binary = {
+  package_name: Riot_model.Package_name.t;
+  binary_name: string;
+  path: Path.t;
+  args: string list;
+}
 type run_event =
   | Build of Riot_build.Event.t
   | RunningBinary of {
@@ -60,6 +66,12 @@ val list_binaries:
 val run_error_message: run_error -> string
 
 val run_event_to_json: run_event -> Data.Json.t option
+
+val build_binary:
+  ?on_event:(run_event -> unit) -> run_request -> (built_binary, run_error) result
+
+val build_source_binary:
+  ?on_event:(run_event -> unit) -> source_run_request -> (built_binary, run_error) result
 
 val run: ?on_event:(run_event -> unit) -> run_request -> (unit, run_error) result
 

@@ -58,6 +58,20 @@ let trailing_args = fun matches ->
   | "--" :: rest -> rest
   | _ -> args
 
+let deprecated_trace_flag_message = fun flag ->
+  "riot run no longer accepts "
+  ^ flag
+  ^ "; use `riot trace` for profiler traces or `riot run -- "
+  ^ flag
+  ^ "` to pass it to the child binary"
+
+let rejected_removed_trace_flag = fun matches ->
+  match ArgParser.trailing_args matches with
+  | "--" :: _ -> None
+  | flag :: _ when String.equal flag "--trace" || String.equal flag "--profiler" ->
+      Some (deprecated_trace_flag_message flag)
+  | _ -> None
+
 let build_scope_for_binary = Run_runtime.build_scope_for_binary
 
 type target =
@@ -332,6 +346,13 @@ let run_with_workspace_info = fun ~workspace ~workspace_error matches ->
       Build.Json
     else
       Build.Human
+  in
+  let* () =
+    match rejected_removed_trace_flag matches with
+    | None -> Ok ()
+    | Some message ->
+        write_workspace_error ~mode:output_mode message;
+        Error (Failure message)
   in
   if json_mode && not list_mode then
     let message =

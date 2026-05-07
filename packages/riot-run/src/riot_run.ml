@@ -23,6 +23,13 @@ type runnable_binary = {
   source_path: Path.t;
 }
 
+type built_binary = {
+  package_name: Riot_model.Package_name.t;
+  binary_name: string;
+  path: Path.t;
+  args: string list;
+}
+
 type run_event =
   | Build of Riot_build.Event.t
   | RunningBinary of {
@@ -94,7 +101,7 @@ let list_binaries = fun (workspace: Riot_model.Workspace.t) ?package_filter () -
           source_path = Path.(pkg.path / bin.path);
         }))
   |> List.sort
-    ~compare:(fun left right ->
+    ~compare:(fun (left:runnable_binary) (right:runnable_binary) ->
       match Riot_model.Package_name.compare left.package_name right.package_name with
       | Order.EQ -> String.compare left.binary_name right.binary_name
       | diff -> diff)
@@ -215,7 +222,7 @@ let build_profile = fun name ->
   | "release" -> Riot_model.Profile.release
   | _ -> Riot_model.Profile.debug
 
-let run = fun ?(on_event = no_event) (request: run_request) ->
+let build_binary = fun ?(on_event = no_event) (request: run_request) ->
   let* package_name =
     resolve_binary
       ~workspace:request.workspace
@@ -245,19 +252,18 @@ let run = fun ?(on_event = no_event) (request: run_request) ->
       ~target:(Riot_model.Riot_dirs.host_target ())
   in
   let* path = find_built_binary_path ~store ~output ~package_name ~binary_name:request.binary_name in
-  on_event
-    (RunningBinary { package = package_name; binary = request.binary_name; args = request.args });
-  let cmd = Command.make (Path.to_string path) ~args:request.args in
-  match Command.status cmd with
-  | Ok 0 -> Ok ()
-  | Ok code -> Error (ProcessExited code)
-  | Error (Command.SystemError msg) -> Error (SystemError msg)
+  Ok {
+    package_name;
+    binary_name = request.binary_name;
+    path;
+    args = request.args;
+  }
 
-let run_source = fun ?(on_event = no_event) (request: source_run_request) ->
+let build_source_binary = fun ?(on_event = no_event) (request: source_run_request) ->
   let* loaded =
     load_source_workspace ~on_event ~source_spec:request.source_spec ~update:request.update
   in
-  run
+  build_binary
     ~on_event
     {
       workspace = loaded.workspace;
@@ -266,3 +272,31 @@ let run_source = fun ?(on_event = no_event) (request: source_run_request) ->
       profile = request.profile;
       args = request.args;
     }
+
+let run = fun ?(on_event = no_event) (request: run_request) ->
+  let* built = build_binary ~on_event request in
+  on_event
+    (RunningBinary {
+      package = built.package_name;
+      binary = built.binary_name;
+      args = built.args;
+    });
+  let cmd = Command.make (Path.to_string built.path) ~args:built.args in
+  match Command.status cmd with
+  | Ok 0 -> Ok ()
+  | Ok code -> Error (ProcessExited code)
+  | Error (Command.SystemError msg) -> Error (SystemError msg)
+
+let run_source = fun ?(on_event = no_event) (request: source_run_request) ->
+  let* built = build_source_binary ~on_event request in
+  on_event
+    (RunningBinary {
+      package = built.package_name;
+      binary = built.binary_name;
+      args = built.args;
+    });
+  let cmd = Command.make (Path.to_string built.path) ~args:built.args in
+  match Command.status cmd with
+  | Ok 0 -> Ok ()
+  | Ok code -> Error (ProcessExited code)
+  | Error (Command.SystemError msg) -> Error (SystemError msg)

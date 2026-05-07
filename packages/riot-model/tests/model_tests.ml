@@ -1633,6 +1633,9 @@ let test_workspace_operational_config_defaults_when_missing = fun _ctx ->
             && Int64.equal config.cache.max_size_bytes (Int64.mul 50L 1_073_741_824L)
             && Option.is_none config.test.small_test_timeout
             && config.test.flaky_max_retries = 0
+            && Option.is_none config.trace.profiler
+            && Option.is_none config.trace.perf.sample_rate_hz
+            && Option.is_none config.trace.xctrace.template_
           then
             Ok ()
           else
@@ -1689,6 +1692,46 @@ flakey_max_retry = 3
             Ok ()
           else
             Error "expected .riot/config.toml to parse riot.test policy")
+
+let test_workspace_operational_config_parses_riot_trace = fun _ctx ->
+  with_tempdir
+    "riot_model_workspace_operational_config_trace"
+    (fun tmpdir ->
+      let riot_dir = Path.(tmpdir / Path.v ".riot") in
+      Result.expect (Fs.create_dir_all riot_dir) ~msg:"Failed to create .riot directory";
+      Result.expect
+        (Fs.write
+          {|
+[riot.trace]
+profiler = "xctrace"
+
+[riot.trace.xctrace]
+template = "Time Profiler"
+time_limit = "5s"
+window = "750 ms"
+
+[riot.trace.perf]
+sample_rate = 997
+call_graph = "dwarf"
+call_graph_stack_size = 8192
+|}
+          Path.(riot_dir / Path.v "config.toml"))
+        ~msg:"Failed to write .riot/config.toml";
+      match Riot_model.Workspace_operational_config.load ~workspace_root:tmpdir with
+      | Error err -> Error (Riot_model.Workspace_operational_config.message err)
+      | Ok config ->
+          if
+            config.trace.profiler = Some "xctrace"
+            && config.trace.xctrace.template_ = Some "Time Profiler"
+            && config.trace.xctrace.time_limit = Some "5s"
+            && config.trace.xctrace.window = Some "750ms"
+            && config.trace.perf.sample_rate_hz = Some 997
+            && config.trace.perf.call_graph = Some "dwarf"
+            && config.trace.perf.call_graph_stack_size = Some 8192
+          then
+            Ok ()
+          else
+            Error "expected .riot/config.toml to parse riot.trace policy")
 
 let test_workspace_operational_config_rejects_invalid_max_size_unit = fun _ctx ->
   with_tempdir
@@ -1878,6 +1921,9 @@ let tests =
     case
       "workspace operational config: parses riot.test"
       test_workspace_operational_config_parses_riot_test;
+    case
+      "workspace operational config: parses riot.trace"
+      test_workspace_operational_config_parses_riot_trace;
     case
       "workspace operational config: rejects invalid max_size unit"
       test_workspace_operational_config_rejects_invalid_max_size_unit;

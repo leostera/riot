@@ -36,6 +36,7 @@ Use this file as the route map for package-specific guidance. General contributo
 - `packages/riot-fuzz/AGENTS.md`: coverage-guided fuzzing engine, AFL forkserver/native coverage map, and corpus/crash persistence
 - `packages/riot-test/AGENTS.md`: shared test selection, suite binary discovery, and test harness execution contracts
 - `packages/riot-cli/AGENTS.md`: CLI commands and user-facing flows
+- `packages/riot-trace/AGENTS.md`: profiler execution, trace summaries, and trace artifact conversion
 - `packages/riot-bench/AGENTS.md`: benchmark history storage and regression-tracking contracts
 - `packages/riot-check/AGENTS.md`: `riot check` command implementation and package-aware typechecking flow
 - `packages/riot-e2e/AGENTS.md`: heavy black-box end-to-end tests against built Riot binaries

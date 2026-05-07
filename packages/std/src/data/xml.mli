@@ -1,3 +1,5 @@
+open Global
+
 (**
    XML construction and rendering.
 
@@ -23,6 +25,12 @@ type t =
     }
   | Text of string
   | CData of string
+
+type error =
+  | Parse_error of {
+      message: string;
+      offset: int;
+    }
 
 (**
    Creates an XML element with optional attributes and child nodes.
@@ -61,6 +69,18 @@ val text: string -> t
 *)
 val cdata: string -> t
 
+(** Returns the first attribute with [name] on an element. *)
+val attr: string -> t -> string option
+
+(** Returns an element's children, or [[]] for text and CDATA nodes. *)
+val children: t -> t list
+
+(** Returns all direct element children, optionally narrowed by element name. *)
+val child_elements: ?name:string -> t -> t list
+
+(** Concatenates text and CDATA descendants into one decoded string. *)
+val text_content: t -> string
+
 (**
    Serializes an XML node using two-space indentation.
 
@@ -84,3 +104,8 @@ val to_string: ?indent:int -> t -> string
    ```
 *)
 val declaration: string
+
+(** Parses one XML document from a string. *)
+val from_string: string -> (t, error) result
+
+val error_message: error -> string

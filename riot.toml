@@ -60,6 +60,7 @@ members = [
   "packages/riot-build2",
   "packages/riot-lsp",
   "packages/riot-store",
+  "packages/riot-trace",
   "packages/riot-toolchain",
   "packages/riot-doc",
   "packages/riot-fuzz",

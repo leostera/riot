@@ -164,6 +164,7 @@ _riot() {
         'rm:Remove dependencies'
         'update:Update locked dependencies'
         'run:Run a binary'
+        'trace:Run a binary under a profiler'
         'test:Run tests'
         'fuzz:Run fuzz campaigns'
         'bench:Run benchmarks'
@@ -243,6 +244,45 @@ _riot() {
                     '--json[Emit machine-readable JSON output for --list]' \
                     '--release[Use the release build profile]' \
                     '--update[Refresh a cached remote source before running]'
+
+                case $state in
+                    packages)
+                        local -a packages
+                        packages=(${(f)"$(riot completions --packages 2>/dev/null)"})
+                        _describe 'package' packages
+                        ;;
+                esac
+            fi
+            ;;
+        trace)
+            if [[ $CURRENT -eq 3 ]]; then
+                local -a binaries
+                binaries=(${(f)"$(riot completions --binaries 2>/dev/null)"})
+                compadd summary
+                compadd call-tree
+                compadd -a binaries
+            elif [[ "${words[3]}" == "summary" || "${words[3]}" == "call-tree" ]]; then
+                _arguments \
+                    '--json[Emit machine-readable JSON output]' \
+                    '(-f --filter)'{-f,--filter}'[Only show frames matching glob]:glob:' \
+                    ':trace:_files'
+            else
+                _arguments \
+                    '(-p --package)'{-p,--package}'[Trace binary from package]:package:->packages' \
+                    '--list[List runnable binaries in the current workspace]' \
+                    '--json[Emit machine-readable JSON output for --list]' \
+                    '--release[Use the release build profile]' \
+                    '(-o --output)'{-o,--output}'[Write trace output to path]:path:_files' \
+                    '--force[Replace an existing trace output path]' \
+                    '--append[Append a run to an existing trace output when supported]' \
+                    '--profiler[Profiler backend]:profiler:(auto perf xctrace)' \
+                    '--sample-rate[Sampling frequency in hertz]:hz:' \
+                    '--time-limit[Limit recording time]:duration:' \
+                    '--window[Keep only final recording window]:duration:' \
+                    '--xctrace-template[xctrace template name or path]:template:' \
+                    '--perf-call-graph[perf call graph mode]:mode:(dwarf fp lbr no)' \
+                    '--perf-call-graph-stack-size[perf DWARF stack dump size]:bytes:' \
+                    '--update[Refresh a cached remote source before tracing]'
 
                 case $state in
                     packages)

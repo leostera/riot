@@ -174,6 +174,35 @@ let test_complex_document = fun _ctx ->
   else
     Error "Failed to serialize complex document"
 
+let test_parse_simple_element = fun _ctx ->
+  match Xml.from_string {|<root id="42"><child>hello</child></root>|} with
+  | Ok (Xml.Element { name = "root"; children = [ Xml.Element { name = "child"; _ } ]; _ } as root) ->
+      (
+        match Xml.attr "id" root with
+        | Some "42" -> Ok ()
+        | _ -> Error "Failed to parse root attribute"
+      )
+  | Ok _ -> Error "Unexpected parsed XML shape"
+  | Error err -> Error (Xml.error_message err)
+
+let test_parse_self_closing_and_single_quoted_attrs = fun _ctx ->
+  match Xml.from_string {|<?xml version="1.0"?><node xpath='//row[1]'><sentinel/></node>|} with
+  | Ok root -> (
+      match (Xml.attr "xpath" root, Xml.child_elements ~name:"sentinel" root) with
+      | (Some "//row[1]", [ Xml.Element { name = "sentinel"; children = []; _ } ]) -> Ok ()
+      | _ -> Error "Failed to parse single-quoted attr or self-closing child"
+    )
+  | Error err -> Error (Xml.error_message err)
+
+let test_parse_decodes_attrs_and_text_content = fun _ctx ->
+  match Xml.from_string {|<frame name="a&amp;b">&lt;leaf&gt;</frame>|} with
+  | Ok frame -> (
+      match (Xml.attr "name" frame, Xml.text_content frame) with
+      | (Some "a&b", "<leaf>") -> Ok ()
+      | _ -> Error "Failed to decode XML entities"
+    )
+  | Error err -> Error (Xml.error_message err)
+
 let tests =
   Test.[
     case "create element" test_create_element;
@@ -196,6 +225,11 @@ let tests =
     case "special chars in text" test_special_chars_in_text;
     case "special chars in attributes" test_special_chars_in_attrs;
     case "complex document" test_complex_document;
+    case "parse simple element" test_parse_simple_element;
+    case
+      "parse self-closing and single-quoted attrs"
+      test_parse_self_closing_and_single_quoted_attrs;
+    case "parse decodes attrs and text content" test_parse_decodes_attrs_and_text_content;
   ]
 
 let main ~args = Test.Cli.main ~name:"xml" ~tests ~args ()
