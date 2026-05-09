@@ -254,7 +254,8 @@ Future work can build on the same package and command boundary:
 - export Perfetto-compatible artifacts from sampled profile summaries
 - ingest Linux `perf.data`, Darwin `.trace`, and other host formats into one
   Riot profile model
-- add `Std.Trace` spans for explicit user instrumentation
+- add `Std.Telemetry.with_span` / `Std.Telemetry.Span` spans for explicit user
+  instrumentation
 - extend the vendored compiler to insert function-entry spans in selected build
   profiles
 - record allocation samples when a profiler backend supports them

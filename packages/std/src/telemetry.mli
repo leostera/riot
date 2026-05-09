@@ -36,6 +36,58 @@
 *)
 type event = ..
 
+module Span: sig
+  (** A UUIDv7 span identifier. *)
+  type id = Uuid.t
+
+  (** Extra span metadata. Values use JSON so handlers can preserve types. *)
+  type attribute = string * Data.Json.t
+  type attributes = attribute list
+
+  type status =
+    | Succeeded
+    | Failed of exn
+
+  type t
+
+  type lifecycle =
+    | Started of t
+    | Completed of {
+        span: t;
+        completed_at: Time.Instant.t;
+        duration: Time.Duration.t;
+        status: status;
+      }
+
+  val id: t -> id
+  val id_to_string: id -> string
+  val equal_id: id -> id -> bool
+  val parent_id: t -> id option
+  val name: t -> string
+  val attributes: t -> attributes
+  val started_at: t -> Time.Instant.t
+
+  (** Start a span and emit a [Started] lifecycle event. *)
+  val start: ?span:t -> ?attributes:attributes -> string -> t
+
+  (** Finish a span and emit a [Completed] lifecycle event. *)
+  val finish: ?status:status -> t -> unit
+end
+
+(** Standard telemetry event emitted by [Telemetry.Span]. *)
+type event +=
+  | SpanEvent of Span.lifecycle
+
+(**
+   Run [fn] inside a telemetry span.
+
+   Pass [?span] to make the new span a child of an existing span. Emits
+   [Telemetry.Span.Started] before calling [fn]. Emits
+   [Telemetry.Span.Completed] with [Succeeded] when [fn] returns, or [Failed]
+   before re-raising when [fn] raises.
+*)
+val with_span: ?span:Span.t -> ?attributes:Span.attributes -> string -> (Span.t -> 'a) -> 'a
+
 val start: unit -> Pid.t
 
 (** Emit a telemetry event. All attached handlers will receive it. *)

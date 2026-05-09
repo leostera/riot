@@ -2,15 +2,74 @@ open Global
 
 type event = ..
 
+module Span = struct
+  type id = Uuid.t
+
+  type attribute = string * Data.Json.t
+
+  type attributes = attribute list
+
+  type status =
+    | Succeeded
+    | Failed of exn
+
+  type t = {
+    id: id;
+    parent_id: id option;
+    name: string;
+    attributes: attributes;
+    started_at: Time.Instant.t;
+  }
+
+  type lifecycle =
+    | Started of t
+    | Completed of {
+        span: t;
+        completed_at: Time.Instant.t;
+        duration: Time.Duration.t;
+        status: status;
+      }
+
+  let emit_lifecycle = ref (fun _event -> ())
+
+  let set_emitter = fun fn -> emit_lifecycle := fn
+
+  let id = fun span -> span.id
+
+  let id_to_string = fun id -> Uuid.to_string id
+
+  let equal_id = Uuid.equal
+
+  let parent_id = fun span -> span.parent_id
+
+  let name = fun span -> span.name
+
+  let attributes = fun span -> span.attributes
+
+  let started_at = fun span -> span.started_at
+
+  let fresh_id = Uuid.v7
+
+  let start = fun ?span ?(attributes = []) name ->
+    let span = {
+      id = fresh_id ();
+      parent_id = Option.map span ~fn:id;
+      name;
+      attributes;
+      started_at = Time.Instant.now ();
+    } in
+    !emit_lifecycle (Started span);
+    span
+
+  let finish = fun ?(status = Succeeded) span ->
+    let completed_at = Time.Instant.now () in
+    let duration = Time.Instant.saturating_duration_since ~earlier:span.started_at completed_at in
+    !emit_lifecycle (Completed { span; completed_at; duration; status })
+
+end
+
 type event +=
-  | SpanStarted of {
-      started_at: Time.Instant.t;
-      event: event;
-    }
-  | SpanCompleted of {
-      completed_at: Time.Instant.t;
-      event: event;
-    }
+  | SpanEvent of Span.lifecycle
 
 type handler_id = string
 
@@ -143,6 +202,19 @@ let emit = fun event ->
   match Atomic.get pid with
   | None -> ()
   | Some current -> send current.pid Server.(Telemetry (Emit event))
+
+let () = Span.set_emitter (fun event -> emit (SpanEvent event))
+
+let with_span = fun ?span ?attributes name fn ->
+  let span = Span.start ?span ?attributes name in
+  try
+    let result = fn span in
+    Span.finish span;
+    result
+  with
+  | exn ->
+      Span.finish ~status:(Span.Failed exn) span;
+      raise_notrace exn
 
 let attach = fun id fn ->
   match Atomic.get pid with
