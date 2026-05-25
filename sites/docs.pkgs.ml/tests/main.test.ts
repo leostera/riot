@@ -47,7 +47,10 @@ describe("docs.pkgs worker", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-    expect(await response.text()).toContain("std docs");
+    const body = await response.text();
+    expect(body).toContain("tech-demo");
+    expect(body).toContain("data-pkgs-docs-tech-demo-banner");
+    expect(body).toContain("std docs");
   });
 
   test("queue consumer records published releases for timer-driven processing", async () => {

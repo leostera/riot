@@ -53,6 +53,14 @@ const {
     <meta name="description" content={description} />
   </head>
   <body>
+    <aside class="tech-demo-banner" aria-label="Tech demo notice">
+      <div class="tech-demo-banner__inner">
+        <strong class="tech-demo-banner__label">tech-demo</strong>
+        <span class="tech-demo-banner__copy">
+          Riot is an in-progress preview. Commands, packages, APIs, and docs may change before release.
+        </span>
+      </div>
+    </aside>
     <slot />
     <script>
       type RiotTheme = "light" | "dark";

@@ -65,6 +65,63 @@ const RELEASE_PROCESSING_TARGET_CONCURRENCY = 1;
 const RELEASE_PROCESSING_LEASE_MS = 20 * 60 * 1000;
 const RELEASE_PROCESSING_RETRY_DELAY_MS = 5 * 60 * 1000;
 const RELEASE_PROCESSING_MAX_ATTEMPTS = 3;
+const TECH_DEMO_BANNER_MARKER = "data-pkgs-docs-tech-demo-banner";
+const TECH_DEMO_BANNER_HTML = `
+<style data-pkgs-docs-tech-demo-banner-style>
+.pkgs-docs-tech-demo-banner {
+  box-sizing: border-box;
+  width: 100%;
+  border-bottom: 2px solid #151317;
+  background: #ffc43d;
+  color: #151317;
+  box-shadow: 0 8px 0 rgba(21, 19, 23, 0.14);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.pkgs-docs-tech-demo-banner *,
+.pkgs-docs-tech-demo-banner *::before,
+.pkgs-docs-tech-demo-banner *::after {
+  box-sizing: border-box;
+}
+.pkgs-docs-tech-demo-banner__inner {
+  display: flex;
+  min-height: 64px;
+  width: min(100%, 1180px);
+  align-items: center;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 14px 24px;
+}
+.pkgs-docs-tech-demo-banner__label {
+  flex: 0 0 auto;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+.pkgs-docs-tech-demo-banner__copy {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+@media (max-width: 640px) {
+  .pkgs-docs-tech-demo-banner__inner {
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+  .pkgs-docs-tech-demo-banner__label {
+    font-size: 21px;
+  }
+}
+</style>
+<aside class="pkgs-docs-tech-demo-banner" data-pkgs-docs-tech-demo-banner aria-label="Tech demo notice">
+  <div class="pkgs-docs-tech-demo-banner__inner">
+    <strong class="pkgs-docs-tech-demo-banner__label">tech-demo</strong>
+    <span class="pkgs-docs-tech-demo-banner__copy">Generated package docs are an in-progress preview. Routes, output, and package pages may change before release.</span>
+  </div>
+</aside>`;
 
 interface PackageReleaseProcessingMessage {
   kind: "process_release";
@@ -255,10 +312,24 @@ async function respondWithObject(request: Request, object: StoredObject): Promis
   }
   headers.set("cache-control", cacheControlForKey(object.key));
   headers.set("etag", etag);
-  headers.set("content-length", String(object.size));
+  const shouldInjectBanner = shouldInjectTechDemoBanner(object.key, headers);
+  if (!shouldInjectBanner) {
+    headers.set("content-length", String(object.size));
+  }
 
   if (request.method === "HEAD") {
     return new Response(null, {
+      status: 200,
+      headers,
+    });
+  }
+
+  if (shouldInjectBanner && object.body !== null) {
+    const html = await new Response(object.body).text();
+    const body = injectTechDemoBanner(html);
+    headers.set("content-length", String(Buffer.byteLength(body)));
+
+    return new Response(body, {
       status: 200,
       headers,
     });
@@ -268,6 +339,30 @@ async function respondWithObject(request: Request, object: StoredObject): Promis
     status: 200,
     headers,
   });
+}
+
+function shouldInjectTechDemoBanner(key: string, headers: Headers): boolean {
+  const contentEncoding = headers.get("content-encoding");
+  if (contentEncoding !== null && contentEncoding.toLowerCase() !== "identity") {
+    return false;
+  }
+
+  const contentType = headers.get("content-type");
+  return key.endsWith(".html") || contentType?.toLowerCase().includes("text/html") === true;
+}
+
+function injectTechDemoBanner(html: string): string {
+  if (html.includes(TECH_DEMO_BANNER_MARKER)) {
+    return html;
+  }
+
+  const bodyMatch = html.match(/<body\b[^>]*>/i);
+  if (bodyMatch?.index !== undefined) {
+    const insertAt = bodyMatch.index + bodyMatch[0].length;
+    return `${html.slice(0, insertAt)}${TECH_DEMO_BANNER_HTML}${html.slice(insertAt)}`;
+  }
+
+  return `${TECH_DEMO_BANNER_HTML}${html}`;
 }
 
 function cacheControlForKey(key: string): string {
