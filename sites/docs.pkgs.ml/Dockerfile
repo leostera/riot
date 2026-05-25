@@ -6,7 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/root
 ENV PATH=/root/.riot/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     curl \
