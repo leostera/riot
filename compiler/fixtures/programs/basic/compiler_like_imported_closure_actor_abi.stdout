@@ -1,8 +1,0 @@
-identity closure: old=unknown, new=concrete
-actor factory closure: old=concrete, new=concrete
-nested actor factory closure: old=unknown, new=concrete
-raw type variable: old=unknown, new=unknown
-list of unknown: old=unknown, new=unknown
-tuple of unknown: old=unknown, new=unknown
-record wrapper: old=concrete, new=concrete
-variant wrapper: old=concrete, new=concrete

@@ -1,1 +1,0 @@
-line 1 ok; line 2 ok; line 3 rejects String == Bool; line 4 rejects (i64, String) == (i64, Bool)

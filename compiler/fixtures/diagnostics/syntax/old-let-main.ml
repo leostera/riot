@@ -1,1 +1,0 @@
-let main () = println "hello world"

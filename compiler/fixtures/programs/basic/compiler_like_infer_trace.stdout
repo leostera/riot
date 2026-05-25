@@ -1,1 +1,0 @@
-if condition: Bool vs Int | call argument parse: String vs List<Int> | list item: Int -> String vs Int -> Bool

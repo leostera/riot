@@ -1,4 +1,0 @@
-fn main() {
-  let x = 5 - 3;
-  dbg(x)
-}

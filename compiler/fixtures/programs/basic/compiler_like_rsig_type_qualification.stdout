@@ -1,1 +1,0 @@
-head:Syntax.token,trail:Syntax.box<Syntax.token,Option<String>>,pair:(Syntax.token,List<Syntax.span>),forwarded:Syntax.token

@@ -91,3 +91,5 @@ There's a lot of things Riot aims to be, but here's a few that Riot does _not_ t
 Riot is the continuation of the work I started with
 [Caramel](https://github.com/leostera/caramel), an Erlang-backend for the OCaml
 compiler.
+
+If you're looking for the old Riot library that used to be published in opam you can find it here: https://github.com/leostera/riot/commit/310a4868edaa4f97304ca5398f23d843b8b26eae

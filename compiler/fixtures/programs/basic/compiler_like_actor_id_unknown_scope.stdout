@@ -1,3 +1,0 @@
-scoped same: ok
-scoped mixed: expected String, got i64
-existential mixed: ok

@@ -1,5 +1,0 @@
-record:ActorId<box<i64>>
-variant:ActorId<option<i64>>
-list:ActorId<List<i64>>
-heterogeneous:ActorId<Unknown>
-wildcard:ActorId<Unknown>

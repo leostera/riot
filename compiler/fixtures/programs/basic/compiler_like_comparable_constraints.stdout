@@ -1,1 +1,0 @@
-line 1 ok; line 2 ok; line 3 rejects Bool < Bool; line 4 rejects List<i64> < List<i64>

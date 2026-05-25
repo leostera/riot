@@ -1,8 +1,0 @@
-old list: reject
-new list: match
-bad result: reject
-variant: match
-record nested: match
-variant nested: match
-actor callback: match
-bad actor callback: reject
