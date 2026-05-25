@@ -76,7 +76,6 @@ Useful links:
 
 - Landing page: <https://riot.ml>
 - Installer: <https://get.riot.ml>
-- Documentation: <https://docs.riot.ml>
 - Package registry: <https://pkgs.ml>
 - Source repository: <https://github.com/leostera/riot>
 - Agent discovery: <https://riot.ml/llms.txt>

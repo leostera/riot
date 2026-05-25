@@ -77,17 +77,20 @@ const TECH_DEMO_BANNER_HTML = `
   color: #151317;
   box-shadow: 0 4px 0 rgba(21, 19, 23, 0.12);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: center;
 }
 .pkgs-docs-tech-demo-banner *,
 .pkgs-docs-tech-demo-banner *::before,
 .pkgs-docs-tech-demo-banner *::after {
   box-sizing: border-box;
+  color: #151317 !important;
 }
 .pkgs-docs-tech-demo-banner__inner {
   display: flex;
   min-height: 40px;
   width: min(100%, 1180px);
   align-items: center;
+  justify-content: center;
   gap: 12px;
   margin: 0 auto;
   padding: 8px 24px;
@@ -108,7 +111,7 @@ const TECH_DEMO_BANNER_HTML = `
   .pkgs-docs-tech-demo-banner__inner {
     min-height: 0;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 4px;
     padding: 8px 16px;
   }

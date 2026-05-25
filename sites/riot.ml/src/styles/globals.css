@@ -238,6 +238,12 @@ body {
   background: var(--jr-color-amber-300);
   color: #151317;
   box-shadow: 0 4px 0 rgba(14, 13, 16, 0.12);
+  text-align: center;
+}
+
+.tech-demo-banner,
+.tech-demo-banner * {
+  color: #151317 !important;
 }
 
 .tech-demo-banner__inner {
@@ -245,6 +251,7 @@ body {
   width: min(100%, var(--jr-layout-wide-width));
   min-height: 42px;
   align-items: center;
+  justify-content: center;
   gap: var(--jr-space-3);
   margin: 0 auto;
   padding: var(--jr-space-2) var(--jr-layout-content-padding-x);
@@ -270,7 +277,7 @@ body {
   .tech-demo-banner__inner {
     min-height: 0;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--jr-space-1);
     padding: var(--jr-space-2) var(--jr-space-4);
   }

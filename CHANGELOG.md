@@ -298,7 +298,7 @@
 - Added `riot yank` plus exact-version yank support in the `pkgs-ml` registry client.
 - Added structured test and benchmark suite timing output in microseconds, including per-test durations, suite lifecycle timing, and escaped JSON payloads that pipe cleanly into tools like `jq`.
 - Added aggregated case-level summaries in `riot test` and `riot bench`, including measured test time, slowest tests, and aggregated failed test lists in both human and JSON output.
-- Added package admin views in the `pkgs.ml` services and migrated `docs.riot.ml` to the new Astro/Starlight content layout.
+- Added package admin views in the `pkgs.ml` services and migrated the Riot docs site to the new Astro/Starlight content layout.
 
 ### Changed
 
