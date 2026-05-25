@@ -66,6 +66,7 @@ const RELEASE_PROCESSING_LEASE_MS = 20 * 60 * 1000;
 const RELEASE_PROCESSING_RETRY_DELAY_MS = 5 * 60 * 1000;
 const RELEASE_PROCESSING_MAX_ATTEMPTS = 3;
 const TECH_DEMO_BANNER_MARKER = "data-pkgs-docs-tech-demo-banner";
+const GENERATED_DOCS_SHARED_PATH_PREFIX = "_shared/";
 const TECH_DEMO_BANNER_HTML = `
 <style data-pkgs-docs-tech-demo-banner-style>
 .pkgs-docs-tech-demo-banner {
@@ -74,7 +75,7 @@ const TECH_DEMO_BANNER_HTML = `
   border-bottom: 2px solid #151317;
   background: #ffc43d;
   color: #151317;
-  box-shadow: 0 8px 0 rgba(21, 19, 23, 0.14);
+  box-shadow: 0 4px 0 rgba(21, 19, 23, 0.12);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .pkgs-docs-tech-demo-banner *,
@@ -84,22 +85,22 @@ const TECH_DEMO_BANNER_HTML = `
 }
 .pkgs-docs-tech-demo-banner__inner {
   display: flex;
-  min-height: 64px;
+  min-height: 40px;
   width: min(100%, 1180px);
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin: 0 auto;
-  padding: 14px 24px;
+  padding: 8px 24px;
 }
 .pkgs-docs-tech-demo-banner__label {
   flex: 0 0 auto;
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1;
 }
 .pkgs-docs-tech-demo-banner__copy {
   min-width: 0;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -108,11 +109,11 @@ const TECH_DEMO_BANNER_HTML = `
     min-height: 0;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding: 14px 16px;
+    gap: 4px;
+    padding: 8px 16px;
   }
   .pkgs-docs-tech-demo-banner__label {
-    font-size: 21px;
+    font-size: 15px;
   }
 }
 </style>
@@ -122,6 +123,165 @@ const TECH_DEMO_BANNER_HTML = `
     <span class="pkgs-docs-tech-demo-banner__copy">Generated package docs are an in-progress preview. Routes, output, and package pages may change before release.</span>
   </div>
 </aside>`;
+const GENERATED_DOCS_FALLBACK_CSS = `
+:root {
+  --jr-color-bg: #fff8ed;
+  --jr-color-bg-subtle: #f5ecdc;
+  --jr-color-bg-raised: #fffdf7;
+  --jr-color-text: #151317;
+  --jr-color-text-muted: #5b5462;
+  --jr-color-border: rgba(21, 19, 23, 0.14);
+  --jr-color-brand: #ef233c;
+  --jr-color-sidebar-bg: #151317;
+  --jr-color-sidebar-text: #fff8ed;
+  --jr-font-sans: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --jr-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --jr-font-display: "Martian Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--jr-color-bg); color: var(--jr-color-text); scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--jr-color-bg);
+  color: var(--jr-color-text);
+  font-family: var(--jr-font-sans);
+  font-size: 15px;
+  line-height: 1.58;
+}
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--jr-color-brand); }
+code, pre { font-family: var(--jr-font-mono); }
+.docs-shell {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  min-height: 100vh;
+}
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  padding: 28px 24px;
+  border-right: 1px solid rgba(255, 248, 237, 0.18);
+  background: var(--jr-color-sidebar-bg);
+  color: var(--jr-color-sidebar-text);
+}
+.sidebar-brand {
+  display: inline-flex;
+  margin-bottom: 24px;
+  color: #ffc43d;
+  font-family: var(--jr-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sidebar-title {
+  font-family: var(--jr-font-display);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.sidebar-meta {
+  margin-top: 8px;
+  color: rgba(255, 248, 237, 0.66);
+  font-family: var(--jr-font-mono);
+  font-size: 12px;
+}
+.sidebar-group {
+  margin-top: 28px;
+}
+.sidebar-group h2 {
+  margin: 0 0 10px;
+  color: rgba(255, 248, 237, 0.54);
+  font-family: var(--jr-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.sidebar-group ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sidebar-group a {
+  display: block;
+  padding: 5px 0;
+  color: var(--jr-color-sidebar-text);
+  overflow-wrap: anywhere;
+}
+.content {
+  min-width: 0;
+  max-width: 1040px;
+  padding: 48px 56px 80px;
+}
+.page-header {
+  margin-bottom: 36px;
+  border-bottom: 1px solid var(--jr-color-border);
+  padding-bottom: 24px;
+}
+.page-title {
+  margin: 0;
+  font-family: var(--jr-font-display);
+  font-size: clamp(30px, 5vw, 56px);
+  font-weight: 900;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.docstring, .item-doc, .module-docstring {
+  max-width: 76ch;
+  color: var(--jr-color-text);
+}
+.docstring p, .item-doc p, .module-docstring p {
+  margin: 12px 0 0;
+}
+.section, .detail-section, .entry-section {
+  margin-top: 36px;
+}
+.section h2, .detail-section h2, .entry-section h2 {
+  margin: 0 0 14px;
+  font-family: var(--jr-font-display);
+  font-size: 24px;
+  line-height: 1.18;
+}
+.item-row, .module-row, .entry-row {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--jr-color-border);
+  padding: 14px 0;
+}
+.item-name, .module-name, .entry-name {
+  font-family: var(--jr-font-mono);
+  font-weight: 700;
+}
+.kind-label, .badge, .tag {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--jr-color-border);
+  background: var(--jr-color-bg-subtle);
+  padding: 2px 6px;
+  font-family: var(--jr-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+pre {
+  overflow: auto;
+  border: 1px solid var(--jr-color-border);
+  background: var(--jr-color-bg-raised);
+  padding: 16px;
+}
+@media (max-width: 860px) {
+  .docs-shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 20px;
+  }
+  .content {
+    padding: 28px 20px 56px;
+  }
+}
+`;
 
 interface PackageReleaseProcessingMessage {
   kind: "process_release";
@@ -180,6 +340,14 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   }
 
   const url = new URL(request.url);
+  const escapedSharedAsset = matchEscapedGeneratedDocsSharedAssetPath(url.pathname);
+  if (escapedSharedAsset !== null) {
+    const fallbackAsset = generatedDocsFallbackAsset(escapedSharedAsset);
+    if (fallbackAsset !== null) {
+      return respondWithGeneratedDocsFallbackAsset(request, fallbackAsset);
+    }
+  }
+
   const match = matchPackageDocsPath(url.pathname);
 
   if (match === null) {
@@ -194,6 +362,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   const objectKey = resolveDocsObjectKey(match.packageName, match.version, match.rest);
   const object = await env.ML_PKGS_CDN.get(objectKey);
   if (object === null) {
+    const fallbackAsset = generatedDocsFallbackAsset(match.rest);
+    if (fallbackAsset !== null) {
+      return respondWithGeneratedDocsFallbackAsset(request, fallbackAsset);
+    }
+
     const run = await readLatestPackagePipelineRun(env.SEARCH_DB, match.packageName, match.version, "docs");
     if (run !== null) {
       return new Response(
@@ -242,7 +415,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  return await respondWithObject(request, object);
+  return await respondWithObject(request, object, match);
 }
 
 function redirectToPkgs(url: URL): Response {
@@ -274,6 +447,21 @@ function matchPackageDocsPath(pathname: string):
   };
 }
 
+function matchEscapedGeneratedDocsSharedAssetPath(pathname: string): string | null {
+  const segments = pathname.split("/").filter((segment) => segment.length > 0);
+  if (segments[0] !== "p") {
+    return null;
+  }
+
+  const sharedIndex = segments.indexOf("_shared");
+  if (sharedIndex < 0) {
+    return null;
+  }
+
+  const assetPath = segments.slice(sharedIndex + 1).map((segment) => decodeURIComponent(segment)).join("/");
+  return assetPath.length === 0 ? null : assetPath;
+}
+
 function resolveDocsObjectKey(packageName: string, version: string, rest: string): string {
   if (rest.length === 0) {
     return `docs/${packageName}/${version}/index.html`;
@@ -290,7 +478,11 @@ function resolveDocsObjectKey(packageName: string, version: string, rest: string
   return `docs/${packageName}/${version}/${rest}`;
 }
 
-async function respondWithObject(request: Request, object: StoredObject): Promise<Response> {
+async function respondWithObject(
+  request: Request,
+  object: StoredObject,
+  match: { packageName: string; version: string },
+): Promise<Response> {
   const etag = object.httpEtag;
   if (request.headers.get("if-none-match") === etag) {
     return new Response(null, {
@@ -326,7 +518,9 @@ async function respondWithObject(request: Request, object: StoredObject): Promis
 
   if (shouldInjectBanner && object.body !== null) {
     const html = await new Response(object.body).text();
-    const body = injectTechDemoBanner(html);
+    const body = injectTechDemoBanner(
+      rewriteGeneratedDocsAssetUrls(html, match.packageName, match.version),
+    );
     headers.set("content-length", String(Buffer.byteLength(body)));
 
     return new Response(body, {
@@ -336,6 +530,44 @@ async function respondWithObject(request: Request, object: StoredObject): Promis
   }
 
   return new Response(object.body, {
+    status: 200,
+    headers,
+  });
+}
+
+function generatedDocsFallbackAsset(rest: string): { body: string; contentType: string } | null {
+  const assetPath = rest.startsWith(GENERATED_DOCS_SHARED_PATH_PREFIX)
+    ? rest.slice(GENERATED_DOCS_SHARED_PATH_PREFIX.length)
+    : rest;
+
+  if (assetPath === "doc.css") {
+    return {
+      body: GENERATED_DOCS_FALLBACK_CSS,
+      contentType: "text/css; charset=utf-8",
+    };
+  }
+
+  if (assetPath === "prism-core.min.js" || assetPath === "prism-ocaml.min.js") {
+    return {
+      body: "",
+      contentType: "text/javascript; charset=utf-8",
+    };
+  }
+
+  return null;
+}
+
+function respondWithGeneratedDocsFallbackAsset(
+  request: Request,
+  asset: { body: string; contentType: string },
+): Response {
+  const headers = new Headers({
+    "cache-control": "public, max-age=300",
+    "content-type": asset.contentType,
+    "content-length": String(Buffer.byteLength(asset.body)),
+  });
+
+  return new Response(request.method === "HEAD" ? null : asset.body, {
     status: 200,
     headers,
   });
@@ -363,6 +595,20 @@ function injectTechDemoBanner(html: string): string {
   }
 
   return `${TECH_DEMO_BANNER_HTML}${html}`;
+}
+
+function rewriteGeneratedDocsAssetUrls(
+  html: string,
+  packageName: string,
+  version: string,
+): string {
+  const sharedAssetPrefix = `/p/${encodeURIComponent(packageName)}/${encodeURIComponent(version)}/_shared/`;
+
+  return html.replace(
+    /((?:href|src)=["'])(?:\.\.\/)+_shared\/([^"']+)(["'])/g,
+    (_match, attrStart: string, assetPath: string, attrEnd: string) =>
+      `${attrStart}${sharedAssetPrefix}${assetPath}${attrEnd}`,
+  );
 }
 
 function cacheControlForKey(key: string): string {

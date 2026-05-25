@@ -72,7 +72,7 @@ Riot includes:
 - an actor-model runtime and standard library surface for building real OCaml
   applications
 
-The main public surfaces are:
+Useful links:
 
 - Landing page: <https://riot.ml>
 - Installer: <https://get.riot.ml>

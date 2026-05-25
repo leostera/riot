@@ -83,6 +83,7 @@ export class SandboxPackagePipelineExecutor implements PackagePipelineExecutor {
     const env = commandEnv();
     const packageDir = `${WORKSPACE_ROOT}/packages/${request.package_name}`;
     const artifactPath = `/tmp/${request.package_name}-${request.package_version}.tar.gz`;
+    const docsOutputRoot = `${WORKSPACE_ROOT}/_build/doc`;
     const docsOutputDir = `${WORKSPACE_ROOT}/_build/doc/${request.package_name}/${request.package_version}`;
 
     try {
@@ -270,7 +271,7 @@ export class SandboxPackagePipelineExecutor implements PackagePipelineExecutor {
         });
 
         const files = docs.success
-          ? await collectGeneratedDocsFiles(sandbox, docsOutputDir)
+          ? await collectGeneratedDocsFiles(sandbox, docsOutputDir, docsOutputRoot)
           : [];
         logPipelineStep(request, "docs.artifacts.collected", {
           output_dir: docsOutputDir,
@@ -478,19 +479,15 @@ function parseJsonlStdout(stdout: string): {
 async function collectGeneratedDocsFiles(
   sandbox: Sandbox,
   outputDir: string,
+  outputRoot: string,
 ): Promise<GeneratedDocsFile[]> {
-  const exists = await sandbox.exists(outputDir);
-  if (!exists.exists) {
-    return [];
-  }
-
-  const listed = await sandbox.listFiles(outputDir, {
-    recursive: true,
-    includeHidden: true,
-  });
+  const listedFiles = [
+    ...(await listGeneratedDocsFiles(sandbox, outputDir, "")),
+    ...(await listGeneratedDocsFiles(sandbox, `${outputRoot}/_shared`, "_shared/")),
+  ];
 
   const files: GeneratedDocsFile[] = [];
-  for (const file of listed.files) {
+  for (const file of listedFiles) {
     if (file.type !== "file") {
       continue;
     }
@@ -509,4 +506,25 @@ async function collectGeneratedDocsFiles(
   }
 
   return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function listGeneratedDocsFiles(
+  sandbox: Sandbox,
+  dir: string,
+  prefix: string,
+): Promise<Array<{ type: string; absolutePath: string; relativePath: string }>> {
+  const exists = await sandbox.exists(dir);
+  if (!exists.exists) {
+    return [];
+  }
+
+  const listed = await sandbox.listFiles(dir, {
+    recursive: true,
+    includeHidden: true,
+  });
+
+  return listed.files.map((file) => ({
+    ...file,
+    relativePath: `${prefix}${file.relativePath}`,
+  }));
 }

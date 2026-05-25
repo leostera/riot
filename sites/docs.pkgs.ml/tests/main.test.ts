@@ -39,9 +39,13 @@ describe("docs.pkgs worker", () => {
   test("package docs route serves generated docs from R2", async () => {
     const env = makeEnv();
     const bucket = env.ML_PKGS_CDN as unknown as FakeR2Bucket;
-    await bucket.put("docs/std/0.1.0/index.html", "<h1>std docs</h1>", {
-      httpMetadata: { contentType: "text/html; charset=utf-8" },
-    });
+    await bucket.put(
+      "docs/std/0.1.0/index.html",
+      '<!doctype html><html><head><link rel="stylesheet" href="../../_shared/doc.css"></head><body><h1>std docs</h1><script src="../../_shared/prism-core.min.js"></script></body></html>',
+      {
+        httpMetadata: { contentType: "text/html; charset=utf-8" },
+      },
+    );
 
     const response = await worker.fetch(new Request("https://docs.pkgs.ml/p/std/0.1.0/"), env);
 
@@ -50,7 +54,29 @@ describe("docs.pkgs worker", () => {
     const body = await response.text();
     expect(body).toContain("tech-demo");
     expect(body).toContain("data-pkgs-docs-tech-demo-banner");
+    expect(body).toContain('href="/p/std/0.1.0/_shared/doc.css"');
+    expect(body).toContain('src="/p/std/0.1.0/_shared/prism-core.min.js"');
     expect(body).toContain("std docs");
+  });
+
+  test("generated docs shared CSS falls back when old docs missed shared assets", async () => {
+    const env = makeEnv();
+
+    const response = await worker.fetch(new Request("https://docs.pkgs.ml/p/std/0.1.0/_shared/doc.css"), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/css");
+    expect(await response.text()).toContain(".docs-shell");
+  });
+
+  test("escaped generated docs shared CSS path falls back for existing pages", async () => {
+    const env = makeEnv();
+
+    const response = await worker.fetch(new Request("https://docs.pkgs.ml/p/_shared/doc.css"), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/css");
+    expect(await response.text()).toContain(".docs-shell");
   });
 
   test("queue consumer records published releases for timer-driven processing", async () => {
