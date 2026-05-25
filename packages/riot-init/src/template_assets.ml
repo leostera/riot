@@ -291,8 +291,8 @@ riot run -p my-package my-binary -- --port 8080
 Riot can also run remote sources:
 
 ```sh
-riot run leostera/create-riot-app
-riot run --update leostera/create-riot-app
+riot run https://github.com/owner/tool
+riot run --update https://github.com/owner/tool
 ```
 
 ## Tests and benchmarks

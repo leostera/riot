@@ -8,88 +8,136 @@ There are many OCaml stacks, this one is mine.
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> |
-  <a href="#non-goals">Non-goals</a> |
-  <a href="#acknowledgments">Acknowledgments</a>
+  <a href="#what-riot-is">What Riot Is</a> |
+  <a href="#command-surface">Command Surface</a> |
+  <a href="#what-you-can-build">What You Can Build</a> |
+  <a href="#non-goals">Non-goals</a>
 </p>
 
-Riot is an [actor-model][actors], multi-core-ready ecosystem and tooling for
-OCaml 5, that I designed from the ground up to help me ship _great software_.
+Riot is a tech-demo of an opinionated OCaml stack for building applications as
+one piece: tools, services, databases, packages, experiments, and systems that
+need to stay understandable while they grow.
 
-It includes:
-
-* An actor-based multi-core scheduler, so going parallel is as easy as calling `spawn`!
-
-* `std` -- my take on a modern batteries-included standard library with 98% of
-what you need to build apps, including supervision trees, application
-abstractions, layered config management, logging and tracing, common data
-formats (json, toml, etc), lazy iterators and collections, datetime and time
-and timers, file system and networking, an arg parser, unicode support,
-synchronization primitives, external commands, cryptography, and more.
-
-* `riot` -- a new extensible build system and package manager that becomes the
-only tool you need to install and use to do _everything_ in this stack. 
-
-* `ocaml-toolchain.toml` -- a managed toolchain story, including support for
-cross-compilation
-
-* a familiar package management experience -- with commands like `riot add
-agents@0.1.2` to add, remove, and update your dependencies
-
-* an extensible command system, where packages can provide custom commands to
-support your workflows better, and they are all surfaced via riot. Think `riot
-minttea:gen component`
-
-* `riot fix` -- a new extensible linter, where packages can provide custom
-linting rules and automated fixes
-
-* `riot fmt` -- a strict, zero-knobs formatter, optimized for readability and
-small diffs
-
-* A new procedural macro system, allowing packages to provide macros using
-`syn`, a lossless concrete syntax tree for OCaml.
-
-* ...and a whole lot of features and libraries I've had to build to get this
-thing up and running!
+It is centered around one tool, `riot`, plus a modern package registry,
+prebuilt OCaml toolchains, a multi-core-ready actor-model runtime, a new
+standard library, and first-class support for agentic work.
 
 ## Quick Start
 
-To get a feel for Riot quickly:
+Install Riot:
 
 ```sh
 curl -sSL https://get.riot.ml | sh
 riot --help
 ```
 
-To start an empty workspace run `riot init` and follow the instructions. The
-generated workspace includes a starter package, test, Dockerfile, and GitHub
-Actions workflow.
-
-Or you can scaffold a starter Riot application by running:
+Start a workspace:
 
 ```sh
-riot run leostera/create-riot-app
+riot init app
+cd app
+riot build
+riot test
 ```
+
+## What Riot Is
+
+Riot is a stack, but it is also a tool: `riot`. The goal is that this is the
+only tool you need inside the stack.
+
+Riot includes:
+
+- a package-aware build system using plain `riot.toml` manifests
+- package management through `pkgs.ml`, including add, remove, update, search,
+  publish, yank, login, and logout flows
+- managed OCaml toolchains declared in `ocaml-toolchain.toml`, including
+  prebuilt host and cross-target toolchains
+- `riot fmt`, a strict zero-knobs formatter optimized for readability and
+  stable diffs
+- `riot fix`, an extensible linting and codemod surface with package-provided
+  rules and automated fixes
+- one test runner for unit tests, property tests, snapshot tests, and replayed
+  fuzz cases
+- `riot fuzz` for coverage-guided fuzzing campaigns against parsers, codecs,
+  protocol handlers, and CLI boundaries
+- `riot snapshots` for reviewing generated expected-output changes
+- `riot bench` for benchmark runs, recording, and comparison
+- `riot doc` for local and release package documentation
+- `riot run` for local executables, GitHub repositories, URLs, and one-off
+  workflow tools
+- package provider commands like `riot sqlx:migrate`, so dependencies can
+  extend the local workflow without becoming separate global tools
+- `.agents/skills/riot-ml` in generated projects, plus `--json` output across
+  important command paths so agents can inspect and repair workflows as data
+- an actor-model runtime and standard library surface for building real OCaml
+  applications
+
+The main public surfaces are:
+
+- Landing page: <https://riot.ml>
+- Installer: <https://get.riot.ml>
+- Documentation: <https://docs.riot.ml>
+- Package registry: <https://pkgs.ml>
+- Source repository: <https://github.com/leostera/riot>
+- Agent discovery: <https://riot.ml/llms.txt>
+
+## Command Surface
+
+Riot keeps the normal software-development loop behind one command family:
+
+| Command | Purpose |
+| --- | --- |
+| `.agents/skills/riot-ml` | local agent instructions for Riot projects |
+| `riot build` | build packages and workspaces |
+| `riot fmt` | format OCaml with one house style |
+| `riot fix` | lint, explain rules, and apply safe fixes |
+| `riot test` | run unit, property, snapshot, and replayed fuzz tests |
+| `riot fuzz` | run and replay coverage-guided fuzzing campaigns |
+| `riot snapshots` | approve or reject pending snapshot candidates |
+| `riot bench` | run, record, and compare benchmarks |
+| `riot add`, `riot rm`, `riot update` | manage dependencies and `riot.lock` |
+| `riot publish`, `riot yank` | publish and manage registry releases |
+| `riot search`, `riot login`, `riot logout` | work with `pkgs.ml` |
+| `riot init`, `riot new` | create workspaces and packages on the blessed path |
+| `riot toolchain` | install, list, and validate OCaml toolchains |
+| `riot doc` | generate package documentation |
+| `riot run` | run workspace binaries and remote sources |
+| `riot <pkg>:<cmd>` | run package-owned workflow commands |
+
+Most automation-oriented commands either support `--json` today or are designed
+around structured output, so scripts, editors, CI jobs, and agents do not need
+to scrape prose.
+
+## What You Can Build
+
+Riot is intended for:
+
+- multi-core applications using actors, supervision, and message passing
+- command line interfaces with clear errors and structured output
+- cloud and networked services that do real IO
+- developer tooling such as formatters, linters, code generators, release tools,
+  migration scripts, and project automation
+- TUI applications with packages like `minttea` and `gooey`
+- web applications with `suri`, including LiveView-style flows
+- database-backed systems with `sqlx`, `postgres`, and `sqlite`
+- agentic workflows that can be run, inspected, repaired, and repeated
 
 ## Non-goals
 
-There's a lot of things Riot aims to be, but here's a few that Riot does _not_ try to be:
+Riot is not a full port of the Erlang VM. It does not try to support Erlang or
+Elixir bytecode, hot-code reloading in live applications, function-call-level
+tracing in live applications, or ad-hoc distribution.
 
-1. Riot is not a full port of the Erlang VM and it won't support several of its
-   use-cases, like:
-
-   * supporting Erlang or Elixir bytecode
-   * hot-code reloading in live applications
-   * function-call level tracing in live applications
-   * ad-hoc distribution
-
-2. Riot is also not trying to preserve compatibiilty with the traditional OCaml
-   toolchain or experience. This is my own vision of what writing OCaml could
-   look like.
+Riot is also not trying to preserve compatibility with the traditional OCaml
+toolchain or experience. This is my own vision of what writing OCaml could look
+like.
 
 ## Acknowledgments
 
-Riot is the continuation of the work I started with
-[Caramel](https://github.com/leostera/caramel), an Erlang-backend for the OCaml
+Riot continues work I started with
+[Caramel](https://github.com/leostera/caramel), an Erlang backend for the OCaml
 compiler.
 
-If you're looking for the old Riot library that used to be published in opam you can find it here: https://github.com/leostera/riot/commit/310a4868edaa4f97304ca5398f23d843b8b26eae
+If you are looking for the old Riot library that used to be published in opam,
+you can find it at
+<https://github.com/leostera/riot/commit/310a4868edaa4f97304ca5398f23d843b8b26eae>.

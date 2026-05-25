@@ -1675,7 +1675,7 @@ let test_pm_event_hides_workspace_resolved_packages = fun _ctx ->
       ~seen_registry_updates
       (
         Riot_model.Event.DepsPackageResolvedForBuild {
-          package = package_name "create-riot-app";
+          package = package_name "workspace-tool";
           version = None;
           path = "/workspace";
           workspace = true;

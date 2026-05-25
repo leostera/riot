@@ -16,11 +16,11 @@ Examples:
 
 ```sh
 riot install suri
-riot install leostera/create-riot-app
-riot install https://github.com/leostera/create-riot-app@create-riot-app
-riot run leostera/create-riot-app
-riot run https://github.com/leostera/create-riot-app
-riot run https://github.com/leostera/create-riot-app@create-riot-app
+riot install owner/tool
+riot install https://github.com/owner/tool@tool
+riot run owner/tool
+riot run https://github.com/owner/tool
+riot run https://github.com/owner/tool@tool
 riot run https://example.com/releases/tool.tar.gz@main -- --help
 ```
 
@@ -42,13 +42,13 @@ These commands should:
 GitHub shorthand:
 
 ```text
-leostera/create-riot-app
+owner/tool
 ```
 
 is treated as:
 
 ```text
-https://github.com/leostera/create-riot-app
+https://github.com/owner/tool
 ```
 
 These commands are intentionally workspace-free.
@@ -80,8 +80,8 @@ That is too much ceremony for tools that are naturally source-addressed.
 The desired experience is closer to:
 
 ```sh
-riot install leostera/create-riot-app
-riot run leostera/create-riot-app
+riot install owner/tool
+riot run owner/tool
 ```
 
 That should feel like:
@@ -112,7 +112,7 @@ This feature is especially useful for:
 If a user points `riot install` at a remote source package:
 
 ```sh
-riot install leostera/create-riot-app
+riot install owner/tool
 ```
 
 Riot should:
@@ -147,7 +147,7 @@ than "modify my current workspace to depend on it."
 If a user points `riot run` at a remote source package:
 
 ```sh
-riot run leostera/create-riot-app
+riot run owner/tool
 ```
 
 Riot should reuse the exact same source and build machinery, but execute the
@@ -159,9 +159,9 @@ If the package does not expose a `main` binary, the user should specify one:
 
 ```sh
 riot install https://github.com/owner/repo@tool
-riot install leostera/create-riot-app@create-riot-app
+riot install owner/tool@tool
 riot run https://github.com/owner/repo@tool
-riot run leostera/create-riot-app@create-riot-app
+riot run owner/tool@tool
 ```
 
 This `@<bin>` suffix is part of the `riot install` / `riot run` CLI syntax, not
@@ -170,8 +170,8 @@ part of the remote locator itself.
 Arguments after `--` are forwarded to the selected binary:
 
 ```sh
-riot install leostera/create-riot-app -- --help
-riot run leostera/create-riot-app -- --help
+riot install owner/tool -- --help
+riot run owner/tool -- --help
 riot run https://example.com/releases/tool.tar.gz@main -- --verbose
 ```
 
@@ -410,22 +410,22 @@ from the exact way the user invoked the binary.
 Examples:
 
 ```text
-leostera/create-riot-app
-=> canonical identity: github:https://github.com/leostera/create-riot-app#default
+owner/tool
+=> canonical identity: github:https://github.com/owner/tool#default
 => remote-id: 7f/2c/7f2c9e...
 => build root: ~/.riot/build/7f/2c/7f2c9e.../debug/aarch64-apple-darwin/...
 ```
 
 ```text
-https://github.com/leostera/create-riot-app#main
-=> canonical identity: github:https://github.com/leostera/create-riot-app#main
+https://github.com/owner/tool#main
+=> canonical identity: github:https://github.com/owner/tool#main
 => remote-id: 3a/91/3a91b4...
 => build root: ~/.riot/build/3a/91/3a91b4.../debug/aarch64-apple-darwin/...
 ```
 
 ```text
-https://github.com/leostera/create-riot-app#3f0e2af
-=> canonical identity: github:https://github.com/leostera/create-riot-app#3f0e2af
+https://github.com/owner/tool#3f0e2af
+=> canonical identity: github:https://github.com/owner/tool#3f0e2af
 => remote-id: ab/44/ab44de...
 => build root: ~/.riot/build/ab/44/ab44de.../debug/aarch64-apple-darwin/...
 ```
@@ -451,8 +451,8 @@ Two rules should keep this predictable:
 
 That means:
 
-- `riot install leostera/create-riot-app@main` and
-  `riot run leostera/create-riot-app@create-riot-app` should share the same
+- `riot install owner/tool@main` and
+  `riot run owner/tool@tool` should share the same
   detached build root if they build the same source tree
 - `#main` and `#3f0e2af` should not share the same detached build root
 
@@ -498,8 +498,8 @@ That means:
 - `riot install riot` remains the normal local behavior
 - `riot install suri` can fall through to the registry package behavior
 - `riot run my-binary` remains the normal local behavior
-- `riot install leostera/create-riot-app` enters remote-source mode
-- `riot run leostera/create-riot-app` enters remote-source mode
+- `riot install owner/tool` enters remote-source mode
+- `riot run owner/tool` enters remote-source mode
 
 This keeps the command surface compact without stealing ordinary local binary
 names.
