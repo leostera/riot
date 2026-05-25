@@ -28,7 +28,7 @@ basic operational questions:
 - Is `ghcr.io/leostera/riot/riot-builder:latest` actually current?
 - Which parts of Docker support are real today, and which parts are aspirational
   documentation?
-- How should service-local Dockerfiles, like `services/registry/Dockerfile`,
+- How should site-local Dockerfiles, like `sites/docs.pkgs.ml/Dockerfile`,
   relate to the shared builder image?
 
 At the moment, the answers are spread across:
@@ -59,7 +59,7 @@ Today, Riot's Docker stack has three layers:
 
 There is also a fourth, emerging layer:
 
-4. service-local Dockerfiles, such as `services/registry/Dockerfile`, that use
+4. site-local Dockerfiles, such as `sites/docs.pkgs.ml/Dockerfile`, that use
    `ghcr.io/leostera/riot/riot-builder:latest` as their build stage
 
 ### Contributor mental model
@@ -87,8 +87,8 @@ flowchart TD
   F --> H[riot-builder image]
   G --> H
   H --> I[local use via docker run]
-  H --> J[service-local Dockerfiles]
-  J --> K[services/registry/Dockerfile]
+  H --> J[site-local Dockerfiles]
+  J --> K[sites/docs.pkgs.ml/Dockerfile]
 ```
 
 ### What works today
@@ -121,7 +121,7 @@ docker/README.md
 docker/QUICKSTART.md
 docker/example-app/Dockerfile
 docker/example-app/README.md
-services/registry/Dockerfile
+sites/docs.pkgs.ml/Dockerfile
 ```
 
 The workflow files that mention container publishing are all currently disabled:
@@ -258,7 +258,7 @@ This contract is reflected in:
 - `docker/QUICKSTART.md`
 - `docker/example-app/Dockerfile`
 - `docker/example-app/README.md`
-- `services/registry/Dockerfile`
+- `sites/docs.pkgs.ml/Dockerfile`
 
 That contract is reasonable as an interface.
 The gap is not the interface itself.
@@ -285,7 +285,7 @@ So the current documentation overstates the amount of automation in place.
 
 ## 7. Service-local Dockerfiles
 
-`services/registry/Dockerfile` demonstrates the current intended composition
+`sites/docs.pkgs.ml/Dockerfile` demonstrates the current intended composition
 pattern:
 
 1. use `ghcr.io/leostera/riot/riot-builder:latest` as a build stage

@@ -8,7 +8,7 @@
 [summary]: #summary
 
 This RFD documents Riot's package registry as a current-system snapshot. The
-registry lives in `services/api.pkgs.ml` and acts as the control-plane service
+registry lives in `sites/api.pkgs.ml` and acts as the control-plane service
 for publication, name claims, and immutable release records, while install hot
 paths are deliberately handled elsewhere.
 

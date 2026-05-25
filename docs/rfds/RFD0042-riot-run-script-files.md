@@ -448,7 +448,7 @@ This RFD intentionally leaves room for a broader Riot script import model.
 Natural extensions include:
 
 - using this script model to power a better browser-side Riot playground in
-  `services/play.riot.ml`, where user scripts can run more directly from the
+  `sites/play.riot.ml`, where user scripts can run more directly from the
   editor without first being expanded into full workspace scaffolding
 - a Riot eval or REPL experience that can load and run package-aware scripts,
   including remote package imports

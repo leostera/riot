@@ -1,4 +1,4 @@
 interface:
   display_name: "Riot Services"
   short_description: "Work on Riot web and Cloudflare services"
-  default_prompt: "Use $riot-services when changing services under ./services, including registry, CDN, docs, websites, and Wrangler workers."
+  default_prompt: "Use $riot-services when changing services under ./sites, including registry, CDN, docs, websites, and Wrangler workers."

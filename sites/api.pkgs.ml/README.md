@@ -35,7 +35,7 @@ The control-plane database is Cloudflare D1 (`riot-registry`).
   ```
 
 ## Exported backups (Cloudflare Workflows)
-`services/api.pkgs.ml` includes a `D1BackupWorkflow` that exports D1 to R2 using
+`sites/api.pkgs.ml` includes a `D1BackupWorkflow` that exports D1 to R2 using
 Cloudflare’s D1 REST export API and stores `*.sql` snapshots in
 `ML_PKGS_BACKUPS` (Cloudflare R2 bucket `ml-pkgs-backups`) at:
 `{prefix}/{accountId}/{databaseId}/{YYYY-MM-DD}/{timestamp}-*.sql`.
@@ -94,7 +94,7 @@ The Worker stores registry control-plane metadata in D1:
 auth, sessions, API tokens, package claims, published releases, registry
 events, search, and derived web views. Runtime D1 access is implemented with
 `drizzle-orm`, while schema changes are managed only through Wrangler D1 SQL
-migrations in `services/api.pkgs.ml/migrations/`.
+migrations in `sites/api.pkgs.ml/migrations/`.
 
 ## Live smoke tests
 

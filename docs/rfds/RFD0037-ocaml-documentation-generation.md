@@ -155,7 +155,7 @@ _build/doc/<package>/<version>/
 ```
 
 For package publish staging, command output from `_build/doc/<package>/<version>/` should be uploaded under
-`docs/<package>/<version>/` so route resolution in `services/docs.pkgs.ml` remains unchanged:
+`docs/<package>/<version>/` so route resolution in `sites/docs.pkgs.ml` remains unchanged:
 
 - `docs/<name>/<version>/index.html`
 - `docs/<name>/<version>/...` for all generated assets
@@ -172,7 +172,7 @@ The link map is derived from resolved dependency metadata (`package` + locked ve
 
 ### 5) Registry/docs pipeline integration
 
-- `services/docs.pkgs.ml` already stages a docs request with:
+- `sites/docs.pkgs.ml` already stages a docs request with:
   - `run_kind: "docs"`
   - `command: ["riot", "doc"]`
   - `output_prefix: docs/<package>/<version>/`
@@ -181,7 +181,7 @@ The link map is derived from resolved dependency metadata (`package` + locked ve
   - it must write docs to `_build/doc/<package>/<version>/` by default
   - it must fail fast and clearly if package declaration is incomplete.
 
-No docs router behavior changes are needed immediately in `services/docs.pkgs.ml`.
+No docs router behavior changes are needed immediately in `sites/docs.pkgs.ml`.
 
 ### 6) HTML UI and “modern” look
 
@@ -290,9 +290,9 @@ Define and pin behavior before code generation:
 
 ### Phase 7 - Docs pipeline integration
 
-1. ensure command writes output at path consumed by `services/docs.pkgs.ml` runner (`_build/doc/<package>/<version>/` for local build output, `docs/<package>/<version>/` for staging).
+1. ensure command writes output at path consumed by `sites/docs.pkgs.ml` runner (`_build/doc/<package>/<version>/` for local build output, `docs/<package>/<version>/` for staging).
 2. preserve existing `DocsBuildRequest` schema and do not require service-side contract changes.
-3. update `services/docs.pkgs.ml/src/main.ts` docs service docs to include concrete `riot doc` requirements (artifact name, root file, exit expectations).
+3. update `sites/docs.pkgs.ml/src/main.ts` docs service docs to include concrete `riot doc` requirements (artifact name, root file, exit expectations).
 4. add an execution contract for runner behavior: command working directory points at unpacked package source, generated output lives under configured `output_root`, and runner uploads only successful `index.html` plus tracked generated assets.
 
 ### Phase 8 - Operational polish and release hardening
@@ -321,7 +321,7 @@ Proposed implementation touch list:
 13. `packages/riot-doc/src/assets/*`,
 14. `packages/riot-cli/src/doc.ml`,
 15. `packages/riot-cli/src/cli.ml` (route to new command and docs command docs text where needed),
-16. `services/docs.pkgs.ml/src/main.ts` (contract comments and docs notes only).
+16. `sites/docs.pkgs.ml/src/main.ts` (contract comments and docs notes only).
 
 ### Acceptance criteria for MVP
 

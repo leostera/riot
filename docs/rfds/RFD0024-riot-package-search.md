@@ -8,7 +8,7 @@
 [summary]: #summary
 
 This RFD documents Riot package search as a current-system snapshot. Search is
-a discovery read model exposed from `services/api.pkgs.ml` at
+a discovery read model exposed from `sites/api.pkgs.ml` at
 `GET https://api.pkgs.ml/v1/search?q=<query>` and keeps one searchable row per
 published package.
 
@@ -63,7 +63,7 @@ not trying to be a second install index or a second publication database.
 ### Service boundary
 
 Search is no longer a separate worker.
-It is a read path inside `services/api.pkgs.ml`.
+It is a read path inside `sites/api.pkgs.ml`.
 
 That means:
 

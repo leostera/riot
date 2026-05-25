@@ -28,13 +28,13 @@ Exclude fixtures under `tests/`.
 
 ```bash
 .agents/skills/riot-release/scripts/release_inventory.py --list-manifests
-find packages services -path '*/tests/*' -prune -o -name riot.toml -print | sort
+find packages sites -path '*/tests/*' -prune -o -name riot.toml -print | sort
 ```
 
 ### Bump the Riot semver
 
 - Update `[package].version` in every real `riot.toml` under `packages/` and
-  `services/`.
+  `sites/`.
 - Do not bump fixture manifests under test workspaces.
 - Keep the versions aligned across the workspace release set.
 - The helper reports any real release manifests whose version has drifted from
