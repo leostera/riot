@@ -128,7 +128,8 @@ let resolve = fun request ->
     ~package_names
     ~targets
     ~scope:(Request.Internal.scope request)
-    ~profile:(Request.Internal.profile request))
+    ~profile:(Request.Internal.profile request)
+    ())
 
 let map_runtime_error = function
   | Build_runtime.ToolchainInstallFailed { target; error } ->

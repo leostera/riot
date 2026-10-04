@@ -12,7 +12,8 @@ val make:
   targets:Riot_model.Target.Set.t ->
   scope:scope ->
   profile:Riot_model.Profile.t ->
-  ?requested_parallelism:int option ->
+  ?requested_parallelism:int ->
+  unit ->
   t
 
 val workspace: t -> Riot_model.Workspace.t

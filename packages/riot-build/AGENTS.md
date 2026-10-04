@@ -25,6 +25,7 @@
 21. Internal build-session payloads should carry typed target triples, not reparsed target strings. If a worker/runtime boundary needs a target, pass `Riot_model.Target.t` through and stringify only where the filesystem or toolchain process actually needs it.
 19. Keep the root `Riot_build` facade as build-focused as possible. Build entrypoints, typed build requests, `Build_result`, build events, build errors, and the build lock surface belong at the top level. Do not reintroduce command-runtime modules or other transport-shaped internals through `Riot_build`.
 20. Package/workspace scaffolding does not belong here. `riot-build` must not expose package creation helpers; `riot-init` owns that API.
+22. `Build_spec.make` ends in `unit` so its optional `requested_parallelism:int` argument can be omitted. The stored value is `int option`; do not declare the optional argument itself as `int option` and accidentally introduce a second option layer.
 
 ## Validate
 
