@@ -16,6 +16,7 @@
 4. Snapshot RFDs are historical records of the system at the time they were written. Do not refresh an old snapshot to match later behavior; write a new snapshot RFD if the system has changed enough to warrant one.
 5. When architecture or package boundaries change, update the affected living docs and proposals in the same change, but only update snapshot RFDs by writing a new snapshot.
 6. Preserve the existing voice of a document instead of normalizing everything to contributor docs.
+7. Daily-driver v0.1 proposals start at RFD0044. Keep per-run validation results and execution checklists in root `TODO.md`; do not mark a proposal implemented merely because one acceptance check passes.
 
 ## Validate
 

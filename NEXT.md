@@ -1,5 +1,9 @@
 # Now
 
+Daily-driver v0.1 stabilization is tracked in [TODO.md](TODO.md), with scope and
+acceptance proposals in [RFD0044](docs/rfds/RFD0044-v0-1-daily-driver-stability.md).
+The lists below remain the broader backlog, not an all-items-required release gate.
+
 * riot check -p kernel is fast <100ms
 
 # Before Announcing

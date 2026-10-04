@@ -7,6 +7,16 @@ RFDs use a small lifecycle vocabulary:
 - `rejected`: explicitly not moving forward
 - `implemented`: reflected in the current repo state
 
+## Daily-Driver v0.1
+
+Proposed stabilization sequence (execution status lives in [`../../TODO.md`](../../TODO.md)):
+
+1. [RFD0044 - v0.1 Daily-Driver Stability](RFD0044-v0-1-daily-driver-stability.md): scope, supported workflows, and candidate acceptance.
+2. [RFD0045 - Repeatable Stability Validation](RFD0045-repeatable-stability-validation.md): self-hosting, CI, and build/runtime regression gates.
+3. [RFD0046 - Verified and Recoverable Riot Releases](RFD0046-verified-recoverable-releases.md): installation integrity, rollback, and publication consistency.
+
+These are `presented` proposals, not claims that their acceptance gates already pass.
+
 ## Next Up
 
 These are the RFDs that are still only `presented` and therefore the most obvious candidates for follow-up work:
@@ -14,8 +24,13 @@ These are the RFDs that are still only `presented` and therefore the most obviou
 - `RFD0008` - Macro
 - `RFD0033` - Remote Source Install and Run
 - `RFD0035` - New Test, Bench, and Example Target Layout
+- `RFD0040` - Test Coverage and LCOV Reporting
 - `RFD0041` - A New Kernel for Riot
+- `RFD0042` - Riot Run Script Files
 - `RFD0043` - Unified Build Session and Work Scheduler
+- `RFD0044` - v0.1 Daily-Driver Stability
+- `RFD0045` - Repeatable Stability Validation
+- `RFD0046` - Verified and Recoverable Riot Releases
 
 ## Rejected
 
