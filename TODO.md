@@ -90,8 +90,12 @@ validation remains recorded. The hook and Git configuration were not changed.
   a cold-planning lead, not yet proof of the full timeout's cause. No TLA+ models
   were rerun; the old command-order model is documented as historical.
 
-The cache fix is regression-tested but the candidate self-build baseline is not
-currently green after the intentionally invalidated planner cache.
+Follow-up after partial cache warming: the verbose v15 self-build completed in
+25.15s, and the rebuilt driver's six-suite validation passed all 86 cases with no
+failures/skips (`_build/stability/run-l3qoyfe8/report.json`). The hash and package-plan
+regressions now join the default smoke gate. The focused existing-cache baseline
+is green again; the first cold timeout still needs an isolated reproduction and
+is not considered fixed by these successful retries.
 
 ## Correctness work after the baseline
 

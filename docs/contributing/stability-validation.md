@@ -21,6 +21,8 @@ It builds `riot-cli`, then requires these suites to report nonempty passing resu
 - `std:std_test_cli_tests`
 - `riot-build:build_core_tests`
 - `riot-cli:test_selection_tests`
+- `riot-planner:action_hash_tests`
+- `riot-planner:package_planning_tests`
 
 For targeted work, repeated `--suite package:suite` arguments replace the default
 suite list. `--timeout` is a per-command external deadline, not a per-case timeout.

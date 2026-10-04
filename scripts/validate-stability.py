@@ -21,6 +21,8 @@ DEFAULT_SUITES = (
     "std:std_test_cli_tests",
     "riot-build:build_core_tests",
     "riot-cli:test_selection_tests",
+    "riot-planner:action_hash_tests",
+    "riot-planner:package_planning_tests",
 )
 
 
