@@ -74,10 +74,33 @@ baseline, not full workspace or clean-machine certification.
 Commits bypass the unrelated failing workspace-wide hook per invocation; targeted
 validation remains recorded. The hook and Git configuration were not changed.
 
+### Foreign-action cache fix — 2026-10-05
+
+- Red: five of eight initial argv tests failed with the old hash encoding
+  (`_build/stability/run-u97p8jgw/report.json`).
+- Green: twelve action-hash tests and thirteen package-planning tests passed using
+  the existing `./riot` driver to build current-source suites
+  (`_build/stability/run-04sjbbf6/report.json`). The latter includes a seeded v14
+  plan-cache entry rejected by the new v15 planner contract.
+- `./riot build riot-planner` and `./riot build riot-cli` passed within 30s each.
+- Candidate self-build with the v15 driver timed out after 120s
+  (`_build/stability/run-4mt_6eu9/report.json`), before suite execution.
+- A separate 10s verbose reproduction showed ongoing planning, reaching `syn`;
+  a macOS stack sample showed `Syn.Parser.scan_for_in` among active work. This is
+  a cold-planning lead, not yet proof of the full timeout's cause. No TLA+ models
+  were rerun; the old command-order model is documented as historical.
+
+The cache fix is regression-tested but the candidate self-build baseline is not
+currently green after the intentionally invalidated planner cache.
+
 ## Correctness work after the baseline
 
-- [ ] Reproduce foreign build command-order hash collisions in a regression test;
-  preserve order in hashing and invalidate affected cache identities.
+- [x] Reproduce foreign build argv hash collisions; preserve argument order and
+  field boundaries, and invalidate affected action/plan cache identities.
+  Twelve action-hash cases and thirteen package-planning cases pass.
+- [ ] **Next: investigate cold planning after cache invalidation.** The rebuilt
+  v15 driver exceeded 120s rebuilding the CLI; do not remove the invalidation just
+  to make a stale cache appear healthy.
 - [ ] Reconcile `specs/riot/BugInventory.md` against current code. Toolchain hashing
   is already present; historical entries are not all current bugs.
 - [ ] Cover missing/corrupt exports, dependency-path/toolchain changes, failed

@@ -12,8 +12,8 @@ serialization contracts belong in normal OCaml tests.
 - `ActionCache.tla`: action-level cache semantics for `BuildForeignDependency`
   actions.
 - `ActionCache.cfg`: smoke config for the action-cache slice.
-- `ActionCacheCommandOrderBug.cfg`: failing config for the command-order cache
-  collision.
+- `ActionCacheCommandOrderBug.cfg`: historical failing config for the pre-v2
+  foreign-action command-order cache collision.
 - `PlanBundleVersionGate.tla`: warm-plan cache acceptance rules for persisted
   plan bundles.
 - `PlanBundleVersionGate.cfg`: smoke config for the accepted bundle path.
@@ -52,7 +52,8 @@ serialization contracts belong in normal OCaml tests.
 The current cache path is split across a few packages:
 
 - `riot-planner` computes action hashes and plan-bundle cache keys.
-- `riot-executor` decides cache hit vs miss and materializes cached outputs.
+- `riot-build` now owns action execution, cache hit vs miss, and materialization
+  orchestration. Historical models refer to the former `riot-executor` boundary.
 - `riot-store` keeps the immutable action artifact store.
 
 That makes action-level caching a good first slice: it is small enough to
@@ -92,8 +93,12 @@ timeout 60 java -cp "/Applications/TLA+ Toolbox.app/Contents/Eclipse/tla2tools.j
 
 ## Current Findings
 
-- `ActionCacheCommandOrderBug.cfg` exposes the command-order hash collision in
-  `packages/riot-planner/src/action.ml`.
+- `ActionCacheCommandOrderBug.cfg` preserves the historical command-order hash
+  collision. The implementation now uses framed, ordered foreign argv and planner
+  artifact contract v15. Validate the fix with
+  `riot test riot-planner:action_hash_tests` and
+  `riot test riot-planner:package_planning_tests`; the old TLA+ config intentionally
+  retains its pre-fix semantics.
 - `PlanBundleToolchainInvalidationBug.cfg` exposes the planner-cache key
   mismatch between toolchain-insensitive bundle reuse and toolchain-sensitive
   action hashes.

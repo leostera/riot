@@ -3,15 +3,15 @@
 This file is the running list of `riot` properties that currently look buggy
 under the extracted specs.
 
-The goal here is triage, not fixes and not OCaml tests yet.
+The inventory began as spec triage. Daily-driver stabilization now adds executable
+regressions and records fixes without erasing historical counterexamples.
 
 Workflow:
 
 - extract one small spec slice from the current implementation
 - run TLC against a passing smoke model and, when useful, a failing bug model
 - if the spec exposes a likely design bug, add the property here
-- only after this list feels complete enough do we switch to writing OCaml
-  tests
+- reproduce prioritized findings in OCaml tests and record their resolution
 
 ## Status Meanings
 
@@ -21,36 +21,48 @@ Workflow:
 - `spec-failing + impl-reproduced`: the spec fails and we have also reproduced
   the same behavior directly against the current implementation
 
-## Current Bug Properties
+- `resolved + regression-tested`: the implementation fix passes executable
+  regressions; the historical model may still describe the pre-fix behavior
+
+## Tracked Bug Properties
 
 ### 1. Action Cache Must Respect Command Order
 
-Status: `spec-failing`
+Status: `resolved + regression-tested`
 
-Spec slice:
+Spec slice (historical pre-fix semantics):
 - `ActionCache.tla`
 - `ActionCacheCommandOrderBug.cfg`
 
 Property:
-- Two `BuildForeignDependency` actions with different ordered command
-  sequences must not share the same cache entry.
+- Different foreign executable/argv lists must not alias in the action cache.
+  `build_cmd` is one executable followed by arguments, not a shell-command sequence.
 
-Why it looks buggy:
-- The current action hash normalizes `build_cmd` as a multiset, so
-  `["Prep", "Compile"]` and `["Compile", "Prep"]` collide.
-- The cache machine can then reuse a stored artifact for the wrong command
-  order.
+Reproduced behavior:
+- Sorting `build_cmd` made `["cp", "source", "destination"]` and
+  `["cp", "destination", "source"]` share a hash.
+- Unframed strings also conflated argument boundaries and empty arguments.
+- Five cases in `packages/riot-planner/tests/action_hash_tests.ml` failed before
+  the fix. The original abstract `Prep`/`Compile` model represents the ordering
+  issue, not the executor's literal command invocation contract.
+
+Resolution:
+- `BuildForeignDependency:v2` preserves argv order and frames string lengths and
+  list counts, including the other foreign-action fields.
+- Planner artifact contract v15 invalidates v14 plan bundles and package artifacts
+  so saved action hashes cannot bypass the new encoding.
+- Twelve action-hash tests pass, including order, boundaries, empties, legacy
+  invalidation, normalized outputs/environment keys, and JSON roundtrips.
+- The existing stale-plan regression now seeds a v14 entry and verifies replanning.
 
 Primary source area:
 - `packages/riot-planner/src/action.ml`
-- `packages/riot-executor/src/action_executor.ml`
+- `packages/riot-planner/src/package_planner.ml`
+- `packages/riot-build/src/action_executor.ml`
 
-Counterexample shape:
-- `FirstBuild` stores the result of `<<"Prep", "Compile">>`
-- `SecondBuild` with `<<"Compile", "Prep">>` hits cache instead of rebuilding
-
-Deferred follow-up:
-- write an OCaml regression test only after we finish the spec pass
+The TLA+ slice is retained unchanged as a historical counterexample, not evidence
+that the new encoding is still faulty. Other action variants have not received a
+complete encoding audit in this fix.
 
 ### 2. Plan Bundle Cache Key Must Invalidate On Toolchain Change
 

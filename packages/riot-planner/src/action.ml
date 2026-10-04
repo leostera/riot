@@ -59,7 +59,8 @@ type t =
     - Order of compile-only flags in the list
 
     Link actions preserve object/library flag order because OCaml link order is
-    semantically significant. *)
+    semantically significant. Foreign actions preserve the executable/argv order
+    and frame each field so argument boundaries and empty arguments are significant. *)
 let hash = fun action ->
   let open Crypto in
     let hasher = Sha256.create () in
@@ -174,18 +175,34 @@ let hash = fun action ->
       outputs;
       env
     } ->
-        Sha256.write hasher "BuildForeignDependency";
-        Sha256.write hasher name;
-        Sha256.write hasher (Path.to_string path);
-        let sorted_cmd = List.sort build_cmd ~compare:String.compare in
-        List.for_each sorted_cmd ~fn:(Sha256.write hasher);
-        write_sorted_paths hasher outputs;
+        (* Version the encoding so old artifacts cannot survive a hash-contract
+           change, even when their argv happened to already be sorted. *)
+        Sha256.write hasher "BuildForeignDependency:v2";
+        let write_string value =
+          Sha256.write hasher (Int.to_string (String.length value));
+          Sha256.write hasher ":";
+          Sha256.write hasher value
+        in
+        let write_list values ~fn =
+          Sha256.write hasher (Int.to_string (List.length values));
+          Sha256.write hasher ":";
+          List.for_each values ~fn
+        in
+        write_string name;
+        write_string (Path.to_string path);
+        (* build_cmd is executable :: argv, not an unordered set of commands. *)
+        write_list build_cmd ~fn:write_string;
+        let sorted_outputs =
+          List.map outputs ~fn:Path.to_string |> List.sort ~compare:String.compare
+        in
+        write_list sorted_outputs ~fn:write_string;
         let sorted_env =
           List.sort env ~compare:(fun (k1, _) (k2, _) ->
             String.compare k1 k2)
         in
-        List.for_each sorted_env ~fn:(fun (k, v) ->
-          Sha256.write hasher (k ^ "=" ^ v));
+        write_list sorted_env ~fn:(fun (key, value) ->
+          write_string key;
+          write_string value);
         Sha256.finish hasher
 
 let to_string = function

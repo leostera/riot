@@ -9,10 +9,10 @@ system.
 - `packages/riot-planner/src/action_node.ml`: action-node hash composition
 - `packages/riot-planner/src/package_planner.ml`: planner bundle caching and
   dependency-aware package hashes
-- `packages/riot-executor/src/action_executor.ml`: action cache lookup,
+- `packages/riot-build/src/action_executor.ml`: action cache lookup,
   execution, verification, and store writes
-- `packages/riot-executor/src/action_queue.ml`: action dependency scheduling
-- `packages/riot-executor/src/coordinator.ml`: workspace/package orchestration
+- `packages/riot-build/src/action_queue.ml`: action dependency scheduling
+- `packages/riot-build/src/coordinator.ml`: workspace/package orchestration
   and package-level cache short-circuiting
 - `packages/riot-store/src/store.ml`: immutable artifact store, plan bundle
   store, and package export materialization
@@ -54,5 +54,7 @@ java -cp "/Applications/TLA+ Toolbox.app/Contents/Eclipse/tla2tools.jar" \
   -config specs/riot/ActionCache.cfg
 ```
 
-Run the bug config separately when you want the current semantics to produce a
-counterexample.
+Run bug configs separately. Some preserve historical pre-fix semantics; consult
+`BugInventory.md` before treating a counterexample as a current implementation bug.
+For the fixed foreign-action encoding, run `riot test riot-planner:action_hash_tests`
+and `riot test riot-planner:package_planning_tests` as well.

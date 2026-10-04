@@ -6,7 +6,7 @@ module G = Graph.SimpleGraph
 let test_toolchain = Riot_toolchain.init ~config:Riot_model.Toolchain_config.default
 |> Result.expect ~msg:"Failed to initialize toolchain"
 
-let planner_artifacts_version = "planner-artifacts:v14"
+let planner_artifacts_version = "planner-artifacts:v15"
 let legacy_planner_artifacts_version = "planner-artifacts:v12"
 let explicit_root_library_path_fix_planner_artifacts_version = "planner-artifacts:v12"
 let nested_sibling_dependency_fix_planner_artifacts_version = "planner-artifacts:v13"
@@ -742,7 +742,7 @@ let test_stale_plan_bundle_version_rebuilds_plan_graphs = fun _ctx ->
         let profile = Riot_model.Profile.release in
         let build_ctx = Riot_model.Build_ctx.make ~session_id ~profile () in
         let stale_input_hash = compute_input_hash
-          ~planner_version:"planner-artifacts:v2"
+          ~planner_version:"planner-artifacts:v14"
           ~package
           ~workspace
           ~profile

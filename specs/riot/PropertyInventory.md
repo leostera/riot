@@ -17,14 +17,19 @@ small stateful slices we can audit and evolve with the codebase.
   what we wish the system looked like.
 - If a slice exposes a likely bug, record that property in
   `BugInventory.md`.
-- Do not add new OCaml regression tests during this phase. First finish the
-  remaining stateful spec inventory.
+- During daily-driver stabilization, promote prioritized findings into OCaml
+  regression tests and distinguish historical model semantics from fixed code.
 
 ## Slice Backlog
 
 ### 1. `ActionCache`
 
-Status: `modeled`
+Status: `modeled; foreign argv collision fixed with executable regressions`
+
+The historical model still describes the pre-fix hash. Current foreign actions
+preserve executable/argv order and use length/count framing; planner contract v15
+invalidates cached graphs using the old hashes. See `action_hash_tests.ml` and
+`BugInventory.md` for the reproduction and resolution.
 
 Primary sources:
 - `packages/riot-planner/src/action.ml`
