@@ -22,11 +22,13 @@ Linux.
   `unit` argument so callers can omit it; update its call site.
 - [x] Build `riot-build` and `riot-cli` with the existing `./riot` driver.
 - [x] Use the newly produced CLI to rebuild `riot-cli` against the existing cache.
-- [ ] **Next: diagnose the build-core test command timeout.** Do not call the
-  baseline green until a newly built suite runs and reports its results.
+- [ ] Diagnose the original build-core test command timeout. Later runs passed;
+  the cause is still unproven, so this is not closed by a successful retry.
+- [x] Run the newly built CLI's focused baseline with saved per-command evidence.
 - [ ] Choose/pin the clean bootstrap path and record binary/toolchain provenance.
-- [ ] Add a bounded local validation entrypoint with explicit driver selection,
-  process-tree cleanup, saved output, and required-suite discovery checks.
+- [x] Add a bounded local validation entrypoint with explicit driver selection,
+  process-group cleanup, saved output, and required-suite discovery checks.
+  See `scripts/validate-stability.py` and `docs/contributing/stability-validation.md`.
 - [ ] Wire active host CI to the same entrypoint; do not merely rename the stale
   disabled workflow.
 - [ ] Exercise clean self-hosting in disposable state, without clearing real caches.
@@ -34,7 +36,7 @@ Linux.
 
 ### Validation record — 2026-10-04
 
-Source baseline: `df8b93642`, plus the uncommitted constructor fix above. Local
+Source baseline: `df8b93642`, with the constructor fix committed as `23cd71ad5`. Local
 Apple Silicon runs used existing caches; they are not clean-bootstrap evidence.
 
 | Command | Observation |
@@ -55,6 +57,22 @@ discrepancy rather than inferring the executable's source identity from it.
 
 Earlier survey: kernel 319/319 and std 560/560 cases passed with the existing
 driver. Those results do not establish the newly built driver's test path.
+
+Follow-up: the whole-workspace commit hook failed on existing minttea/Raml errors
+and may have warmed caches before the timeout investigation. The JSON build-core
+rerun passed all 14 cases; six additional runs alternating human/JSON output also
+passed. This does not establish the original timeout's cause.
+
+`scripts/validate-stability.py --driver
+./_build/debug/aarch64-apple-darwin/out/riot-cli/riot --timeout 30` passed all four
+required suites: kernel foundation 25, std test CLI 13, build core 14, and CLI test
+selection 9 (61 cases total, no failures/skips). Local evidence:
+`_build/stability/run-p9o_00qr/report.json`. The supervisor's 10 Python tests passed,
+including timeout cleanup of a SIGTERM-ignoring child. This is a focused warm-cache
+baseline, not full workspace or clean-machine certification.
+
+Commits bypass the unrelated failing workspace-wide hook per invocation; targeted
+validation remains recorded. The hook and Git configuration were not changed.
 
 ## Correctness work after the baseline
 
