@@ -1,5 +1,7 @@
 {
   "name": "riot-ml",
+  "publisher": "riot-ml",
+  "repository": "https://github.com/leostera/riot/",
   "displayName": "Riot ML",
   "description": "VS Code integration for Riot",
   "version": "0.0.1",
@@ -460,6 +462,7 @@
   },
   "scripts": {
     "vscode:prepublish": "bun run package",
+    "vscode:vsix": "bun run vsce package",
     "compile": "bun run check-types && bun run lint && node esbuild.js",
     "watch": "bunx npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
@@ -480,6 +483,7 @@
   ],
   "devDependencies": {
     "@types/vscode": "^1.110.0",
+    "@vscode/vsce": "^4.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "typescript-eslint": "^8.56.1",
