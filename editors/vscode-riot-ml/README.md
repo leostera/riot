@@ -50,6 +50,15 @@ bun run compile
 bun run watch
 ```
 
+To package the version of the extension under local development as
+a [VSIX](https://learn.microsoft.com/en-us/visualstudio/extensibility/anatomy-of-a-vsix-package?view=visualstudio)
+(to make it easier to deploy locally for testing or to, ultimately,
+publish to the marketplace):
+
+```sh
+bun run vscode:vsix
+```
+
 ## Known Issues
 
 - build and test integration still shells out through VS Code tasks instead of
