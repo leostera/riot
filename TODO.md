@@ -25,13 +25,13 @@ LSP is explicitly deferred. ARM Linux is outside the initial required matrix.
 - [ ] Diagnose the original build-core test command timeout. Later runs passed;
   the cause is still unproven, so this is not closed by a successful retry.
 - [x] Run the newly built CLI's focused baseline with saved per-command evidence.
-- [ ] Choose/pin the clean bootstrap path and record binary/toolchain provenance.
+- [x] Choose/pin the Apple Silicon clean bootstrap path and record binary/toolchain provenance.
 - [x] Add a bounded local validation entrypoint with explicit driver selection,
   process-group cleanup, saved output, and required-suite discovery checks.
   See `scripts/validate-stability.py` and `docs/contributing/stability-validation.md`.
 - [ ] Wire active host CI to the same entrypoint; do not merely rename the stale
   disabled workflow.
-- [ ] Exercise clean self-hosting in disposable state, without clearing real caches.
+- [x] Exercise Apple Silicon clean self-hosting in disposable state, without clearing real caches.
 - [ ] Initialize and run an external application using the generated dependencies.
 
 ### Validation record — 2026-10-04
@@ -261,6 +261,46 @@ correctness contracts; this one resolved race does not complete that task.
 Next: check in artifact pins and a repeatable downloaded-bootstrap entrypoint,
 retaining the legacy bootstrap's separate argument/result dialect rather than
 weakening current-driver result validation.
+
+### Downloaded pinned bootstrap and fresh self-rebuild — 2026-10-10
+
+- Release `0.0.43` is not a compatible bootstrap for this source's manually
+  initialized executable entrypoints: it rejected `syn`'s existing `main = fun`
+  declaration (`pinned-probe-jd0tlemv/`, exit 1 after 70.45s). No source/runtime
+  entrypoint rewrite was made to force that unrelated ABI migration.
+- Downloaded exact release `0.0.17`, verified its archive SHA256 before extracting
+  the regular executable/metadata payloads, and selected it as the compatible
+  bootstrap. Its archive includes AppleDouble metadata, which is not extracted.
+  A first control built successfully in 38.49s but the current-only cold harness
+  rejected its older terminal result dialect (`cold-3qb1wf9h/report.json`). That
+  rejected run remains unchanged and is not counted as a passing harness run.
+- Added `scripts/bootstrap-pins.json` and `scripts/validate-bootstrap.py`. Each
+  invocation downloads hash-pinned bootstrap/compiler archives anew, checks
+  metadata/version/host, exports committed source with no prior `_build`, and
+  uses a private HOME/compiler. The produced CLI is snapshotted and builds a
+  second empty export, followed by a warm control. No installed Riot/compiler or
+  existing project artifacts are inputs to this lane.
+- The bootstrap's `BuildCompleted` dialect has a separate strict validator;
+  package results must be nonempty, unique, successful, include the runtime CLI,
+  and agree with statistics. This does not relax current-driver validation.
+- First integrated run passed:
+  `_build/stability/bootstrap-xwds5gdu/report.json`, source `9d77e8c76`, downloaded
+  bootstrap CLI build 38.74s; its produced CLI rebuilt the next empty export in
+  45.51s, warm control 0.35s. Both commands used recorded 120s diagnostic deadlines.
+  Source, archive, compiler manifest, driver hashes, paths, logs, and exits are
+  retained. Host SDK/C compiler and Homebrew native libraries remain explicit
+  prerequisites; this is not a hermetic/signature-authenticated build.
+- Twenty-seven Python tests pass, including hash-before-extraction, archive
+  containment, AppleDouble exclusion, missing/duplicate/failed terminal results,
+  unsupported host pins, and failed-download/no-retry evidence retention.
+- Follow-up harness hardening now gives curl a private HOME, disables user curl
+  configuration, cross-checks source/driver identity between stages, and records
+  the final stage-two executable digest. The committed-script run is recorded
+  separately below once executed.
+
+Next: rerun the committed bootstrap entrypoint, then use its stage-two driver for
+remaining focused correctness/runtime checks. Linux execution, active CI,
+external-service workflows, candidate recovery, and real soak days remain open.
 
 ## Correctness work after the baseline
 

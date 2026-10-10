@@ -98,6 +98,46 @@ If process-group cleanup is denied, validation fails and preserves a
 attempted; this does not prove all children were cleaned up. Inspect remaining
 processes before continuing, rather than treating cleanup failure as a pass.
 
+## Pinned bootstrap and fresh self-rebuild
+
+On Apple Silicon, with Python 3.12+, curl, Git, Xcode command-line tools, and
+Homebrew PCRE2/OpenSSL development libraries available:
+
+```sh
+python3 scripts/validate-bootstrap.py \
+  --host-target aarch64-apple-darwin \
+  --timeout 120
+```
+
+`scripts/bootstrap-pins.json` records exact-version HTTPS archive URLs and
+reviewed SHA256 values for Riot `0.0.17` and compiler `5.5.0-riot.2`. Each run
+redownloads both archives to a unique `bootstrap-*` evidence directory; it does
+not select `latest`, copy the installed compiler, or use a repo `_build` driver.
+Curl uses a private HOME and ignores user curl configuration. Hash verification
+precedes extraction. Extraction uses Python's data filter, rejects duplicate or
+unsafe paths, and accepts only regular `riot`/`release.json` bootstrap payloads.
+Older archives' AppleDouble metadata is ignored.
+
+The downloaded bootstrap builds `riot-cli` from an empty committed export with
+private HOME/cache state. The produced CLI is snapshotted and builds a *second*
+empty export, followed by its warm control. Reports tie both exports to the same
+source SHA and tie the second-stage driver to the first-stage executable digest.
+The first failure stops the entire lane without retry or cache substitution.
+The resulting executable paths/digests and all archive/command logs are retained.
+Use `--revision` for a specific committed source; uncommitted changes are excluded.
+
+The pinned bootstrap has an older `BuildCompleted` JSON result dialect. Its
+separate validator requires nonempty, unique, successful package results,
+matching statistics, and the requested runtime CLI. The current driver's
+`returning_results` validator remains unchanged. A successful exit alone is not
+accepted for either dialect.
+
+These pins currently cover Apple Silicon only. An absent Linux pin fails rather
+than skipping its gate. This lane is not hermetic: host PATH, C compiler/SDK, and
+native libraries are prerequisites. Checksums pin exact reviewed bytes; they are
+not a release signature or independent provenance attestation. The diagnostic
+120-second command deadline is recorded, not presented as a release speed SLA.
+
 ## Test the supervisor
 
 ```sh
