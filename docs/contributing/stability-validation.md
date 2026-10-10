@@ -84,6 +84,15 @@ commands, logs, and external deadlines are retained. No real installation/cache
 is cleared; fixtures are not automatically deleted. The controlled compiler is
 not bootstrap certification, and this library is not the representative service.
 
+The same command with `--scenario cancellation` delivers SIGINT to the build's
+supervised process group while compilation is paused. The compiler must belong
+to that group; the CLI must terminate with failure within ten seconds and leave
+no group members after a bounded three-second observation. A subsequent build
+must succeed without clearing caches. The interrupted command remains a raw
+failure with a separately recorded expected outcome; recovery is not substituted
+for a failed cancellation gate. The first build has a total external `--timeout`
+deadline, including the barrier interaction; recovery has its own deadline.
+
 ## Reproduce cold builds without clearing real caches
 
 Use Python 3.12 or newer for the committed-export lane:

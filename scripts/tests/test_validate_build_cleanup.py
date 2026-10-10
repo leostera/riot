@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 SPEC = importlib.util.spec_from_file_location(
     "cleanup_validation", Path(__file__).resolve().parents[1] / "validate-build-cleanup.py"
@@ -51,6 +52,22 @@ class BuildCleanupTests(unittest.TestCase):
             self.assertNotEqual(evidence["original_sha256"], evidence["wrapper_sha256"])
             with self.assertRaises(ValueError):
                 cleanup.gate_compiler(compiler, control)
+
+    def test_group_probe_reaps_leader_and_requires_no_remaining_members(self):
+        process = Mock(pid=1234)
+        with patch.object(cleanup.os, "killpg", side_effect=ProcessLookupError):
+            self.assertFalse(cleanup.process_group_survives(process, 1))
+        process.poll.assert_called_once()
+        with patch.object(cleanup.os, "killpg", return_value=None):
+            self.assertTrue(cleanup.process_group_survives(process, 0))
+
+    def test_release_gate_rejects_exited_build_without_opening_fifo(self):
+        process = Mock()
+        process.poll.return_value = -2
+        with patch.object(cleanup.os, "open") as open_fifo:
+            with self.assertRaises(ValueError):
+                cleanup.release_gate(process, Path("unused-fifo"), 1)
+            open_fifo.assert_not_called()
 
     def test_compiler_gate_rejects_symlink_without_modification(self):
         with tempfile.TemporaryDirectory() as tmp:

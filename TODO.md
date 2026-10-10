@@ -351,6 +351,12 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - `bootstrap-_el85elr/report.json` builds committed `5fc5377fb` from pinned downloads: bootstrap CLI **38.642s**, produced-CLI fresh rebuild **45.316s**, warm **0.663s**. Stage-two SHA256: `3aab3c8111309480656fe2dc1a15dd651a73fb2b18448c356f053dbdf065083e`.
 - `build-cleanup-1d5d6rdp/report.json` passes the checked-in cleanup barrier against that exact stage-two driver. This closes the committed Apple Silicon concurrent-cleanup reproduction, not cancellation, Linux execution, or candidate readiness.
 
+## Build cancellation and recovery
+
+- `cancel-probe-g6evglam/report.json`: committed root-guard stage-two driver `3aab3c81…` receives SIGINT while its controlled compilation is paused. CLI exits `-2` in 0.001s, the compiler belongs to the supervised process group, no group survives, and a subsequent build succeeds in 0.710s without clearing caches.
+- Added checked-in `--scenario cancellation` to `scripts/validate-build-cleanup.py`; `build-cleanup-_yy4et3o/report.json` passes against the same exact driver. The barrier publishes its PID atomically; cancellation/remaining-group expectations are retained separately from raw negative exits, and recovery is a distinct required command.
+- All 34 Python harness tests pass. This establishes the bounded Apple Silicon Ctrl-C path for a paused external compile step, not shutdown/stress certification across the required platform matrix.
+
 ## Committed cache-verification build and edit controls
 
 - `bootstrap-dyj4il10/report.json` downloaded pinned archives and built committed `a1a7c2f34`: bootstrap CLI 38.411s, fresh self-rebuild 44.941s, warm 0.718s. Stage-two SHA256: `8c4e16bfeded769e16d84d2a4624142eba66815b2321cca0811c6967ea86db86`.

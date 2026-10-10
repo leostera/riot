@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove active builds reject cleanup in an external disposable library fixture."""
+"""Check build cleanup exclusion or Ctrl-C recovery in disposable state."""
 
 import argparse
 import errno
@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -57,7 +58,8 @@ def gate_compiler(compiler, control):
     wrapper = (
         '#!/bin/sh\nfor arg in "$@"; do\n'
         f' if [ "$arg" = "-c" ] && mkdir {quote(str(control / "claim"))} 2>/dev/null; then\n'
-        f'  echo "$$" > {quote(str(control / "ready"))}\n'
+        f'  echo "$$" > {quote(str(control / "ready.tmp"))}\n'
+        f'  /bin/mv {quote(str(control / "ready.tmp"))} {quote(str(control / "ready"))}\n'
         f'  read release < {quote(str(control / "release"))}\n'
         ' fi\ndone\n'
         f'exec {quote(str(original))} "$@"\n'
@@ -97,6 +99,19 @@ def release_gate(process, fifo, timeout):
         os.close(fd)
 
 
+def process_group_survives(process, timeout):
+    deadline = time.monotonic() + timeout
+    while True:
+        process.poll()  # Reap the leader before probing remaining group members.
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return False
+        if time.monotonic() >= deadline:
+            return True
+        time.sleep(0.05)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--driver", required=True, type=Path)
@@ -104,6 +119,7 @@ def main(argv=None):
     parser.add_argument("--toolchain-version", required=True, type=cold.component)
     parser.add_argument("--host-target", required=True, type=cold.component)
     parser.add_argument("--timeout", default=120, type=stability.positive_timeout)
+    parser.add_argument("--scenario", choices=("cleanup", "cancellation"), default="cleanup")
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--fixture-parent", type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args(argv)
@@ -125,7 +141,7 @@ def main(argv=None):
         "working_tree_status": stability.git_output("status", "--porcelain"),
         "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "host": platform.platform(), "host_target": args.host_target,
-        "timeout_s": args.timeout,
+        "timeout_s": args.timeout, "scenario": args.scenario,
         "scope": "external generated library fixture; private HOME and copied compiler deliberately modified with a FIFO gate; not bootstrap certification or representative-service acceptance",
     }
 
@@ -186,20 +202,39 @@ def main(argv=None):
                 wait_for_gate(process, control / "ready", remaining(30))
                 sentinel = repo / "_build/cleanup-sentinel"
                 sentinel.write_text("active build must survive cleanup\n")
-                clean = stability.run_command([str(snapshot), "clean", "--force", "--json"], cwd=repo,
-                    env=env, log_dir=run, index=1, timeout=remaining(10))
-                clean["phase"] = "expected-cleanup-rejection"
-                clean["expectation_passed"] = False
-                report["commands"].append(clean)
-                save()
-                # Release compilation even if cleanup violated the expectation,
-                # retaining both the cleanup result and subsequent build result.
-                release_gate(process, control / "release", remaining(10))
-                process.wait(timeout=remaining())
-                build["exit_code"] = process.returncode
-                build["passed"] = process.returncode == 0
-                report["sentinel_survived"] = sentinel.exists()
-                save()
+                if args.scenario == "cleanup":
+                    clean = stability.run_command([str(snapshot), "clean", "--force", "--json"], cwd=repo,
+                        env=env, log_dir=run, index=1, timeout=remaining(10))
+                    clean["phase"] = "expected-cleanup-rejection"
+                    clean["expectation_passed"] = False
+                    report["commands"].append(clean)
+                    save()
+                    # Retain both the cleanup result and subsequent build result,
+                    # even when cleanup violated the exclusion expectation.
+                    release_gate(process, control / "release", remaining(10))
+                    process.wait(timeout=remaining())
+                    build["exit_code"] = process.returncode
+                    build["passed"] = process.returncode == 0
+                    report["sentinel_survived"] = sentinel.exists()
+                    save()
+                else:
+                    compiler_pid = int((control / "ready").read_text())
+                    group = os.getpgid(compiler_pid)
+                    report["compiler_pid"] = compiler_pid
+                    report["compiler_process_group"] = group
+                    report["build_process_group"] = process.pid
+                    if group != process.pid:
+                        raise ValueError("controlled compiler escaped the supervised build process group")
+                    interrupted_at = time.monotonic()
+                    os.killpg(process.pid, signal.SIGINT)
+                    process.wait(timeout=remaining(10))
+                    build["exit_code"] = process.returncode
+                    report["cancellation_duration_s"] = round(time.monotonic() - interrupted_at, 3)
+                    report["process_group_survived"] = process_group_survives(process, remaining(3))
+                    build["expectation_passed"] = process.returncode != 0 and not report["process_group_survived"]
+                    save()
+                    if not build["expectation_passed"]:
+                        raise ValueError("Ctrl-C returned success or left a compiler process behind")
             finally:
                 if process is not None:
                     stability.stop_group(process)
@@ -212,14 +247,27 @@ def main(argv=None):
                 if process is not None:
                     build["exit_code"] = process.returncode
                 save()
-        validate_cleanup_rejection(clean, repo / "_build")
-        clean["expectation_passed"] = True
-        if not report["sentinel_survived"] or not build["passed"]:
-            raise ValueError("cleanup damaged the active build or its working sentinel")
-        cold.validate_build_output(Path(build["stdout"]))
+        if args.scenario == "cleanup":
+            validate_cleanup_rejection(clean, repo / "_build")
+            clean["expectation_passed"] = True
+            if not report["sentinel_survived"] or not build["passed"]:
+                raise ValueError("cleanup damaged the active build or its working sentinel")
+            cold.validate_build_output(Path(build["stdout"]))
+        else:
+            # This is recovery after a deliberately interrupted build, not a
+            # retry substituting for a failed required gate. The original
+            # interrupted command and its expectation remain in the report.
+            recovery = stability.run_command(command, cwd=repo, env=env, log_dir=run,
+                index=2, timeout=args.timeout)
+            recovery["phase"] = "post-cancellation-recovery"
+            report["commands"].append(recovery)
+            save()
+            if not recovery["passed"]:
+                raise ValueError("build did not recover after cancellation")
+            cold.validate_build_output(Path(recovery["stdout"]))
         report["passed"] = True
         save()
-        print(f"Active-build cleanup rejection passed: {report_path}")
+        print(f"Build {args.scenario} scenario passed: {report_path}")
         return 0
     except (OSError, ValueError, TimeoutError, subprocess.SubprocessError) as error:
         report["error"] = str(error)
