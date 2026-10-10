@@ -683,7 +683,21 @@ let should_run_gc = fun ~generation_count ~policy ~tracked_size_bytes ->
   generation_count > policy.Riot_model.Workspace_operational_config.keep_generations
   || Int64.compare tracked_size_bytes policy.max_size_bytes > 0
 
-let clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
+let with_cleanup_lock = fun ~(workspace:Workspace.t) ~on_lock_error fn ->
+  match Build_root_lock.acquire_exclusive ~target_dir_root:workspace.target_dir_root with
+  | Error error ->
+      let error = Build_root_lock.error_message error in
+      on_lock_error error;
+      Error error
+  | Ok lock ->
+      try
+        let result = fn () in
+        Build_root_lock.release lock;
+        result
+      with
+      | exn -> Build_root_lock.release lock; raise exn
+
+let clean_with_events_unlocked = fun ~(workspace:Workspace.t) ~on_event ->
   let trigger = Manual in
   let report_error error =
     on_event (GcFailed { trigger; error });
@@ -724,9 +738,14 @@ let clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
         Error error
   )
 
+let clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
+  with_cleanup_lock ~workspace
+    ~on_lock_error:(fun error -> on_event (GcFailed { trigger = Manual; error }))
+    (fun () -> clean_with_events_unlocked ~workspace ~on_event)
+
 let clean = fun ~(workspace:Workspace.t) -> clean_with_events ~workspace ~on_event:no_event
 
-let force_clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
+let force_clean_with_events_unlocked = fun ~(workspace:Workspace.t) ~on_event ->
   let build_root = workspace.target_dir_root in
   on_event (ForceCleanStarted { build_root });
   if not (path_exists build_root) then
@@ -746,6 +765,11 @@ let force_clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
         ^ IO.error_message err in
         on_event (ForceCleanFailed { build_root; error });
         Error error
+
+let force_clean_with_events = fun ~(workspace:Workspace.t) ~on_event ->
+  with_cleanup_lock ~workspace
+    ~on_lock_error:(fun error -> on_event (ForceCleanFailed { build_root = workspace.target_dir_root; error }))
+    (fun () -> force_clean_with_events_unlocked ~workspace ~on_event)
 
 let force_clean = fun ~(workspace:Workspace.t) -> force_clean_with_events ~workspace ~on_event:no_event
 

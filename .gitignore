@@ -9,6 +9,7 @@ generated
 *.install
 *.bin
 _build
+.*.riot-build.lock
 *.beam
 *.trace
 test/generated/*

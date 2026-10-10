@@ -29,6 +29,8 @@
 
 23. Cached-action materialization failures must return `Failed (ExecutionFailed ...)` and emit failure telemetry, not raise. Workers must still deliver a completion result to the coordinator when filesystem promotion fails.
 
+24. Public build runtime execution holds a shared `riot-store` build-root guard through execution, promotion, generation bookkeeping, and result preparation. `BuildLock.acquire` also guards its callback, including reentrant calls; independent builds/targets retain shared access. Bare `BuildLock.wait` is only a low-level lane lock, not a complete build-root lifetime guard. Cleanup requires the corresponding exclusive sibling lock and must not delete active work.
+
 ## Validate
 
 `timeout 30 riot build riot-build`

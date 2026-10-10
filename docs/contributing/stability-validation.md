@@ -26,6 +26,7 @@ It builds `riot-cli`, then requires these suites to report nonempty passing resu
 - `riot-planner:action_hash_tests`
 - `riot-planner:package_planning_tests`
 - `riot-build:action_executor_tests`
+- `riot-build:build_lock_tests`
 - `riot-store:store_tests`
 
 For targeted work, repeated `--suite package:suite` arguments replace the default
@@ -59,6 +60,29 @@ passes, report both observations rather than erasing the first failure.
 The script snapshots the driver but builds and tests the current working tree.
 It is not a clean-checkout self-hosting proof. That remains separate work under
 [RFD0045](../rfds/RFD0045-repeatable-stability-validation.md).
+
+## Active-build cleanup exclusion
+
+```sh
+python3 scripts/validate-build-cleanup.py \
+  --driver <explicit-candidate-cli> \
+  --toolchain <installed-host-compiler-directory> \
+  --toolchain-version 5.5.0-riot.2 \
+  --host-target aarch64-apple-darwin --timeout 120
+```
+
+This creates a standalone library fixture outside the monorepo (so ancestor
+workspace discovery cannot select Riot itself), with a private HOME/compiler.
+A deliberate wrapper around the **copied** `ocamlopt.opt` gates its first actual
+compilation through a FIFO. While that compilation is active, `clean --force`
+must promptly exit 1 and emit the specific build-root-in-use failure without
+entering cleanup. The sentinel must survive, and compilation must subsequently
+complete successfully with strict terminal build evidence. The raw negative
+command result is retained alongside its separately validated expectation.
+Fixture paths, wrapper text/digests, compiler manifest, driver snapshot/digest,
+commands, logs, and external deadlines are retained. No real installation/cache
+is cleared; fixtures are not automatically deleted. The controlled compiler is
+not bootstrap certification, and this library is not the representative service.
 
 ## Reproduce cold builds without clearing real caches
 

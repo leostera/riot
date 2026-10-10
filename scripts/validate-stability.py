@@ -23,6 +23,7 @@ DEFAULT_SUITES = (
     "std:std_command_tests",
     "riot-build:build_core_tests",
     "riot-build:action_executor_tests",
+    "riot-build:build_lock_tests",
     "riot-store:store_tests",
     "riot-cli:test_selection_tests",
     "riot-planner:action_hash_tests",

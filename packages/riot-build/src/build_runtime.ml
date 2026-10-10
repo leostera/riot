@@ -370,4 +370,15 @@ let execute = fun ?(allow_partial_failures = false) ?(record_cache_generation = 
       ~on_event
       spec
   in
-  do_build context
+  match Riot_store.Build_root_lock.acquire_shared ~target_dir_root:context.workspace.target_dir_root with
+  | Error error ->
+      Error (BuildSessionError (Build_session.UnexpectedEvent {
+        reason = Riot_store.Build_root_lock.error_message error;
+      }))
+  | Ok lock ->
+      try
+        let result = do_build context in
+        Riot_store.Build_root_lock.release lock;
+        result
+      with
+      | exn -> Riot_store.Build_root_lock.release lock; raise exn

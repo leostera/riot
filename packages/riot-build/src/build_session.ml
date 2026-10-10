@@ -240,7 +240,7 @@ module BuildLock = struct
         release t;
         raise (lock_failure "lock" path)
 
-  let acquire = fun ~target_dir_root ~profile ~target fn ->
+  let acquire_lane = fun ~target_dir_root ~profile ~target fn ->
     let lock_path = path ~target_dir_root ~profile ~target in
     if is_reentrant lock_path then (
       let _ = increment_reentrant lock_path in
@@ -267,6 +267,17 @@ module BuildLock = struct
               let _ = decrement_reentrant lock_path in
               release t;
               raise exn
+
+  let acquire = fun ~target_dir_root ~profile ~target fn ->
+    match Riot_store.Build_root_lock.acquire_shared ~target_dir_root with
+    | Error error -> raise (Failure (Riot_store.Build_root_lock.error_message error))
+    | Ok lock ->
+        try
+          let result = acquire_lane ~target_dir_root ~profile ~target fn in
+          Riot_store.Build_root_lock.release lock;
+          result
+        with
+        | exn -> Riot_store.Build_root_lock.release lock; raise exn
 end
 
 let convert_build_stats: Session_protocol.BuildStats.t -> build_stats = fun stats ->

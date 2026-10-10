@@ -20,6 +20,8 @@
 13. Cache hits verify the manifest's build hash and each declared payload's regular-file kind, size, and SHA512 digest. Referenced exports must be declared and verified against their action manifests. Verify all files before promotion or export materialization touches working outputs.
 14. Same-hash publication reuses immutable directories. Refuse a damaged existing payload or unreadable manifest with a typed, actionable error; do not report new outputs as stored while retaining damaged bytes, or silently remove corruption evidence. Verification is not a signature/authentication guarantee.
 
+15. `Build_root_lock` protects build-root lifetime across processes: builds hold shared guards, policy and force cleanup require an exclusive guard and fail promptly on contention. The persistent guard is a hidden sibling (`.<root-name>.riot-build.lock`), never inside the removable root and never unlinked on release. Preserve the inode across cleanup. Guard callbacks release on both ordinary and exceptional exits.
+
 ## Validate
 
 `timeout 30 riot build riot-store`

@@ -336,6 +336,16 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - [ ] Select a real external application and record candidate daily-use results.
 - [ ] Reconcile current package names, user docs, and support claims.
 
+## Concurrent build/cleanup — retained barrier reproduction
+
+- `cleanup-probe/probe-2amyv5yw` did not reach compilation: putting a package-only fixture under the monorepo selected its ancestor workspace (`PackageNotFound`). Retained unchanged; subsequent fixtures live outside the monorepo and gate the actual `ocamlopt.opt`, not its unused alias.
+- `cleanup-probe/probe-q_oj70rv/report.json`: pinned-bootstrap-produced driver `8c4e16bf…` paused at its first real compilation. Concurrent `clean --force` exited 0 in 0.040s, removed the sentinel/build root, and the released build exited 1. This is the negative-path reproduction, not a timing retry.
+- Added a cooperative shared-build/exclusive-cleanup guard at a persistent hidden sibling of the build root. It is never unlinked on release or force cleanup. Shared holders preserve independent build/target concurrency; policy and forced cleanup fail explicitly before entering destructive work. Modern build runtime holds the guard through bookkeeping/result preparation, and `BuildLock.acquire` guards callbacks as well.
+- `run-jy5npuxd` retained an initial compilation failure caused by the existing nominal `Fs.Permissions` surface; the guard now uses the established nontruncating `File.open_write` API. `run-025wwp68` retained the guard's root-directory rejection test failure; explicit `/` basename rejection fixed it before filesystem access.
+- `run-c6acl6kk/report.json`: 34 store and four build-lock cases pass. `cleanup-probe/probe-06wgzzfo/report.json`: changed CLI rejects cleanup (exit 1, 0.076s), preserves the sentinel, and the released build succeeds.
+- Checked-in `scripts/validate-build-cleanup.py` passes in `build-cleanup-98fg7xup/report.json`, retaining the private copied-compiler FIFO wrapper/digests, exact driver snapshot, raw expected negative command, and successful build evidence. This minimal library is not the representative-service gate.
+- `run-n7cvc6u_/report.json`: expanded default gate passes **11 suites / 182 cases**, no skips. All **32** Python harness cases pass. Guard coverage is Apple Silicon only; Linux execution and cancellation remain open, as does a committed fresh bootstrap of this latest guard change. Legacy drivers do not cooperate with the new guard.
+
 ## Committed cache-verification build and edit controls
 
 - `bootstrap-dyj4il10/report.json` downloaded pinned archives and built committed `a1a7c2f34`: bootstrap CLI 38.411s, fresh self-rebuild 44.941s, warm 0.718s. Stage-two SHA256: `8c4e16bfeded769e16d84d2a4624142eba66815b2321cca0811c6967ea86db86`.

@@ -810,6 +810,65 @@ let test_corrupt_export_materialization_preserves_working_output = fun _ctx ->
           if String.equal (read_file working) "working" then Ok ()
           else Error "failed export verification replaced the working output")
 
+let test_build_root_shared_holders_exclude_cleanup = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"store_root_shared_lock"
+    (fun root ->
+      let target_dir_root = Path.(root / Path.v "target") in
+      let module Lock = Riot_store.Build_root_lock in
+      let first = Lock.acquire_shared ~target_dir_root |> Result.expect ~msg:"first shared lock" in
+      let second = Lock.acquire_shared ~target_dir_root |> Result.expect ~msg:"second shared lock" in
+      let exclusive_was_blocked = match Lock.acquire_exclusive ~target_dir_root with
+        | Error (Lock.Busy _) -> true
+        | Error _ -> false
+        | Ok lock -> Lock.release lock; false in
+      Lock.release first;
+      let remaining_holder_blocked = match Lock.acquire_exclusive ~target_dir_root with
+        | Error (Lock.Busy _) -> true
+        | Error _ -> false
+        | Ok lock -> Lock.release lock; false in
+      Lock.release second;
+      let exclusive = Lock.acquire_exclusive ~target_dir_root |> Result.expect ~msg:"exclusive after last shared release" in
+      let shared_was_blocked = match Lock.acquire_shared ~target_dir_root with
+        | Error (Lock.Busy _) -> true
+        | Error _ -> false
+        | Ok lock -> Lock.release lock; false in
+      Lock.release exclusive;
+      if exclusive_was_blocked && remaining_holder_blocked && shared_was_blocked then Ok ()
+      else Error "shared/exclusive build-root exclusion was violated")
+  with
+  | Ok result -> result
+  | Error _ -> Error "tempdir creation failed"
+
+let test_cleanup_refuses_active_build_and_preserves_stable_lock = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"store_root_cleanup_lock"
+    (fun root ->
+      let workspace = make_test_workspace root in
+      let target_dir_root = workspace.Riot_model.Workspace.target_dir_root in
+      let _ = Fs.create_dir_all target_dir_root |> Result.expect ~msg:"create target root" in
+      let sentinel = Path.(target_dir_root / Path.v "working-output") in
+      let _ = Fs.write "working" sentinel |> Result.expect ~msg:"write sentinel" in
+      let module Lock = Riot_store.Build_root_lock in
+      let lock = Lock.acquire_shared ~target_dir_root |> Result.expect ~msg:"hold active build guard" in
+      let force_refused = Result.is_err (Riot_store.Cache_gc.force_clean ~workspace) in
+      let policy_refused = Result.is_err (Riot_store.Cache_gc.clean ~workspace) in
+      let preserved = String.equal (read_file sentinel) "working" in
+      Lock.release lock;
+      let _ = Riot_store.Cache_gc.force_clean ~workspace |> Result.expect ~msg:"clean after build release" in
+      let root_removed = not (Fs.exists target_dir_root |> Result.unwrap_or ~default:true) in
+      let stable_path = Lock.path ~target_dir_root |> Result.expect ~msg:"stable lock path" in
+      let lock_survived = Fs.exists stable_path |> Result.unwrap_or ~default:false in
+      if force_refused && policy_refused && preserved && root_removed && lock_survived then Ok ()
+      else Error "cleanup removed active output or its persistent sibling lock")
+  with
+  | Ok result -> result
+  | Error _ -> Error "tempdir creation failed"
+
+let test_build_root_lock_rejects_root_directory = fun _ctx ->
+  match Riot_store.Build_root_lock.acquire_exclusive ~target_dir_root:(Path.v "/") with
+  | Error (InvalidRoot _) -> Ok ()
+  | Error _ -> Error "expected invalid-root error before filesystem access"
+  | Ok lock -> Riot_store.Build_root_lock.release lock; Error "root-directory guard was accepted"
+
 let test_cache_gc_drops_unreferenced_entries_after_generation_overflow = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_cache_gc_generation_overflow_test"
@@ -1144,6 +1203,9 @@ let tests =
     case "save refuses to reuse damaged immutable entry" test_save_refuses_to_reuse_damaged_existing_entry;
     case "get rejects corrupt referenced export" test_get_rejects_corrupt_referenced_export;
     case "corrupt export materialization preserves working output" test_corrupt_export_materialization_preserves_working_output;
+    case "shared build-root holders exclude cleanup" test_build_root_shared_holders_exclude_cleanup;
+    case "cleanup refuses active build and preserves sibling lock" test_cleanup_refuses_active_build_and_preserves_stable_lock;
+    case "build-root guard rejects root directory" test_build_root_lock_rejects_root_directory;
     case "cache GC records generation count in state" test_record_successful_build_tracks_generation_count_in_state;
     case "cache GC dedupes identical warm generations" test_record_successful_build_dedupes_identical_warm_generation;
     case "cache GC records changed warm generations without new entries" test_record_successful_build_keeps_new_warm_generation_when_closure_changes;

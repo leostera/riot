@@ -137,11 +137,30 @@ let test_different_targets_do_not_block_each_other = fun _ctx ->
                 Error "Different target locks should not block each other"
           | Error reason -> Error reason))
 
+let test_build_lock_protects_root_from_cleanup = fun _ctx ->
+  with_tempdir "riot_build_cleanup_lock"
+    (fun root ->
+      let workspace = make_workspace root in
+      let target_dir_root = target_dir_root workspace in
+      let result = BuildLock.acquire ~target_dir_root ~profile:"debug"
+        ~target:(target "aarch64-apple-darwin")
+        (fun () ->
+          match Riot_store.Cache_gc.force_clean ~workspace with
+          | Error _ -> Ok ()
+          | Ok () -> Error "cleanup removed a root held by BuildLock.acquire") in
+      match result with
+      | Error _ as error -> error
+      | Ok () ->
+          match Riot_store.Cache_gc.force_clean ~workspace with
+          | Ok () -> Ok ()
+          | Error reason -> Error ("build-root guard was not released: " ^ reason))
+
 let tests =
   Test.[
     case "build lock: reentrant acquire in same process" test_reentrant_acquire_in_same_process;
     case "build lock: releases on exception" test_releases_lock_on_exception;
     case "build lock: different targets do not block each other" test_different_targets_do_not_block_each_other;
+    case "build lock: protects root from cleanup" test_build_lock_protects_root_from_cleanup;
   ]
 
 let name = "Riot CLI Build Lock Tests"
