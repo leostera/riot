@@ -20,6 +20,8 @@
 14. Keep `Kernel.Random.Source` entropy-only. OS randomness belongs here; PRNG policy, distributions, and sampling combinators belong in `std`.
 15. Keep the tracked IO implementation paths lowercase: `src/io/io.ml`, `src/io/io.mli`, and `src/io/iovec/`. Internal code refers to `Io`; the public facade exposes `Kernel.IO`. Case-insensitive worktrees can conceal incorrect tracked spelling, so validate path changes from a fresh Git export.
 
+16. A successful process-source registration must retain either a native exit watch or a pending priority-readiness hint. kqueue `ESRCH` can mean exit won the registration race; never silently accept it and leave the caller parked. Pending hints are token-preserving, consumed once, replaced on reregister, removed on deregister/close, and bounded by `Poll.poll ~max_events`. Native process changes retry `EINTR` and capture errno before reentering the OCaml runtime.
+
 ## Validate
 
 `timeout 30 riot build kernel-new`

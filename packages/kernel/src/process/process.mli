@@ -78,7 +78,8 @@ val try_wait: t -> (status option, error) Result.t
 (** Use `to_source process` when you want readiness for `try_wait`.
 
     Exit observation remains valid even if owned stdio handles are closed before the process is
-    reaped. *)
+    reaped. If exit wins the registration race, successful registration still provides a priority
+    readiness hint for retrying `try_wait`; readiness itself is not an exit status. *)
 val to_source: t -> Async.Source.t
 
 (** Use `kill process ~signal` to send a signal immediately without waiting for exit. *)

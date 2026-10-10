@@ -18,7 +18,9 @@ Adjust the target path for your host. The script requires Python 3 and a Unix ho
 It builds `riot-cli`, then requires these suites to report nonempty passing results:
 
 - `kernel:kernel_new_foundation_tests`
+- `kernel:kernel_new_process_tests`
 - `std:std_test_cli_tests`
+- `std:std_command_tests`
 - `riot-build:build_core_tests`
 - `riot-cli:test_selection_tests`
 - `riot-planner:action_hash_tests`

@@ -332,22 +332,21 @@ static value kernel_new_async_process_change(
     binding->token_root);
 
   int syscall_result;
+  int saved_errno;
   caml_enter_blocking_section();
-  syscall_result = kevent(selector_fd, &change, 1, NULL, 0, NULL);
+  do {
+    syscall_result = kevent(selector_fd, &change, 1, NULL, 0, NULL);
+    saved_errno = errno;
+  } while (syscall_result == -1 && saved_errno == EINTR);
   caml_leave_blocking_section();
 
   if (syscall_result == -1) {
-    int code = kernel_new_error_of_errno(errno);
+    int code = kernel_new_error_of_errno(saved_errno);
     if ((flags & EV_DELETE) == 0) {
       kernel_new_async_remove_binding(selector_fd, pid, EVFILT_PROC);
     }
-    if (
-      code == KERNEL_NEW_ERR_INTERRUPTED
-      || code == KERNEL_NEW_ERR_NO_SUCH_PROCESS
-    ) {
-      if ((flags & EV_DELETE) != 0) {
-        kernel_new_async_remove_binding(selector_fd, pid, EVFILT_PROC);
-      }
+    if ((flags & EV_DELETE) != 0 && code == KERNEL_NEW_ERR_NO_SUCH_PROCESS) {
+      kernel_new_async_remove_binding(selector_fd, pid, EVFILT_PROC);
       CAMLreturn(kernel_new_result_ok(Val_unit));
     }
     CAMLreturn(kernel_new_result_error(code));

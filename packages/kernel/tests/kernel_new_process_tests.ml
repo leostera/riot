@@ -409,6 +409,118 @@ let test_try_wait_is_stable_after_priority_readiness = fun _ctx ->
               | (Some (Kernel.Process.Exited 0), Some (Kernel.Process.Exited 0)) -> Ok ()
               | _ -> Error "expected try_wait to stay stable after process priority readiness")))
 
+let test_process_registration_after_exit_reports_readiness = fun _ctx ->
+  let stdio = Kernel.Process.{ stdin = Stdin.Null; stdout = Stdout.Null; stderr = Stderr.Null } in
+  let* process = lift_process
+    (Kernel.Process.spawn ~program:"/bin/sh" ~args:[|"-c"; ":"|] ~stdio ()) in
+  with_process process
+    (fun process ->
+      with_poll
+        (fun poll ->
+          (* Reap first: kqueue can no longer attach EVFILT_PROC. A registration
+             that reports success must still deliver a retry hint, not park forever. *)
+          let* status = wait_for_exit poll ~token:(Kernel.Async.Token.make 540) process in
+          if status != Kernel.Process.Exited 0 then
+            Error "expected process to exit before late registration"
+          else
+            let token = Kernel.Async.Token.make "late-process-registration" in
+            let source = Kernel.Process.to_source process in
+            let* () = lift_async
+              (Kernel.Async.Poll.register poll token Kernel.Async.Interest.priority source) in
+            protect
+              ~finally:(fun () ->
+                let _ = Kernel.Async.Poll.deregister poll source in
+                ())
+              (fun () ->
+                let* events = lift_async (Kernel.Async.Poll.poll ~timeout:10_000_000L poll) in
+                if List.any events ~fn:(fun event ->
+                    Kernel.Async.Token.equal token (Kernel.Async.Event.token event)
+                    && Kernel.Async.Event.is_priority event) then
+                  Ok ()
+                else
+                  Error "successful late process registration lost readiness")))
+
+let expect_priority_events = fun ~tokens events ->
+  if List.length events != List.length tokens then
+    Error "unexpected pending process event count"
+  else if List.all tokens ~fn:(fun token ->
+      List.any events ~fn:(fun event ->
+        Kernel.Async.Event.is_priority event
+        && Kernel.Async.Token.equal token (Kernel.Async.Event.token event))) then
+    Ok ()
+  else
+    Error "pending process event used a stale or unexpected token"
+
+let with_exited_process = fun poll fn ->
+  let stdio = Kernel.Process.{ stdin = Stdin.Null; stdout = Stdout.Null; stderr = Stderr.Null } in
+  let* process = lift_process
+    (Kernel.Process.spawn ~program:"/bin/sh" ~args:[|"-c"; ":"|] ~stdio ()) in
+  with_process process
+    (fun process ->
+      let* status = wait_for_exit poll ~token:(Kernel.Async.Token.make "reap-before-pending") process in
+      if status = Kernel.Process.Exited 0 then
+        fn (Kernel.Process.to_source process)
+      else
+        Error "expected process to exit before testing pending readiness")
+
+let test_pending_process_readiness_lifecycle = fun _ctx ->
+  with_poll
+    (fun poll ->
+      with_exited_process poll
+        (fun source ->
+          let original = Kernel.Async.Token.make "pending-original" in
+          let replacement = Kernel.Async.Token.make "pending-replacement" in
+          let register token = lift_async
+            (Kernel.Async.Poll.register poll token Kernel.Async.Interest.priority source) in
+          let select () = lift_async (Kernel.Async.Poll.poll ~timeout:0L poll) in
+          let* () = register original in
+          let* () = lift_async
+            (Kernel.Async.Poll.reregister poll replacement Kernel.Async.Interest.priority source) in
+          let* events = select () in
+          let* () = expect_priority_events ~tokens:[replacement] events in
+          let* events = select () in
+          let* () = expect_priority_events ~tokens:[] events in
+          let* () = register original in
+          let* () = lift_async (Kernel.Async.Poll.deregister poll source) in
+          let* events = select () in
+          let* () = expect_priority_events ~tokens:[] events in
+          let* () = register original in
+          let* () = register replacement in
+          let* events = select () in
+          let* () = expect_priority_events ~tokens:[replacement] events in
+          let* events = select () in
+          expect_priority_events ~tokens:[] events))
+
+let test_pending_process_readiness_respects_poll_limit = fun _ctx ->
+  with_poll
+    (fun poll ->
+      with_exited_process poll
+        (fun first ->
+          with_exited_process poll
+            (fun second ->
+              let first_token = Kernel.Async.Token.make "pending-first" in
+              let second_token = Kernel.Async.Token.make "pending-second" in
+              let* () = lift_async
+                (Kernel.Async.Poll.register poll first_token Kernel.Async.Interest.priority first) in
+              let* () = lift_async
+                (Kernel.Async.Poll.register poll second_token Kernel.Async.Interest.priority second) in
+              let* () =
+                match Kernel.Async.Poll.poll ~max_events:0 ~timeout:0L poll with
+                | Kernel.Result.Error _ -> Ok ()
+                | Kernel.Result.Ok _ -> Error "expected zero event limit to be rejected"
+              in
+              let* first_events = lift_async
+                (Kernel.Async.Poll.poll ~max_events:1 ~timeout:0L poll) in
+              let* second_events = lift_async
+                (Kernel.Async.Poll.poll ~max_events:1 ~timeout:0L poll) in
+              if List.length first_events != 1 || List.length second_events != 1 then
+                Error "pending process hints ignored the poll limit or lost its remainder"
+              else
+                let* () = expect_priority_events ~tokens:[first_token; second_token]
+                  (first_events @ second_events) in
+                let* events = lift_async (Kernel.Async.Poll.poll ~timeout:0L poll) in
+                expect_priority_events ~tokens:[] events)))
+
 let test_kill_reports_signaled_status = fun _ctx ->
   let stdio = Kernel.Process.{ stdin = Stdin.Null; stdout = Stdout.Null; stderr = Stderr.Null } in
   let* process = lift_process
@@ -1332,6 +1444,9 @@ let tests = [
   Test.case "Process close preserves registered exit source" test_process_close_preserves_registered_exit_source;
   Test.case "Process source deregister before close is harmless" test_process_source_deregister_before_close_is_harmless;
   Test.case "Process try_wait is stable after priority readiness" test_try_wait_is_stable_after_priority_readiness;
+  Test.case "Process registration after exit reports readiness" test_process_registration_after_exit_reports_readiness;
+  Test.case "Process pending readiness token lifecycle" test_pending_process_readiness_lifecycle;
+  Test.case "Process pending readiness respects poll limit" test_pending_process_readiness_respects_poll_limit;
   Test.case "Process kill reports signaled status" test_kill_reports_signaled_status;
   Test.case "Process sigterm reports signaled status" test_sigterm_reports_signaled_status;
   Test.case "Process kill then close preserves signaled status" test_kill_then_close_preserves_signaled_status;

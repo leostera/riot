@@ -110,13 +110,34 @@ module Kevent = struct
 end
 
 module Selector = struct
-  type t = selector
+  type t = {
+    native: selector;
+    mutable pending_processes: event list;
+  }
 
   let name = "kqueue"
 
-  let make = FFI.create
+  let make = fun () ->
+    let* native = FFI.create () in
+    Result.Ok { native; pending_processes = [] }
 
-  let close = FFI.close
+  let close = fun selector ->
+    let* () = FFI.close selector.native in
+    selector.pending_processes <- [];
+    Result.Ok ()
+
+  let rec discard_pending_process = fun pid events ->
+    match events with
+    | [] -> []
+    | event :: rest when event.fd = pid -> discard_pending_process pid rest
+    | event :: rest -> event :: discard_pending_process pid rest
+
+  let rec take_pending = fun count events acc ->
+    match (count, events) with
+    | (0, _)
+    | (_, []) -> (acc, events, count)
+    | (_, event :: rest) ->
+        take_pending (count - 1) rest (Event.make (module Kevent) event :: acc)
 
   let select = fun ?(timeout = 500_000_000L) ?(max_events = 1_024) selector ->
     if timeout < 0L then
@@ -124,7 +145,17 @@ module Selector = struct
     else if max_events <= 0 then
       Result.Error (InvalidMaxEvents { max_events })
     else
-      let* events = FFI.wait ~max_events ~timeout_ns:timeout selector in
+      let pending, remaining, native_limit =
+        take_pending max_events selector.pending_processes []
+      in
+      let* events =
+        if native_limit = 0 then
+          Result.Ok [||]
+        else
+          FFI.wait ~max_events:native_limit
+            ~timeout_ns:(if pending = [] then timeout else 0L) selector.native
+      in
+      selector.pending_processes <- remaining;
       let rec to_list index acc =
         if index < 0 then
           acc
@@ -133,7 +164,7 @@ module Selector = struct
             (index - 1)
             (Event.make (module Kevent) (Array.get_unchecked events ~at:index) :: acc)
       in
-      Result.Ok (to_list (Array.length events - 1) [])
+      Result.Ok (to_list (Array.length events - 1) pending)
 
   let register = fun selector ~fd ~token ~interest ->
     let flags = Libc.(ev_clear lor ev_receipt lor ev_add) in
@@ -147,7 +178,7 @@ module Selector = struct
       | false, true -> [ Kevent.make fd ~filter:Libc.evfilt_write ~flags ~token ]
       | false, false -> []
     in
-    FFI.apply selector (Array.from_list changes) [|System_error_code.broken_pipe|]
+    FFI.apply selector.native (Array.from_list changes) [|System_error_code.broken_pipe|]
 
   let reregister = fun selector ~fd ~token ~interest ->
     let flags = Libc.(ev_clear lor ev_receipt) in
@@ -168,7 +199,7 @@ module Selector = struct
       Kevent.make fd ~filter:Libc.evfilt_read ~flags:read_flags ~token;
     |] in
     FFI.apply
-      selector
+      selector.native
       changes
       [|System_error_code.broken_pipe; System_error_code.no_such_file_or_directory|]
 
@@ -179,19 +210,37 @@ module Selector = struct
       Kevent.make fd ~filter:Libc.evfilt_write ~flags ~token;
       Kevent.make fd ~filter:Libc.evfilt_read ~flags ~token;
     |] in
-    FFI.apply selector changes [|System_error_code.no_such_file_or_directory|]
+    FFI.apply selector.native changes [|System_error_code.no_such_file_or_directory|]
 
-  let register_process = fun selector ~pid ~token -> FFI.register_process selector ~pid ~token
+  let change_process = fun change selector ~pid ~token ->
+    selector.pending_processes <- discard_pending_process pid selector.pending_processes;
+    match change selector.native ~pid ~token with
+    | Result.Error (System System_error.NoSuchProcess) ->
+        (* Exit can win between try_wait and registration. Readiness is a retry
+           hint, not an exit status: preserve the caller's token until select,
+           reregister, deregister, or close consumes it. Never report success
+           with neither a native watch nor a pending hint. *)
+        selector.pending_processes <-
+          Kevent.make pid ~filter:Libc.evfilt_proc ~flags:0 ~token
+          :: selector.pending_processes;
+        Result.Ok ()
+    | result -> result
 
-  let reregister_process = fun selector ~pid ~token -> FFI.reregister_process selector ~pid ~token
+  let register_process = fun selector ~pid ~token ->
+    change_process FFI.register_process selector ~pid ~token
 
-  let deregister_process = fun selector ~pid -> FFI.deregister_process selector ~pid
+  let reregister_process = fun selector ~pid ~token ->
+    change_process FFI.reregister_process selector ~pid ~token
+
+  let deregister_process = fun selector ~pid ->
+    selector.pending_processes <- discard_pending_process pid selector.pending_processes;
+    FFI.deregister_process selector.native ~pid
 
   let register_timer = fun selector ~timer_id ~token ~timeout_parts ~repeat ->
-    FFI.register_timer selector ~timer_id ~timeout_parts ~repeat ~token
+    FFI.register_timer selector.native ~timer_id ~timeout_parts ~repeat ~token
 
   let reregister_timer = fun selector ~timer_id ~token ~timeout_parts ~repeat ->
-    FFI.reregister_timer selector ~timer_id ~timeout_parts ~repeat ~token
+    FFI.reregister_timer selector.native ~timer_id ~timeout_parts ~repeat ~token
 
-  let deregister_timer = fun selector ~timer_id -> FFI.deregister_timer selector ~timer_id
+  let deregister_timer = fun selector ~timer_id -> FFI.deregister_timer selector.native ~timer_id
 end

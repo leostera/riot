@@ -189,6 +189,45 @@ Next: use an explicit periodic actor/action snapshot in a disposable diagnostic
 build to identify which continuations are waiting without delivery. The required
 validation gate remains red; no candidate freeze or soak can begin.
 
+### Causal cold-build fix: late process registration — 2026-10-10
+
+- Built a temporary scheduler snapshot probe; retained source SHA, patch, driver
+  digest, build attempts, and logs in `_build/stability/actor-snapshot-probe/`.
+  The temporary scheduler instrumentation has been removed from tracked source.
+- `_build/stability/cold-amec9v52/report.json` exceeded 25s. Its snapshots show
+  every worker queue empty and, after initial compilation activity, 345 actors
+  waiting for messages plus exactly one actor parked at `Command.wait` (pid<367>).
+  There were no runnable, queued, executing, or pending actors in that steady state.
+- A raw kqueue control demonstrated running-process exit delivery, but `ESRCH`
+  on registration of zombie/reaped children. The native process-change shim was
+  swallowing that registration error as success, leaving no exit watch. This
+  matches the race between `Process.try_wait` and async process registration.
+- Added a deterministic late-registration regression: reap the child first, then
+  require priority readiness from a successful registration. Before the fix,
+  `04.stdout.log` reports 44/45 passing and this case failing with
+  `successful late process registration lost readiness`. Earlier test-build
+  timeout/cleanup denial is retained in `03.*` and not counted as a pass.
+- Native process changes now retry `EINTR`, capture errno before reentering OCaml,
+  and return registration `ESRCH`. The selector preserves that caller's token as
+  a one-shot pending priority hint, so `try_wait` can observe exit rather than
+  parking forever. Reregister replaces hints; deregister/close clear them; poll
+  limits and validation preserve unconsumed hints.
+- All 45 process cases passed after the fix (`06.stdout.log`). Two additional
+  pending-token lifecycle/poll-limit cases now make that suite 47 cases.
+- The changed driver built a fresh committed CLI source export cold in 49.71s
+  and warm in 0.29s (`cold-1z2_vy97/report.json`, timeout 120s). This export still
+  uses the prior committed kernel source; it proves the new *driver* completes
+  its cold build, not that the resulting exported CLI contains the fix.
+- `_build/stability/run-qlb4hat9/report.json` passed all eight required suites:
+  139 cases, no failures/skips, with a snapshotted changed driver. Seventeen
+  Python harness tests also passed. Process and command suites are now default
+  gates so this readiness regression and scheduler diagnostics cannot be omitted.
+
+Next: commit/export the fix, rebuild that export with the changed driver, and
+have its resulting CLI rebuild itself. Keep pinned-bootstrap certification
+separate from the copied-compiler diagnostic lane. Continue the remaining build
+correctness contracts; this one resolved race does not complete that task.
+
 ## Correctness work after the baseline
 
 - [x] Reproduce foreign build argv hash collisions; preserve argument order and
