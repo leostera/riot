@@ -116,10 +116,17 @@ were copied. Driver SHA-256 and compiler manifest are in `setup.json` under:
   export with no build cache in 3.37s (`kernel-clean.result.json`). This validates
   the casing fix, not the rebuilt driver's cold execution path.
 
-Next: reproduce the rebuilt driver's cold action/runtime hang on a minimal
-workspace, retaining command/stack evidence. Do not accept a warm-cache retry as
-proof of recovery. The original historical timeout and the new isolated hang
-remain unresolved.
+Narrowing results (`minimal-results.json` in the same evidence directory):
+
+- Minimal one-module library with the rebuilt driver: cold build 0.28s, warm build
+  0.04s, both exit 0. The simplest compile path does not reproduce the hang.
+- Rebuilt driver against the kernel cache produced by the old driver: 0.81s,
+  exit 0. Warm-cache success is a control observation, not proof of recovery.
+
+Next: narrow the rebuilt driver's cold concurrent action/runtime hang using
+larger generated fixtures and child-process/wakeup evidence. The original
+historical timeout and the isolated hang remain unresolved; no performance
+budget or causal fix is claimed.
 
 ## Correctness work after the baseline
 
