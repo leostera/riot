@@ -351,6 +351,10 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - `bootstrap-_el85elr/report.json` builds committed `5fc5377fb` from pinned downloads: bootstrap CLI **38.642s**, produced-CLI fresh rebuild **45.316s**, warm **0.663s**. Stage-two SHA256: `3aab3c8111309480656fe2dc1a15dd651a73fb2b18448c356f053dbdf065083e`.
 - `build-cleanup-1d5d6rdp/report.json` passes the checked-in cleanup barrier against that exact stage-two driver. This closes the committed Apple Silicon concurrent-cleanup reproduction, not cancellation, Linux execution, or candidate readiness.
 
+## Executable promotion smoke coverage
+
+- `run-q5s_8kzr/report.json` passes all **36** store cases, including an executable saved to the immutable cache, promoted with permissions preserved, and directly executed from the working output with exact stdout/empty stderr/exit-0 assertions. This complements the preserved corrupt-promotion failure cases and actual produced-CLI execution in the bootstrap/edit lanes.
+
 ## Temporary artifact publication contention
 
 - Strengthened repeat-build tests to require cached status and the same artifact hash, and concurrent unchanged builds to require both cached statuses; no more acceptance of arbitrary `Built` results or ignored cache flags.

@@ -860,6 +860,29 @@ let test_corrupt_export_materialization_preserves_working_output = fun _ctx ->
           if String.equal (read_file working) "working" then Ok ()
           else Error "failed export verification replaced the working output")
 
+let test_promoted_executable_runs_from_working_output = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"store_execute_promoted_output"
+    (fun root ->
+      let store = Riot_store.Store.create ~workspace:(make_test_workspace root) in
+      let sandbox = Path.(root / Path.v "sandbox") in
+      let output = write_output sandbox (Path.v "tool") "#!/bin/sh\nprintf promoted-executable\n" in
+      let _ = Fs.set_permissions output Fs.Permissions.executable
+        |> Result.expect ~msg:"make source executable" in
+      let hash = Crypto.hash_string "promoted-executable-runs" in
+      let _ = Riot_store.Store.save store ~package:"pkg" ~hash ~sandbox_dir:sandbox ~outs:[output]
+        |> Result.expect ~msg:"save executable" in
+      let target = Path.(root / Path.v "out") in
+      let _ = Riot_store.Store.promote store hash ~target_dir:target
+        |> Result.expect ~msg:"promote executable" in
+      match Command.output (Command.make (Path.to_string Path.(target / Path.v "tool"))) with
+      | Error (Command.SystemError reason) -> Error ("execute promoted output: " ^ reason)
+      | Ok result when result.status = 0 && String.equal result.stdout "promoted-executable"
+        && String.equal result.stderr "" -> Ok ()
+      | Ok _ -> Error "promoted executable did not run with expected status and output")
+  with
+  | Ok result -> result
+  | Error _ -> Error "tempdir creation failed"
+
 let test_build_root_shared_holders_exclude_cleanup = fun _ctx ->
   match Fs.with_tempdir ~prefix:"store_root_shared_lock"
     (fun root ->
@@ -1254,6 +1277,7 @@ let tests =
     case "save refuses to reuse damaged immutable entry" test_save_refuses_to_reuse_damaged_existing_entry;
     case "get rejects corrupt referenced export" test_get_rejects_corrupt_referenced_export;
     case "corrupt export materialization preserves working output" test_corrupt_export_materialization_preserves_working_output;
+    case "promoted executable runs from working output" test_promoted_executable_runs_from_working_output;
     case "shared build-root holders exclude cleanup" test_build_root_shared_holders_exclude_cleanup;
     case "cleanup refuses active build and preserves sibling lock" test_cleanup_refuses_active_build_and_preserves_stable_lock;
     case "build-root guard rejects root directory" test_build_root_lock_rejects_root_directory;
