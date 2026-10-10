@@ -25,6 +25,7 @@ type t = {
 type error =
   | HashNotFound of { hash: Crypto.hash }
   | LoadManifestFailed of { path: Path.t; cause: string }
+  | CorruptArtifact of { path: Path.t; reason: string }
   | CreateTargetDirFailed of { path: Path.t; cause: Fs.error }
   | CreateParentDirFailed of { path: Path.t; cause: Fs.error }
   | ReadSourceMetadataFailed of { path: Path.t; cause: Fs.error }
@@ -54,6 +55,11 @@ let error_message = function
   ^ " ("
   ^ cause
   ^ ")"
+  | CorruptArtifact { path; reason } -> "Cached artifact is damaged: "
+  ^ Path.to_string path
+  ^ " ("
+  ^ reason
+  ^ "); use `riot clean --force` to rebuild"
   | CreateTargetDirFailed { path; cause } -> "Failed to create target directory: "
   ^ Path.to_string path
   ^ " ("
@@ -232,6 +238,46 @@ let read_opened_file = fun file ->
   let _ = Fs.File.close file in
   content
 
+let validate_manifest_files = fun ~hash ~hash_dir (manifest: Manifest.t) ->
+  let corrupt path reason = Error (CorruptArtifact { path; reason }) in
+  let validate_file (entry: Manifest.file_entry) =
+    let relative = Path.to_string entry.path in
+    if Path.is_absolute entry.path || String.equal relative ""
+      || List.any (String.split ~by:"/" relative) ~fn:(fun part -> String.equal part "..") then
+      corrupt hash_dir "manifest file path must stay relative to the artifact"
+    else
+      let path = Path.(hash_dir / entry.path) in
+      match Fs.symlink_metadata path with
+      | Error cause -> corrupt path (IO.error_message cause)
+      | Ok metadata when not (Fs.Metadata.is_file metadata) ->
+          corrupt path "payload is not a regular file"
+      | Ok metadata when Fs.Metadata.len metadata != entry.size ->
+          corrupt path "payload size does not match manifest"
+      | Ok _ ->
+          match Fs.read_to_string path with
+          | Error cause -> corrupt path (IO.error_message cause)
+          | Ok content ->
+              let actual = Crypto.(Sha512.hash_string content |> Digest.hex) in
+              if String.equal actual entry.hash then Ok ()
+              else corrupt path "payload checksum does not match manifest"
+  in
+  if not (String.equal manifest.build_hash (Crypto.Digest.hex hash)) then
+    corrupt (manifest_path hash_dir) "manifest build hash does not match its cache key"
+  else
+    List.fold_left manifest.files ~acc:(Ok ()) ~fn:(fun acc entry ->
+      let* () = acc in
+      validate_file entry)
+
+let validate_existing_artifact = fun store hash ->
+  let hash_dir = get_hash_dir store hash in
+  match Fs.exists hash_dir with
+  | Ok false -> Ok ()
+  | Error cause -> Error (CorruptArtifact { path = hash_dir; reason = IO.error_message cause })
+  | Ok true ->
+      match Manifest.load ~path:(manifest_path hash_dir) with
+      | Error reason -> Error (CorruptArtifact { path = manifest_path hash_dir; reason })
+      | Ok manifest -> validate_manifest_files ~hash ~hash_dir manifest
+
 (** Check if artifacts for a given hash exist in the store *)
 let exists = fun store hash ->
   let hash_dir = get_hash_dir store hash in
@@ -259,6 +305,9 @@ let promote = fun store hash ~target_dir ->
         | Error _ -> Error (HashNotFound { hash })
       )
   in
+  (* Verify the entire entry before modifying any working output. A cache hit
+     must never mean that damaged bytes or an incomplete manifest were trusted. *)
+  let* () = validate_manifest_files ~hash ~hash_dir manifest in
   let* () = Fs.create_dir_all target_dir
   |> Result.map_err ~fn:(fun cause -> CreateTargetDirFailed { path = target_dir; cause }) in
   let promote_one (entry: Manifest.file_entry) =
@@ -277,6 +326,9 @@ let promote = fun store hash ~target_dir ->
 (** Store artifacts from sandbox to content-addressable store *)
 let store_artifacts = fun store ~package ?(ocamlc_warnings = []) ?(exports = []) hash sandbox_dir declared_outputs ->
   let hash_dir = get_hash_dir store hash in
+  (* Immutable same-hash publication reuses an existing directory. Refuse a
+     damaged destination rather than falsely reporting that new outputs won. *)
+  let* () = validate_existing_artifact store hash in
   let temp_dir = artifact_temp_dir store hash in
   let* () = Fs.create_dir_all temp_dir
   |> Result.map_err ~fn:(fun cause -> CreateTempDirFailed { path = temp_dir; cause }) in
@@ -343,7 +395,8 @@ let store_artifacts = fun store ~package ?(ocamlc_warnings = []) ?(exports = [])
   result
 
 let export_source_path = fun store (entry: export_entry) ->
-  if Path.is_absolute entry.path then
+  if Path.is_absolute entry.path
+    || List.any (String.split ~by:"/" (Path.to_string entry.path)) ~fn:(fun part -> String.equal part "..") then
     None
   else
     match hash_of_hex entry.action_hash with
@@ -357,18 +410,33 @@ let load_manifest = fun store ~hash ->
 
 let path_exists = fun path -> Fs.exists path |> Result.unwrap_or ~default:false
 
-let manifest_exports_exist = fun store (manifest: Manifest.t) ->
-  List.all manifest.exports
-    ~fn:(fun (entry: Manifest.export_entry) ->
-      match export_source_path store entry with
-      | Some path -> path_exists path
-      | None -> false)
+let validate_export_source = fun store (entry: export_entry) ->
+  match export_source_path store entry with
+  | None -> Error (ExportPathMustBeRelative { path = entry.path })
+  | Some path when not (path_exists path) -> Error (ExportSourceMissing { path })
+  | Some path ->
+      match hash_of_hex entry.action_hash with
+      | None -> Error (CorruptArtifact { path; reason = "invalid export action hash" })
+      | Some hash ->
+          match load_manifest store ~hash with
+          | None -> Error (CorruptArtifact { path; reason = "export action manifest is missing or invalid" })
+          | Some manifest ->
+              match List.find manifest.files ~fn:(fun (file: Manifest.file_entry) ->
+                String.equal (Path.to_string file.path) (Path.to_string entry.path)) with
+              | None -> Error (CorruptArtifact { path; reason = "export is not declared in its action manifest" })
+              | Some file ->
+                  validate_manifest_files ~hash ~hash_dir:(get_hash_dir store hash)
+                    { manifest with files = [file] }
+
+let manifest_exports_valid = fun store (manifest: Manifest.t) ->
+  List.all manifest.exports ~fn:(fun entry -> Result.is_ok (validate_export_source store entry))
 
 (** Simple interface - check if we have cached artifacts for a hash *)
 let get = fun store hash ->
   match load_manifest store ~hash with
   | Some manifest ->
-      if manifest_exports_exist store manifest then
+      if manifest_exports_valid store manifest
+        && Result.is_ok (validate_manifest_files ~hash ~hash_dir:(get_hash_dir store hash) manifest) then
         let files =
           List.map manifest.files ~fn:(fun (entry: Manifest.file_entry) -> entry.path)
         in
@@ -430,6 +498,9 @@ let load_plan_bundle = fun store ~hash ->
     )
 
 let materialize_package_exports = fun store ~exports ~target_dir ->
+  let* () = List.fold_left exports ~acc:(Ok ()) ~fn:(fun acc entry ->
+    let* () = acc in
+    validate_export_source store entry) in
   let* () = Fs.create_dir_all target_dir
   |> Result.map_err ~fn:(fun cause -> CreatePackageOutputDirFailed { path = target_dir; cause }) in
   let copy_one (entry: export_entry) =

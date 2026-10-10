@@ -336,6 +336,16 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - [ ] Select a real external application and record candidate daily-use results.
 - [ ] Reconcile current package names, user docs, and support claims.
 
+## Cache payload correctness — retained reproductions
+
+- `_build/stability/run-9hdcrd5k/report.json`: seven existing build/cache suites passed using the pinned-bootstrap stage-two driver. This alone did not cover damaged payloads.
+- `run-jxx6lpuz/report.json`: five new store cases failed before the fix (missing/truncated/same-size-changed payloads accepted, corrupt promotion accepted, and same-hash save falsely successful).
+- `run-jk3vt4vv/report.json`: 29 store cases passed after payload verification; the new cached-action promotion failure case still failed because it raised instead of returning an execution failure.
+- `run-zspm978j/report.json`: five executor cases passed after typed failure handling; the newly added referenced-export corruption case failed, proving existence-only checks were insufficient.
+- `run-gqk2eg1w/report.json`: all seven focused suites passed, 52 cases, after export verification. Store coverage includes preserving working outputs on corrupt promotion/materialization. Damaged existing entries fail explicitly and retain evidence; automatic cache repair is not claimed.
+- `run-oikpjps1/report.json`: the expanded default gate passed ten suites, **175 cases**, with no skips. Driver selection and isolated HOME came from `bootstrap-1ufu7_dr/report.json`; reports retain driver/source/working-tree identities and commands. These are working-tree regressions, not a new committed cold/self-hosting proof.
+- All 27 Python validation tests passed. Remaining build-correctness contracts, committed cold/warm/edit measurements, Linux execution, and candidate soak are still open.
+
 ## Separate public-launch gates
 
 - [ ] Execute every advertised target and publish a support/compatibility matrix.

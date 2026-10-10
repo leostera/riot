@@ -17,6 +17,9 @@
 11. Post-build generation recording must stay cheap on repeated warm builds. `state.json` is the authoritative generation-recency index; do not make the build path discover recency by scanning or parsing generation payload files.
 12. Inside `riot-store`, lane targets should stay typed as `Riot_model.Target.t`. Only stringify them when encoding JSON receipts/state or deriving on-disk lane paths.
 
+13. Cache hits verify the manifest's build hash and each declared payload's regular-file kind, size, and SHA512 digest. Referenced exports must be declared and verified against their action manifests. Verify all files before promotion or export materialization touches working outputs.
+14. Same-hash publication reuses immutable directories. Refuse a damaged existing payload or unreadable manifest with a typed, actionable error; do not report new outputs as stored while retaining damaged bytes, or silently remove corruption evidence. Verification is not a signature/authentication guarantee.
+
 ## Validate
 
 `timeout 30 riot build riot-store`

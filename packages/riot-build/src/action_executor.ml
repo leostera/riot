@@ -410,6 +410,41 @@ let resolve_source_for_copy = fun ~(package:Riot_model.Package.t) ~src_path ->
   ^ String.concat ", " (List.map candidates ~fn:Path.to_string)
   ^ ")")
 
+let execute_cached_node = fun ~store ~session_id ~start ~sandbox_dir (node: Action_node.t) artifact ->
+  let finish status ocamlc_warnings =
+    let completed_at = Instant.now () in
+    {
+      node_id = node.id;
+      status;
+      ocamlc_warnings;
+      duration = Instant.duration_since ~earlier:start completed_at;
+      started_at = start;
+      completed_at;
+    }
+  in
+  Telemetry.emit Telemetry_events.(CacheHit {
+    session_id;
+    package = node.value.package;
+    action = node;
+    hash = artifact.Riot_store.Artifact.hash;
+  });
+  (* Failure must remain a node result so the worker can deliver completion;
+     raising here would strand the coordinator waiting for that worker. *)
+  match Riot_store.Store.promote store artifact.Riot_store.Artifact.hash ~target_dir:sandbox_dir with
+  | Error error ->
+      let message = "Failed to materialize cached action artifact: " ^ Riot_store.Store.error_message error in
+      Telemetry.emit Telemetry_events.(ActionFailed {
+        session_id; package = node.value.package; action = node; error = message;
+      });
+      finish (Failed (ExecutionFailed { message })) []
+  | Ok () ->
+      let result = finish (Cached artifact.Riot_store.Artifact.hash) artifact.Riot_store.Artifact.ocamlc_warnings in
+      Telemetry.emit Telemetry_events.(ActionCompleted {
+        session_id; package = node.value.package; action = node;
+        artifact; status = `Cached; duration = result.duration;
+      });
+      result
+
 let execute_node = fun ~completed ~store ~session_id toolchain sandbox_dir (node: Action_node.t) ->
   let start = Instant.now () in
   if has_failed_dependencies completed node then
@@ -428,38 +463,7 @@ let execute_node = fun ~completed ~store ~session_id toolchain sandbox_dir (node
     (
       let action_hash = Action_node.get_hash node in
       match Riot_store.Store.get store action_hash with
-      | Some artifact ->
-          Telemetry.emit
-            Telemetry_events.(CacheHit {
-              session_id;
-              package = node.value.package;
-              action = node;
-              hash = action_hash
-            });
-          let _ = Riot_store.Store.promote store artifact.Riot_store.Artifact.hash ~target_dir:sandbox_dir
-          |> Result.expect
-            ~msg:("Failed to materialize cached action artifact: " ^ G.Node_id.to_string node.id) in
-          let completed_at = Instant.now () in
-          let duration = Instant.duration_since ~earlier:start completed_at in
-          Telemetry.emit
-            Telemetry_events.(
-              ActionCompleted {
-                session_id;
-                package = node.value.package;
-                action = node;
-                artifact;
-                status = `Cached;
-                duration;
-              }
-            );
-          {
-            node_id = node.id;
-            status = Cached action_hash;
-            ocamlc_warnings = artifact.Riot_store.Artifact.ocamlc_warnings;
-            duration;
-            started_at = start;
-            completed_at;
-          }
+      | Some artifact -> execute_cached_node ~store ~session_id ~start ~sandbox_dir node artifact
       | None ->
           Telemetry.emit
             Telemetry_events.(CacheMiss {

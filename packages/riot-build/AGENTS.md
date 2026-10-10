@@ -27,6 +27,8 @@
 20. Package/workspace scaffolding does not belong here. `riot-build` must not expose package creation helpers; `riot-init` owns that API.
 22. `Build_spec.make` ends in `unit` so its optional `requested_parallelism:int` argument can be omitted. The stored value is `int option`; do not declare the optional argument itself as `int option` and accidentally introduce a second option layer.
 
+23. Cached-action materialization failures must return `Failed (ExecutionFailed ...)` and emit failure telemetry, not raise. Workers must still deliver a completion result to the coordinator when filesystem promotion fails.
+
 ## Validate
 
 `timeout 30 riot build riot-build`

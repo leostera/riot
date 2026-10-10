@@ -246,12 +246,42 @@ let test_execute_node_skips_when_dependency_failed = fun _ctx ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
+let test_cached_promotion_failure_returns_failed_result = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"action_executor_cached_promotion_failure"
+    (fun root ->
+      let store = Riot_store.Store.create ~workspace:(make_workspace root) in
+      let sandbox = Path.(root / Path.v "sandbox") in
+      let _ = Fs.create_dir_all sandbox |> Result.expect ~msg:"create sandbox" in
+      let output = Path.v "out.txt" in
+      let node = make_node ~package:(make_package ~root ~name:"pkg")
+        ~actions:[Riot_planner.Action.WriteFile { destination = output; content = "hello" }]
+        ~outs:[output] () in
+      let file = Path.(sandbox / output) in
+      let _ = Fs.write "hello" file |> Result.expect ~msg:"write cached output" in
+      let _ = Riot_store.Store.save store ~package:"pkg"
+        ~hash:(Riot_planner.Action_node.get_hash node) ~sandbox_dir:sandbox ~outs:[file]
+        |> Result.expect ~msg:"seed cache" in
+      let blocked = Path.(root / Path.v "blocked") in
+      let _ = Fs.write "not a directory" blocked |> Result.expect ~msg:"block promotion destination" in
+      try
+        let result = Action_executor.execute_node ~completed:(HashMap.create ()) ~store
+          ~session_id:(Session_id.make ()) (test_toolchain ()) blocked node in
+        match result.status with
+        | Action_executor.Failed (ExecutionFailed { message }) when not (String.equal message "") -> Ok ()
+        | _ -> Error "cached promotion failure did not return a failed execution result"
+      with
+      | _ -> Error "cached promotion failure raised instead of returning a failed execution result")
+  with
+  | Ok result -> result
+  | Error err -> Error (IO.error_message err)
+
 let tests =
   Test.[
     case "execute_node writes declared output" test_execute_node_writes_file;
     case "execute_node copies file action outputs" test_execute_node_copies_file;
     case "execute_node fails when declared output is missing" test_execute_node_fails_when_declared_output_is_missing;
     case "execute_node skips when dependency already failed" test_execute_node_skips_when_dependency_failed;
+    case "cached promotion failure returns failed result" test_cached_promotion_failure_returns_failed_result;
   ]
 
 let name = "riot-build:action-executor"

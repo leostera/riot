@@ -722,6 +722,94 @@ let test_get_returns_none_when_export_source_missing = fun _ctx ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let with_saved_payload = fun prefix fn ->
+  match Fs.with_tempdir ~prefix
+    (fun tmpdir ->
+      let store = Riot_store.Store.create ~workspace:(make_test_workspace tmpdir) in
+      let sandbox = Path.(tmpdir / Path.v "sandbox") in
+      let _ = Fs.create_dir_all sandbox |> Result.expect ~msg:"create sandbox" in
+      let output = Path.(sandbox / Path.v "payload") in
+      let _ = Fs.write "original" output |> Result.expect ~msg:"write original payload" in
+      let hash = Crypto.hash_string prefix in
+      let _ = Riot_store.Store.save store ~package:"pkg" ~hash ~sandbox_dir:sandbox ~outs:[output]
+        |> Result.expect ~msg:"save original payload" in
+      let cached = Path.(Riot_store.Store.hash_dir_of store hash / Path.v "payload") in
+      fn tmpdir store hash sandbox output cached)
+  with
+  | Ok result -> result
+  | Error _ -> Error "tempdir creation failed"
+
+let test_get_rejects_missing_payload = fun _ctx ->
+  with_saved_payload "store_missing_payload"
+    (fun _root store hash _sandbox _output cached ->
+      let _ = Fs.remove_file cached |> Result.expect ~msg:"remove cached payload" in
+      match Riot_store.Store.get store hash with
+      | None -> Ok ()
+      | Some _ -> Error "missing payload was accepted as a cache hit")
+
+let test_get_rejects_changed_payload = fun content _ctx ->
+  with_saved_payload "store_changed_payload"
+    (fun _root store hash _sandbox _output cached ->
+      let _ = Fs.write content cached |> Result.expect ~msg:"damage cached payload" in
+      match Riot_store.Store.get store hash with
+      | None -> Ok ()
+      | Some _ -> Error "damaged payload was accepted as a cache hit")
+
+let test_corrupt_promotion_preserves_working_output = fun _ctx ->
+  with_saved_payload "store_corrupt_promotion"
+    (fun root store hash _sandbox _output cached ->
+      let target = Path.(root / Path.v "out") in
+      let _ = Fs.create_dir_all target |> Result.expect ~msg:"create output directory" in
+      let working = Path.(target / Path.v "payload") in
+      let _ = Fs.write "working" working |> Result.expect ~msg:"write working output" in
+      let _ = Fs.write "tampered" cached |> Result.expect ~msg:"damage cached payload" in
+      match Riot_store.Store.promote store hash ~target_dir:target with
+      | Ok () -> Error "promotion silently accepted corrupt cached bytes"
+      | Error _ ->
+          if String.equal (read_file working) "working" then Ok ()
+          else Error "failed cache verification replaced the working output")
+
+let test_save_refuses_to_reuse_damaged_existing_entry = fun _ctx ->
+  with_saved_payload "store_refuse_damaged_entry"
+    (fun _root store hash sandbox output cached ->
+      let _ = Fs.write "tampered" cached |> Result.expect ~msg:"damage cached payload" in
+      match Riot_store.Store.save store ~package:"pkg" ~hash ~sandbox_dir:sandbox ~outs:[output] with
+      | Ok _ -> Error "save reported success while retaining a damaged immutable entry"
+      | Error _ ->
+          if String.equal (read_file cached) "tampered" then Ok ()
+          else Error "save deleted corruption evidence instead of reporting failure")
+
+let test_get_rejects_corrupt_referenced_export = fun _ctx ->
+  with_saved_payload "store_corrupt_referenced_export"
+    (fun _root store action_hash sandbox _output cached ->
+      let hash = Crypto.hash_string "package-referencing-corrupt-export" in
+      let exports = [Riot_store.Store.{
+        name = "payload"; path = Path.v "payload"; action_hash = Crypto.Digest.hex action_hash;
+      }] in
+      let _ = Riot_store.Store.save store ~package:"pkg" ~exports ~hash ~sandbox_dir:sandbox ~outs:[]
+        |> Result.expect ~msg:"save export-only package manifest" in
+      let _ = Fs.write "tampered" cached |> Result.expect ~msg:"damage referenced export" in
+      match Riot_store.Store.get store hash with
+      | None -> Ok ()
+      | Some _ -> Error "package cache accepted a corrupt referenced export")
+
+let test_corrupt_export_materialization_preserves_working_output = fun _ctx ->
+  with_saved_payload "store_corrupt_export_materialization"
+    (fun root store action_hash _sandbox _output cached ->
+      let target = Path.(root / Path.v "out") in
+      let _ = Fs.create_dir_all target |> Result.expect ~msg:"create export destination" in
+      let working = Path.(target / Path.v "payload") in
+      let _ = Fs.write "working" working |> Result.expect ~msg:"write working export" in
+      let exports = [Riot_store.Store.{
+        name = "payload"; path = Path.v "payload"; action_hash = Crypto.Digest.hex action_hash;
+      }] in
+      let _ = Fs.write "tampered" cached |> Result.expect ~msg:"damage export source" in
+      match Riot_store.Store.materialize_package_exports store ~exports ~target_dir:target with
+      | Ok () -> Error "export materialization silently accepted corrupt bytes"
+      | Error _ ->
+          if String.equal (read_file working) "working" then Ok ()
+          else Error "failed export verification replaced the working output")
+
 let test_cache_gc_drops_unreferenced_entries_after_generation_overflow = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_cache_gc_generation_overflow_test"
@@ -1049,6 +1137,13 @@ let tests =
     case "save preserves executable permissions in cache" test_save_preserves_executable_permissions_in_cache;
     case "save/promote preserves executable permissions" test_save_and_promote_preserves_executable_permissions;
     case "get returns none when export source missing" test_get_returns_none_when_export_source_missing;
+    case "get rejects missing cached payload" test_get_rejects_missing_payload;
+    case "get rejects truncated cached payload" (test_get_rejects_changed_payload "x");
+    case "get rejects same-size cached payload corruption" (test_get_rejects_changed_payload "tampered");
+    case "corrupt cache promotion preserves working output" test_corrupt_promotion_preserves_working_output;
+    case "save refuses to reuse damaged immutable entry" test_save_refuses_to_reuse_damaged_existing_entry;
+    case "get rejects corrupt referenced export" test_get_rejects_corrupt_referenced_export;
+    case "corrupt export materialization preserves working output" test_corrupt_export_materialization_preserves_working_output;
     case "cache GC records generation count in state" test_record_successful_build_tracks_generation_count_in_state;
     case "cache GC dedupes identical warm generations" test_record_successful_build_dedupes_identical_warm_generation;
     case "cache GC records changed warm generations without new entries" test_record_successful_build_keeps_new_warm_generation_when_closure_changes;

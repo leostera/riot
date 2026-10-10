@@ -12,6 +12,7 @@ type t
 type error =
   | HashNotFound of { hash: Std.Crypto.hash }
   | LoadManifestFailed of { path: Std.Path.t; cause: string }
+  | CorruptArtifact of { path: Std.Path.t; reason: string }
   | CreateTargetDirFailed of { path: Std.Path.t; cause: Std.Fs.error }
   | CreateParentDirFailed of { path: Std.Path.t; cause: Std.Fs.error }
   | ReadSourceMetadataFailed of { path: Std.Path.t; cause: Std.Fs.error }
