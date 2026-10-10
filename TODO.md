@@ -346,6 +346,11 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - Checked-in `scripts/validate-build-cleanup.py` passes in `build-cleanup-98fg7xup/report.json`, retaining the private copied-compiler FIFO wrapper/digests, exact driver snapshot, raw expected negative command, and successful build evidence. This minimal library is not the representative-service gate.
 - `run-n7cvc6u_/report.json`: expanded default gate passes **11 suites / 182 cases**, no skips. All **32** Python harness cases pass. Guard coverage is Apple Silicon only; Linux execution and cancellation remain open, as does a committed fresh bootstrap of this latest guard change. Legacy drivers do not cooperate with the new guard.
 
+### Committed root-guard proof
+
+- `bootstrap-_el85elr/report.json` builds committed `5fc5377fb` from pinned downloads: bootstrap CLI **38.642s**, produced-CLI fresh rebuild **45.316s**, warm **0.663s**. Stage-two SHA256: `3aab3c8111309480656fe2dc1a15dd651a73fb2b18448c356f053dbdf065083e`.
+- `build-cleanup-1d5d6rdp/report.json` passes the checked-in cleanup barrier against that exact stage-two driver. This closes the committed Apple Silicon concurrent-cleanup reproduction, not cancellation, Linux execution, or candidate readiness.
+
 ## Committed cache-verification build and edit controls
 
 - `bootstrap-dyj4il10/report.json` downloaded pinned archives and built committed `a1a7c2f34`: bootstrap CLI 38.411s, fresh self-rebuild 44.941s, warm 0.718s. Stage-two SHA256: `8c4e16bfeded769e16d84d2a4624142eba66815b2321cca0811c6967ea86db86`.
