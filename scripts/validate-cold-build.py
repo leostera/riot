@@ -73,6 +73,35 @@ def validate_build_output(path):
         raise ValueError("build reported partial failure or omitted failure status")
 
 
+EDIT_MARKER = "stability-edit-probe"
+CLI_ABOUT = "OCaml build system and package manager"
+
+
+def mutate_cli_about(repo):
+    path = repo / "packages/riot-cli/src/cli.ml"
+    before = path.read_bytes()
+    needle = f'about "{CLI_ABOUT}"'.encode()
+    if before.count(needle) != 1:
+        raise ValueError("edit probe requires exactly one known CLI description")
+    description = EDIT_MARKER.ljust(len(CLI_ABOUT), "-")
+    after = before.replace(needle, f'about "{description}"'.encode())
+    metadata = path.stat()
+    path.write_bytes(after)
+    # A content edit must invalidate even when metadata-only fingerprints match.
+    os.utime(path, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+    if path.stat().st_mtime_ns != metadata.st_mtime_ns or len(after) != len(before):
+        raise ValueError("edit probe did not preserve source size and mtime")
+    return {
+        "source_file": str(path),
+        "before_sha256": hashlib.sha256(before).hexdigest(),
+        "after_sha256": hashlib.sha256(after).hexdigest(),
+        "size_bytes": len(before),
+        "preserved_mtime_ns": metadata.st_mtime_ns,
+        "before_description": CLI_ABOUT,
+        "after_description": description,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--driver", required=True, type=Path)
@@ -81,9 +110,12 @@ def main(argv=None):
     parser.add_argument("--host-target", required=True, type=component)
     parser.add_argument("--revision", default="HEAD", help="committed source revision; uncommitted edits are excluded")
     parser.add_argument("--package", default="kernel", type=component)
+    parser.add_argument("--edit-probe", action="store_true", help="riot-cli only: verify a same-size/mtime-preserving source edit through produced CLI help")
     parser.add_argument("--timeout", default=120, type=stability.positive_timeout)
     parser.add_argument("--log-dir", type=Path, help="evidence parent (default: _build/stability)")
     args = parser.parse_args(argv)
+    if args.edit_probe and args.package != "riot-cli":
+        parser.error("--edit-probe requires --package riot-cli")
     if os.name != "posix":
         parser.error("process-group supervision requires a Unix host")
     driver = args.driver.resolve()
@@ -110,6 +142,7 @@ def main(argv=None):
         "toolchain_version": args.toolchain_version,
         "host_target": args.host_target,
         "package": args.package,
+        "edit_probe_requested": args.edit_probe,
         "timeout_s": args.timeout,
         "scope": "committed export, isolated HOME and empty build cache; copied compiler and inherited host PATH/native libraries; not a pinned bootstrap certification",
         "passed": False,
@@ -157,8 +190,18 @@ def main(argv=None):
         })
         save()
         env = isolated_environment(home)
-        for index, phase in enumerate(("cold", "warm")):
-            command = [str(snapshot), "build", args.package, "--json"]
+        phases = ["cold", "warm"]
+        if args.edit_probe:
+            phases.extend(["pre-edit-help", "edit", "post-edit-help"])
+        produced = repo / "_build/debug" / args.host_target / "out/riot-cli/riot"
+        for index, phase in enumerate(phases):
+            if phase == "edit":
+                report["edit_probe"] = mutate_cli_about(repo)
+                save()
+            if phase.endswith("help"):
+                command = [str(produced), "--help"]
+            else:
+                command = [str(snapshot), "build", args.package, "--json"]
             print(f"Running {phase}: {' '.join(command)}", flush=True)
             result = stability.run_command(
                 command, cwd=repo, env=env, log_dir=run,
@@ -167,7 +210,18 @@ def main(argv=None):
             result["phase"] = phase
             if result["passed"]:
                 try:
-                    validate_build_output(Path(result["stdout"]))
+                    if phase.endswith("help"):
+                        output = Path(result["stdout"]).read_text()
+                        if phase == "pre-edit-help":
+                            if CLI_ABOUT not in output or EDIT_MARKER in output:
+                                raise ValueError("baseline produced CLI did not expose the original description")
+                            result["executable_sha256"] = hashlib.sha256(produced.read_bytes()).hexdigest()
+                        else:
+                            if CLI_ABOUT in output or report["edit_probe"]["after_description"] not in output:
+                                raise ValueError("produced CLI did not reflect the source edit")
+                            result["executable_sha256"] = hashlib.sha256(produced.read_bytes()).hexdigest()
+                    else:
+                        validate_build_output(Path(result["stdout"]))
                 except (OSError, ValueError) as error:
                     result["passed"] = False
                     result["error"] = str(error)
@@ -178,7 +232,7 @@ def main(argv=None):
                 return 1
         report["passed"] = True
         save()
-        print(f"Cold and warm commands passed: {report_path}")
+        print(f"Required build/probe commands passed: {report_path}")
         return 0
     except (OSError, ValueError, subprocess.SubprocessError, tarfile.TarError) as error:
         report["error"] = str(error)

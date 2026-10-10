@@ -77,6 +77,30 @@ class ColdIsolationTests(unittest.TestCase):
                 with self.subTest(events=events), self.assertRaises(ValueError):
                     cold.validate_build_output(path)
 
+    def test_edit_probe_changes_content_but_preserves_size_and_mtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            source = repo / "packages/riot-cli/src/cli.ml"
+            source.parent.mkdir(parents=True)
+            source.write_text(f'command "riot" |> about "{cold.CLI_ABOUT}"\n')
+            before = source.stat()
+            evidence = cold.mutate_cli_about(repo)
+            self.assertEqual(source.stat().st_size, before.st_size)
+            self.assertEqual(source.stat().st_mtime_ns, before.st_mtime_ns)
+            self.assertNotEqual(evidence["before_sha256"], evidence["after_sha256"])
+            self.assertIn(evidence["after_description"], source.read_text())
+
+    def test_edit_probe_rejects_absent_or_ambiguous_description_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            source = repo / "packages/riot-cli/src/cli.ml"
+            source.parent.mkdir(parents=True)
+            for original in ("unrelated code", f'about "{cold.CLI_ABOUT}"\n' * 2):
+                source.write_text(original)
+                with self.assertRaises(ValueError):
+                    cold.mutate_cli_about(repo)
+                self.assertEqual(source.read_text(), original)
+
     def test_supervisor_passes_explicit_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = cold.stability.run_command(

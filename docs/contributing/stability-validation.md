@@ -86,8 +86,17 @@ control runs only after the cold command succeeds. Each command requires a
 nonempty terminal build result with no partial failure; a zero exit with missing
 JSON evidence is not accepted. Failure stops immediately, retains the command
 logs/report, and does not substitute a successful retry. Use `--package riot-cli`
-for the CLI closure. These diagnostic deadlines are not yet release performance
-budgets.
+for the CLI closure. Add `--edit-probe` to measure a third build after changing
+its help description in the disposable export. The mutation preserves file size
+and mtime; the produced CLI's help must expose the original text before the edit
+and the new text afterwards. Reports retain both source and executable digests.
+The final edited executable is a test artifact, **not** the unmodified candidate;
+use the separate bootstrap-produced CLI for candidate validation.
+
+The 120-second command deadline gives substantial headroom over the retained
+Apple Silicon CLI controls (approximately 45 seconds cold, 0.7 seconds warm,
+and 2.2 seconds for the description edit). These diagnostic deadlines are not
+release performance budgets, and do not establish Linux timings.
 
 This is isolation from existing build and user caches, not a fully hermetic build:
 PATH, host native libraries, and other host environment settings remain inherited.

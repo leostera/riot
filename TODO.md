@@ -336,6 +336,12 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - [ ] Select a real external application and record candidate daily-use results.
 - [ ] Reconcile current package names, user docs, and support claims.
 
+## Committed cache-verification build and edit controls
+
+- `bootstrap-dyj4il10/report.json` downloaded pinned archives and built committed `a1a7c2f34`: bootstrap CLI 38.411s, fresh self-rebuild 44.941s, warm 0.718s. Stage-two SHA256: `8c4e16bfeded769e16d84d2a4624142eba66815b2321cca0811c6967ea86db86`.
+- `cold-wg1hiqpl/report.json` used that stage-two driver in another committed export and private HOME: cold 44.908s, warm 0.709s, same-size/mtime-preserving CLI-description edit 2.199s, all within the explicit 120s external deadline. Produced CLI help verified original and changed descriptions; source/binary digests and mutation are retained. The edited executable is a probe artifact, not the candidate.
+- Added opt-in `--package riot-cli --edit-probe` to the cold validator, plus mutation/ambiguity unit tests. All 29 harness tests pass. These controls do not close Linux execution, cancellation, concurrent cleanup, or the original unexplained build-core timeout.
+
 ## Cache payload correctness — retained reproductions
 
 - `_build/stability/run-9hdcrd5k/report.json`: seven existing build/cache suites passed using the pinned-bootstrap stage-two driver. This alone did not cover damaged payloads.
