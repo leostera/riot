@@ -9,6 +9,7 @@ public = true
 path = "src/tty.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = { path = "../std", version = "*" }
 
 [dev-dependencies]

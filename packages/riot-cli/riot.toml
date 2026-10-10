@@ -13,6 +13,7 @@ name = "riot"
 path = "src/main.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = { path = "../std", version = "*" }
 riot-init = { path = "../riot-init", version = "*" }
 riot-run = { path = "../riot-run", version = "*" }

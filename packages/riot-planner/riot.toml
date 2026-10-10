@@ -9,6 +9,7 @@ public = false
 path = "src/Riot_planner.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = { path = "../std", version = "*" }
 riot-model = { path = "../riot-model", version = "*" }
 riot-store = { path = "../riot-store", version = "*" }

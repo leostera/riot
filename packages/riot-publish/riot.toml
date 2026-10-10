@@ -9,6 +9,7 @@ public = false
 path = "src/riot_publish.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = { path = "../std", version = "*" }
 riot-model = { path = "../riot-model", version = "*" }
 pkgs-ml = { path = "../pkgs-ml", version = "*" }

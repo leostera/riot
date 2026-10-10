@@ -228,6 +228,40 @@ have its resulting CLI rebuild itself. Keep pinned-bootstrap certification
 separate from the copied-compiler diagnostic lane. Continue the remaining build
 correctness contracts; this one resolved race does not complete that task.
 
+### Committed self-rebuild controls and bootstrap discovery — 2026-10-10
+
+- Source `59e386808` completed two independent fresh-export CLI builds. First
+  stage: `cold-fxp6jbr9/report.json`, cold 45.49s/warm 0.25s. The resulting CLI,
+  not the original driver, then built a second empty export:
+  `cold-c989_ioz/report.json`, cold 46.74s/warm 1.03s. Both retained driver hashes,
+  source identities, isolated HOME/cache conditions, and a 120s command deadline.
+  Compiler inputs were still copied from the installed toolchain, so these are
+  self-rebuild controls, not the downloaded pinned-bootstrap gate.
+- Read-only CDN discovery downloaded Riot release `0.0.43` and compiler
+  `5.5.0-riot.2` for Apple Silicon. Archive hashes were verified before Python
+  `tarfile` data-filtered extraction. Retained headers, checksum responses,
+  archives, and extracted metadata: `_build/stability/bootstrap-discovery/`.
+  Riot archive SHA256 `4d14827336fe61c3987973f012697a93d7ad44099e1dcc5256f0f706ca52eec3`;
+  compiler SHA256 `3fcfe6e78d0dc4c545c14eb2d04b08d05f21d00f1b3b953b6371b15dc7b20151`.
+  The exact-version Riot checksum agrees with discovery's latest checksum.
+- The downloaded release uses `build --package riot-cli --jobs 1`, not the current
+  positional build interface. The initial positional failure and corrected
+  interface run are both retained under `cold-fyvng90y/`.
+- Its stricter planner rejected undeclared direct `Kernel` imports in propane,
+  tty, and riot-model (`legacy-bootstrap.result.json`, failed after 52.56s).
+  Auditing the remaining CLI closure found the same direct-import mismatch in
+  eight additional manifests. Added explicit local kernel dependencies in all
+  eleven affected packages; no source API was changed.
+- Current-driver validation with those manifests passed all eight suites, 139
+  cases (`_build/stability/run-ka1f04dh/report.json`). Pinned downloaded bootstrap
+  validation must still be rerun from a new committed export with no prior build
+  artifacts, then repeated by the CLI it produces. Nothing was published or
+  installed into the user's HOME.
+
+Next: check in artifact pins and a repeatable downloaded-bootstrap entrypoint,
+retaining the legacy bootstrap's separate argument/result dialect rather than
+weakening current-driver result validation.
+
 ## Correctness work after the baseline
 
 - [x] Reproduce foreign build argv hash collisions; preserve argument order and

@@ -83,5 +83,6 @@ Use it as a router: pick the most relevant existing AGENTS file before making ch
 3. Implement changes.
 4. Run required builds.
 5. Update affected AGENTS files if behavior or contracts changed.
+6. Declare direct package imports in `[dependencies]`, including direct `Kernel` references. Do not rely on `std`'s transitive dependencies to make a source import legal; pinned bootstrap planners can enforce the direct-dependency boundary.
 
 When comitting, always use conventional commits.

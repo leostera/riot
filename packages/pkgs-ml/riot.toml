@@ -13,5 +13,6 @@ name = "pkgs_ml_tests"
 path = "tests/pkgs_ml_tests.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = { path = "../std", version = "*" }
 blink = { path = "../blink", version = "*" }

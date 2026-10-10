@@ -9,5 +9,6 @@ public = false
 path = "src/riot_model.ml"
 
 [dependencies]
+kernel = { path = "../kernel", version = "*" }
 std = "*"
 ignore = "*"
