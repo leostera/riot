@@ -22,6 +22,8 @@
 
 16. A successful process-source registration must retain either a native exit watch or a pending priority-readiness hint. kqueue `ESRCH` can mean exit won the registration race; never silently accept it and leave the caller parked. Pending hints are token-preserving, consumed once, replaced on reregister, removed on deregister/close, and bounded by `Poll.poll ~max_events`. Native process changes retry `EINTR` and capture errno before reentering the OCaml runtime.
 
+17. `Fs.File.try_lock_shared` is a nonblocking advisory shared lock, compatible with other shared holders and excluding exclusive holders. The Unix shim uses `flock(LOCK_SH | LOCK_NB)`, retries `EINTR`, and distinguishes contention (`Ok false`) from system errors.
+
 ## Validate
 
 `timeout 30 riot build kernel-new`

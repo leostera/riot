@@ -142,6 +142,8 @@ module FFI = struct
 
   external try_lock_exclusive: t -> (bool, int) Result.t = "kernel_new_fs_file_try_lock_exclusive"
 
+  external try_lock_shared: t -> (bool, int) Result.t = "kernel_new_fs_file_try_lock_shared"
+
   external unlock: t -> (unit, int) Result.t = "kernel_new_fs_file_unlock"
 
   external read: t -> bytes -> int -> int -> (int, int) Result.t = "kernel_new_fs_file_read"
@@ -225,6 +227,9 @@ let open_write = fun ?(create = true) ?(truncate = true) ?(append = false) ?(per
 
 let close = fun fd ->
   FFI.close fd |> Result.map_err ~fn:(fun code -> System (System_error.from_code code))
+
+let try_lock_shared = fun fd ->
+  FFI.try_lock_shared fd |> Result.map_err ~fn:(fun code -> System (System_error.from_code code))
 
 let try_lock_exclusive = fun fd ->
   FFI.try_lock_exclusive fd |> Result.map_err ~fn:(fun code -> System (System_error.from_code code))

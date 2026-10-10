@@ -33,6 +33,10 @@ val open_read_write: Path.t -> (t, error) result
 
 val try_lock_exclusive: t -> (bool, error) result
 
+val try_lock_shared: t -> (bool, error) result
+(** Nonblocking advisory shared lock; compatible with other shared holders,
+    incompatible with an exclusive holder. *)
+
 val unlock: t -> (unit, error) result
 
 val read: t -> bytes -> offset:int -> len:int -> (int, error) result

@@ -75,6 +75,8 @@ let open_read_write = fun path ->
 
 let try_lock_exclusive = fun file -> wrap_result (Kernel.Fs.File.try_lock_exclusive file)
 
+let try_lock_shared = fun file -> wrap_result (Kernel.Fs.File.try_lock_shared file)
+
 let unlock = fun file -> wrap_result (Kernel.Fs.File.unlock file)
 
 let to_source = Kernel.Fs.File.to_source

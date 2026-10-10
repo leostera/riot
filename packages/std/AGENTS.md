@@ -36,6 +36,8 @@
 
 30. Scheduler exception/warning diagnostics and enabled trace output must go to stderr, never stdout or the actor-backed logger. Use direct kernel writes (best effort on write failure), and retain child-process regressions in `std_command_tests` for exception visibility and stdout separation. Trace remains disabled by default; low-level writes do not use actor I/O effects but are not a nonblocking delivery guarantee.
 
+31. `Fs.File.try_lock_shared` forwards the kernel's nonblocking advisory shared-lock contract. Lock lifetime follows the file handle; do not unlink persistent guard files to release locks.
+
 ## Validate
 
 `timeout 30 riot build std`

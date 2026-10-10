@@ -200,6 +200,22 @@ CAMLprim value kernel_new_fs_file_try_lock_exclusive(value fd_val) {
   CAMLreturn(kernel_new_result_ok(Val_bool(1)));
 }
 
+CAMLprim value kernel_new_fs_file_try_lock_shared(value fd_val) {
+  CAMLparam1(fd_val);
+
+  int result;
+  do {
+    result = flock(Int_val(fd_val), LOCK_SH | LOCK_NB);
+  } while (result == -1 && errno == EINTR);
+  if (result == -1) {
+    if (errno == EWOULDBLOCK || errno == EAGAIN) {
+      CAMLreturn(kernel_new_result_ok(Val_bool(0)));
+    }
+    CAMLreturn(kernel_new_result_errno());
+  }
+  CAMLreturn(kernel_new_result_ok(Val_bool(1)));
+}
+
 CAMLprim value kernel_new_fs_file_unlock(value fd_val) {
   CAMLparam1(fd_val);
 

@@ -71,6 +71,10 @@ val close: t -> (unit, error) Result.t
 
 val try_lock_exclusive: t -> (bool, error) Result.t
 
+val try_lock_shared: t -> (bool, error) Result.t
+(** Nonblocking advisory shared lock. Multiple shared holders may coexist;
+    returns [Ok false] if an exclusive holder prevents acquisition. *)
+
 val unlock: t -> (unit, error) Result.t
 
 val read: t -> ?pos:int -> ?len:int -> bytes -> (int, error) Result.t
