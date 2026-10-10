@@ -161,6 +161,34 @@ Next: collect live actor/action state in a successfully built diagnostic candida
 or narrow the kernel action graph further. No scheduler change has been made based
 solely on these control observations.
 
+### Restore scheduler error observability — 2026-10-10
+
+- `Scheduler.eprintln` was an unconditional no-op, hiding process exception
+  diagnostics, warnings, and even explicitly enabled scheduler tracing. Restored
+  best-effort writes directly to kernel stderr, with partial-write handling and
+  no actor logger/effect dependency. These writes are not a nonblocking guarantee.
+- Added child-process regressions in `std_command_tests`: an intentionally failing
+  main must exit nonzero with scheduler context/exception on stderr and empty
+  stdout; enabled tracing must preserve the exact stdout payload and emit its
+  shutdown diagnostic on stderr.
+- `./riot build std` passed in 8.28s. The first CLI rebuild timed out after 30s
+  (`riot-diagnostics-build-hlmnub01`); preserved, not counted as passing.
+- All six `std_command_tests` passed, including both new regressions, then an
+  independent verbose CLI rebuild passed in 10.93s. Evidence:
+  `/var/folders/v0/6x4x9vzn10gbdxpzdnsfyxwh0000gn/T/riot-diagnostics-test-drkech0w/`.
+  Two earlier compilation attempts exposed unavailable `Bytes.of_string` and
+  `(<>)` APIs; fixed to supported `Bytes.from_string` and `Int.equal`.
+- The resulting diagnostic-enabled driver still exceeded 30s on an isolated
+  committed CLI source export (`_build/stability/cold-304vrzkp/report.json`) and
+  120s on the normal required-gate entrypoint (`run-0evrko52/report.json`);
+  neither emitted scheduler errors. Restoring diagnostics is a proven separate
+  correctness fix, not a resolution of the cold-build hang. The cold export
+  predates this source change; its driver snapshot includes the change.
+
+Next: use an explicit periodic actor/action snapshot in a disposable diagnostic
+build to identify which continuations are waiting without delivery. The required
+validation gate remains red; no candidate freeze or soak can begin.
+
 ## Correctness work after the baseline
 
 - [x] Reproduce foreign build argv hash collisions; preserve argument order and

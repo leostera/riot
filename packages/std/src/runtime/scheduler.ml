@@ -11,7 +11,19 @@ open Scheduler_types
 
 let panic = Kernel.SystemError.panic
 
-let eprintln = fun _message -> ()
+(* Scheduler diagnostics cannot depend on the actor-backed logger or suspend
+   the process whose failure they are reporting. Preserve stdout for payloads. *)
+let eprintln = fun message ->
+  let buffer = Kernel.Bytes.from_string (message ^ "\n") in
+  let length = Kernel.Bytes.length buffer in
+  let rec write pos =
+    if pos < length then
+      match Kernel.IO.Stderr.write buffer ~pos ~len:(length - pos) with
+      | Ok count when count > 0 -> write (pos + count)
+      | Ok _
+      | Error _ -> ()
+  in
+  write 0
 
 type process_slot = Scheduler_types.process_slot
 

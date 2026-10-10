@@ -34,6 +34,8 @@
 28. `Std.Runtime` owns the actor runtime implementation. Keep scheduler, mailbox, timer, and process internals under `std/src/runtime`, and treat the `actors` package as a compatibility facade during the migration.
 29. `Std.System` owns raw target-triple parsing. Keep the public triple type on `Std.System.TargetTriple`, expose the current machine as `Std.System.host_triple`, and do not duplicate `arch-vendor-os[-abi]` parsing in higher layers.
 
+30. Scheduler exception/warning diagnostics and enabled trace output must go to stderr, never stdout or the actor-backed logger. Use direct kernel writes (best effort on write failure), and retain child-process regressions in `std_command_tests` for exception visibility and stdout separation. Trace remains disabled by default; low-level writes do not use actor I/O effects but are not a nonblocking delivery guarantee.
+
 ## Validate
 
 `timeout 30 riot build std`
