@@ -293,10 +293,16 @@ weakening current-driver result validation.
 - Twenty-seven Python tests pass, including hash-before-extraction, archive
   containment, AppleDouble exclusion, missing/duplicate/failed terminal results,
   unsupported host pins, and failed-download/no-retry evidence retention.
-- Follow-up harness hardening now gives curl a private HOME, disables user curl
+- Follow-up harness hardening gives curl a private HOME, disables user curl
   configuration, cross-checks source/driver identity between stages, and records
-  the final stage-two executable digest. The committed-script run is recorded
-  separately below once executed.
+  the final stage-two executable digest.
+- The committed entrypoint passed on source `52b8d26c2`:
+  `_build/stability/bootstrap-1ufu7_dr/report.json`. Downloaded bootstrap build
+  39.17s; produced CLI's fresh self-build 45.21s, warm 0.31s. Final executable:
+  `_build/stability/bootstrap-1ufu7_dr/self-host/cold-132i6_5s/repo/_build/debug/aarch64-apple-darwin/out/riot-cli/riot`;
+  SHA256 `f78fa831654328bc8e26be84bb709fc91bf5743611694ebf87aaf23cea882018`.
+  This closes the Apple Silicon pinned-bootstrap/self-rebuild milestone, not
+  Linux execution, external service, candidate freeze, or the soak.
 
 Next: rerun the committed bootstrap entrypoint, then use its stage-two driver for
 remaining focused correctness/runtime checks. Linux execution, active CI,
