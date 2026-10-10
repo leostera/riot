@@ -46,7 +46,7 @@ def stop_group(process):
         pass
 
 
-def run_command(command, *, cwd, log_dir, index, timeout):
+def run_command(command, *, cwd, log_dir, index, timeout, env=None):
     stdout_path = log_dir / f"{index:02d}.stdout.log"
     stderr_path = log_dir / f"{index:02d}.stderr.log"
     result = {
@@ -60,7 +60,7 @@ def run_command(command, *, cwd, log_dir, index, timeout):
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         try:
             process = subprocess.Popen(
-                command, cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True
+                command, cwd=cwd, env=env, stdout=stdout, stderr=stderr, start_new_session=True
             )
         except OSError as error:
             result["error"] = str(error)
@@ -72,12 +72,24 @@ def run_command(command, *, cwd, log_dir, index, timeout):
             except KeyboardInterrupt:
                 result["error"] = "interrupted"
             finally:
-                stop_group(process)
-                process.wait()
+                try:
+                    stop_group(process)
+                except OSError as error:
+                    result["cleanup_error"] = str(error)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    # Keep supervision bounded even if group cleanup was denied.
+                    try:
+                        process.kill()
+                        process.wait(timeout=5)
+                    except (OSError, subprocess.TimeoutExpired) as error:
+                        result["cleanup_error"] = str(error)
             result["exit_code"] = process.returncode
     result["duration_s"] = round(time.monotonic() - started, 3)
     result["passed"] = (
-        result["exit_code"] == 0 and not result["timed_out"] and "error" not in result
+        result["exit_code"] == 0 and not result["timed_out"]
+        and "error" not in result and "cleanup_error" not in result
     )
     return result
 

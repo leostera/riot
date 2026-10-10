@@ -56,10 +56,50 @@ The script snapshots the driver but builds and tests the current working tree.
 It is not a clean-checkout self-hosting proof. That remains separate work under
 [RFD0045](../rfds/RFD0045-repeatable-stability-validation.md).
 
+## Reproduce cold builds without clearing real caches
+
+Use Python 3.12 or newer for the committed-export lane:
+
+```sh
+python3 scripts/validate-cold-build.py \
+  --driver ./_build/debug/aarch64-apple-darwin/out/riot-cli/riot \
+  --toolchain "$HOME/.riot/toolchains/5.5.0-riot.2/aarch64-apple-darwin" \
+  --toolchain-version 5.5.0-riot.2 \
+  --host-target aarch64-apple-darwin \
+  --package kernel \
+  --timeout 120
+```
+
+The script exports a committed revision (default `HEAD`, configurable with
+`--revision`) into a unique `_build/stability/cold-*` directory. Uncommitted source
+edits are not included. It creates a private HOME and copies only the explicitly
+selected compiler; the compiler manifest and exported source configuration must
+match the requested version/host. Relative internal compiler symlinks are preserved;
+absolute or escaping links are rejected.
+
+The first build starts with no `_build` or user registry/project cache. A warm
+control runs only after the cold command succeeds. Each command requires a
+nonempty terminal build result with no partial failure; a zero exit with missing
+JSON evidence is not accepted. Failure stops immediately, retains the command
+logs/report, and does not substitute a successful retry. Use `--package riot-cli`
+for the CLI closure. These diagnostic deadlines are not yet release performance
+budgets.
+
+This is isolation from existing build and user caches, not a fully hermetic build:
+PATH, host native libraries, and other host environment settings remain inherited.
+The selected compiler is copied, not downloaded through a pinned bootstrap. The
+report identifies that limitation explicitly. The script does not delete its
+retained workspace or alter your installed Riot.
+
+If process-group cleanup is denied, validation fails and preserves a
+`cleanup_error` alongside the command result. A separate bounded leader kill is
+attempted; this does not prove all children were cleaned up. Inspect remaining
+processes before continuing, rather than treating cleanup failure as a pass.
+
 ## Test the supervisor
 
 ```sh
-python3 -m unittest discover -s scripts/tests -p 'test_validate_stability.py' -v
+python3 -m unittest discover -s scripts/tests -p 'test_validate*.py' -v
 ```
 
 These tests cover JSON-result validation, log preservation, spawn failures,

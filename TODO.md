@@ -128,6 +128,39 @@ larger generated fixtures and child-process/wakeup evidence. The original
 historical timeout and the isolated hang remain unresolved; no performance
 budget or causal fix is claimed.
 
+### Cold-build narrowing and repeatable harness — 2026-10-10
+
+- Valid generated cold libraries with 8, 32, and 96 independent modules passed in
+  0.34s, 0.70s, and 1.56s respectively. The first exploratory fixtures used `+`
+  without a prelude and correctly failed compilation; those are not passing controls.
+- A 24-file native C fixture passed in 1.40s; a native dependency shared across
+  build/runtime scopes passed in 1.61s. Evidence is under the earlier temporary
+  reproduction directory (`parallel-valid-results.json`, `native-results.json`).
+- A separate fresh kernel build still hung at 15s with no live compiler child
+  visible in the captured process table. Temporary command-reader instrumentation
+  exists only in the disposable `repo` export, not in the real working tree;
+  building that probe CLI with the old driver exceeded 60s, so no probe binary or
+  probe-derived conclusion is claimed.
+- `scripts/validate-cold-build.py` now reproduces committed-export cold/warm runs
+  using an isolated HOME and explicit copied compiler/driver. It retains evidence,
+  checks terminal JSON results, rejects escaping compiler links, and stops on the
+  first failure rather than substituting a warm retry.
+- Two fresh kernel harness runs passed cold/warm:
+  `_build/stability/cold-t3p6eiuy/report.json` (4.63s/0.12s) and
+  `_build/stability/cold-mj7lhufq/report.json` (4.21s/0.08s). Both use the same driver
+  bytes as the hanging runs; this is not evidence that the hang is fixed.
+- The CLI-closure harness exceeded 60s and exposed a process-group cleanup
+  permission error (`cold-6uw5turs/report.json`). The supervisor now preserves
+  cleanup failures as command evidence and keeps leader waits bounded. A 20s
+  diagnostic run retained its timeout normally (`cold-yd1jveln/report.json`); this
+  deadline is a diagnostic cutoff, not a proposed CLI release budget.
+- Seventeen Python validation/isolation tests passed, including explicit HOME,
+  compiler-link containment, missing build evidence, and cleanup-error reporting.
+
+Next: collect live actor/action state in a successfully built diagnostic candidate
+or narrow the kernel action graph further. No scheduler change has been made based
+solely on these control observations.
+
 ## Correctness work after the baseline
 
 - [x] Reproduce foreign build argv hash collisions; preserve argument order and

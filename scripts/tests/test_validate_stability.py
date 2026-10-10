@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -111,6 +112,15 @@ class ProcessSupervisionTests(unittest.TestCase):
             )
             self.assertFalse(result["passed"])
             self.assertIn("error", result)
+
+    def test_cleanup_error_retains_command_evidence_and_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(validation, "stop_group", side_effect=PermissionError("denied")):
+                result = self.run_python("print('retained')", tmp)
+            self.assertFalse(result["passed"])
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["cleanup_error"], "denied")
+            self.assertEqual(Path(result["stdout"]).read_text(), "retained\n")
 
     def test_timeout_kills_term_ignoring_child(self):
         with tempfile.TemporaryDirectory() as tmp:
