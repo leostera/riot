@@ -102,7 +102,7 @@ let test_second_build_reuses_action_cache_path = fun _ctx ->
             Riot_planner.Package_graph.Runtime)
           ~package in
         match first_build.status with
-        | Built _ -> (
+        | Built first_artifact -> (
             let second_build = Package_builder.build
               ~workspace
               ~toolchain
@@ -114,8 +114,10 @@ let test_second_build_reuses_action_cache_path = fun _ctx ->
                 Riot_planner.Package_graph.Runtime)
               ~package in
             match second_build.status with
-            | Built _
-            | Cached _ -> Ok ()
+            | Cached artifact ->
+                if String.equal (Crypto.Digest.hex first_artifact.hash) (Crypto.Digest.hex artifact.hash) then Ok ()
+                else Error "Unchanged repeat build returned a different artifact hash"
+            | Built _ -> Error "Unchanged repeat build did not use its package cache"
             | Skipped { reason } -> Error ("Second build skipped: " ^ reason)
             | Failed err -> Error ("Second build failed: " ^ package_error_message err)
           )

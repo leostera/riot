@@ -22,6 +22,8 @@
 
 15. `Build_root_lock` protects build-root lifetime across processes: builds hold shared guards, policy and force cleanup require an exclusive guard and fail promptly on contention. The persistent guard is a hidden sibling (`.<root-name>.riot-build.lock`), never inside the removable root and never unlinked on release. Preserve the inode across cleanup. Guard callbacks release on both ordinary and exceptional exits.
 
+16. Artifact temporary-name allocation must use an atomic read-modify-write nonce, not separate cell reads/writes. Clock resolution and PID alone cannot distinguish simultaneous same-hash writers. Keep contention coverage bounded, require every writer to finish successfully, and verify promoted bytes.
+
 ## Validate
 
 `timeout 30 riot build riot-store`

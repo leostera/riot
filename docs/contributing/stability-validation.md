@@ -27,6 +27,10 @@ It builds `riot-cli`, then requires these suites to report nonempty passing resu
 - `riot-planner:package_planning_tests`
 - `riot-build:action_executor_tests`
 - `riot-build:build_lock_tests`
+- `riot-build:cache_tests`
+- `riot-build:concurrent_tests`
+- `riot-build:executor_behavior_tests`
+- `riot-build:coordinator_tests`
 - `riot-store:store_tests`
 
 For targeted work, repeated `--suite package:suite` arguments replace the default

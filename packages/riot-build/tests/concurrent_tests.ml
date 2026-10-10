@@ -353,9 +353,8 @@ let test_concurrent_builds_with_shared_cache = fun _ctx ->
             let result2 = receive ~selector () in
             match (result1, result2) with
             | (BuildCompleteWithCache (_, cached1, Ok ()), BuildCompleteWithCache (_, cached2, Ok ())) ->
-                let _ = cached1 in
-                let _ = cached2 in
-                Ok ()
+                if cached1 && cached2 then Ok ()
+                else Error "Concurrent unchanged builds must both reuse the shared package cache"
             | BuildCompleteWithCache (name, _, Error err), _ ->
                 Error (name ^ " build failed: " ^ err)
             | _, BuildCompleteWithCache (name, _, Error err) ->

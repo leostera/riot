@@ -351,6 +351,14 @@ external-service workflows, candidate recovery, and real soak days remain open.
 - `bootstrap-_el85elr/report.json` builds committed `5fc5377fb` from pinned downloads: bootstrap CLI **38.642s**, produced-CLI fresh rebuild **45.316s**, warm **0.663s**. Stage-two SHA256: `3aab3c8111309480656fe2dc1a15dd651a73fb2b18448c356f053dbdf065083e`.
 - `build-cleanup-1d5d6rdp/report.json` passes the checked-in cleanup barrier against that exact stage-two driver. This closes the committed Apple Silicon concurrent-cleanup reproduction, not cancellation, Linux execution, or candidate readiness.
 
+## Temporary artifact publication contention
+
+- Strengthened repeat-build tests to require cached status and the same artifact hash, and concurrent unchanged builds to require both cached statuses; no more acceptance of arbitrary `Built` results or ignored cache flags.
+- `run-ppej_rb3/report.json` retained a failure of the existing simultaneous same-package build case: one writer's `.tmp.…9` directory disappeared before publication (`source path does not exist`). The stricter unchanged-cache cases themselves passed.
+- Artifact nonce allocation used separate `Sync.Cell.get/set`, which cannot guarantee unique concurrent allocations. Replaced it with `Sync.Atomic.fetch_and_add`, matching the generic contentstore allocator's existing pattern. No historical failure was deleted or retried as a substitute.
+- Added bounded contention coverage: 24 synchronized actors, four same-hash publications each; every writer must succeed and promoted bytes must match. `run-vk34wk8k/report.json` passes all five focused suites, **46 cases**.
+- `run-sc245juy/report.json` passes the expanded default gate: **15 suites / 194 cases**, no skips. All **34** harness tests pass. These are working-tree regressions; the latest nonce change still needs committed fresh-export evidence before candidate promotion.
+
 ## Build cancellation and recovery
 
 - `cancel-probe-g6evglam/report.json`: committed root-guard stage-two driver `3aab3c81…` receives SIGINT while its controlled compilation is paused. CLI exits `-2` in 0.001s, the compiler belongs to the supervised process group, no group survives, and a subsequent build succeeds in 0.710s without clearing caches.

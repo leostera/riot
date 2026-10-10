@@ -320,6 +320,56 @@ let test_concurrent_same_hash_saves_share_cache_safely = fun _ctx ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_contended_same_hash_publication = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"store_contended_publication"
+    (fun root ->
+      let store = Riot_store.Store.create ~workspace:(make_test_workspace root) in
+      let sandbox = Path.(root / Path.v "sandbox") in
+      let output = write_output sandbox (Path.v "payload") "shared-artifact" in
+      let hash = Crypto.hash_string "contended-publication" in
+      let parent = self () in
+      let rec save_four remaining =
+        if remaining = 0 then Ok ()
+        else
+          match Riot_store.Store.save store ~package:"pkg" ~hash ~sandbox_dir:sandbox ~outs:[output] with
+          | Error error -> Error error
+          | Ok _ -> save_four (remaining - 1)
+      in
+      let rec spawn_workers index workers =
+        if index = 24 then workers
+        else
+          let worker = spawn (fun () ->
+            let selector = function ConcurrentSaveGo -> `select () | _ -> `skip in
+            let _ = receive ~selector () in
+            let result = save_four 4 in
+            send parent (ConcurrentSaveComplete (Int.to_string index, result));
+            Ok ()) in
+          spawn_workers (index + 1) (worker :: workers)
+      in
+      let workers = spawn_workers 0 [] in
+      List.for_each workers ~fn:(fun worker -> send worker ConcurrentSaveGo);
+      let rec collect remaining failures =
+        if remaining = 0 then failures
+        else
+          let selector = function ConcurrentSaveComplete _ as message -> `select message | _ -> `skip in
+          match receive ~selector () with
+          | ConcurrentSaveComplete (_, Ok ()) -> collect (remaining - 1) failures
+          | ConcurrentSaveComplete (name, Error error) ->
+              collect (remaining - 1) ((name ^ ": " ^ Riot_store.Store.error_message error) :: failures)
+          | _ -> collect (remaining - 1) ("unexpected worker result" :: failures)
+      in
+      match collect 24 [] with
+      | [] ->
+          let target = Path.(root / Path.v "out") in
+          let _ = Riot_store.Store.promote store hash ~target_dir:target
+            |> Result.expect ~msg:"promote contended artifact" in
+          if String.equal (read_file Path.(target / Path.v "payload")) "shared-artifact" then Ok ()
+          else Error "contended publication changed artifact bytes"
+      | failures -> Error (String.concat "; " failures))
+  with
+  | Ok result -> result
+  | Error _ -> Error "tempdir creation failed"
+
 let test_plan_bundle_round_trip = fun _ctx ->
   match
     Fs.with_tempdir ~prefix:"store_plan_bundle_test"
@@ -1184,6 +1234,7 @@ let tests =
     case "exists requires manifest" test_exists_requires_manifest_file;
     case "put-if-absent keeps first writer" test_put_if_absent_keeps_first_writer;
     case "concurrent same-hash saves share cache safely" test_concurrent_same_hash_saves_share_cache_safely;
+    case "contended same-hash publication keeps temporary directories private" test_contended_same_hash_publication;
     case "plan bundle round trip" test_plan_bundle_round_trip;
     case "hash manifest round trip preserves exports" test_hash_manifest_round_trip_preserves_exports;
     case "artifact round trip preserves manifest payload" test_artifact_round_trip_preserves_ocamlc_warnings;
