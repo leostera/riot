@@ -18,6 +18,7 @@
 12. Source-layout and code-hygiene rules do not belong in unit tests. Encode them in docs, review guidance, or separate tooling instead.
 13. Do not add `Backend.ml` shim modules. Prefer local backend files such as `env/unix.ml`; if the current planner cannot support a deeper nested split yet, keep the implementation in the public module rather than introducing a backend shim.
 14. Keep `Kernel.Random.Source` entropy-only. OS randomness belongs here; PRNG policy, distributions, and sampling combinators belong in `std`.
+15. Keep the tracked IO implementation paths lowercase: `src/io/io.ml`, `src/io/io.mli`, and `src/io/iovec/`. Internal code refers to `Io`; the public facade exposes `Kernel.IO`. Case-insensitive worktrees can conceal incorrect tracked spelling, so validate path changes from a fresh Git export.
 
 ## Validate
 

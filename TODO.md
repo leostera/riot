@@ -10,11 +10,11 @@ of `NEXT.md`.
 - [RFD0045: repeatable validation](docs/rfds/RFD0045-repeatable-stability-validation.md)
 - [RFD0046: verified, recoverable releases](docs/rfds/RFD0046-verified-recoverable-releases.md)
 
-All three are **presented**, not accepted or implemented. Initial scope assumptions
-for discussion: Apple Silicon development, x86_64 GNU/Linux execution, a five-day
-candidate soak. Compiler/build diagnostics are the agreed initial editing path;
-LSP is explicitly deferred. Decide whether the first real application requires ARM
-Linux.
+All three are **presented**, not accepted or implemented. The confirmed goal
+requires Apple Silicon development, x86_64 GNU/Linux execution, a representative
+service outside the monorepo, and five actual development days of user-reported
+candidate use. Compiler/build diagnostics are the agreed initial editing path;
+LSP is explicitly deferred. ARM Linux is outside the initial required matrix.
 
 ## Current slice: restore and establish the baseline
 
@@ -96,6 +96,30 @@ failures/skips (`_build/stability/run-l3qoyfe8/report.json`). The hash and packa
 regressions now join the default smoke gate. The focused existing-cache baseline
 is green again; the first cold timeout still needs an isolated reproduction and
 is not considered fixed by these successful retries.
+
+### Isolated cold reproduction — 2026-10-10
+
+Fresh Git export of `bb1c418a2`; isolated HOME with only a copied
+`5.5.0-riot.2/aarch64-apple-darwin` compiler. No project/build or registry caches
+were copied. Driver SHA-256 and compiler manifest are in `setup.json` under:
+`/var/folders/v0/6x4x9vzn10gbdxpzdnsfyxwh0000gn/T/riot-cold-baseline-yqbl34n4/`.
+
+- Rebuilt driver's `build riot-cli --json`: timed out after 182.28s. A sample at
+  45s showed worker domains waiting, unlike the earlier active-parser sample.
+- A subsequent kernel-only run failed in 0.39s with `Unbound module Io`.
+- Git tracked `src/IO/IO.ml`, while the case-insensitive working tree contained
+  `src/io/io.ml`. Four tracked paths are now renamed to the lowercase spelling
+  required by internal `Io` references; the public `Kernel.IO` alias is unchanged.
+- With casing corrected, the rebuilt driver still timed out building kernel at
+  90s. The casing defect therefore does not explain away the hanging driver.
+- The original `./riot` driver built the corrected kernel in a separate fresh
+  export with no build cache in 3.37s (`kernel-clean.result.json`). This validates
+  the casing fix, not the rebuilt driver's cold execution path.
+
+Next: reproduce the rebuilt driver's cold action/runtime hang on a minimal
+workspace, retaining command/stack evidence. Do not accept a warm-cache retry as
+proof of recovery. The original historical timeout and the new isolated hang
+remain unresolved.
 
 ## Correctness work after the baseline
 
