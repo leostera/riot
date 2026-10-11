@@ -174,6 +174,7 @@ module ModuleScopes = struct
     constructors: constructor_binding IdentMap.t;
     types: TypeScopes.t;
     modules: module_binding IdentMap.t;
+    opens: module_summary list;
   }
 
   type t =
@@ -191,6 +192,7 @@ module ModuleScopes = struct
     constructors = IdentMap.empty;
     types = TypeScopes.empty;
     modules = IdentMap.empty;
+    opens = [];
   }
 
   let create () = Root (empty_frame ())
@@ -220,6 +222,11 @@ module ModuleScopes = struct
     modules = frame.modules;
   }
 
+  let open_module t ~summary =
+    map_current
+      t
+      ~fn:(fun current -> { current with opens = summary :: current.opens })
+
   let add_module_to_current t ~name ~summary ~ordinal =
     let binding = { summary; ordinal } in
     map_current
@@ -246,6 +253,34 @@ module ModuleScopes = struct
   let pop_value_scope t =
     map_current t ~fn:(fun current -> { current with values = ValueScopes.pop current.values })
 
+  let rec find_open opens ~lookup =
+    match opens with
+    | [] -> None
+    | summary :: rest -> (
+        match lookup summary with
+        | Some _ as found -> found
+        | None -> find_open rest ~lookup
+      )
+
+  let get_open_value t ~name =
+    find_open (current t).opens ~lookup:(fun summary ->
+      Option.map (IdentMap.get summary.values ~key:name) ~fn:ValueScopes.binding_scheme)
+
+  let get_open_constructor t ~name =
+    find_open (current t).opens ~lookup:(fun summary ->
+      Option.map (IdentMap.get summary.constructors ~key:name) ~fn:(fun binding -> binding.description))
+
+  let get_open_record_field t ~name =
+    find_open (current t).opens ~lookup:(fun summary ->
+      Option.map (IdentMap.get summary.record_fields ~key:name) ~fn:(fun binding -> binding.info))
+
+  let get_open_type t ~name =
+    find_open (current t).opens ~lookup:(fun summary -> TypeScopes.get summary.types ~name)
+
+  let get_open_module t ~name =
+    find_open (current t).opens ~lookup:(fun summary ->
+      Option.map (IdentMap.get summary.modules ~key:name) ~fn:(fun binding -> binding.summary))
+
   let add_value t ~name ~scheme ~ordinal =
     map_current
       t
@@ -258,9 +293,13 @@ module ModuleScopes = struct
     match ValueScopes.get (current t).values ~name with
     | Some _ as scheme -> scheme
     | None -> (
-        match t with
-        | Root _ -> None
-        | Scope { parent; _ } -> get_value parent ~name
+        match get_open_value t ~name with
+        | Some _ as scheme -> scheme
+        | None -> (
+            match t with
+            | Root _ -> None
+            | Scope { parent; _ } -> get_value parent ~name
+          )
       )
 
   let add_constructor t ~name ~description ~ordinal =
@@ -276,9 +315,13 @@ module ModuleScopes = struct
     match IdentMap.get (current t).constructors ~key:name with
     | Some binding -> Some binding.description
     | None -> (
-        match t with
-        | Root _ -> None
-        | Scope { parent; _ } -> get_constructor parent ~name
+        match get_open_constructor t ~name with
+        | Some _ as description -> description
+        | None -> (
+            match t with
+            | Root _ -> None
+            | Scope { parent; _ } -> get_constructor parent ~name
+          )
       )
 
   let add_record_field t ~name ~info ~ordinal =
@@ -294,9 +337,13 @@ module ModuleScopes = struct
     match IdentMap.get (current t).record_fields ~key:name with
     | Some binding -> Some binding.info
     | None -> (
-        match t with
-        | Root _ -> None
-        | Scope { parent; _ } -> get_record_field parent ~name
+        match get_open_record_field t ~name with
+        | Some _ as info -> info
+        | None -> (
+            match t with
+            | Root _ -> None
+            | Scope { parent; _ } -> get_record_field parent ~name
+          )
       )
 
   let add_type t ~name ~declaration ~ordinal =
@@ -311,18 +358,26 @@ module ModuleScopes = struct
     match TypeScopes.get (current t).types ~name with
     | Some _ as declaration -> declaration
     | None -> (
-        match t with
-        | Root _ -> None
-        | Scope { parent; _ } -> get_type parent ~name
+        match get_open_type t ~name with
+        | Some _ as declaration -> declaration
+        | None -> (
+            match t with
+            | Root _ -> None
+            | Scope { parent; _ } -> get_type parent ~name
+          )
       )
 
   let rec get_module t ~name =
     match IdentMap.get (current t).modules ~key:name with
     | Some binding -> Some binding.summary
     | None -> (
-        match t with
-        | Root _ -> None
-        | Scope { parent; _ } -> get_module parent ~name
+        match get_open_module t ~name with
+        | Some _ as summary -> summary
+        | None -> (
+            match t with
+            | Root _ -> None
+            | Scope { parent; _ } -> get_module parent ~name
+          )
       )
 
   let root_value_bindings t = ValueScopes.root_bindings (root t).values
@@ -525,6 +580,16 @@ let get_module_path t ~path =
       | Some summary -> descend summary rest
       | None -> None
     )
+
+let open_module t ~path =
+  let path =
+    Model.Surface_path.to_segments path
+    |> List.map ~fn:module_path_segment
+  in
+  match get_module_path t ~path with
+  | None -> None
+  | Some summary ->
+      Some { t with modules = ModuleScopes.open_module t.modules ~summary }
 
 let add_module_alias t ~name ~target =
   let path =

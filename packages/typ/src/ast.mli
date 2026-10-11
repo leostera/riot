@@ -914,6 +914,8 @@ and structure_item_kind =
   | Module of module_declaration list
   (** Module type declaration. *)
   | ModuleType of module_type_declaration
+  (** Open a module for following structure-item lookups. *)
+  | Open of ident
   (** Include by module identifier. *)
   | Include of ident
 
@@ -937,6 +939,8 @@ and signature_item_kind =
   | External of external_declaration
   (** Exception declaration. *)
   | Exception of exception_declaration
+  (** Open a module for following signature-item lookups. *)
+  | Open of ident
 (** Typed implementation file. *)
 type implementation = {
   (** Source origin for the file root. *)

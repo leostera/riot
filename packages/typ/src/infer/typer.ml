@@ -1225,6 +1225,15 @@ let unsupported_signature_item state (item: signature_item) summary =
       summary;
     })
 
+let open_module state origin module_path =
+  if not (State.open_module state ~path:module_path) then
+    State.add_diagnostic
+      state
+      (Diagnostics.Diagnostic.unresolved_name
+        ~span:origin.Ast.span
+        ~namespace:"module"
+        ~name:(SurfacePath.to_string module_path))
+
 let type_let_binding (state: State.t) (lb: let_binding) =
   let _ = infer_let_binding state ~mode:Generalized lb in
   ()
@@ -1245,6 +1254,7 @@ let rec type_impl_item (state: State.t) (item: structure_item) =
       let _ = infer_expression state expression in
       ()
   | Module declarations -> List.for_each declarations ~fn:(type_module_declaration state)
+  | Open module_path -> open_module state item.origin module_path
   | ModuleType _ -> unsupported_structure_item state item "module type declarations are not supported yet"
   | Include _ -> unsupported_structure_item state item "include declarations are not supported yet"
 
@@ -1287,6 +1297,7 @@ let type_intf_item state (item: signature_item) =
             ("cannot extend an unavailable type " ^ SurfacePath.to_string extension.name)
     )
   | Exception declaration -> register_exception state declaration
+  | Open module_path -> open_module state item.origin module_path
 
 let type_intf state (items: signature_item list) =
   List.for_each items ~fn:(type_intf_item state)

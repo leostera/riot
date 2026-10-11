@@ -107,15 +107,15 @@ than evidence of class/object syntax in first-party OCaml implementation code.
   lowers escaping metavariable levels before linking. A conservative
   nonexpansive-value restriction is active; regressions cover environment
   capture and a polymorphic-reference escape.
-- Unresolved value, constructor, field, type, and type-variable names now emit
-  structured source-located errors. Type-constructor arity mismatches are also
+- Unresolved value, constructor, field, type, type-variable, and module names
+  now emit structured source-located errors. Type-constructor arity mismatches are also
   structured errors. Recovery variables may continue traversal but cannot
   erase these diagnostics.
 - Common built-in `option`/`result` constructors and basic reference/prelude
   signatures are modeled explicitly. This is not yet the workspace dependency
   environment: imports and full library interfaces still need package-aware
   loading.
-- `~/.riot/bin/riot test -p typ --json`: **353 passed, 0 failed** after these
+- `~/.riot/bin/riot test -p typ --json`: **355 passed, 0 failed** after these
   soundness and bidirectional changes. This validates Typ's focused/snapshot
   suite only.
 - The preliminary standalone runner at `packages/typ/bench/corpus_check.ml`

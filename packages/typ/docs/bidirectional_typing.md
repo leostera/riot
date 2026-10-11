@@ -58,6 +58,14 @@ by a polymorphic-reference regression.
 
 ## Modules and signatures
 
+A top-level `open M` resolves an already available module and adds its direct
+exports to subsequent unqualified lookups in that structure or signature. The
+most recent open wins among opened modules; local declarations shadow opened
+names. Opened bindings are lookup scope, not declarations, so they are not
+re-exported by the containing module. Nominal type references resolved through
+an open retain the defining module's canonical type identity. An unavailable
+open target is an unresolved-module diagnostic.
+
 `.mli` declarations create schemes with their declared type variables bound in
 the declaration scope. Abstract type identities remain nominal. Manifest
 equalities are represented when exported. A module member lookup must resolve

@@ -434,6 +434,50 @@ let has_unresolved_name diagnostics ~namespace ~name =
         && Int.(span.start < span.end_)
     | _ -> false)
 
+let diagnostics_are_empty source =
+  match infer_source_diagnostics source with
+  | Error message -> Error message
+  | Ok [] -> Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n")
+
+let test_open_module_resolves_exported_members _ctx =
+  diagnostics_are_empty {ocaml|
+module Packet = struct
+  type t = Item of int
+  let count = 2
+end
+open Packet
+let chosen : t = Item count
+module Previous = struct let selected = 1 end
+module Latest = struct let selected = true end
+open Previous
+open Latest
+let shadowed : bool = selected
+|ocaml}
+
+let test_open_module_scope_does_not_export_imports _ctx =
+  let source = {ocaml|
+module Packet = struct
+  let hidden = 1
+end
+module Use = struct
+  open Packet
+  let visible = hidden
+end
+let missing = hidden
+|ocaml} in
+  match infer_source_diagnostics source with
+  | Error message -> Error message
+  | Ok diagnostics ->
+      if has_unresolved_name diagnostics ~namespace:"value" ~name:"hidden" then Ok ()
+      else
+        Error
+          (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+          |> String.concat "\n")
+
 let interface_has_type_arity_error source ~expected ~actual =
   let parse_result = Syn.parse_interface (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
@@ -479,7 +523,8 @@ let test_unresolved_names_are_errors_in_their_namespaces _ctx =
   in
   let* () = check "let value = missing_value\n" ~namespace:"value" ~name:"missing_value" in
   let* () = check "let value = Missing 1\n" ~namespace:"constructor" ~name:"Missing" in
-  check "let value : missing_type = 1\n" ~namespace:"type" ~name:"missing_type"
+  let* () = check "let value : missing_type = 1\n" ~namespace:"type" ~name:"missing_type" in
+  check "open Missing\nlet value = 1\n" ~namespace:"module" ~name:"Missing"
 
 let test_generalization_does_not_quantify_an_environment_variable _ctx =
   let source = "let bad x = let id = x in (id 1, id true)\n" in
@@ -518,6 +563,8 @@ let tests =
     case "raise rejects non-exception values" test_raise_rejects_non_exception_values;
     case "generalization preserves environment variables" test_generalization_does_not_quantify_an_environment_variable;
     case "unresolved names are errors by namespace" test_unresolved_names_are_errors_in_their_namespaces;
+    case "open modules resolve exported members" test_open_module_resolves_exported_members;
+    case "open imports are not module exports" test_open_module_scope_does_not_export_imports;
     case "type constructor arity is checked" test_type_constructor_arity_is_checked;
     case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;
     case "bidirectional annotations check introduction forms" test_bidirectional_annotations_check_introductions;

@@ -640,6 +640,7 @@ and structure_item_kind =
   | Exception of exception_declaration
   | Module of module_declaration list
   | ModuleType of module_type_declaration
+  | Open of ident
   | Include of ident
 
 and signature_item = {
@@ -653,6 +654,7 @@ and signature_item_kind =
   | TypeExtension of type_extension_declaration
   | External of external_declaration
   | Exception of exception_declaration
+  | Open of ident
 
 type implementation = {
   origin: origin;
@@ -2279,6 +2281,13 @@ and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
         make_structure_item origin (Module (build_module_declarations context declaration))
     | ModuleType declaration ->
         make_structure_item origin (ModuleType (build_module_type_declaration context declaration))
+    | Open declaration ->
+        let ident =
+          Syn.Ast.OpenDeclaration.ident declaration
+          |> require_some origin "missing open target"
+          |> ident_from_syn_ident
+        in
+        make_structure_item origin (Open ident)
     | Include declaration ->
         let ident =
           Syn.Ast.IncludeDeclaration.body_ident declaration
@@ -2292,7 +2301,6 @@ and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
     | Extension extension ->
         let node = Syn.Ast.ExtensionItem.as_node extension in
         build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
-    | Open _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind)
     | Error node -> unsupported_node node (node_summary node)
     | Unknown node -> ((unsupported_node node (node_summary node)): structure_item)
   )
@@ -2325,9 +2333,15 @@ and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
     | Extension extension ->
         let node = Syn.Ast.ExtensionItem.as_node extension in
         build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
+    | Open declaration ->
+        let ident =
+          Syn.Ast.OpenDeclaration.ident declaration
+          |> require_some origin "missing open target"
+          |> ident_from_syn_ident
+        in
+        make_signature_item origin (Open ident)
     | Module _
     | ModuleType _
-    | Open _
     | Include _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind)
     | Error node -> unsupported_node node (node_summary node)
     | Unknown node -> ((unsupported_node node (node_summary node)): signature_item)

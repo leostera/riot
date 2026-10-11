@@ -101,6 +101,13 @@ let get_module_path state ~path =
   in
   InferenceEnv.get_module_path state.env ~path
 
+let open_module state ~path =
+  match InferenceEnv.open_module state.env ~path with
+  | None -> false
+  | Some env ->
+      state.env <- env;
+      true
+
 let add_module_alias state ~name ~target =
   match InferenceEnv.add_module_alias state.env ~name ~target with
   | None -> false
