@@ -503,3 +503,42 @@ let module_values (summary: module_summary) = value_bindings summary.values
 let module_types (summary: module_summary) = type_bindings summary.types
 
 let module_modules (summary: module_summary) = module_bindings summary.modules
+
+let module_path_segment name =
+  Model.Surface_path.from_parts [ name ]
+  |> Result.expect ~msg:"module path segment must be a non-empty identifier"
+
+let get_module_path t ~path =
+  let rec descend summary path =
+    match path with
+    | [] -> Some summary
+    | name :: rest -> (
+        match module_get_module summary ~name with
+        | Some nested -> descend nested rest
+        | None -> None
+      )
+  in
+  match path with
+  | [] -> None
+  | root :: rest -> (
+      match ModuleScopes.get_module t.modules ~name:root with
+      | Some summary -> descend summary rest
+      | None -> None
+    )
+
+let add_module_alias t ~name ~target =
+  let path =
+    Model.Surface_path.to_segments target
+    |> List.map ~fn:module_path_segment
+  in
+  match get_module_path t ~path with
+  | None -> None
+  | Some summary ->
+      Some {
+        modules = ModuleScopes.add_module_to_current
+          t.modules
+          ~name
+          ~summary
+          ~ordinal:t.next_ordinal;
+        next_ordinal = t.next_ordinal + 1;
+      }

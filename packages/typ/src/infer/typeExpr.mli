@@ -12,6 +12,9 @@ val arrow_label_to_type_label: Ast.arrow_label -> Ast.Type.Label.t
 (** Convert a source type expression into an inference type and annotate it. *)
 val core_type_to_type: State.t -> Ast.core_type -> Ast.Type.t
 
+(** Convert an annotation while sharing one solver variable per named type variable. *)
+val core_type_to_type_scoped: State.t -> Ast.core_type -> Ast.Type.t
+
 (** Build the nominal type represented by a declaration. *)
 val type_declaration_to_type: ?arguments:Ast.Type.t list -> Ast.type_declaration -> Ast.Type.t
 

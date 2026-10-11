@@ -22,7 +22,7 @@ let inline_record_payload_ident (decl: type_declaration) (ctr: type_constructor)
    need the generalized body here because the description itself is not a value
    scheme; it has separate slots for result type and argument metadata.
 *)
-let generalize_type type_ = (Quantifier.generalize type_).body
+let generalize_type type_ = (Quantifier.generalize_all type_).body
 
 (**
    Generalize constructor argument metadata in lockstep with the callable
@@ -113,9 +113,45 @@ let instantiate state (description: InferenceEnv.constructor_description) =
     arguments = instantiate_arguments description.arguments;
   }
 
+let builtin_constructor ident =
+  let first_id = TypeVar.first in
+  let second_id = TypeVar.next first_id in
+  let first = Type.Generic first_id in
+  let second = Type.Generic second_id in
+  let description ~result ~arguments body: InferenceEnv.constructor_description = {
+    name = ident;
+    scheme = TypeScheme.monomorphic body;
+    result;
+    arguments = InferenceEnv.Tuple arguments;
+  }
+  in
+  if SurfacePath.equal ident Builtin.none_ident then
+    Some (description ~result:(Builtin.option first) ~arguments:[] (Builtin.option first))
+  else if SurfacePath.equal ident Builtin.some_ident then
+    Some (
+      description
+        ~result:(Builtin.option first)
+        ~arguments:[ first ]
+        (Ast.Type.arrow first (Builtin.option first)))
+  else if SurfacePath.equal ident Builtin.ok_ident then
+    Some (
+      description
+        ~result:(Builtin.result first second)
+        ~arguments:[ first ]
+        (Ast.Type.arrow first (Builtin.result first second)))
+  else if SurfacePath.equal ident Builtin.error_ident then
+    Some (
+      description
+        ~result:(Builtin.result first second)
+        ~arguments:[ second ]
+        (Ast.Type.arrow second (Builtin.result first second)))
+  else
+    None
+
 let instantiate_from_state state ident =
-  State.get_constructor state ~name:ident
-  |> Option.map ~fn:(instantiate state)
+  match State.get_constructor state ~name:ident with
+  | Some constructor -> Some (instantiate state constructor)
+  | None -> Option.map (builtin_constructor ident) ~fn:(instantiate state)
 
 (**
    Build the environment payload for one constructor declaration.
@@ -190,7 +226,7 @@ let from_type_constructor state (decl: type_declaration) (ctr: type_constructor)
       in
       ({
         name = ctr.name;
-        scheme = Quantifier.generalize body;
+        scheme = Quantifier.generalize_all body;
         result = generalize_type result;
         arguments = generalize_constructor_arguments constructor_arguments;
       }: InferenceEnv.constructor_description))

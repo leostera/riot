@@ -19,6 +19,10 @@ let nominal name = Type.Apply { ident = ident name; arguments = [] }
 
 let int_type = fun () -> nominal "int"
 
+let source_slice source =
+  IO.IoVec.IoSlice.from_string source
+  |> Result.expect ~msg:"failed to create interface test source slice"
+
 let bool_type = fun () -> nominal "bool"
 
 let scheme type_ = TypeScheme.monomorphic type_
@@ -157,6 +161,348 @@ let test_multiple_modules_are_copied_recursively _ctx =
       |> assert_equal_names ~expected:[ "flag" ]
   | _ -> Error "expected modules M and N"
 
+let test_infer_signature_exports_typed_declarations _ctx =
+  let source = {ocaml|
+type color = Red | Blue
+val choose : color -> color
+val identity : 'a -> 'a
+external primitive : int -> int = "primitive"
+|ocaml} in
+  let parse_result = Syn.parse_interface (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | _ :: _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      | [] ->
+          result.intf
+          |> render_interface
+          |> assert_equal_string
+            ~expected:(
+              "type color = Red | Blue\n"
+              ^ "val choose : color -> color\n"
+              ^ "val identity : 'a -> 'a\n"
+              ^ "val primitive : int -> int\n")
+
+let test_infer_nested_modules_and_aliases _ctx =
+  let source = {ocaml|
+module M = struct
+  type color = Red | Blue
+  let choose (value: color) = value
+end
+module Alias = M
+let selected = Alias.choose Alias.Red
+|ocaml} in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | _ :: _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      | [] ->
+          result.intf
+          |> render_interface
+          |> assert_equal_string ~expected:"val selected : M.color\n"
+
+let test_infer_exception_declarations _ctx =
+  let source = {ocaml|
+exception Failure
+exception Error of string
+let failure = Failure
+let error = Error "problem"
+|ocaml} in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | _ :: _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      | [] ->
+          result.intf
+          |> render_interface
+          |> assert_equal_string ~expected:"val failure : exn\nval error : exn\n"
+
+let test_infer_common_expression_forms _ctx =
+  let source = {ocaml|
+exception Failure
+exception Error of string
+let sum a b = a + b
+let concatenate a b = a ^ b
+let values = [1; 2; 3]
+let total = match values with | [] -> 0 | head :: tail -> head
+let loop n = for i = 0 to n do assert (i >= 0) done
+let sequence = print_endline "ok"; ()
+let recovered = try Error "bad" with | Failure -> Error "failed" | Error message -> Error message
+let abort () = raise Failure
+|ocaml} in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | _ :: _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      | [] ->
+          result.intf
+          |> render_interface
+          |> assert_equal_string
+            ~expected:(
+              "val sum : int -> int -> int\n"
+              ^ "val concatenate : string -> string -> string\n"
+              ^ "val values : int list\n"
+              ^ "val total : int\n"
+              ^ "val loop : int -> unit\n"
+              ^ "val sequence : unit\n"
+              ^ "val recovered : exn\n"
+              ^ "val abort : unit -> 'a\n")
+
+let test_infix_mismatch_has_operand_span _ctx =
+  let source = "let _ = true + 1\n" in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
+        when span.start = 8 && span.end_ = 12 && String.equal expected "int" && String.equal actual "bool" ->
+          Ok ()
+      | _ ->
+          Error
+            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n")
+
+let test_raise_rejects_non_exception_values _ctx =
+  let source = "let _ = raise 1\n" in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
+        when span.start = 14 && span.end_ = 15 && String.equal expected "exn" && String.equal actual "int" ->
+          Ok ()
+      | _ ->
+          Error
+            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n")
+
+let test_bidirectional_annotations_check_introductions _ctx =
+  let source = {ocaml|
+let identity : int -> int = fun value -> value
+let pair : int * bool = (1, true)
+let choose : bool -> int = fun condition -> if condition then 1 else 0
+|ocaml} in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [] ->
+          render_interface result.intf
+          |> assert_equal_string
+            ~expected:(
+              "val identity : int -> int\n"
+              ^ "val pair : int * bool\n"
+              ^ "val choose : bool -> int\n")
+      | _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+
+let test_bidirectional_function_body_mismatch_is_localized _ctx =
+  let source = "let bad : int -> int = fun value -> true\n" in
+  let span_start = 36 in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
+        when span.start = span_start
+          && String.equal expected "int"
+          && String.equal actual "bool" -> Ok ()
+      | _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+
+let test_value_restriction_keeps_reference_contents_monomorphic _ctx =
+  let source =
+    "let reference = ref (fun x -> x)\n"
+    ^ "let _ = reference := (fun x -> x + 1)\n"
+    ^ "let bad = (!reference) true\n"
+  in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+        when span.start = 94 && span.end_ = 98 -> Ok ()
+      | _ ->
+          Error
+            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n")
+
+let infer_source_diagnostics source =
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      Ok (result.diagnostics.items |> Vector.iter |> Iterator.to_list)
+
+let has_unresolved_name diagnostics ~namespace ~name =
+  List.any diagnostics ~fn:(function
+    | Typ.Diagnostics.Diagnostic.UnresolvedName
+        { namespace = found_namespace; name = found_name; span } ->
+        String.equal namespace found_namespace
+        && String.equal name found_name
+        && Int.(span.start < span.end_)
+    | _ -> false)
+
+let interface_has_type_arity_error source ~expected ~actual =
+  let parse_result = Syn.parse_interface (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics = result.diagnostics.items |> Vector.iter |> Iterator.to_list in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeConstructorArityMismatch
+            { name; expected = found_expected; actual = found_actual; span } ]
+        when String.equal name "wrapper"
+          && Int.equal found_expected expected
+          && Int.equal found_actual actual
+          && Int.(span.start < span.end_) -> Ok ()
+      | _ ->
+          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+
+let test_type_constructor_arity_is_checked _ctx =
+  let* () =
+    interface_has_type_arity_error
+      "type 'a wrapper = Wrap of 'a\nval value : (int, bool) wrapper\n"
+      ~expected:1
+      ~actual:2
+  in
+  interface_has_type_arity_error
+    "type ('a, 'b) wrapper = Wrap of 'a * 'b\nval value : int wrapper\n"
+    ~expected:2
+    ~actual:1
+
+let test_unresolved_names_are_errors_in_their_namespaces _ctx =
+  let check source ~namespace ~name =
+    match infer_source_diagnostics source with
+    | Error message -> Error message
+    | Ok diagnostics ->
+        if has_unresolved_name diagnostics ~namespace ~name then
+          Ok ()
+        else
+          Error
+            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n")
+  in
+  let* () = check "let value = missing_value\n" ~namespace:"value" ~name:"missing_value" in
+  let* () = check "let value = Missing 1\n" ~namespace:"constructor" ~name:"Missing" in
+  check "let value : missing_type = 1\n" ~namespace:"type" ~name:"missing_type"
+
+let test_generalization_does_not_quantify_an_environment_variable _ctx =
+  let source = "let bad x = let id = x in (id 1, id true)\n" in
+  let parse_result = Syn.parse_implementation (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
+      match diagnostics with
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+        when span.start = 36 && span.end_ = 40 -> Ok ()
+      | _ ->
+          Error
+            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\\n")
+
 let tests =
   Test.[
     case "empty env renders empty interface" test_empty_env_renders_empty_interface;
@@ -164,6 +510,18 @@ let tests =
     case "one value renders value" test_env_with_one_value_renders_value;
     case "local values do not become exports" test_local_values_do_not_become_exports;
     case "multiple modules are copied recursively" test_multiple_modules_are_copied_recursively;
+    case "signature exports typed declarations" test_infer_signature_exports_typed_declarations;
+    case "nested modules and aliases expose typed members" test_infer_nested_modules_and_aliases;
+    case "exception declarations provide constructor types" test_infer_exception_declarations;
+    case "common expression forms infer their types" test_infer_common_expression_forms;
+    case "infix mismatch points to the invalid operand" test_infix_mismatch_has_operand_span;
+    case "raise rejects non-exception values" test_raise_rejects_non_exception_values;
+    case "generalization preserves environment variables" test_generalization_does_not_quantify_an_environment_variable;
+    case "unresolved names are errors by namespace" test_unresolved_names_are_errors_in_their_namespaces;
+    case "type constructor arity is checked" test_type_constructor_arity_is_checked;
+    case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;
+    case "bidirectional annotations check introduction forms" test_bidirectional_annotations_check_introductions;
+    case "bidirectional function mismatch is source-located" test_bidirectional_function_body_mismatch_is_localized;
   ]
 
 let main ~args = Test.Cli.main ~name:"typ:infer-module-interface" ~tests ~args ()

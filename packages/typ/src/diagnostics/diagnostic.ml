@@ -35,6 +35,19 @@ type unerasable_optional_argument = {
   label: string;
 }
 
+type unresolved_name = {
+  span: Syn.Span.t;
+  namespace: string;
+  name: string;
+}
+
+type type_constructor_arity_mismatch = {
+  span: Syn.Span.t;
+  name: string;
+  expected: int;
+  actual: int;
+}
+
 type severity =
   | Error
   | Warning
@@ -46,6 +59,8 @@ type t =
   | InfiniteSubstitution of infinite_substitution
   | TypeMismatch of type_mismatch
   | UnerasableOptionalArgument of unerasable_optional_argument
+  | UnresolvedName of unresolved_name
+  | TypeConstructorArityMismatch of type_constructor_arity_mismatch
 
 let annotation_mismatch ~span ~annotation_span ~expected ~actual =
   AnnotationMismatch { span; annotation_span; expected; actual }
@@ -59,6 +74,12 @@ let type_mismatch ~span ~expected ~actual =
 let unerasable_optional_argument ~span ~label =
   UnerasableOptionalArgument { span; label }
 
+let unresolved_name ~span ~namespace ~name =
+  UnresolvedName { span; namespace; name }
+
+let type_constructor_arity_mismatch ~span ~name ~expected ~actual =
+  TypeConstructorArityMismatch { span; name; expected; actual }
+
 let id diagnostic =
   match diagnostic with
   | UnsupportedSyntax _ -> Error.T0001_UnsupportedSyntax
@@ -67,6 +88,8 @@ let id diagnostic =
   | InfiniteSubstitution _ -> Error.T0004_InfiniteSubstitution
   | TypeMismatch _ -> Error.T0005_TypeMismatch
   | UnerasableOptionalArgument _ -> Error.T0006_UnerasableOptionalArgument
+  | UnresolvedName _ -> Error.T0007_UnresolvedName
+  | TypeConstructorArityMismatch _ -> Error.T0008_TypeConstructorArityMismatch
 
 let span diagnostic =
   match diagnostic with
@@ -75,7 +98,9 @@ let span diagnostic =
   | AnnotationMismatch { span; _ }
   | InfiniteSubstitution { span; _ }
   | TypeMismatch { span; _ }
-  | UnerasableOptionalArgument { span; _ } -> span
+  | UnerasableOptionalArgument { span; _ }
+  | UnresolvedName { span; _ }
+  | TypeConstructorArityMismatch { span; _ } -> span
 
 let severity diagnostic =
   match diagnostic with
@@ -85,6 +110,8 @@ let severity diagnostic =
   | InfiniteSubstitution _
   | TypeMismatch _ -> Error
   | UnerasableOptionalArgument _ -> Warning
+  | UnresolvedName _
+  | TypeConstructorArityMismatch _ -> Error
 
 let hint diagnostic =
   diagnostic
@@ -99,7 +126,9 @@ let fix diagnostic =
   | UnsupportedType _
   | AnnotationMismatch _
   | InfiniteSubstitution _
-  | TypeMismatch _ -> None
+  | TypeMismatch _
+  | UnresolvedName _
+  | TypeConstructorArityMismatch _ -> None
 
 let to_string diagnostic =
   match diagnostic with
@@ -124,6 +153,11 @@ let to_string diagnostic =
       "Optional argument ?"
       ^ label
       ^ " cannot be erased"
+  | UnresolvedName { namespace; name; _ } ->
+      "Unresolved " ^ namespace ^ " name " ^ name
+  | TypeConstructorArityMismatch { name; expected; actual; _ } ->
+      "Type constructor " ^ name ^ " expects " ^ Int.to_string expected
+      ^ " argument(s), but received " ^ Int.to_string actual
 
 let severity_to_string = function
   | Error -> "error"
@@ -153,6 +187,10 @@ let to_json = fun diagnostic ->
     | TypeMismatch { expected; actual; _ } ->
         [ ("expected", String expected); ("actual", String actual); ]
     | UnerasableOptionalArgument { label; _ } -> [ ("label", String label); ]
+    | UnresolvedName { namespace; name; _ } ->
+        [ ("namespace", String namespace); ("name", String name); ]
+    | TypeConstructorArityMismatch { name; expected; actual; _ } ->
+        [ ("name", String name); ("expected", Int expected); ("actual", Int actual); ]
   in
   let fix_fields =
     match fix diagnostic with
@@ -234,6 +272,23 @@ let unerasable_optional_argument_serializer = Serde.Ser.record
       Serde.Ser.field "label" Serde.Ser.string (fun (value: unerasable_optional_argument) -> value.label);
     ])
 
+let unresolved_name_serializer = Serde.Ser.record
+  (Serde.Ser.fields
+    [
+      Serde.Ser.field "span" span_serializer (fun (value: unresolved_name) -> value.span);
+      Serde.Ser.field "namespace" Serde.Ser.string (fun (value: unresolved_name) -> value.namespace);
+      Serde.Ser.field "name" Serde.Ser.string (fun (value: unresolved_name) -> value.name);
+    ])
+
+let type_constructor_arity_mismatch_serializer = Serde.Ser.record
+  (Serde.Ser.fields
+    [
+      Serde.Ser.field "span" span_serializer (fun (value: type_constructor_arity_mismatch) -> value.span);
+      Serde.Ser.field "name" Serde.Ser.string (fun (value: type_constructor_arity_mismatch) -> value.name);
+      Serde.Ser.field "expected" Serde.Ser.int (fun (value: type_constructor_arity_mismatch) -> value.expected);
+      Serde.Ser.field "actual" Serde.Ser.int (fun (value: type_constructor_arity_mismatch) -> value.actual);
+    ])
+
 let serializer = Serde.Ser.variant
   [ Serde.Ser.Variant.newtype "UnsupportedSyntax" unsupported_syntax_serializer
       (
@@ -264,5 +319,15 @@ let serializer = Serde.Ser.variant
       (
         function
         | UnerasableOptionalArgument value -> Some value
+        | _ -> None
+      ); Serde.Ser.Variant.newtype "UnresolvedName" unresolved_name_serializer
+      (
+        function
+        | UnresolvedName value -> Some value
+        | _ -> None
+      ); Serde.Ser.Variant.newtype "TypeConstructorArityMismatch" type_constructor_arity_mismatch_serializer
+      (
+        function
+        | TypeConstructorArityMismatch value -> Some value
         | _ -> None
       ); ]

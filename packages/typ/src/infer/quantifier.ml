@@ -14,10 +14,14 @@ open Ast
    This can be reversed with `instantiate`, which turns a generic back into a
    fresh solver var without affecting the generalized arrow.
 *)
-let generalize type_ =
+let generalize_at_level state ~level type_ =
   let rec loop type_ =
     match Unifier.resolve type_ with
-    | Type.Var { id; link = None } -> Type.Generic id
+    | Type.Var ({ id; link = None } as variable) ->
+        if Int.(State.variable_level state variable > level) then
+          Type.Generic id
+        else
+          Type.Var variable
     | Type.Var { link = Some linked; _ } -> loop linked
     | Type.Generic _ -> type_
     | Type.Tuple parts -> Type.Tuple (List.map parts ~fn:loop)
@@ -28,6 +32,24 @@ let generalize type_ =
     | Type.Apply application ->
         let arguments = List.map application.arguments ~fn:loop in
         Type.Apply { application with arguments }
+  in
+  TypeScheme.monomorphic (loop type_)
+
+let generalize state type_ =
+  generalize_at_level state ~level:(State.current_level state) type_
+
+(** Explicit source quantifiers and declaration parameters are universally bound. *)
+let generalize_all type_ =
+  let rec loop type_ =
+    match Unifier.resolve type_ with
+    | Type.Var { id; link = None } -> Type.Generic id
+    | Type.Var { link = Some linked; _ } -> loop linked
+    | Type.Generic _ -> type_
+    | Type.Tuple parts -> Type.Tuple (List.map parts ~fn:loop)
+    | Type.Arrow arrow ->
+        Type.Arrow { arrow with parameter = loop arrow.parameter; result = loop arrow.result }
+    | Type.Apply application ->
+        Type.Apply { application with arguments = List.map application.arguments ~fn:loop }
   in
   TypeScheme.monomorphic (loop type_)
 

@@ -26,7 +26,31 @@ let string_ident = ident "string"
 
 let unit_ident = ident "unit"
 
+let exn_ident = ident "exn"
+
 let list_ident = ident "list"
+
+let array_ident = ident "array"
+
+let ref_ident = ident "ref"
+
+let option_ident = ident "option"
+
+let result_ident = ident "result"
+
+let none_ident = ident "None"
+
+let some_ident = ident "Some"
+
+let ok_ident = ident "Ok"
+
+let error_ident = ident "Error"
+
+let raise_ident = ident "raise"
+
+let deref_ident = ident "!"
+
+let assign_ident = ident ":="
 
 (**
    Built-ins are represented as nominal applications with zero or more type
@@ -47,7 +71,17 @@ let string = make string_ident
 
 let unit = make unit_ident
 
+let exn = make exn_ident
+
 let list el = make list_ident ~arguments:[ el ]
+
+let array el = make array_ident ~arguments:[ el ]
+
+let ref_ el = make ref_ident ~arguments:[ el ]
+
+let option el = make option_ident ~arguments:[ el ]
+
+let result ok error = make result_ident ~arguments:[ ok; error ]
 
 (**
    Unit is special only because the source language exposes `()` as syntax, and

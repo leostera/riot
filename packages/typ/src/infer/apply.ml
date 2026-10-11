@@ -65,27 +65,29 @@ let infer_argument infer_expression state (arg: argument) =
    For example, applying `true` to `right:int -> bool -> int` consumes the
    `bool` arrow and keeps `right:int -> int`.
 *)
-let apply_positional_argument state callee arg arg_type =
+let check_argument state check_expression (arg: argument) expected =
+  match argument_value arg.kind with
+  | Some expr -> check_expression expr expected
+  | None ->
+      let actual = State.fresh_var state in
+      Constraint.unify
+        state
+        ~expected
+        ~actual
+        ~on_error:(Constraint.argument_constraint_diagnostic arg);
+      expected
+
+let apply_positional_argument state ~infer_expression ~check_expression callee arg =
   let rec search skipped type_ =
     match Unifier.resolve type_ with
     | Type.Arrow arrow when Type.Label.equal arrow.label Type.Label.NoLabel ->
-        Constraint.unify
-          state
-          ~expected:arrow.parameter
-          ~actual:arg_type
-          ~on_error:(Constraint.argument_constraint_diagnostic arg);
+        let _ = check_argument state check_expression arg arrow.parameter in
         rebuild_skipped_arrows skipped arrow.result
     | Type.Arrow arrow when is_optional_label arrow.label -> search skipped arrow.result
     | Type.Arrow arrow -> search (arrow :: skipped) arrow.result
-    | Type.Var _ ->
-        let result = State.fresh_var state in
-        Constraint.unify
-          state
-          ~expected:type_
-          ~actual:(Ast.Type.arrow arg_type result)
-          ~on_error:(Constraint.argument_constraint_diagnostic arg);
-        rebuild_skipped_arrows skipped result
+    | Type.Var _
     | _ ->
+        let arg_type = infer_argument infer_expression state arg in
         let result = State.fresh_var state in
         Constraint.unify
           state
@@ -105,26 +107,16 @@ let apply_positional_argument state callee arg arg_type =
    argument itself teaches the checker that the callee must be a function with
    this labeled parameter.
 *)
-let apply_labeled_argument state callee arg label arg_type =
+let apply_labeled_argument state ~infer_expression ~check_expression callee arg label =
   let rec search skipped type_ =
     match Unifier.resolve type_ with
     | Type.Arrow arrow when label_matches label arrow.label ->
-        Constraint.unify
-          state
-          ~expected:arrow.parameter
-          ~actual:arg_type
-          ~on_error:(Constraint.argument_constraint_diagnostic arg);
+        let _ = check_argument state check_expression arg arrow.parameter in
         rebuild_skipped_arrows skipped arrow.result
     | Type.Arrow arrow -> search (arrow :: skipped) arrow.result
-    | Type.Var _ ->
-        let result = State.fresh_var state in
-        Constraint.unify
-          state
-          ~expected:type_
-          ~actual:(Ast.Type.arrow ~label arg_type result)
-          ~on_error:(Constraint.argument_constraint_diagnostic arg);
-        rebuild_skipped_arrows skipped result
+    | Type.Var _
     | _ ->
+        let arg_type = infer_argument infer_expression state arg in
         let result = State.fresh_var state in
         Constraint.unify
           state
@@ -135,16 +127,17 @@ let apply_labeled_argument state callee arg label arg_type =
   in
   search [] callee
 
-let apply_argument state ~infer_expression callee (arg: argument) =
+let apply_argument state ~infer_expression ~check_expression callee (arg: argument) =
   let label = argument_label_to_type_label arg.kind in
-  let arg_type = infer_argument infer_expression state arg in
   match label with
-  | Type.Label.NoLabel -> apply_positional_argument state callee arg arg_type
-  | _ -> apply_labeled_argument state callee arg label arg_type
+  | Type.Label.NoLabel ->
+      apply_positional_argument state ~infer_expression ~check_expression callee arg
+  | _ ->
+      apply_labeled_argument state ~infer_expression ~check_expression callee arg label
 
-let infer state ~infer_expression (apply: application) =
+let infer state ~infer_expression ~check_expression (apply: application) =
   let callee = infer_expression apply.callee in
   List.fold_left
     apply.arguments
     ~init:callee
-    ~fn:(apply_argument state ~infer_expression)
+    ~fn:(apply_argument state ~infer_expression ~check_expression)

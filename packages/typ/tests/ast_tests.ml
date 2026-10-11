@@ -318,6 +318,7 @@ let tests =
       "from syn keeps constructor expression payloads"
       test_from_syn_keeps_constructor_expression_payloads;
     fuzz
+      ~size:Large
       "parse lower and infer arbitrary implementation input"
       ~seeds:[
         "";

@@ -9,7 +9,7 @@ open Ast
    into every temporary solver type.
 *)
 let unify (state: State.t) ~expected ~actual ~on_error =
-  match Unifier.unify ~expected ~actual with
+  match Unifier.unify_with_state state ~expected ~actual with
   | Ok () -> ()
   | Error err -> State.add_diagnostic state (on_error err)
 

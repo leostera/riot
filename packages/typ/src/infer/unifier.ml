@@ -46,31 +46,40 @@ let rec occurs_in var type_ =
   | Generic _ -> false
 
 (** Solve a type variable by linking it to a known type *)
-let solve_var var type_ =
+let solve_var_with_state state var type_ =
   match resolve type_ with
   | Type.Var other when Type.same_var var other -> Ok ()
   | resolved when occurs_in var resolved -> Error (InfiniteSubstitution { var; type_ })
   | resolved ->
+      (match state with
+      | None -> ()
+      | Some state ->
+          State.adjust_levels
+            state
+            ~to_level:(State.variable_level state var)
+            resolved);
       var.link <- Some resolved;
       Ok ()
+
+let solve_var var type_ = solve_var_with_state None var type_
 
 (**
    Attempt to make two `Type.t` values represent the same type. Whenever a
    variable is found on either side, it'll try to be solved against its matching
    type.
 *)
-let rec unify ~expected ~actual =
+let rec unify_internal state ~expected ~actual =
   match (resolve expected, resolve actual) with
   | (Generic a, Generic b) when TypeVar.equal a b -> Ok ()
   | (Var a, Var b) when Type.same_var a b -> Ok ()
   | (Var var, type_)
-  | (type_, Var var) -> solve_var var type_
-  | (Tuple a, Tuple b) -> unify_many a b
-  | (Arrow a, Arrow b) -> unify_arrow a b
-  | (Apply a, Apply b) -> unify_applications a b
+  | (type_, Var var) -> solve_var_with_state state var type_
+  | (Tuple a, Tuple b) -> unify_many state a b
+  | (Arrow a, Arrow b) -> unify_arrow state a b
+  | (Apply a, Apply b) -> unify_applications state a b
   | (expected, actual) -> type_mismatch ~expected ~actual
 
-and unify_many expected actual =
+and unify_many state expected actual =
   let expected_len = List.length expected in
   let actual_len = List.length actual in
   if Int.(expected_len != actual_len) then
@@ -81,19 +90,24 @@ and unify_many expected actual =
       ~init:(Ok ())
       ~fn:(fun acc (expected, actual) ->
         let* acc = acc in
-        unify ~expected ~actual)
+        unify_internal state ~expected ~actual)
 
-and unify_arrow expected actual =
+and unify_arrow state expected actual =
   if not (Type.Label.equal expected.label actual.label) then
     type_mismatch ~expected:(Type.Arrow expected) ~actual:(Type.Arrow actual)
   else
-    let* () = unify ~expected:expected.parameter ~actual:actual.parameter in
-    unify ~expected:expected.result ~actual:actual.result
+    let* () = unify_internal state ~expected:expected.parameter ~actual:actual.parameter in
+    unify_internal state ~expected:expected.result ~actual:actual.result
 
-and unify_applications expected actual =
+and unify_applications state expected actual =
   let same_constructor = Model.Surface_path.equal expected.ident actual.ident in
   let same_args_length = Int.(List.length expected.arguments = List.length actual.arguments) in
   if same_constructor && same_args_length then
-    unify_many expected.arguments actual.arguments
+    unify_many state expected.arguments actual.arguments
   else
     type_mismatch ~expected:(Type.Apply expected) ~actual:(Type.Apply actual)
+
+let unify ~expected ~actual = unify_internal None ~expected ~actual
+
+let unify_with_state state ~expected ~actual =
+  unify_internal (Some state) ~expected ~actual

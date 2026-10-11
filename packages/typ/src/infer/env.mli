@@ -165,6 +165,12 @@ val has_module: t -> name:Ast.ident -> bool
 (** Find a nested module summary by unqualified name. *)
 val get_module: t -> name:Ast.ident -> module_summary option
 
+(** Resolve a nested module summary by path segments. *)
+val get_module_path: t -> path:Ast.ident list -> module_summary option
+
+(** Add a module alias for an already-bound target path. *)
+val add_module_alias: t -> name:Ast.ident -> target:Ast.ident -> t option
+
 (**
    Iterate over values exported directly by a module summary.
 

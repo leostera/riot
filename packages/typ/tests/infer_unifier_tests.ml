@@ -3,7 +3,10 @@ open Std.Result.Syntax
 
 module State = Typ.Infer.State
 module Unifier = Typ.Infer.Unifier
+module Quantifier = Typ.Infer.Quantifier
+module TypeScheme = Typ.Infer.TypeScheme
 module Type = Typ.Ast.Type
+module TypeVar = Typ.Ast.TypeVar
 module SurfacePath = Typ.Model.Surface_path
 
 let mk_path name =
@@ -154,6 +157,38 @@ let test_unify_arrow_links_parameter_and_result _ctx =
   let* () = assert_type_is_int (type_var a) in
   assert_type_is_bool (type_var b)
 
+let test_unification_lowers_escaping_variable_level _ctx =
+  let state = State.create () in
+  let* outer = fresh_variable state in
+  State.push_scope state;
+  let* inner = fresh_variable state in
+  let actual = arrow (type_var inner) (int_type ()) in
+  let* () =
+    Unifier.unify_with_state state ~expected:(type_var outer) ~actual
+    |> Result.map_err ~fn:Unifier.error_to_string
+  in
+  let lowered = State.variable_level state inner in
+  State.pop_scope state;
+  if Int.(lowered = State.current_level state) then
+    Ok ()
+  else
+    Error "unification failed to lower the escaping variable to the older level"
+
+let test_generalization_preserves_free_outer_variables _ctx =
+  let state = State.create () in
+  let* outer = fresh_variable state in
+  State.push_scope state;
+  let* inner = fresh_variable state in
+  State.pop_scope state;
+  let generalized =
+    Quantifier.generalize state (arrow (type_var outer) (type_var inner))
+  in
+  match Unifier.resolve generalized.TypeScheme.body with
+  | Type.Arrow { parameter = Type.Var same; result = Type.Generic generic; _ }
+    when Type.same_var outer same && TypeVar.equal inner.id generic -> Ok ()
+  | type_ ->
+      Error ("generalization should preserve the environment variable and quantify only the inner one, got " ^ Type.to_string type_)
+
 let tests =
   Test.[
     case "resolve follows links" test_resolve_follows_links;
@@ -167,6 +202,8 @@ let tests =
     case "unify tuple links nested var" test_unify_tuple_links_nested_var;
     case "unify tuple arity mismatch" test_unify_tuple_arity_mismatch;
     case "unify arrow links parameter and result" test_unify_arrow_links_parameter_and_result;
+    case "unification lowers escaping variable level" test_unification_lowers_escaping_variable_level;
+    case "generalization preserves free outer variables" test_generalization_preserves_free_outer_variables;
   ]
 
 let main ~args = Test.Cli.main ~name:"typ:infer" ~tests ~args ()

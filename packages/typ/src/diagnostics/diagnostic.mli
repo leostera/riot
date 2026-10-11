@@ -59,6 +59,24 @@ type type_mismatch = {
   actual: string;
 }
 
+(** Name lookup failure in a specific typing namespace. *)
+type unresolved_name = {
+  (** Source span for the unresolved identifier. *)
+  span: Syn.Span.t;
+  (** Namespace searched, such as value, constructor, field, type, or module. *)
+  namespace: string;
+  (** Source spelling of the unavailable name. *)
+  name: string;
+}
+
+(** Application of a known type constructor with the wrong number of arguments. *)
+type type_constructor_arity_mismatch = {
+  span: Syn.Span.t;
+  name: string;
+  expected: int;
+  actual: int;
+}
+
 (** Optional argument whose default cannot be used by ordinary application.
 
     This mirrors OCaml warning 16. For now `typ` treats it as a warning-level
@@ -94,6 +112,10 @@ type t =
   | TypeMismatch of type_mismatch
   (** Optional argument cannot be erased because no later positional argument exists. *)
   | UnerasableOptionalArgument of unerasable_optional_argument
+  (** Lookup failed in a typing namespace. *)
+  | UnresolvedName of unresolved_name
+  (** Type constructor application has the wrong arity. *)
+  | TypeConstructorArityMismatch of type_constructor_arity_mismatch
 
 (** Build an annotation mismatch diagnostic. *)
 val annotation_mismatch :
@@ -121,6 +143,21 @@ val type_mismatch :
 val unerasable_optional_argument :
   span:Syn.Span.t ->
   label:string ->
+  t
+
+(** Build a source-located unresolved-name error. *)
+val unresolved_name :
+  span:Syn.Span.t ->
+  namespace:string ->
+  name:string ->
+  t
+
+(** Build a type-constructor arity error. *)
+val type_constructor_arity_mismatch :
+  span:Syn.Span.t ->
+  name:string ->
+  expected:int ->
+  actual:int ->
   t
 
 (** Stable diagnostic identifier for a diagnostic. *)

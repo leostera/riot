@@ -146,17 +146,21 @@ module Type = struct
             )
             ^ ") "
             ^ SurfacePath.to_string ident
-      and arrow_parameter_to_string type_ =
+      and visible_type type_ =
         match type_ with
+        | Var { link = Some linked; _ } -> visible_type linked
+        | _ -> type_
+      and arrow_parameter_to_string type_ =
+        match visible_type type_ with
         | Arrow _ -> "(" ^ loop type_ ^ ")"
         | _ -> loop type_
       and constructor_argument_to_string type_ =
-        match type_ with
+        match visible_type type_ with
         | Arrow _
         | Tuple _ -> "(" ^ loop type_ ^ ")"
         | _ -> loop type_
       and tuple_element_to_string type_ =
-        match type_ with
+        match visible_type type_ with
         | Arrow _
         | Tuple _ -> "(" ^ loop type_ ^ ")"
         | _ -> loop type_

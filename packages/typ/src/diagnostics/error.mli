@@ -12,6 +12,8 @@ type id =
   | T0004_InfiniteSubstitution
   | T0005_TypeMismatch
   | T0006_UnerasableOptionalArgument
+  | T0007_UnresolvedName
+  | T0008_TypeConstructorArityMismatch
 
 (** Render a stable diagnostic code. *)
 val id_to_string: id -> string
