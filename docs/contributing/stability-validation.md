@@ -19,6 +19,8 @@ It builds `riot-cli`, then requires these suites to report nonempty passing resu
 
 - `kernel:kernel_new_foundation_tests`
 - `kernel:kernel_new_process_tests`
+- `kernel:kernel_file_gc_tests` (bounded cross-domain GC with scalar/vector file
+  roundtrips, plus short vectored reads preserving unread slices)
 - `std:std_test_cli_tests`
 - `std:std_command_tests`
 - `std:std_runtime_tests` (two-worker mailbox/wakeup, monitor/link, timer,

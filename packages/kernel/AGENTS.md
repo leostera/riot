@@ -24,6 +24,8 @@
 
 17. `Fs.File.try_lock_shared` is a nonblocking advisory shared lock, compatible with other shared holders and excluding exclusive holders. The Unix shim uses `flock(LOCK_SH | LOCK_NB)`, retries `EINTR`, and distinguishes contention (`Ok false`) from system errors.
 
+18. Native calls must not use OCaml heap data pointers while the runtime lock is released. Rooting a `bytes` value does not pin its data. File scalar/vector I/O stages C-owned buffers before release, captures errno before reentry, and copies only the returned read bytes back after reacquiring the lock. Preserve vector offsets, partial reads, EOF, and cleanup on allocation failure. Keep `kernel_file_gc_tests` in the required gate; it forces collections on another domain and requires actual collection evidence.
+
 ## Validate
 
 `timeout 30 riot build kernel-new`

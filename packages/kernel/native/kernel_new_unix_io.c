@@ -131,9 +131,16 @@ static int kernel_new_file_open_flags(int flags_mask) {
   return flags;
 }
 
-static struct iovec *kernel_new_file_build_iovecs(value segments_val, int *count_out) {
+static void kernel_new_file_free_iovecs(struct iovec *iovecs, int count) {
+  for (int index = 0; index < count; index++) free(iovecs[index].iov_base);
+  free(iovecs);
+}
+
+/* Only C-owned buffers may survive a runtime-release section. Rooting an OCaml
+   bytes value does not pin its data pointer against collection/compaction. */
+static struct iovec *kernel_new_file_build_iovecs(value segments_val, int *count_out, int for_write) {
   int count = Wosize_val(segments_val);
-  struct iovec *iovecs = malloc(sizeof(struct iovec) * count);
+  struct iovec *iovecs = malloc(sizeof(struct iovec) * (count > 0 ? count : 1));
   if (iovecs == NULL) {
     caml_raise_out_of_memory();
   }
@@ -143,12 +150,32 @@ static struct iovec *kernel_new_file_build_iovecs(value segments_val, int *count
     value buffer_val = Field(segment_val, 0);
     int offset = Int_val(Field(segment_val, 1));
     int length = Int_val(Field(segment_val, 2));
-    iovecs[index].iov_base = (void *)(Bytes_val(buffer_val) + offset);
+    iovecs[index].iov_base = malloc(length > 0 ? (size_t)length : 1);
+    if (iovecs[index].iov_base == NULL) {
+      kernel_new_file_free_iovecs(iovecs, index);
+      caml_raise_out_of_memory();
+    }
     iovecs[index].iov_len = (size_t)length;
+    if (for_write && length > 0) {
+      memcpy(iovecs[index].iov_base, Bytes_val(buffer_val) + offset, (size_t)length);
+    }
   }
 
   *count_out = count;
   return iovecs;
+}
+
+static void kernel_new_file_copy_read_iovecs(value segments_val, struct iovec *iovecs, ssize_t result) {
+  size_t remaining = result > 0 ? (size_t)result : 0;
+  int count = Wosize_val(segments_val);
+  for (int index = 0; index < count && remaining > 0; index++) {
+    value segment_val = Field(segments_val, index);
+    value buffer_val = Field(segment_val, 0);
+    int offset = Int_val(Field(segment_val, 1));
+    size_t length = remaining < iovecs[index].iov_len ? remaining : iovecs[index].iov_len;
+    memcpy(Bytes_val(buffer_val) + offset, iovecs[index].iov_base, length);
+    remaining -= length;
+  }
 }
 
 static value kernel_new_copy_string_ok(const char *text) {
@@ -229,16 +256,19 @@ CAMLprim value kernel_new_fs_file_unlock(value fd_val) {
 CAMLprim value kernel_new_fs_file_read(value fd_val, value buffer_val, value pos_val, value len_val) {
   CAMLparam4(fd_val, buffer_val, pos_val, len_val);
 
-  ssize_t result;
+  int fd = Int_val(fd_val);
+  size_t length = (size_t)Int_val(len_val);
+  void *buffer = malloc(length > 0 ? length : 1);
+  if (buffer == NULL) caml_raise_out_of_memory();
   caml_enter_blocking_section();
-  result = read(
-    Int_val(fd_val),
-    Bytes_val(buffer_val) + Int_val(pos_val),
-    (size_t)Int_val(len_val));
+  ssize_t result = read(fd, buffer, length);
+  int saved_errno = errno;
   caml_leave_blocking_section();
+  if (result > 0) memcpy(Bytes_val(buffer_val) + Int_val(pos_val), buffer, (size_t)result);
+  free(buffer);
 
   if (result == -1) {
-    CAMLreturn(kernel_new_result_errno());
+    CAMLreturn(kernel_new_result_error(kernel_new_error_of_errno(saved_errno)));
   }
 
   CAMLreturn(kernel_new_result_ok(Val_int(result)));
@@ -247,16 +277,19 @@ CAMLprim value kernel_new_fs_file_read(value fd_val, value buffer_val, value pos
 CAMLprim value kernel_new_fs_file_write(value fd_val, value buffer_val, value pos_val, value len_val) {
   CAMLparam4(fd_val, buffer_val, pos_val, len_val);
 
-  ssize_t result;
+  int fd = Int_val(fd_val);
+  size_t length = (size_t)Int_val(len_val);
+  void *buffer = malloc(length > 0 ? length : 1);
+  if (buffer == NULL) caml_raise_out_of_memory();
+  if (length > 0) memcpy(buffer, Bytes_val(buffer_val) + Int_val(pos_val), length);
   caml_enter_blocking_section();
-  result = write(
-    Int_val(fd_val),
-    Bytes_val(buffer_val) + Int_val(pos_val),
-    (size_t)Int_val(len_val));
+  ssize_t result = write(fd, buffer, length);
+  int saved_errno = errno;
   caml_leave_blocking_section();
+  free(buffer);
 
   if (result == -1) {
-    CAMLreturn(kernel_new_result_errno());
+    CAMLreturn(kernel_new_result_error(kernel_new_error_of_errno(saved_errno)));
   }
 
   CAMLreturn(kernel_new_result_ok(Val_int(result)));
@@ -266,17 +299,18 @@ CAMLprim value kernel_new_fs_file_readv(value fd_val, value segments_val) {
   CAMLparam2(fd_val, segments_val);
 
   int count = 0;
-  struct iovec *iovecs = kernel_new_file_build_iovecs(segments_val, &count);
-  ssize_t result;
-
+  struct iovec *iovecs = kernel_new_file_build_iovecs(segments_val, &count, 0);
+  int fd = Int_val(fd_val);
   caml_enter_blocking_section();
-  result = readv(Int_val(fd_val), iovecs, count);
+  ssize_t result = readv(fd, iovecs, count);
+  int saved_errno = errno;
   caml_leave_blocking_section();
 
-  free(iovecs);
+  kernel_new_file_copy_read_iovecs(segments_val, iovecs, result);
+  kernel_new_file_free_iovecs(iovecs, count);
 
   if (result == -1) {
-    CAMLreturn(kernel_new_result_errno());
+    CAMLreturn(kernel_new_result_error(kernel_new_error_of_errno(saved_errno)));
   }
 
   CAMLreturn(kernel_new_result_ok(Val_int(result)));
@@ -286,17 +320,17 @@ CAMLprim value kernel_new_fs_file_writev(value fd_val, value segments_val) {
   CAMLparam2(fd_val, segments_val);
 
   int count = 0;
-  struct iovec *iovecs = kernel_new_file_build_iovecs(segments_val, &count);
-  ssize_t result;
-
+  struct iovec *iovecs = kernel_new_file_build_iovecs(segments_val, &count, 1);
+  int fd = Int_val(fd_val);
   caml_enter_blocking_section();
-  result = writev(Int_val(fd_val), iovecs, count);
+  ssize_t result = writev(fd, iovecs, count);
+  int saved_errno = errno;
   caml_leave_blocking_section();
 
-  free(iovecs);
+  kernel_new_file_free_iovecs(iovecs, count);
 
   if (result == -1) {
-    CAMLreturn(kernel_new_result_errno());
+    CAMLreturn(kernel_new_result_error(kernel_new_error_of_errno(saved_errno)));
   }
 
   CAMLreturn(kernel_new_result_ok(Val_int(result)));
