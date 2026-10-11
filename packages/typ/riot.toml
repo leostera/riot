@@ -13,3 +13,7 @@ std = { path = "../std", version = "*" }
 syn = { path = "../syn", version = "*" }
 contentstore = { path = "../contentstore", version = "*" }
 serde = { path = "../serde", version = "*" }
+
+[[bin]]
+name = "typ-corpus-check"
+path = "bench/corpus_check.ml"
