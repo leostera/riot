@@ -80,6 +80,14 @@ declarations, so they are not re-exported by the containing module. Nominal
 type references resolved through an open retain the defining module's canonical
 type identity. An unavailable open target is an unresolved-module diagnostic.
 
+Nested `.mli` module signatures can contain values, types, constructors,
+records, nested signatures, and module aliases. A simple `module type of M`
+alias forwards the resolved interface summary; `include M` and
+`include module type of M` re-export the target's direct members in the
+containing signature. Includes with module-type constraints and unsupported
+module-type expressions still receive explicit diagnostics rather than silently
+ignoring constraints.
+
 `.mli` declarations create schemes with their declared type variables bound in
 the declaration scope. Abstract type identities remain nominal. Manifest
 equalities are represented when exported. A module member lookup must resolve

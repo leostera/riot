@@ -158,7 +158,12 @@ and find_signature_item = fun query parent item ->
           find_type_extension_declaration query (Some node) declaration
       | Ast.External declaration -> find_external_declaration query (Some node) declaration
       | Ast.Exception declaration -> find_exception_declaration query (Some node) declaration
-      | Ast.Open _ -> None)
+      | Ast.Module declarations ->
+          find_first declarations ~fn:(find_module_declaration query (Some node))
+      | Ast.ModuleType declaration ->
+          find_module_type_declaration query (Some node) declaration
+      | Ast.Open _
+      | Ast.Include _ -> None)
 
 and find_let_declaration = fun query parent declaration ->
   find_node
@@ -270,7 +275,15 @@ and find_module_declaration = fun query parent declaration ->
     ~children:(fun node ->
       match find_first declaration.parameters ~fn:(find_functor_parameter query (Some node)) with
       | Some _ as found -> found
-      | None -> find_first declaration.items ~fn:(find_structure_item query (Some node)))
+      | None -> (
+          match find_first declaration.items ~fn:(find_structure_item query (Some node)) with
+          | Some _ as found -> found
+          | None -> (
+              match declaration.signature_items with
+              | Some items -> find_first items ~fn:(find_signature_item query (Some node))
+              | None -> None
+            )
+        ))
 
 and find_module_type_declaration = fun query parent declaration ->
   find_node

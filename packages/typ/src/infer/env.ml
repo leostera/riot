@@ -610,6 +610,45 @@ let open_module t ~path =
         next_ordinal = t.next_ordinal + 1;
       }
 
+let include_module t ~path =
+  let path =
+    Model.Surface_path.to_segments path
+    |> List.map ~fn:module_path_segment
+  in
+  match get_module_path t ~path with
+  | None -> None
+  | Some summary ->
+      let env = ref t in
+      let include_value (name, (binding: ValueScopes.binding)) =
+        env := add_value !env ~name ~scheme:(ValueScopes.binding_scheme binding)
+      in
+      let include_constructor (name, (binding: constructor_binding)) =
+        env := add_constructor !env ~name ~description:binding.description
+      in
+      let include_record_field (name, (binding: record_field_binding)) =
+        env := add_record_field !env ~name ~info:binding.info
+      in
+      let include_type (name, (binding: TypeScopes.binding)) =
+        env := add_type !env ~name ~declaration:binding.declaration
+      in
+      let include_nested_module (name, (binding: module_binding)) =
+        let ordinal = (!env).next_ordinal in
+        env := {
+          modules = ModuleScopes.add_module_to_current
+            (!env).modules
+            ~name
+            ~summary:binding.summary
+            ~ordinal;
+          next_ordinal = ordinal + 1;
+        }
+      in
+      List.for_each (IdentMap.to_list summary.values) ~fn:include_value;
+      List.for_each (IdentMap.to_list summary.constructors) ~fn:include_constructor;
+      List.for_each (IdentMap.to_list summary.record_fields) ~fn:include_record_field;
+      List.for_each (IdentMap.to_list summary.types) ~fn:include_type;
+      List.for_each (IdentMap.to_list summary.modules) ~fn:include_nested_module;
+      Some !env
+
 let add_module_alias t ~name ~target =
   let path =
     Model.Surface_path.to_segments target

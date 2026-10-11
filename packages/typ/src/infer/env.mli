@@ -177,6 +177,13 @@ val get_module_path: t -> path:Ast.ident list -> module_summary option
 *)
 val open_module: t -> path:Ast.ident -> t option
 
+(**
+   Include a module's direct exports into the current module at this source
+   position. Unlike [open_module], included names become direct exports of the
+   current module.
+*)
+val include_module: t -> path:Ast.ident -> t option
+
 (** Add a module alias for an already-bound target path. *)
 val add_module_alias: t -> name:Ast.ident -> target:Ast.ident -> t option
 

@@ -425,6 +425,16 @@ let infer_source_diagnostics source =
       let result = Typ.Infer.check ast in
       Ok (result.diagnostics.items |> Vector.iter |> Iterator.to_list)
 
+let infer_interface_diagnostics source =
+  let parse_result = Syn.parse_interface (source_slice source) in
+  let model_source = Typ.Model.Source.make ~text:source in
+  match Ast.from_parse_result ~source:model_source parse_result with
+  | Error diagnostics ->
+      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+  | Ok ast ->
+      let result = Typ.Infer.check ast in
+      Ok (result.diagnostics.items |> Vector.iter |> Iterator.to_list)
+
 let has_unresolved_name diagnostics ~namespace ~name =
   List.any diagnostics ~fn:(function
     | Typ.Diagnostics.Diagnostic.UnresolvedName
@@ -474,6 +484,52 @@ module M = struct type t = Pick of bool end
 open M
 let selected : t = Pick true
 |ocaml}
+
+let test_nested_module_signatures_and_aliases_typecheck _ctx =
+  let source = {ocaml|
+type outer = Outer
+module Packed : sig
+  type t = Local
+  val value : t
+end
+module Alias = Packed
+module TypeOf : module type of Packed
+val selected : Alias.t
+val also_selected : TypeOf.t
+|ocaml} in
+  match infer_interface_diagnostics source with
+  | Error message -> Error message
+  | Ok [] -> Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n")
+
+let test_include_module_reexports_members _ctx =
+  let* () =
+    diagnostics_are_empty {ocaml|
+module Source = struct
+  type t = Item
+  let value = Item
+end
+include Source
+let selected : Source.t = value
+|ocaml}
+  in
+  match infer_interface_diagnostics {ocaml|
+module Source : sig
+  type t = Item
+  val value : t
+end
+include module type of Source
+val selected : t
+|ocaml} with
+  | Error message -> Error message
+  | Ok [] -> Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n")
 
 let test_record_field_puns_use_the_last_identifier_segment _ctx =
   let* () =
@@ -614,6 +670,8 @@ let tests =
     case "generalization preserves environment variables" test_generalization_does_not_quantify_an_environment_variable;
     case "unresolved names are errors by namespace" test_unresolved_names_are_errors_in_their_namespaces;
     case "open modules resolve exported members" test_open_module_resolves_exported_members;
+    case "nested module signatures and aliases typecheck" test_nested_module_signatures_and_aliases_typecheck;
+    case "include re-exports module members" test_include_module_reexports_members;
     case "open precedence applies to type and constructor namespaces" test_open_precedence_applies_to_type_and_constructor_namespaces;
     case "record field puns lower their value identifier" test_record_field_puns_use_the_last_identifier_segment;
     case "record update checks its base type" test_record_update_checks_its_base_type;

@@ -16,4 +16,4 @@ serde = { path = "../serde", version = "*" }
 
 [[bin]]
 name = "typ-corpus-check"
-path = "bench/corpus_check.ml"
+path = "examples/corpus_check.ml"

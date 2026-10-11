@@ -852,6 +852,8 @@ and module_declaration = {
   parameters: functor_parameter list;
   (** Inline structure items when the module body is a structure. *)
   items: structure_item list;
+  (** Inline signature items when the module is declared with a signature. *)
+  signature_items: signature_item list option;
   (** Alias target when the module body is an identifier alias. *)
   alias: ident option;
   (** Optional module type identifier annotation. *)
@@ -939,8 +941,14 @@ and signature_item_kind =
   | External of external_declaration
   (** Exception declaration. *)
   | Exception of exception_declaration
+  (** Nested module signature declarations. *)
+  | Module of module_declaration list
+  (** Module type declaration. *)
+  | ModuleType of module_type_declaration
   (** Open a module for following signature-item lookups. *)
   | Open of ident
+  (** Include declarations from an available module into the signature. *)
+  | Include of ident
 (** Typed implementation file. *)
 type implementation = {
   (** Source origin for the file root. *)

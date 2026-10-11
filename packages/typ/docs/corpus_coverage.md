@@ -118,12 +118,12 @@ than evidence of class/object syntax in first-party OCaml implementation code.
   signatures are modeled explicitly. This is not yet the workspace dependency
   environment: imports and full library interfaces still need package-aware
   loading.
-- `~/.riot/bin/riot test -p typ --json`: **358 passed, 0 failed** after these
-  soundness and bidirectional changes. This validates Typ's focused/snapshot
+- `~/.riot/bin/riot test -p typ --json`: **360 passed, 0 failed** after the
+  module-signature and include changes. This validates Typ's focused/snapshot
   suite only.
-- The standalone runner at `packages/typ/bench/corpus_check.ml` enumerated
-  **2,404** in-scope tracked files and reported **67 passed, 2,337 failed**:
-  **0 parser failures**, **331 AST-lowering failures**, and **2,006 Typ
+- The standalone runner at `packages/typ/examples/corpus_check.ml` enumerated
+  **2,404** in-scope tracked files and reported **71 passed, 2,333 failed**:
+  **0 parser failures**, **144 AST-lowering failures**, and **2,189 Typ
   failures**. This is not the package-aware gate: it checks files independently
   without dependency interfaces, so unresolved imported modules are expected.
   The runner is a diagnostic aid, not evidence of corpus parity. `riot check`

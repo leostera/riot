@@ -604,6 +604,7 @@ and module_declaration = {
   recursive: bool;
   parameters: functor_parameter list;
   items: structure_item list;
+  signature_items: signature_item list option;
   alias: ident option;
   module_type: ident option;
   application: module_application option;
@@ -654,7 +655,10 @@ and signature_item_kind =
   | TypeExtension of type_extension_declaration
   | External of external_declaration
   | Exception of exception_declaration
+  | Module of module_declaration list
+  | ModuleType of module_type_declaration
   | Open of ident
+  | Include of ident
 
 type implementation = {
   origin: origin;
@@ -2190,16 +2194,97 @@ and build_module_declaration_member = fun context member ->
   let origin = origin_from_node (Syn.Ast.ModuleDeclaration.as_node declaration) in
   let module_expr = Syn.Ast.ModuleDeclaration.Member.module_expr member in
   let parameters = functor_parameters_from_member origin member in
+  let module_type_node =
+    match (
+      Syn.Ast.ModuleDeclaration.Member.module_type member,
+      Syn.Ast.ModuleDeclaration.separator_token declaration
+    ) with
+    | (Some node, Some separator) when token_kind_is separator Syn.SyntaxKind.COLON -> Some node
+    | _ -> None
+  in
   let module_type =
-    match Syn.Ast.ModuleDeclaration.Member.module_type member with
-    | Some node -> module_type_ident_from_node node
+    match module_type_node with
+    | Some node -> (
+        match Syn.Ast.ModuleTypeExpr.cast node with
+        | Syn.Ast.Node module_type -> (
+            match Syn.Ast.ModuleTypeExpr.view module_type with
+            | Syn.Ast.ModuleTypeExpr.Ident { ident } -> Some (ident_from_syn_ident ident)
+            | Syn.Ast.ModuleTypeExpr.Signature _ -> None
+            | Syn.Ast.ModuleTypeExpr.Typeof { body = Some body } ->
+                if Option.is_none module_expr then
+                  None
+                else
+                  module_expr_ident body
+            | _ -> build_failed origin "unsupported module type expression"
+          )
+        | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
+        | Syn.Ast.Error _ -> build_failed origin "invalid module type expression"
+      )
+    | None -> None
+  in
+  let module_type_body =
+    match Syn.Ast.ModuleDeclaration.body declaration with
+    | Syn.Ast.ModuleDeclaration.Type { body } -> Some body
+    | _ -> None
+  in
+  let signature_items =
+    let signature =
+      match (module_type_node, module_type_body) with
+      | (Some node, _) -> Some node
+      | (None, Some body) -> Some (Syn.Ast.ModuleTypeExpr.as_node body)
+      | (None, None) -> None
+    in
+    match signature with
+    | Some node -> (
+        match Syn.Ast.ModuleTypeExpr.cast node with
+        | Syn.Ast.Node module_type -> (
+            match Syn.Ast.ModuleTypeExpr.view module_type with
+            | Syn.Ast.ModuleTypeExpr.Signature _ ->
+                Syn.Ast.ModuleTypeExpr.fold_signature_item
+                  module_type
+                  ~init:[]
+                  ~fn:(fun item items ->
+                    match build_signature_item_option context item with
+                    | Some item -> Continue (item :: items)
+                    | None -> Continue items)
+                |> List.reverse
+                |> Option.some
+            | Syn.Ast.ModuleTypeExpr.Ident _
+            | Syn.Ast.ModuleTypeExpr.Typeof _ -> None
+            | _ -> build_failed origin "unsupported module signature expression"
+          )
+        | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
+        | Syn.Ast.Error _ -> build_failed origin "invalid module signature expression"
+      )
+    | None -> None
+  in
+  let type_of_target =
+    match module_type_node with
+    | Some node -> (
+        match Syn.Ast.ModuleTypeExpr.cast node with
+        | Syn.Ast.Node module_type -> (
+            match Syn.Ast.ModuleTypeExpr.view module_type with
+            | Syn.Ast.ModuleTypeExpr.Typeof { body = Some body } -> module_expr_ident body
+            | _ -> None
+          )
+        | Syn.Ast.Unknown _
+        | Syn.Ast.Error _ -> None
+      )
     | None -> None
   in
   let alias =
     match module_expr with
     | Some node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = PATH_MODULE_EXPR) ->
         ident_from_node_option node
-    | _ -> None
+    | None when Option.is_some type_of_target -> type_of_target
+    | _ -> (
+        match (module_type_body, Syn.Ast.ModuleDeclaration.separator_token declaration) with
+        | (Some body, Some separator) when token_kind_is separator Syn.SyntaxKind.EQ ->
+            (match Syn.Ast.ModuleTypeExpr.view body with
+            | Syn.Ast.ModuleTypeExpr.Ident { ident } -> Some (ident_from_syn_ident ident)
+            | _ -> None)
+        | _ -> None
+      )
   in
   let application =
     match module_expr with
@@ -2231,6 +2316,7 @@ and build_module_declaration_member = fun context member ->
     recursive = Syn.Ast.ModuleDeclaration.is_recursive declaration;
     parameters;
     items;
+    signature_items;
     alias;
     module_type;
     application;
@@ -2266,6 +2352,25 @@ and build_module_type_declaration = fun context (declaration: Syn.Ast.ModuleType
     items = List.reverse items;
   }: module_type_declaration)
 
+and build_include_target origin declaration =
+  match Syn.Ast.IncludeDeclaration.body_ident declaration with
+  | Some ident -> ident_from_syn_ident ident
+  | None ->
+      let node =
+        Syn.Ast.IncludeDeclaration.body_node declaration
+        |> require_some origin "missing include body"
+      in
+      (match Syn.Ast.ModuleTypeExpr.cast node with
+      | Syn.Ast.Node module_type -> (
+          match Syn.Ast.ModuleTypeExpr.view module_type with
+          | Syn.Ast.ModuleTypeExpr.Typeof { body = Some body } ->
+              module_expr_ident body
+              |> require_some origin "missing module type-of target"
+          | _ -> build_failed origin "unsupported include module type"
+        )
+      | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
+      | Syn.Ast.Error _ -> build_failed origin "invalid include module type")
+
 and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
   let origin = origin_from_node (Syn.Ast.StructureItem.as_node item) in
   (
@@ -2300,11 +2405,7 @@ and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
         in
         make_structure_item origin (Open ident)
     | Include declaration ->
-        let ident =
-          Syn.Ast.IncludeDeclaration.body_ident declaration
-          |> require_some origin "missing include body"
-          |> ident_from_syn_ident
-        in
+        let ident = build_include_target origin declaration in
         make_structure_item origin (Include ident)
     | Attribute attribute ->
         let node = Syn.Ast.AttributeItem.as_node attribute in
@@ -2344,6 +2445,12 @@ and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
     | Extension extension ->
         let node = Syn.Ast.ExtensionItem.as_node extension in
         build_failed (origin_from_node node) (Syn.SyntaxKind.to_string (Syn.Ast.Node.kind node))
+    | Module declaration ->
+        make_signature_item origin (Module (build_module_declarations context declaration))
+    | ModuleType declaration ->
+        make_signature_item
+          origin
+          (ModuleType (build_module_type_declaration context declaration))
     | Open declaration ->
         let ident =
           Syn.Ast.OpenDeclaration.ident declaration
@@ -2351,9 +2458,9 @@ and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
           |> ident_from_syn_ident
         in
         make_signature_item origin (Open ident)
-    | Module _
-    | ModuleType _
-    | Include _ -> build_failed origin (Syn.SyntaxKind.to_string origin.kind)
+    | Include declaration ->
+        let ident = build_include_target origin declaration in
+        make_signature_item origin (Include ident)
     | Error node -> unsupported_node node (node_summary node)
     | Unknown node -> ((unsupported_node node (node_summary node)): signature_item)
   )

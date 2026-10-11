@@ -1307,6 +1307,15 @@ let open_module state origin module_path =
         ~namespace:"module"
         ~name:(SurfacePath.to_string module_path))
 
+let include_module state origin module_path =
+  if not (State.include_module state ~path:module_path) then
+    State.add_diagnostic
+      state
+      (Diagnostics.Diagnostic.unresolved_name
+        ~span:origin.Ast.span
+        ~namespace:"module"
+        ~name:(SurfacePath.to_string module_path))
+
 let type_let_binding (state: State.t) (lb: let_binding) =
   let _ = infer_let_binding state ~mode:Generalized lb in
   ()
@@ -1329,28 +1338,34 @@ let rec type_impl_item (state: State.t) (item: structure_item) =
   | Module declarations -> List.for_each declarations ~fn:(type_module_declaration state)
   | Open module_path -> open_module state item.origin module_path
   | ModuleType _ -> unsupported_structure_item state item "module type declarations are not supported yet"
-  | Include _ -> unsupported_structure_item state item "include declarations are not supported yet"
+  | Include module_path -> include_module state item.origin module_path
 
 and type_impl (state: State.t) (items: structure_item list) =
   List.for_each items ~fn:(type_impl_item state)
 
 and type_module_declaration state (declaration: module_declaration) =
-  match (declaration.parameters, declaration.application, declaration.alias) with
-  | (_ :: _, _, _)
-  | (_, Some _, _) ->
-      unsupported_syntax state declaration.origin "functor and module-application declarations are not supported yet"
-  | ([], None, Some target) ->
-      if not (State.add_module_alias state ~name:declaration.name ~target) then
-        unsupported_syntax
-          state
-          declaration.origin
-          ("module alias target is unavailable: " ^ SurfacePath.to_string target)
-  | ([], None, None) ->
-      State.push_module state ~name:declaration.name;
-      type_impl state declaration.items;
-      State.pop_module state
+  if Option.is_some declaration.signature_items || Option.is_some declaration.module_type then
+    unsupported_syntax
+      state
+      declaration.origin
+      "module implementation signature ascriptions are not supported yet"
+  else
+    match (declaration.parameters, declaration.application, declaration.alias) with
+    | (_ :: _, _, _)
+    | (_, Some _, _) ->
+        unsupported_syntax state declaration.origin "functor and module-application declarations are not supported yet"
+    | ([], None, Some target) ->
+        if not (State.add_module_alias state ~name:declaration.name ~target) then
+          unsupported_syntax
+            state
+            declaration.origin
+            ("module alias target is unavailable: " ^ SurfacePath.to_string target)
+    | ([], None, None) ->
+        State.push_module state ~name:declaration.name;
+        type_impl state declaration.items;
+        State.pop_module state
 
-let type_intf_item state (item: signature_item) =
+let rec type_intf_item state (item: signature_item) =
   match item.kind with
   | Value declaration ->
       let scheme = signature_type_scheme state declaration.type_annotation in
@@ -1370,9 +1385,42 @@ let type_intf_item state (item: signature_item) =
             ("cannot extend an unavailable type " ^ SurfacePath.to_string extension.name)
     )
   | Exception declaration -> register_exception state declaration
+  | Module declarations ->
+      List.for_each declarations ~fn:(type_signature_module_declaration state)
+  | ModuleType _ ->
+      unsupported_signature_item state item "module type declarations are not supported yet"
   | Open module_path -> open_module state item.origin module_path
+  | Include module_path -> include_module state item.origin module_path
 
-let type_intf state (items: signature_item list) =
+and type_signature_module_declaration state (declaration: module_declaration) =
+  match (
+    declaration.parameters,
+    declaration.application,
+    declaration.alias,
+    declaration.module_type,
+    declaration.signature_items,
+    declaration.items
+  ) with
+  | (_ :: _, _, _, _, _, _)
+  | (_, Some _, _, _, _, _) ->
+      unsupported_syntax state declaration.origin "functor and module-application declarations are not supported yet"
+  | ([], None, Some target, None, None, []) ->
+      if not (State.add_module_alias state ~name:declaration.name ~target) then
+        unsupported_syntax
+          state
+          declaration.origin
+          ("module alias target is unavailable: " ^ SurfacePath.to_string target)
+  | ([], None, None, None, Some signature_items, []) ->
+      State.push_module state ~name:declaration.name;
+      type_intf state signature_items;
+      State.pop_module state
+  | _ ->
+      unsupported_syntax
+        state
+        declaration.origin
+        "unsupported module signature form"
+
+and type_intf state (items: signature_item list) =
   List.for_each items ~fn:(type_intf_item state)
 
 let type_implementation state (implementation: Ast.implementation) =
