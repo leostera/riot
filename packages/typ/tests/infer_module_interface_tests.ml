@@ -563,7 +563,7 @@ let test_record_update_checks_its_base_type _ctx =
 let test_character_interval_patterns_check_character_inputs _ctx =
   let* () =
     diagnostics_are_empty
-      "let is_lower = function 'a' .. 'z' -> true | _ -> false\n"
+      "let is_lower = function 'a' .. 'z' -> true | _ -> false\nlet is_digit = function Some '0' .. '9' -> true | _ -> false\n"
   in
   match infer_source_diagnostics
     "let invalid = match 1 with 'a' .. 'z' -> true | _ -> false\n"

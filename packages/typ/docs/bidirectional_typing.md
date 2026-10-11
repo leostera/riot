@@ -37,8 +37,10 @@ recovery path that also emits a diagnostic, not as successful checking.
 
 A character interval pattern retains both endpoint patterns for source queries,
 requires character-literal endpoints during AST lowering, and checks its input
-against `char`. A non-character scrutinee produces a source-located type
-mismatch; endpoints do not introduce bindings.
+against `char`. Syn parses the interval at higher precedence than constructor
+application, so `Some '0' .. '9'` is represented as `Some ('0' .. '9')`. A
+non-character scrutinee produces a source-located type mismatch; endpoints do
+not introduce bindings.
 
 ## Rank-1 HM and mutation
 

@@ -2339,12 +2339,25 @@ and parse_pattern_apply = fun p ~stop_type_at_arrow ->
       loop (complete p marker Syntax_kind.ATTRIBUTE_PATTERN)
     ) else if can_start_pattern_atom (current_kind p) then (
       let marker = precede p lhs in
-      ignore (parse_pattern_atom p ~stop_type_at_arrow);
+      ignore (parse_pattern_atom_with_interval p ~stop_type_at_arrow);
       loop (complete p marker Syntax_kind.CONSTRUCT_PATTERN)
     ) else
       lhs
   in
-  loop (parse_pattern_atom p ~stop_type_at_arrow)
+  loop (parse_pattern_atom_with_interval p ~stop_type_at_arrow)
+
+and parse_pattern_atom_with_interval = fun p ~stop_type_at_arrow ->
+  let lhs = parse_pattern_atom p ~stop_type_at_arrow in
+  if at p Syntax_kind.DOTDOT then (
+    let marker = precede p lhs in
+    bump p;
+    if can_start_pattern_atom (current_kind p) then
+      ignore (parse_pattern_atom p ~stop_type_at_arrow)
+    else
+      Event.Buffer.error p.events (invalid_pattern_at_previous_end p);
+    complete p marker Syntax_kind.INTERVAL_PATTERN
+  ) else
+    lhs
 
 and parse_pattern_atom = fun p ~stop_type_at_arrow ->
   match current_kind p with

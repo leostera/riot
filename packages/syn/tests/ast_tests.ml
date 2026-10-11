@@ -809,6 +809,47 @@ let test_exception_pattern_with_argument_view = fun _ctx ->
       | _ -> Error "expected exception pattern with a constructor payload")
   | _ -> Error "expected match expression"
 
+let test_interval_pattern_precedes_constructor_application = fun _ctx ->
+  let root =
+    match parse_ml "let value = match input with | Some '1' .. '9' -> 1 | _ -> 0\n" with
+    | Ok root -> root
+    | Error message -> panic message
+  in
+  let body =
+    nth_structure_item root 0
+    |> require_some ~msg:"expected let declaration"
+    |> binding_of_structure_item
+    |> Result.expect ~msg:"expected let binding"
+    |> body_of_binding
+    |> Result.expect ~msg:"expected match body"
+  in
+  match Ast.Expr.view body with
+  | Ast.Expr.Match { first_case; _ } ->
+      let pattern =
+        match Ast.MatchCase.view first_case with
+        | Ast.MatchCase.Case { pattern; _ } -> pattern
+        | Ast.MatchCase.Unknown _ -> panic "expected first match case"
+      in
+      (match Ast.Pattern.view pattern with
+      | Ast.Pattern.Constructor { constructor; payload = Some payload }
+        when String.equal (Ast.Ident.text constructor) "Some" ->
+          (match Ast.Pattern.view payload with
+          | Ast.Pattern.Interval { left; right } ->
+              let literal_text pattern =
+                match Ast.Pattern.view pattern with
+                | Ast.Pattern.Literal { token } -> Ast.Token.text token
+                | _ -> panic "expected character interval endpoint"
+              in
+              let left_text = literal_text left in
+              let right_text = literal_text right in
+              if String.equal left_text "'1'" && String.equal right_text "'9'" then
+                Ok ()
+              else
+                Error ("unexpected interval " ^ left_text ^ " .. " ^ right_text)
+          | _ -> Error "expected interval constructor payload")
+      | _ -> Error "expected constructor application over interval pattern")
+  | _ -> Error "expected match expression"
+
 let test_poly_variant_tuple_pattern_boundary = fun _ctx ->
   let source =
     {ocaml|let equal_constraint = fun left right ->
@@ -4123,6 +4164,7 @@ let tests =
       test_labeled_application_after_poly_variant_argument;
     case "ast exposes tuple and cons pattern views" test_pattern_views;
     case "exception pattern with argument view" test_exception_pattern_with_argument_view;
+    case "interval pattern binds before constructor application" test_interval_pattern_precedes_constructor_application;
     case
       "ast keeps comma outside polymorphic variant pattern payloads"
       test_poly_variant_tuple_pattern_boundary;
