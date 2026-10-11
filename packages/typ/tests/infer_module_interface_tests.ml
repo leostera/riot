@@ -456,7 +456,53 @@ module Latest = struct let selected = true end
 open Previous
 open Latest
 let shadowed : bool = selected
+module OpenedAfterBinding = struct let precedence = true end
+let precedence = 1
+open OpenedAfterBinding
+let opened_wins : bool = precedence
+module OpenedBeforeBinding = struct let precedence = false end
+open OpenedBeforeBinding
+let precedence = 2
+let local_wins : int = precedence
 |ocaml}
+
+let test_open_precedence_applies_to_type_and_constructor_namespaces _ctx =
+  diagnostics_are_empty {ocaml|
+type local = Pick of int
+type t = Root
+module M = struct type t = Pick of bool end
+open M
+let selected : t = Pick true
+|ocaml}
+
+let test_record_field_puns_use_the_last_identifier_segment _ctx =
+  let* () =
+    diagnostics_are_empty {ocaml|
+module MapIter = struct
+  type state = { items : int }
+end
+let items = 2
+let qualified : MapIter.state = { MapIter.items }
+|ocaml}
+  in
+  diagnostics_are_empty {ocaml|
+module MapIter = struct
+  type state = { items : int }
+end
+let items = 2
+let unqualified : MapIter.state = { items }
+|ocaml}
+
+let test_record_update_checks_its_base_type _ctx =
+  let source = "type point = { x : int }\nlet invalid : point = { 1 with x = 1 }\n" in
+  match infer_source_diagnostics source with
+  | Error message -> Error message
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+    when Int.(span.start < span.end_) -> Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n")
 
 let test_open_module_scope_does_not_export_imports _ctx =
   let source = {ocaml|
@@ -524,7 +570,11 @@ let test_unresolved_names_are_errors_in_their_namespaces _ctx =
   let* () = check "let value = missing_value\n" ~namespace:"value" ~name:"missing_value" in
   let* () = check "let value = Missing 1\n" ~namespace:"constructor" ~name:"Missing" in
   let* () = check "let value : missing_type = 1\n" ~namespace:"type" ~name:"missing_type" in
-  check "open Missing\nlet value = 1\n" ~namespace:"module" ~name:"Missing"
+  let* () = check "open Missing\nlet value = 1\n" ~namespace:"module" ~name:"Missing" in
+  check
+    "type point = { x : int }\nlet value : point = { y = 1 }\n"
+    ~namespace:"field"
+    ~name:"y"
 
 let test_generalization_does_not_quantify_an_environment_variable _ctx =
   let source = "let bad x = let id = x in (id 1, id true)\n" in
@@ -564,6 +614,9 @@ let tests =
     case "generalization preserves environment variables" test_generalization_does_not_quantify_an_environment_variable;
     case "unresolved names are errors by namespace" test_unresolved_names_are_errors_in_their_namespaces;
     case "open modules resolve exported members" test_open_module_resolves_exported_members;
+    case "open precedence applies to type and constructor namespaces" test_open_precedence_applies_to_type_and_constructor_namespaces;
+    case "record field puns lower their value identifier" test_record_field_puns_use_the_last_identifier_segment;
+    case "record update checks its base type" test_record_update_checks_its_base_type;
     case "open imports are not module exports" test_open_module_scope_does_not_export_imports;
     case "type constructor arity is checked" test_type_constructor_arity_is_checked;
     case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;

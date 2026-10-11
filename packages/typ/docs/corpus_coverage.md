@@ -15,7 +15,7 @@ parser samples).
 
 Initial inventory on 2026-10-11:
 
-- 2,403 tracked source/interface files in scope: 1,575 `.ml` and 828 `.mli`
+- 2,404 tracked source/interface files in scope: 1,576 `.ml` and 828 `.mli`
 - 70 packages represented
 - 0 `.ml`/`.mli` files under `compiler/` in this checkout; all sources are under
   `packages/`
@@ -74,8 +74,8 @@ than evidence of class/object syntax in first-party OCaml implementation code.
 
 ## Baseline And Existing Integration
 
-- Bulk parsing with the built `syn` executable reports **0 parser diagnostics
-  across all 2,403 in-scope files**. This does not imply that `Typ` accepts or
+- The corpus runner's `Syn.parse` pass reports **0 parser diagnostics across
+  all 2,404 in-scope files**. This does not imply that `Typ` accepts or
   typechecks those files.
 - Baseline `riot test -p syn --json`: **1,197 passed, 0 failed**.
 - Baseline `riot test -p typ --json`: **1,942 total; 342 passed and 1,600
@@ -110,23 +110,25 @@ than evidence of class/object syntax in first-party OCaml implementation code.
 - Unresolved value, constructor, field, type, type-variable, and module names
   now emit structured source-located errors. Type-constructor arity mismatches are also
   structured errors. Recovery variables may continue traversal but cannot
-  erase these diagnostics.
+  erase these diagnostics. Record puns lower to their OCaml value identifiers,
+  and an expected nominal record type can disambiguate an unqualified label;
+  focused coverage includes qualified/unqualified puns, invalid labels,
+  record-update base checking, and source-order precedence across open scopes.
 - Common built-in `option`/`result` constructors and basic reference/prelude
   signatures are modeled explicitly. This is not yet the workspace dependency
   environment: imports and full library interfaces still need package-aware
   loading.
-- `~/.riot/bin/riot test -p typ --json`: **355 passed, 0 failed** after these
+- `~/.riot/bin/riot test -p typ --json`: **358 passed, 0 failed** after these
   soundness and bidirectional changes. This validates Typ's focused/snapshot
   suite only.
-- The preliminary standalone runner at `packages/typ/bench/corpus_check.ml`
-  found **2,404** candidate files in the current working tree and reported
-  **65 passed, 2,339 failed**. This is not the package-aware gate: it checks
-  files independently without dependency interfaces, so unresolved imported
-  modules are expected, and the failures also expose unsupported first-party
-  structure/signature forms. The runner is a diagnostic aid, not evidence of
-  corpus parity. `riot check` coverage remains blocked until these are resolved
-  through Typ support and package-aware loading; no sources may be excluded to
-  make the result green.
+- The standalone runner at `packages/typ/bench/corpus_check.ml` enumerated
+  **2,404** in-scope tracked files and reported **67 passed, 2,337 failed**:
+  **0 parser failures**, **331 AST-lowering failures**, and **2,006 Typ
+  failures**. This is not the package-aware gate: it checks files independently
+  without dependency interfaces, so unresolved imported modules are expected.
+  The runner is a diagnostic aid, not evidence of corpus parity. `riot check`
+  coverage remains blocked until unsupported syntax and package-aware loading
+  are resolved; no sources may be excluded to make the result green.
 
 ## Coverage Tracking
 

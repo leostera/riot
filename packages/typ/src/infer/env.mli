@@ -168,7 +168,13 @@ val get_module: t -> name:Ast.ident -> module_summary option
 (** Resolve a nested module summary by path segments. *)
 val get_module_path: t -> path:Ast.ident list -> module_summary option
 
-(** Open a module summary into the current module's unqualified lookups. *)
+(**
+   Open a module summary into unqualified lookups at this source position.
+
+   A later open shadows earlier bindings it provides; later declarations in the
+   current module shadow names introduced by the open. Opened names are not
+   copied into the module's exports.
+*)
 val open_module: t -> path:Ast.ident -> t option
 
 (** Add a module alias for an already-bound target path. *)

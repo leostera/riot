@@ -56,15 +56,29 @@ restriction keeps one allocated cell monomorphic. As new mutable primitives are
 added, their types and expansiveness must be added to this contract and covered
 by a polymorphic-reference regression.
 
+## Record literals
+
+A record pun such as `{ field }` keeps `field` as the label and lowers its
+omitted value to the value identifier with the label's final path segment. Thus
+`{ M.field }` looks up label `M.field` while reading value `field`, matching the
+OCaml compiler behavior validated for the repository's 5.5 toolchain. When an
+expected nominal record type is available, it may disambiguate an unqualified
+label that is not otherwise in scope; the selected declaration's type
+parameters are instantiated and checked against that expected type. An
+unresolved label remains an error. Record updates also check their base
+expression against the expected record type before checking updated fields; an
+empty literal is explicitly rejected instead of receiving a recovery type.
+
 ## Modules and signatures
 
 A top-level `open M` resolves an already available module and adds its direct
-exports to subsequent unqualified lookups in that structure or signature. The
-most recent open wins among opened modules; local declarations shadow opened
-names. Opened bindings are lookup scope, not declarations, so they are not
-re-exported by the containing module. Nominal type references resolved through
-an open retain the defining module's canonical type identity. An unavailable
-open target is an unresolved-module diagnostic.
+exports to subsequent unqualified lookups in that structure or signature.
+Among opened modules, the most recent open providing a name wins. Lookup is
+source-ordered: an open shadows earlier bindings it provides, while later local
+declarations shadow opened names. Opened bindings are lookup scope, not
+declarations, so they are not re-exported by the containing module. Nominal
+type references resolved through an open retain the defining module's canonical
+type identity. An unavailable open target is an unresolved-module diagnostic.
 
 `.mli` declarations create schemes with their declared type variables bound in
 the declaration scope. Abstract type identities remain nominal. Manifest

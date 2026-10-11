@@ -2,6 +2,23 @@ open Std
 open Std.Collections
 open Std.Iter
 
+type failure_stage =
+  | Read
+  | Parse
+  | Ast
+  | Typecheck
+
+type check_failure = {
+  stage: failure_stage;
+  diagnostics: string list;
+}
+
+let failure_stage_to_string = function
+  | Read -> "read"
+  | Parse -> "parse"
+  | Ast -> "AST"
+  | Typecheck -> "Typ"
+
 let has_source_extension path =
   match Path.extension path with
   | Some ".ml"
@@ -33,7 +50,7 @@ let rec collect_source_files path acc =
         else acc
     | Error _ -> acc
 
-let render_diagnostics diagnostics =
+let render_typ_diagnostics diagnostics =
   diagnostics
   |> Vector.iter
   |> Iterator.to_list
@@ -42,23 +59,37 @@ let render_diagnostics diagnostics =
 let check_file path =
   match Fs.read path with
   | Error error ->
-      Error ("cannot read " ^ Path.to_string path ^ ": " ^ IO.error_message error)
+      Error {
+        stage = Read;
+        diagnostics = [ "cannot read " ^ Path.to_string path ^ ": " ^ IO.error_message error ];
+      }
   | Ok text ->
-      let parse_result = Syn.parse ~filename:path (IO.IoVec.IoSlice.from_string text |> Result.expect ~msg:"source slice") in
-      if not (Vector.is_empty parse_result.diagnostics) then
-        Error ("Syn reported parser diagnostics")
+      let source_slice = IO.IoVec.IoSlice.from_string text |> Result.expect ~msg:"source slice" in
+      let parse_result = Syn.parse ~filename:path source_slice in
+      let parser_diagnostics =
+        Vector.iter parse_result.diagnostics
+        |> Iterator.to_list
+        |> List.map ~fn:Syn.Diagnostic.to_string
+      in
+      if List.length parser_diagnostics > 0 then
+        Error { stage = Parse; diagnostics = parser_diagnostics }
       else
         let source = Typ.Model.Source.make ~text in
         match Typ.Ast.from_parse_result ~source parse_result with
         | Error diagnostics ->
-            Error
-              (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-              |> String.concat "\n")
+            Error {
+              stage = Ast;
+              diagnostics =
+                List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string;
+            }
         | Ok ast ->
             let result = Typ.Infer.check ast in
-            match render_diagnostics result.diagnostics.items with
+            (match render_typ_diagnostics result.diagnostics.items with
             | [] -> Ok ()
-            | diagnostics -> Error (String.concat "\n" diagnostics)
+            | diagnostics -> Error { stage = Typecheck; diagnostics })
+
+let increment counter =
+  counter := Int.(!counter + 1)
 
 let run () =
   match Env.current_dir () with
@@ -72,20 +103,33 @@ let run () =
       in
       let checked = ref 0 in
       let failures = ref 0 in
+      let read_failures = ref 0 in
+      let parse_failures = ref 0 in
+      let ast_failures = ref 0 in
+      let type_failures = ref 0 in
       let examples = ref 0 in
       List.for_each files ~fn:(fun path ->
-        checked := Int.(!checked + 1);
+        increment checked;
         match check_file path with
         | Ok () -> ()
-        | Error diagnostic ->
-            failures := Int.(!failures + 1);
+        | Error failure ->
+            increment failures;
+            (match failure.stage with
+            | Read -> increment read_failures
+            | Parse -> increment parse_failures
+            | Ast -> increment ast_failures
+            | Typecheck -> increment type_failures);
             if !examples < 40 then (
-              examples := Int.(!examples + 1);
-              eprintln (Path.to_string path ^ ": " ^ diagnostic)));
+              increment examples;
+              eprintln
+                (Path.to_string path ^ " [" ^ failure_stage_to_string failure.stage ^ "]: "
+                ^ String.concat "\n" failure.diagnostics)));
       println
         ("Typ corpus: " ^ Int.to_string !checked ^ " files; "
         ^ Int.to_string (!checked - !failures) ^ " passed; "
-        ^ Int.to_string !failures ^ " failed");
+        ^ Int.to_string !failures ^ " failed (parse: " ^ Int.to_string !parse_failures
+        ^ ", AST: " ^ Int.to_string !ast_failures ^ ", Typ: "
+        ^ Int.to_string !type_failures ^ ", read: " ^ Int.to_string !read_failures ^ ")");
       if !failures = 0 then 0 else 1
 
 let main ~args:_ =

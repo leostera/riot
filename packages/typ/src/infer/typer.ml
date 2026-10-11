@@ -330,7 +330,7 @@ and infer_expression_node (state: State.t) (expr: expression) =
     | Assert condition -> infer_assert state condition
     | Let letexpr -> infer_let_expr state letexpr
     | Match match_ -> infer_match state match_
-    | Record record -> infer_record state record
+    | Record record -> infer_record state expr record
     | FieldAccess access -> infer_field_access state expr access
     | _ ->
         unsupported_syntax state expr.origin "expression form is not supported by typ yet";
@@ -347,6 +347,7 @@ and check_expression_node state (expr: expression) expected =
   | If ifelse -> check_if_else state ifelse expected
   | Match match_ -> check_match state match_ expected
   | Try try_ -> check_try state try_ expected
+  | Record record -> check_record state expr record expected
   | Let let_ -> check_let_expr state let_ expected
   | Sequence sequence ->
       let _ = check_expression state sequence.left Builtin.unit in
@@ -588,10 +589,82 @@ and infer_record_body state (fields: record_expression_field list) =
           record_type
     )
 
-and infer_record state record =
+and record_field_last_segment name =
+  let segments = Model.Surface_path.to_segments name in
+  match List.reverse segments with
+  | [] -> None
+  | segment :: _ -> Some segment
+
+and record_field_for_expected_type state expected name =
+  match Unifier.resolve expected with
+  | Type.Apply { ident; _ } -> (
+      let declaration: Ast.type_declaration option = State.get_type state ~name:ident in
+      match declaration with
+      | Some owner -> (
+          match owner.definition.kind with
+          | Ast.Record (fields: Ast.record_field_declaration list) ->
+              let field_name = record_field_last_segment name in
+              let rec find_field (fields: Ast.record_field_declaration list) =
+                match fields with
+                | [] -> None
+                | (field: Ast.record_field_declaration) :: rest -> (
+                    match field_name with
+                    | Some name
+                      when String.equal (Model.Surface_path.to_string field.name) name ->
+                        let info: State.InferenceEnv.record_field_info = { owner; field } in
+                        Some info
+                    | _ -> find_field rest
+                  )
+              in
+              find_field fields
+          | _ -> None
+        )
+      | None -> None
+    )
+  | _ -> None
+
+and check_record state expr record expected =
+  match Unifier.resolve expected with
+  | Type.Apply _ ->
+      (match record.update with
+      | Some update ->
+          let _ = check_expression state update expected in
+          ()
+      | None -> ());
+      if List.is_empty record.fields && Option.is_none record.update then
+        unsupported_syntax state expr.origin "empty record literals are not supported"
+      else
+        List.for_each record.fields ~fn:(fun field ->
+          let info =
+            match State.get_record_field state ~name:field.name with
+            | Some info -> Some info
+            | None -> record_field_for_expected_type state expected field.name
+          in
+          match info with
+          | Some info ->
+              let (owner_type, field_type) = instantiate_record_field state info in
+              unify
+                state
+                ~expected
+                ~actual:owner_type
+                ~on_error:(expression_constraint_diagnostic expr);
+              let _ = check_expression state field.value field_type in
+              ()
+          | None ->
+              unresolved_name state field.origin ~namespace:"field" field.name;
+              let _ = infer_expression state field.value in
+              ());
+      expected
+  | _ ->
+      let actual = infer_record state expr record in
+      unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
+      expected
+
+and infer_record state expr record =
   match record with
-  (* TODO(@leostera): model empty records instead of falling back to a hole. *)
-  | { update = None; fields = [] } -> State.fresh_var state
+  | { update = None; fields = [] } ->
+      unsupported_syntax state expr.origin "empty record literals are not supported";
+      State.fresh_var state
 
   (* TODO(@leostera): decide whether empty updates should be accepted here. *)
   | { update = Some update; fields = [] } -> infer_expression state update

@@ -1616,10 +1616,21 @@ and build_record_expression_field = fun context (field: Syn.Ast.RecordExpr.field
   match field with
   | Syn.Ast.RecordExprField { ident; value; node } ->
       let origin = origin_from_node (Syn.Ast.RecordExprField.as_node node) in
+      let value =
+        match value with
+        | Some expression -> build_expression context expression
+        | None ->
+            let value_ident =
+              Syn.Ast.Ident.last_segment ident
+              |> require_some origin "missing record field name"
+              |> ident_from_token
+            in
+            make_expression origin (Ident value_ident)
+      in
       let field: record_expression_field = {
         origin;
         name = ident_from_syn_ident ident;
-        value = build_expression context (require_some origin "missing record field value" value);
+        value;
       }
       in
       Some field
