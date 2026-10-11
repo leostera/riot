@@ -560,6 +560,22 @@ let test_record_update_checks_its_base_type _ctx =
         (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
         |> String.concat "\n")
 
+let test_character_interval_patterns_check_character_inputs _ctx =
+  let* () =
+    diagnostics_are_empty
+      "let is_lower = function 'a' .. 'z' -> true | _ -> false\n"
+  in
+  match infer_source_diagnostics
+    "let invalid = match 1 with 'a' .. 'z' -> true | _ -> false\n"
+  with
+  | Error message -> Error message
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+    when Int.(span.start < span.end_) -> Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n")
+
 let test_open_module_scope_does_not_export_imports _ctx =
   let source = {ocaml|
 module Packet = struct
@@ -675,6 +691,7 @@ let tests =
     case "open precedence applies to type and constructor namespaces" test_open_precedence_applies_to_type_and_constructor_namespaces;
     case "record field puns lower their value identifier" test_record_field_puns_use_the_last_identifier_segment;
     case "record update checks its base type" test_record_update_checks_its_base_type;
+    case "character intervals check character inputs" test_character_interval_patterns_check_character_inputs;
     case "open imports are not module exports" test_open_module_scope_does_not_export_imports;
     case "type constructor arity is checked" test_type_constructor_arity_is_checked;
     case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;

@@ -85,6 +85,14 @@ let rec bind_pattern ~mode (state: State.t) (pattern: pattern) type_ =
   | Literal literal ->
       let expected = literal_type literal in
       unify state ~expected ~actual:type_ ~on_error:(pattern_constraint_diagnostic pattern)
+  | Interval { left; right } ->
+      unify
+        state
+        ~expected:Builtin.char
+        ~actual:type_
+        ~on_error:(pattern_constraint_diagnostic pattern);
+      bind_pattern ~mode state left Builtin.char;
+      bind_pattern ~mode state right Builtin.char
   | List patterns ->
       let element = State.fresh_var state in
       unify

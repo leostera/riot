@@ -351,6 +351,11 @@ and find_pattern = fun query parent pattern ->
       | Ast.PolyVariant { payload = None; _ }
       | Ast.FirstClassModule { package_type = None; _ } -> None
       | Ast.Constructor { payload; _ } -> find_option payload ~fn:(find_pattern query (Some node))
+      | Ast.Interval { left; right } -> (
+          match find_pattern query (Some node) left with
+          | Some _ as found -> found
+          | None -> find_pattern query (Some node) right
+        )
       | Ast.PolyVariant { payload = Some payload; _ } -> find_pattern query (Some node) payload
       | Ast.Tuple patterns
       | Ast.List patterns -> find_first patterns ~fn:(find_pattern query (Some node))

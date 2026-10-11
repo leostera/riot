@@ -335,6 +335,7 @@ and pattern_kind =
   | Bind of ident
   | Constructor of constructor_pattern
   | Literal of literal
+  | Interval of { left: pattern; right: pattern }
   | PolyVariant of poly_variant_pattern
   | Tuple of pattern list
   | List of pattern list
@@ -1524,10 +1525,23 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
           })
     | Syn.Ast.Pattern.FirstClassModule _ ->
         build_first_class_module_pattern context origin syntax_pattern
+    | Syn.Ast.Pattern.Interval { left; right } ->
+        let build_character_endpoint endpoint =
+          match Syn.Ast.Pattern.view endpoint with
+          | Syn.Ast.Pattern.Literal { token }
+            when token_kind_is token Syn.SyntaxKind.CHAR ->
+              build_pattern context endpoint
+          | _ -> build_failed origin "interval pattern endpoints must be character literals"
+        in
+        make_pattern
+          origin
+          (Interval {
+            left = build_character_endpoint left;
+            right = build_character_endpoint right;
+          })
     | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Array _
-    | Syn.Ast.Pattern.Interval _
     | Syn.Ast.Pattern.Lazy _
     | Syn.Ast.Pattern.Exception _ ->
         ((build_failed origin (Syn.SyntaxKind.to_string origin.kind)): pattern)

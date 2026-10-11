@@ -33,6 +33,13 @@ whose typing rule is missing. In particular, a fallback that synthesizes an
 introduction form and unifies the result afterward is permitted only as a
 recovery path that also emits a diagnostic, not as successful checking.
 
+## Pattern constraints
+
+A character interval pattern retains both endpoint patterns for source queries,
+requires character-literal endpoints during AST lowering, and checks its input
+against `char`. A non-character scrutinee produces a source-located type
+mismatch; endpoints do not introduce bindings.
+
 ## Rank-1 HM and mutation
 
 A let-bound scheme quantifies only metavariables whose creation level is

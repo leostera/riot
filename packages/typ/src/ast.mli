@@ -395,6 +395,8 @@ and pattern_kind =
   | Constructor of constructor_pattern
   (** Literal pattern. *)
   | Literal of literal
+  (** Character interval pattern, such as ['a' .. 'z']. *)
+  | Interval of { left: pattern; right: pattern }
   (** Polymorphic variant pattern. *)
   | PolyVariant of poly_variant_pattern
   (** Tuple pattern. *)
