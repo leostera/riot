@@ -659,7 +659,7 @@ let package_hash_key = fun (unit_key: Build_unit.key) ->
    If input_hash hasn't changed, we know the full hash is the same!
 *)
 let compute_input_hash_with_cache = fun
-  ?(planner_version = "planner-artifacts:v31")
+  ?(planner_version = "planner-artifacts:v32")
   ?package_hash_key
   ~input_hash_cache
   ~package
