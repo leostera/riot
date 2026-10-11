@@ -27,11 +27,13 @@ type parser = {
   events: Syntax_tree.Builder.t;
   mutable pos: int;
   mutable last_eof_unclosed_delimiter_offset: int option;
+  mutable record_field_depth: int;
 }
 
 type checkpoint = {
   saved_pos: int;
   saved_last_eof_unclosed_delimiter_offset: int option;
+  saved_record_field_depth: int;
   builder_checkpoint: Syntax_tree.Builder.checkpoint;
 }
 
@@ -62,17 +64,21 @@ let create = fun source ->
     events;
     pos = 0;
     last_eof_unclosed_delimiter_offset = None;
+    record_field_depth = 0;
   }
 
-let checkpoint = fun (p: parser) -> {
-  saved_pos = p.pos;
-  saved_last_eof_unclosed_delimiter_offset = p.last_eof_unclosed_delimiter_offset;
-  builder_checkpoint = Syntax_tree.Builder.checkpoint p.events;
-}
+let checkpoint = fun (p: parser) ->
+  {
+    saved_pos = p.pos;
+    saved_last_eof_unclosed_delimiter_offset = p.last_eof_unclosed_delimiter_offset;
+    saved_record_field_depth = p.record_field_depth;
+    builder_checkpoint = Syntax_tree.Builder.checkpoint p.events;
+  }
 
 let restore = fun (p: parser) (saved: checkpoint) ->
   p.pos <- saved.saved_pos;
   p.last_eof_unclosed_delimiter_offset <- saved.saved_last_eof_unclosed_delimiter_offset;
+  p.record_field_depth <- saved.saved_record_field_depth;
   Syntax_tree.Builder.restore p.events saved.builder_checkpoint
 
 let significant_count = fun p -> p.significant_len
@@ -711,6 +717,24 @@ let at_item_boundary = fun p ~signature ->
     || Syntax_kind.(peek_kind p 1 = AT)
     || Syntax_kind.(peek_kind p 1 = ATAT)))
 
+let record_field_separator_ahead p =
+  if not (at p Syntax_kind.SEMI) then
+    false
+  else if Syntax_kind.(peek_kind p 1 = RBRACE) then
+    true
+  else
+    let rec field_head offset saw_ident =
+      match peek_kind p offset with
+      | Syntax_kind.IDENT when not saw_ident -> field_head (offset + 1) true
+      | Syntax_kind.DOT when saw_ident && Syntax_kind.(peek_kind p (offset + 1) = IDENT) ->
+          field_head (offset + 2) true
+      | Syntax_kind.EQ
+      | Syntax_kind.SEMI
+      | Syntax_kind.RBRACE when saw_ident -> true
+      | _ -> false
+    in
+    field_head 1 false
+
 let expression_boundary = fun p ~stop_at_item ~stop_at_semi ~stop_at_comma ~signature ->
   match current_kind p with
   | Syntax_kind.EOF
@@ -729,7 +753,10 @@ let expression_boundary = fun p ~stop_at_item ~stop_at_semi ~stop_at_comma ~sign
   | Syntax_kind.END_KW
   | Syntax_kind.DONE_KW -> true
   | Syntax_kind.COMMA -> stop_at_comma
-  | Syntax_kind.SEMI -> stop_at_semi || (stop_at_item && Syntax_kind.(peek_kind p 1 = SEMI))
+  | Syntax_kind.SEMI ->
+      stop_at_semi
+      || (Int.(p.record_field_depth > 0) && record_field_separator_ahead p)
+      || (stop_at_item && Syntax_kind.(peek_kind p 1 = SEMI))
   | _ -> stop_at_item && at_item_boundary p ~signature
 
 let trailing_sequence_boundary = fun p ->
@@ -1852,11 +1879,16 @@ and parse_record_expr = fun p ~signature ->
     let before = p.pos in
     if at p Syntax_kind.IDENT then
       ignore (parse_path_expr p)
-    else
+    else (
+      p.record_field_depth <- Int.(p.record_field_depth + 1);
       ignore (parse_expression p ~signature ~stop_at_item:false ~stop_at_semi:true 0);
+      p.record_field_depth <- Int.(p.record_field_depth - 1)
+    );
     if at p Syntax_kind.EQ then (
       bump p;
-      ignore (parse_expression p ~signature ~stop_at_item:false ~stop_at_semi:true 0)
+      p.record_field_depth <- Int.(p.record_field_depth + 1);
+      ignore (parse_expression p ~signature ~stop_at_item:false ~stop_at_semi:true 0);
+      p.record_field_depth <- Int.(p.record_field_depth - 1)
     );
     ensure_progress p before (invalid_expression p);
     ignore (bump_if p Syntax_kind.SEMI);

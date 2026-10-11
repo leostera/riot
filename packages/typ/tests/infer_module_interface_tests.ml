@@ -690,6 +690,13 @@ let invalid = function
         |> String.concat "\\n"
       )
 
+let test_match_case_in_record_field_types_cleanly _ctx =
+  diagnostics_are_empty
+    {ocaml|
+type value = { field : int }
+let value : value = { field = match true with | true -> 1; }
+|ocaml}
+
 let test_local_exceptions_scope_their_constructor _ctx =
   let* () =
     diagnostics_are_empty
@@ -932,6 +939,9 @@ let tests =
       "record field puns lower their value identifier"
       test_record_field_puns_use_the_last_identifier_segment;
     case "record update checks its base type" test_record_update_checks_its_base_type;
+    case
+      "match case stays inside record field boundary"
+      test_match_case_in_record_field_types_cleanly;
     case
       "character intervals check character inputs"
       test_character_interval_patterns_check_character_inputs;

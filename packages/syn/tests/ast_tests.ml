@@ -2692,6 +2692,47 @@ let { x; y = z; _ } = record
   Test.assert_equal ~expected:"_" ~actual:(Ast.Token.text wildcard);
   Ok ()
 
+let test_match_case_stops_at_record_field_separator = fun _ctx ->
+  let root =
+    parse_ml "let record = { field = match true with | true -> 1; }\n"
+    |> Result.expect ~msg:"expected record with match field"
+  in
+  let record_expr =
+    nth_structure_item root 0
+    |> require_some ~msg:"expected record binding"
+    |> binding_of_structure_item
+    |> Result.expect ~msg:"expected record let binding"
+    |> body_of_binding
+    |> Result.expect ~msg:"expected record expression"
+  in
+  let record_view =
+    Ast.cast_result_to_option (Ast.RecordExpr.cast record_expr)
+    |> require_some ~msg:"expected record expression view"
+  in
+  let field_value = ref None in
+  iter_fold
+    Ast.RecordExpr.fold_field
+    record_view
+    ~fn:(fun field ->
+      match field with
+      | Ast.RecordExprField { value = Some value; _ } -> field_value := Some value
+      | _ -> ());
+  match !field_value with
+  | Some match_expr -> (
+      match Ast.Expr.view match_expr with
+      | Ast.Expr.Match { first_case; _ } -> (
+          match Ast.MatchCase.view first_case with
+          | Ast.MatchCase.Case { body; _ } -> (
+              match Ast.Expr.view body with
+              | Ast.Expr.Literal _ -> Ok ()
+              | _ -> Error "record-field separator became a trailing sequence"
+            )
+          | Ast.MatchCase.Unknown _ -> Error "expected complete match case"
+        )
+      | _ -> Error "expected record field match expression"
+    )
+  | None -> Error "expected record field value"
+
 let test_record_field_special_form_boundaries = fun _ctx ->
   let source =
     "let generator = {\n  run =\n    fun rnd size ->\n      let rec try_gen () =\n        match build rnd size with\n        | Some value -> value\n        | None -> try_gen ()\n      in\n      try_gen ();\n}\nlet next = 1\n"
@@ -4246,6 +4287,9 @@ let tests =
       test_parenthesized_parameter_annotation_is_not_return_annotation;
     case "ast views normalize redundant parentheses" test_ast_views_normalize_redundant_parentheses;
     case "ast exposes record expression and pattern views" test_record_views;
+    case
+      "ast keeps match case bodies within record field boundaries"
+      test_match_case_stops_at_record_field_separator;
     case
       "ast keeps record field special-form bodies within the field boundary"
       test_record_field_special_form_boundaries;
