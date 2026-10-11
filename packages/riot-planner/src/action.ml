@@ -203,14 +203,29 @@ let hash = fun action ->
       outputs;
       env;
     } ->
-      Sha256.write hasher "BuildForeignDependency";
-      Sha256.write hasher name;
-      Sha256.write hasher (Path.to_string path);
-      let sorted_cmd = List.sort build_cmd ~compare:String.compare in
-      List.for_each sorted_cmd ~fn:(Sha256.write hasher);
-      write_sorted_paths hasher outputs;
+      (* Lengths are bytes, and list counts frame field boundaries, including empty argv. *)
+      let write_string value =
+        Sha256.write hasher (Int.to_string (String.length value));
+        Sha256.write hasher ":";
+        Sha256.write hasher value
+      in
+      let write_strings values =
+        write_string (Int.to_string (List.length values));
+        List.for_each values ~fn:write_string
+      in
+      Sha256.write hasher "BuildForeignDependency:v2";
+      write_string name;
+      write_string (Path.to_string path);
+      (* Command position and repetition are execution semantics, not a set. *)
+      write_strings build_cmd;
+      write_strings (List.sort (List.map outputs ~fn:Path.to_string) ~compare:String.compare);
       let sorted_env = List.sort env ~compare:(fun (k1, _) (k2, _) -> String.compare k1 k2) in
-      List.for_each sorted_env ~fn:(fun (k, v) -> Sha256.write hasher (k ^ "=" ^ v));
+      write_string (Int.to_string (List.length sorted_env));
+      List.for_each
+        sorted_env
+        ~fn:(fun (key, value) ->
+          write_string key;
+          write_string value);
       Sha256.finish hasher
 
 let to_string = fun __tmp1 ->

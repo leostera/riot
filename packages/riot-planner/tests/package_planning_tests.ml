@@ -8,7 +8,7 @@ let test_toolchain =
   Riot_toolchain.init ~config:Riot_model.Toolchain_config.default
   |> Result.expect ~msg:"Failed to initialize toolchain"
 
-let planner_artifacts_version = "planner-artifacts:v31"
+let planner_artifacts_version = "planner-artifacts:v32"
 
 let legacy_planner_artifacts_version = "planner-artifacts:v19"
 
@@ -2197,7 +2197,7 @@ let test_cached_artifact_missing_native_objects_rebuilds_plan_graphs = fun _ctx 
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
-let test_stale_cached_artifact_version_rebuilds_plan_graphs = fun _ctx ->
+let stale_cached_artifact_version_rebuilds_plan_graphs = fun planner_version _ctx ->
   match Fs.with_tempdir
     ~prefix:"planner_cached_artifact_stale_version_test"
     (fun tmpdir ->
@@ -2211,7 +2211,7 @@ let test_stale_cached_artifact_version_rebuilds_plan_graphs = fun _ctx ->
       let package = Riot_planner.Build_unit.package unit in
       let stale_input_hash =
         Riot_planner.Package_planner.compute_input_hash
-          ~planner_version:legacy_planner_artifacts_version
+          ~planner_version
           ~package
           ~depset:[]
           ~workspace
@@ -2256,6 +2256,12 @@ let test_stale_cached_artifact_version_rebuilds_plan_graphs = fun _ctx ->
           Error "expected stale cached artifact to be ignored after planner version bump") with
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
+
+let test_stale_cached_artifact_version_rebuilds_plan_graphs =
+  stale_cached_artifact_version_rebuilds_plan_graphs legacy_planner_artifacts_version
+
+let test_foreign_hash_version_rebuilds_plan_graphs =
+  stale_cached_artifact_version_rebuilds_plan_graphs "planner-artifacts:v31"
 
 let test_stale_plan_bundle_version_rebuilds_plan_graphs = fun _ctx ->
   match Fs.with_tempdir
@@ -3851,6 +3857,9 @@ let tests =
     case
       "stale cached artifact version rebuilds plan graphs"
       test_stale_cached_artifact_version_rebuilds_plan_graphs;
+    case
+      "foreign hash version invalidates previously cached package"
+      test_foreign_hash_version_rebuilds_plan_graphs;
     case
       "stale plan bundle version rebuilds plan graphs"
       test_stale_plan_bundle_version_rebuilds_plan_graphs;
