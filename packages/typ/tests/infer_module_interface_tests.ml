@@ -599,6 +599,32 @@ let invalid = function
         (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
         |> String.concat "\\n")
 
+let test_local_open_patterns_scope_module_members _ctx =
+  let* () =
+    diagnostics_are_empty {ocaml|
+module Box = struct
+  type 'a t = Box of 'a
+end
+let unbox = function
+  | Box.(Box value) -> value
+  | _ -> 0
+|ocaml}
+  in
+  match infer_source_diagnostics {ocaml|
+module Colors = struct
+  type color = Red | Blue
+end
+let selected = match Colors.Red with | Colors.(Red) -> true | _ -> false
+let leaked = match Colors.Red with | Red -> true | _ -> false
+|ocaml} with
+  | Error message -> Error message
+  | Ok diagnostics when has_unresolved_name diagnostics ~namespace:"constructor" ~name:"Red" ->
+      Ok ()
+  | Ok diagnostics ->
+      Error
+        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n")
+
 let test_open_module_scope_does_not_export_imports _ctx =
   let source = {ocaml|
 module Packet = struct
@@ -716,6 +742,7 @@ let tests =
     case "record update checks its base type" test_record_update_checks_its_base_type;
     case "character intervals check character inputs" test_character_interval_patterns_check_character_inputs;
     case "exception patterns match exn values" test_exception_patterns_check_exception_values;
+    case "local-open patterns scope module members" test_local_open_patterns_scope_module_members;
     case "open imports are not module exports" test_open_module_scope_does_not_export_imports;
     case "type constructor arity is checked" test_type_constructor_arity_is_checked;
     case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;

@@ -119,13 +119,13 @@ than evidence of class/object syntax in first-party OCaml implementation code.
   environment: imports and full library interfaces still need package-aware
   loading.
 - Current focused suites: `~/.riot/bin/riot test -p syn --json`: **1,199
-  passed, 0 failed**; `~/.riot/bin/riot test -p typ --json`: **362 passed, 0
+  passed, 0 failed**; `~/.riot/bin/riot test -p typ --json`: **363 passed, 0
   failed**. Syn coverage includes preserving interval patterns as constructor
   payloads (for example, `Some '0' .. '9'`). These suites validate focused
   behavior only.
 - The standalone runner at `packages/typ/examples/corpus_check.ml` enumerated
   **2,404** in-scope tracked files and reported **71 passed, 2,333 failed**:
-  **0 parser failures**, **85 AST-lowering failures**, and **2,248 Typ
+  **0 parser failures**, **77 AST-lowering failures**, and **2,256 Typ
   failures**. This is not the package-aware gate: it checks files independently
   without dependency interfaces, so unresolved imported modules are expected.
   The runner is a diagnostic aid, not evidence of corpus parity. `riot check`

@@ -177,6 +177,9 @@ val get_module_path: t -> path:Ast.ident list -> module_summary option
 *)
 val open_module: t -> path:Ast.ident -> t option
 
+(** Close the most recently opened module in the current module frame. *)
+val close_module_open: t -> t
+
 (**
    Include a module's direct exports into the current module at this source
    position. Unlike [open_module], included names become direct exports of the

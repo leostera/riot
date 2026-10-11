@@ -108,6 +108,9 @@ let open_module state ~path =
       state.env <- env;
       true
 
+let close_module_open state =
+  state.env <- InferenceEnv.close_module_open state.env
+
 let include_module state ~path =
   match InferenceEnv.include_module state.env ~path with
   | None -> false

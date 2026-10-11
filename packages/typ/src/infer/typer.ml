@@ -84,6 +84,12 @@ let rec bind_pattern ~mode (state: State.t) (pattern: pattern) type_ =
   | Exception inner_pattern ->
       pattern.type_ <- Some Builtin.exn;
       bind_pattern ~mode state inner_pattern Builtin.exn
+  | LocalOpen { module_path; pattern = inner_pattern } ->
+      if State.open_module state ~path:module_path then (
+        bind_pattern ~mode state inner_pattern type_;
+        State.close_module_open state
+      ) else
+        unresolved_name state pattern.origin ~namespace:"module" module_path
   | Bind name -> bind_value ~mode state ~name type_
   | Literal literal ->
       let expected = literal_type literal in

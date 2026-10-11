@@ -42,6 +42,12 @@ application, so `Some '0' .. '9'` is represented as `Some ('0' .. '9')`. A
 non-character scrutinee produces a source-located type mismatch; endpoints do
 not introduce bindings.
 
+A local-open pattern such as `Colors.(Red)` opens the named module only while
+checking the nested pattern. Constructors, record labels, and type names use
+that lookup scope; pattern binders survive the scope, while the temporary open
+does not leak to sibling cases or later declarations. An unavailable target is
+reported as an unresolved module.
+
 ## Rank-1 HM and mutation
 
 A let-bound scheme quantifies only metavariables whose creation level is

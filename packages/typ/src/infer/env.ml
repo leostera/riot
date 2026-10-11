@@ -235,6 +235,14 @@ module ModuleScopes = struct
       t
       ~fn:(fun current -> { current with opens = opened :: current.opens })
 
+  let close_module_open t =
+    map_current
+      t
+      ~fn:(fun current ->
+        match current.opens with
+        | [] -> current
+        | _ :: opens -> { current with opens })
+
   let add_module_to_current t ~name ~summary ~ordinal =
     let binding = { summary; ordinal } in
     map_current
@@ -609,6 +617,8 @@ let open_module t ~path =
         modules = ModuleScopes.open_module t.modules ~summary ~ordinal:t.next_ordinal;
         next_ordinal = t.next_ordinal + 1;
       }
+
+let close_module_open t = { t with modules = ModuleScopes.close_module_open t.modules }
 
 let include_module t ~path =
   let path =

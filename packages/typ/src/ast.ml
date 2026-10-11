@@ -346,6 +346,7 @@ and pattern_kind =
   | Constraint of constrained_pattern
   | Alias of alias_pattern
   | Attribute of pattern
+  | LocalOpen of { module_path: ident; pattern: pattern }
   | FirstClassModule of first_class_module_pattern
 
 and constructor_pattern = {
@@ -1557,11 +1558,28 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
             right = build_character_endpoint right;
           })
     | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
+    | Syn.Ast.Pattern.Unknown node when Syn.SyntaxKind.(Syn.Ast.Node.kind node
+    = LOCAL_OPEN_PATTERN) -> build_local_open_pattern context origin syntax_pattern
     | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Array _
     | Syn.Ast.Pattern.Lazy _ ->
         ((build_failed origin (Syn.SyntaxKind.to_string origin.kind)): pattern)
   )
+
+and build_local_open_pattern context origin syntax_pattern =
+  let local_open =
+    Syn.Ast.LocalOpenPattern.cast syntax_pattern
+    |> require_cast "invalid local-open pattern"
+  in
+  match Syn.Ast.LocalOpenPattern.view local_open with
+  | Syn.Ast.LocalOpenPattern.Delimited { module_ident; pattern; _ } ->
+      make_pattern
+        origin
+        (LocalOpen {
+          module_path = ident_from_syn_ident module_ident;
+          pattern = build_pattern context pattern;
+        })
+  | Syn.Ast.LocalOpenPattern.Unknown node -> unsupported_node node (node_summary node)
 
 and build_record_pattern_field = fun context (field: Syn.Ast.RecordPattern.field) ->
   match field with

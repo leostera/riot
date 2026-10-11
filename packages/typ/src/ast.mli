@@ -417,6 +417,8 @@ and pattern_kind =
   | Alias of alias_pattern
   (** Pattern with attributes preserved as a source-shaped wrapper. *)
   | Attribute of pattern
+  (** Pattern resolved with module-local opens, such as [M.(Some value)]. *)
+  | LocalOpen of { module_path: ident; pattern: pattern }
   (** First-class module pattern. *)
   | FirstClassModule of first_class_module_pattern
 
