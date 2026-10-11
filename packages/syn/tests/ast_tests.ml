@@ -769,6 +769,46 @@ let test_pattern_views = fun _ctx ->
       Ok ()
   | _ -> Error "expected cons pattern"
 
+let test_exception_pattern_with_argument_view = fun _ctx ->
+  let root =
+    parse_ml "let value = match input with | exception Failure message -> message | _ -> \"\"\n"
+    |> Result.expect ~msg:"expected exception pattern source"
+  in
+  let body =
+    nth_structure_item root 0
+    |> require_some ~msg:"expected let declaration"
+    |> binding_of_structure_item
+    |> Result.expect ~msg:"expected let binding"
+    |> body_of_binding
+    |> Result.expect ~msg:"expected match body"
+  in
+  match Ast.Expr.view body with
+  | Ast.Expr.Match { first_case; _ } ->
+      let pattern =
+        match Ast.MatchCase.view first_case with
+        | Ast.MatchCase.Case { pattern; _ } -> pattern
+        | Ast.MatchCase.Unknown _ -> panic "expected exception match case"
+      in
+      (match Ast.Pattern.view pattern with
+      | Ast.Pattern.Exception { pattern; payload = Some payload } ->
+          let constructor =
+            match Ast.Pattern.view pattern with
+            | Ast.Pattern.Constructor { constructor; payload = None } ->
+                Ast.Ident.text constructor
+            | _ -> panic "expected exception constructor"
+          in
+          let payload_name =
+            match Ast.Pattern.view payload with
+            | Ast.Pattern.Ident { ident } -> Ast.Ident.text ident
+            | _ -> panic "expected exception payload binder"
+          in
+          if String.equal constructor "Failure" && String.equal payload_name "message" then
+            Ok ()
+          else
+            Error ("unexpected exception pattern: " ^ constructor ^ " " ^ payload_name)
+      | _ -> Error "expected exception pattern with a constructor payload")
+  | _ -> Error "expected match expression"
+
 let test_poly_variant_tuple_pattern_boundary = fun _ctx ->
   let source =
     {ocaml|let equal_constraint = fun left right ->
@@ -4082,6 +4122,7 @@ let tests =
       "ast keeps labels after polymorphic variant arguments as application arguments"
       test_labeled_application_after_poly_variant_argument;
     case "ast exposes tuple and cons pattern views" test_pattern_views;
+    case "exception pattern with argument view" test_exception_pattern_with_argument_view;
     case
       "ast keeps comma outside polymorphic variant pattern payloads"
       test_poly_variant_tuple_pattern_boundary;

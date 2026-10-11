@@ -376,7 +376,8 @@ and find_pattern = fun query parent pattern ->
           | Some _ as found -> found
           | None -> find_pattern query (Some node) alias
         )
-      | Ast.Attribute pattern -> find_pattern query (Some node) pattern
+      | Ast.Attribute pattern
+      | Ast.Exception pattern -> find_pattern query (Some node) pattern
       | Ast.FirstClassModule { package_type = Some package_type; _ } ->
           find_package_type query (Some node) package_type)
 

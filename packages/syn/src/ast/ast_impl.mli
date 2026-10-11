@@ -511,7 +511,7 @@ module Pattern: sig
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t }
+    | Exception of { pattern: t; payload: t option }
     | Error of Node.t
     | Unknown of Node.t
 

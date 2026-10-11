@@ -81,6 +81,9 @@ let rec bind_pattern ~mode (state: State.t) (pattern: pattern) type_ =
   match pattern.kind with
   | Wildcard -> ()
   | Constructor ctr -> bind_constructor state pattern ctr type_
+  | Exception inner_pattern ->
+      pattern.type_ <- Some Builtin.exn;
+      bind_pattern ~mode state inner_pattern Builtin.exn
   | Bind name -> bind_value ~mode state ~name type_
   | Literal literal ->
       let expected = literal_type literal in

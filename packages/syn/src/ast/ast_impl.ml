@@ -4066,7 +4066,7 @@ module Pattern: sig
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t }
+    | Exception of { pattern: t; payload: t option }
     | Error of Node.t
     | Unknown of Node.t
 
@@ -4150,7 +4150,7 @@ end = struct
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t }
+    | Exception of { pattern: t; payload: t option }
     | Error of Node.t
     | Unknown of Node.t
 
@@ -4224,9 +4224,12 @@ end = struct
         let payload = normalize_pattern_option (nth_pattern_child pattern 1) in
         match callee with
         | Some callee -> (
-            match view callee with
-            | Constructor { constructor; payload = None } -> Constructor { constructor; payload }
-            | Ident { ident } -> Constructor { constructor = ident; payload }
+            match (view callee, payload) with
+            | (Constructor { constructor; payload = None }, payload) ->
+                Constructor { constructor; payload }
+            | (Ident { ident }, payload) -> Constructor { constructor = ident; payload }
+            | (Exception { pattern; payload = None }, Some payload) ->
+                Exception { pattern; payload = Some payload }
             | _ -> Unknown pattern
           )
         | None -> Unknown pattern
@@ -4310,7 +4313,7 @@ end = struct
       )
     | Syntax_kind.EXCEPTION_PATTERN -> (
         match normalize_pattern_option (first_pattern_child pattern) with
-        | Some pattern -> Exception { pattern }
+        | Some pattern -> Exception { pattern; payload = None }
         | None -> Unknown pattern
       )
     | Syntax_kind.LABELED_PARAM

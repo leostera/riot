@@ -393,6 +393,8 @@ and pattern_kind =
   | Bind of ident
   (** Value constructor pattern, such as `None`, `Some x`, or `M.C`. *)
   | Constructor of constructor_pattern
+  (** Exception-matching pattern, such as `exception Failure message`. *)
+  | Exception of pattern
   (** Literal pattern. *)
   | Literal of literal
   (** Character interval pattern, such as ['a' .. 'z']. *)

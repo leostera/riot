@@ -334,6 +334,7 @@ and pattern_kind =
   | Wildcard
   | Bind of ident
   | Constructor of constructor_pattern
+  | Exception of pattern
   | Literal of literal
   | Interval of { left: pattern; right: pattern }
   | PolyVariant of poly_variant_pattern
@@ -1525,6 +1526,22 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
           })
     | Syn.Ast.Pattern.FirstClassModule _ ->
         build_first_class_module_pattern context origin syntax_pattern
+    | Syn.Ast.Pattern.Exception { pattern; payload } ->
+        let exception_pattern = build_pattern context pattern in
+        let exception_pattern =
+          match (exception_pattern.kind, payload) with
+          | (Constructor ({ payload = None; _ } as constructor), Some payload) ->
+              { exception_pattern with
+                kind = Constructor {
+                  constructor with
+                  payload = Some (build_pattern context payload);
+                };
+              }
+          | (_, Some _) ->
+              build_failed origin "exception pattern payload requires a constructor"
+          | (_, None) -> exception_pattern
+        in
+        make_pattern origin (Exception exception_pattern)
     | Syn.Ast.Pattern.Interval { left; right } ->
         let build_character_endpoint endpoint =
           match Syn.Ast.Pattern.view endpoint with
@@ -1542,8 +1559,7 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
     | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Array _
-    | Syn.Ast.Pattern.Lazy _
-    | Syn.Ast.Pattern.Exception _ ->
+    | Syn.Ast.Pattern.Lazy _ ->
         ((build_failed origin (Syn.SyntaxKind.to_string origin.kind)): pattern)
   )
 
