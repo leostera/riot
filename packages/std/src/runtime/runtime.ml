@@ -62,12 +62,24 @@ module Actor = struct
   let monitor = fun pid ->
     with_current_relations
       (fun t current ->
+        let completed reason =
+          let ref = Proc.make_monitor_ref () in
+          Proc.send_message current (Proc.Messages.DOWN { ref; pid; reason });
+          ref
+        in
         match Scheduler.get_process t pid with
-        | None -> panic ("Cannot monitor non-existent processs " ^ Pid.to_string pid)
+        | None -> completed (Error (Proc.No_process pid))
         | Some target ->
-            let ref = Proc.monitor current pid in
-            Proc.add_monitored_by target (Proc.pid current) ref;
-            ref)
+            (* Exit notification and registry removal are separate steps. A
+               target may still be registered after its relations were drained;
+               never attach a new monitor to that already-completed target. *)
+            match Proc.state target with
+            | Proc.Exited reason -> completed reason
+            | Proc.Finalized -> completed (Error (Proc.No_process pid))
+            | _ ->
+                let ref = Proc.monitor current pid in
+                Proc.add_monitored_by target (Proc.pid current) ref;
+                ref)
 
   let demonitor = fun ref ->
     with_current_relations

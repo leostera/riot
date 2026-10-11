@@ -21,6 +21,8 @@ It builds `riot-cli`, then requires these suites to report nonempty passing resu
 - `kernel:kernel_new_process_tests`
 - `std:std_test_cli_tests`
 - `std:std_command_tests`
+- `std:std_runtime_tests` (two-worker mailbox/wakeup, monitor/link, timer,
+  pinned-placement, and dedicated blocking-lane controls)
 - `riot-build:build_core_tests`
 - `riot-cli:test_selection_tests`
 - `riot-planner:action_hash_tests`

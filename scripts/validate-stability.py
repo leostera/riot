@@ -21,6 +21,7 @@ DEFAULT_SUITES = (
     "kernel:kernel_new_process_tests",
     "std:std_test_cli_tests",
     "std:std_command_tests",
+    "std:std_runtime_tests",
     "riot-build:build_core_tests",
     "riot-build:action_executor_tests",
     "riot-build:build_lock_tests",

@@ -38,6 +38,8 @@
 
 31. `Fs.File.try_lock_shared` forwards the kernel's nonblocking advisory shared-lock contract. Lock lifetime follows the file handle; do not unlink persistent guard files to release locks.
 
+32. Monitor registration always returns a fresh reference, including when exit wins registration. Under the scheduler relations lock, an absent target immediately delivers `DOWN` with `Error (Actor.No_process pid)`; a registered target in `Exited` state delivers its recorded reason without attaching a live relation. Registry removal follows exit notification, so both states need explicit handling. `demonitor` removes live relations but does not flush already-enqueued `DOWN` messages. Keep the two-worker `std_runtime_tests` controls and bounded completion-race batch in the required stability suites.
+
 ## Validate
 
 `timeout 30 riot build std`

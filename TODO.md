@@ -363,6 +363,14 @@ external-service workflows, candidate recovery, and real soak days remain open.
 
 - `run-q5s_8kzr/report.json` passes all **36** store cases, including an executable saved to the immutable cache, promoted with permissions preserved, and directly executed from the working output with exact stdout/empty stderr/exit-0 assertions. This complements the preserved corrupt-promotion failure cases and actual produced-CLI execution in the bootstrap/edit lanes.
 
+## Actor runtime controls and exit-winning monitors
+
+- Added `std:std_runtime_tests` to the required gate. Its explicit two-worker runtime exercises sender FIFO, selective-receive retention (including timeout), a 32-actor pinned wakeup batch, completion/late monitor registration, 64 short-lived monitor races with unique references, demonitoring, trapped link failure, one-shot/cancelled timers, pinned placement through yields, and a dedicated blocking lane while normal actors progress.
+- `run-3lptqiec/report.json` retains the initial test compile error (unavailable `Array` module, replaced with a bounded list). `run-nsrvihjb/report.json` records **10/11** passing cases; monitoring a completed actor raised `Cannot monitor non-existent processs`.
+- Registration now returns a fresh reference and enqueues immediate `DOWN` for absent targets (`Actor.No_process pid`) or already-recorded exits. State inspection under the relations lock also handles the interval between exit-notification draining and registry removal; neither completed path records a dangling live relation.
+- `runtime-overlay-hk19eei1/report.json` passes **13** cases from a retained committed export plus explicitly hashed source overlays and private HOME/cache. `runtime-after-d83j4a1w/report.json` passes the final **13 runtime + 4 coordinator** cases after the pinned batch chooses the opposite initial worker. These are diagnostic overlay controls, not committed bootstrap/candidate certification.
+- Supervision, timer deadline races, shutdown/I/O cleanup stress, and GNU/Linux execution remain open. No runtime task completion or five-day soak is claimed.
+
 ## Temporary artifact publication contention
 
 - Strengthened repeat-build tests to require cached status and the same artifact hash, and concurrent unchanged builds to require both cached statuses; no more acceptance of arbitrary `Built` results or ignored cache flags.
