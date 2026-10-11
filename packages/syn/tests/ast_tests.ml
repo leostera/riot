@@ -789,24 +789,26 @@ let test_exception_pattern_with_argument_view = fun _ctx ->
         | Ast.MatchCase.Case { pattern; _ } -> pattern
         | Ast.MatchCase.Unknown _ -> panic "expected exception match case"
       in
-      (match Ast.Pattern.view pattern with
-      | Ast.Pattern.Exception { pattern; payload = Some payload } ->
-          let constructor =
-            match Ast.Pattern.view pattern with
-            | Ast.Pattern.Constructor { constructor; payload = None } ->
-                Ast.Ident.text constructor
-            | _ -> panic "expected exception constructor"
-          in
-          let payload_name =
-            match Ast.Pattern.view payload with
-            | Ast.Pattern.Ident { ident } -> Ast.Ident.text ident
-            | _ -> panic "expected exception payload binder"
-          in
-          if String.equal constructor "Failure" && String.equal payload_name "message" then
-            Ok ()
-          else
-            Error ("unexpected exception pattern: " ^ constructor ^ " " ^ payload_name)
-      | _ -> Error "expected exception pattern with a constructor payload")
+      (
+        match Ast.Pattern.view pattern with
+        | Ast.Pattern.Exception { pattern; payload = Some payload } ->
+            let constructor =
+              match Ast.Pattern.view pattern with
+              | Ast.Pattern.Constructor { constructor; payload = None } ->
+                  Ast.Ident.text constructor
+              | _ -> panic "expected exception constructor"
+            in
+            let payload_name =
+              match Ast.Pattern.view payload with
+              | Ast.Pattern.Ident { ident } -> Ast.Ident.text ident
+              | _ -> panic "expected exception payload binder"
+            in
+            if String.equal constructor "Failure" && String.equal payload_name "message" then
+              Ok ()
+            else
+              Error ("unexpected exception pattern: " ^ constructor ^ " " ^ payload_name)
+        | _ -> Error "expected exception pattern with a constructor payload"
+      )
   | _ -> Error "expected match expression"
 
 let test_interval_pattern_precedes_constructor_application = fun _ctx ->
@@ -830,24 +832,28 @@ let test_interval_pattern_precedes_constructor_application = fun _ctx ->
         | Ast.MatchCase.Case { pattern; _ } -> pattern
         | Ast.MatchCase.Unknown _ -> panic "expected first match case"
       in
-      (match Ast.Pattern.view pattern with
-      | Ast.Pattern.Constructor { constructor; payload = Some payload }
-        when String.equal (Ast.Ident.text constructor) "Some" ->
-          (match Ast.Pattern.view payload with
-          | Ast.Pattern.Interval { left; right } ->
-              let literal_text pattern =
-                match Ast.Pattern.view pattern with
-                | Ast.Pattern.Literal { token } -> Ast.Token.text token
-                | _ -> panic "expected character interval endpoint"
-              in
-              let left_text = literal_text left in
-              let right_text = literal_text right in
-              if String.equal left_text "'1'" && String.equal right_text "'9'" then
-                Ok ()
-              else
-                Error ("unexpected interval " ^ left_text ^ " .. " ^ right_text)
-          | _ -> Error "expected interval constructor payload")
-      | _ -> Error "expected constructor application over interval pattern")
+      (
+        match Ast.Pattern.view pattern with
+        | Ast.Pattern.Constructor { constructor; payload = Some payload } when String.equal
+          (Ast.Ident.text constructor)
+          "Some" -> (
+            match Ast.Pattern.view payload with
+            | Ast.Pattern.Interval { left; right } ->
+                let literal_text pattern =
+                  match Ast.Pattern.view pattern with
+                  | Ast.Pattern.Literal { token } -> Ast.Token.text token
+                  | _ -> panic "expected character interval endpoint"
+                in
+                let left_text = literal_text left in
+                let right_text = literal_text right in
+                if String.equal left_text "'1'" && String.equal right_text "'9'" then
+                  Ok ()
+                else
+                  Error ("unexpected interval " ^ left_text ^ " .. " ^ right_text)
+            | _ -> Error "expected interval constructor payload"
+          )
+        | _ -> Error "expected constructor application over interval pattern"
+      )
   | _ -> Error "expected match expression"
 
 let test_poly_variant_tuple_pattern_boundary = fun _ctx ->
@@ -3227,10 +3233,19 @@ let test_let_exception_expression_views = fun _ctx ->
     Ast.LetExceptionExpr.in_token exception_expr
     |> require_some ~msg:"expected in token"
   in
+  let payload_type =
+    Ast.LetExceptionExpr.payload_type exception_expr
+    |> require_some ~msg:"expected let exception payload type"
+  in
   Test.assert_equal ~expected:"exception" ~actual:(Ast.Token.text exception_token);
   Test.assert_equal ~expected:"Local" ~actual:(Ast.Ident.text name);
   Test.assert_equal ~expected:"of" ~actual:(Ast.Token.text of_token);
   Test.assert_equal ~expected:"in" ~actual:(Ast.Token.text in_token);
+  (
+    match Ast.TypeExpr.view payload_type with
+    | Ast.TypeExpr.Tuple _ -> ()
+    | _ -> panic "expected tuple let exception payload type"
+  );
   Test.assert_equal
     ~expected:[ "int"; "*"; "Foo"; "."; "t"; ]
     ~actual:(let_exception_payload_tokens exception_expr);
@@ -3256,11 +3271,14 @@ let test_let_exception_expression_views = fun _ctx ->
     Ast.cast_result_to_option (Ast.LetExceptionExpr.cast bare_expr)
     |> require_some ~msg:"expected bare let exception view"
   in
-  (
+  let* () =
     match Ast.LetExceptionExpr.of_token bare_exception with
     | None -> Ok ()
     | Some _ -> Error "expected bare let exception without payload"
-  )
+  in
+  match Ast.LetExceptionExpr.payload_type bare_exception with
+  | None -> Ok ()
+  | Some _ -> Error "expected bare let exception without payload type"
 
 let test_unreachable_expression_views = fun _ctx ->
   let source = "let value = match maybe with | Some value -> value | None -> .\n" in
@@ -4164,7 +4182,9 @@ let tests =
       test_labeled_application_after_poly_variant_argument;
     case "ast exposes tuple and cons pattern views" test_pattern_views;
     case "exception pattern with argument view" test_exception_pattern_with_argument_view;
-    case "interval pattern binds before constructor application" test_interval_pattern_precedes_constructor_application;
+    case
+      "interval pattern binds before constructor application"
+      test_interval_pattern_precedes_constructor_application;
     case
       "ast keeps comma outside polymorphic variant pattern payloads"
       test_poly_variant_tuple_pattern_boundary;

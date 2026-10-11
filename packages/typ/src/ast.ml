@@ -336,7 +336,10 @@ and pattern_kind =
   | Constructor of constructor_pattern
   | Exception of pattern
   | Literal of literal
-  | Interval of { left: pattern; right: pattern }
+  | Interval of {
+      left: pattern;
+      right: pattern;
+    }
   | PolyVariant of poly_variant_pattern
   | Tuple of pattern list
   | List of pattern list
@@ -346,7 +349,10 @@ and pattern_kind =
   | Constraint of constrained_pattern
   | Alias of alias_pattern
   | Attribute of pattern
-  | LocalOpen of { module_path: ident; pattern: pattern }
+  | LocalOpen of {
+      module_path: ident;
+      pattern: pattern;
+    }
   | FirstClassModule of first_class_module_pattern
 
 and constructor_pattern = {
@@ -445,6 +451,7 @@ and expression_kind =
   | Apply of application
   | Infix of infix_operation
   | Let of let_expression
+  | LetException of let_exception_expression
   | LetModule of let_module
   | LocalOpen of local_open
   | FirstClassModule of first_class_module
@@ -534,6 +541,11 @@ and infix_operation = {
 and let_expression = {
   recursive: bool;
   bindings: let_binding list;
+  body: expression;
+}
+
+and let_exception_expression = {
+  declaration: exception_declaration;
   body: expression;
 }
 
@@ -1532,22 +1544,21 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
         let exception_pattern =
           match (exception_pattern.kind, payload) with
           | (Constructor ({ payload = None; _ } as constructor), Some payload) ->
-              { exception_pattern with
+              {
+                exception_pattern with
                 kind = Constructor {
                   constructor with
                   payload = Some (build_pattern context payload);
                 };
               }
-          | (_, Some _) ->
-              build_failed origin "exception pattern payload requires a constructor"
+          | (_, Some _) -> build_failed origin "exception pattern payload requires a constructor"
           | (_, None) -> exception_pattern
         in
         make_pattern origin (Exception exception_pattern)
     | Syn.Ast.Pattern.Interval { left; right } ->
         let build_character_endpoint endpoint =
           match Syn.Ast.Pattern.view endpoint with
-          | Syn.Ast.Pattern.Literal { token }
-            when token_kind_is token Syn.SyntaxKind.CHAR ->
+          | Syn.Ast.Pattern.Literal { token } when token_kind_is token Syn.SyntaxKind.CHAR ->
               build_pattern context endpoint
           | _ -> build_failed origin "interval pattern endpoints must be character literals"
         in
@@ -1558,8 +1569,8 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
             right = build_character_endpoint right;
           })
     | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
-    | Syn.Ast.Pattern.Unknown node when Syn.SyntaxKind.(Syn.Ast.Node.kind node
-    = LOCAL_OPEN_PATTERN) -> build_local_open_pattern context origin syntax_pattern
+    | Syn.Ast.Pattern.Unknown node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = LOCAL_OPEN_PATTERN) ->
+        build_local_open_pattern context origin syntax_pattern
     | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Array _
     | Syn.Ast.Pattern.Lazy _ ->
@@ -1679,12 +1690,7 @@ and build_record_expression_field = fun context (field: Syn.Ast.RecordExpr.field
             in
             make_expression origin (Ident value_ident)
       in
-      let field: record_expression_field = {
-        origin;
-        name = ident_from_syn_ident ident;
-        value;
-      }
-      in
+      let field: record_expression_field = { origin; name = ident_from_syn_ident ident; value } in
       Some field
   | Syn.Ast.UnknownRecordExprField _ -> None
 
@@ -1903,9 +1909,31 @@ and build_expression = fun context (syntax_expression: Syn.Ast.Expr.t) ->
             build_first_class_module_expression context origin syntax_expression
         | _ -> unsupported_node node (node_summary node)
       )
-    | Syn.Ast.Expr.LetException _ ->
-        ((build_failed origin (Syn.SyntaxKind.to_string origin.kind)): expression)
+    | Syn.Ast.Expr.LetException _ -> build_let_exception_expression context origin syntax_expression
   )
+
+and build_let_exception_expression context origin let_exception =
+  let let_exception =
+    Syn.Ast.LetExceptionExpr.cast let_exception
+    |> require_cast "invalid local exception expression"
+  in
+  let exception_origin = origin_from_node (Syn.Ast.LetExceptionExpr.as_node let_exception) in
+  let name =
+    Syn.Ast.LetExceptionExpr.name let_exception
+    |> require_some exception_origin "missing local exception name"
+    |> ident_from_syn_ident
+  in
+  let payload =
+    Syn.Ast.LetExceptionExpr.payload_type let_exception
+    |> Option.map ~fn:(build_core_type context)
+  in
+  let declaration: exception_declaration = { origin = exception_origin; name; payload } in
+  let body =
+    Syn.Ast.LetExceptionExpr.body let_exception
+    |> require_some exception_origin "missing local exception body"
+    |> build_expression context
+  in
+  make_expression origin (LetException { declaration; body })
 
 and build_first_class_module_expression = fun context origin (syntax_expression: Syn.Ast.Expr.t) ->
   let tokens = direct_child_tokens (Syn.Ast.Expr.as_node syntax_expression) in
@@ -2327,10 +2355,11 @@ and build_module_declaration_member = fun context member ->
     | None when Option.is_some type_of_target -> type_of_target
     | _ -> (
         match (module_type_body, Syn.Ast.ModuleDeclaration.separator_token declaration) with
-        | (Some body, Some separator) when token_kind_is separator Syn.SyntaxKind.EQ ->
-            (match Syn.Ast.ModuleTypeExpr.view body with
+        | (Some body, Some separator) when token_kind_is separator Syn.SyntaxKind.EQ -> (
+            match Syn.Ast.ModuleTypeExpr.view body with
             | Syn.Ast.ModuleTypeExpr.Ident { ident } -> Some (ident_from_syn_ident ident)
-            | _ -> None)
+            | _ -> None
+          )
         | _ -> None
       )
   in
@@ -2408,16 +2437,18 @@ and build_include_target origin declaration =
         Syn.Ast.IncludeDeclaration.body_node declaration
         |> require_some origin "missing include body"
       in
-      (match Syn.Ast.ModuleTypeExpr.cast node with
-      | Syn.Ast.Node module_type -> (
-          match Syn.Ast.ModuleTypeExpr.view module_type with
-          | Syn.Ast.ModuleTypeExpr.Typeof { body = Some body } ->
-              module_expr_ident body
-              |> require_some origin "missing module type-of target"
-          | _ -> build_failed origin "unsupported include module type"
-        )
-      | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
-      | Syn.Ast.Error _ -> build_failed origin "invalid include module type")
+      (
+        match Syn.Ast.ModuleTypeExpr.cast node with
+        | Syn.Ast.Node module_type -> (
+            match Syn.Ast.ModuleTypeExpr.view module_type with
+            | Syn.Ast.ModuleTypeExpr.Typeof { body = Some body } ->
+                module_expr_ident body
+                |> require_some origin "missing module type-of target"
+            | _ -> build_failed origin "unsupported include module type"
+          )
+        | Syn.Ast.Unknown node -> unsupported_node node (node_summary node)
+        | Syn.Ast.Error _ -> build_failed origin "invalid include module type"
+      )
 
 and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
   let origin = origin_from_node (Syn.Ast.StructureItem.as_node item) in
@@ -2496,9 +2527,7 @@ and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
     | Module declaration ->
         make_signature_item origin (Module (build_module_declarations context declaration))
     | ModuleType declaration ->
-        make_signature_item
-          origin
-          (ModuleType (build_module_type_declaration context declaration))
+        make_signature_item origin (ModuleType (build_module_type_declaration context declaration))
     | Open declaration ->
         let ident =
           Syn.Ast.OpenDeclaration.ident declaration

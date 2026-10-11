@@ -4,17 +4,14 @@ open TypeScheme
 open Constraint
 open TypeExpr
 
+module HashMap = Std.Collections.HashMap
 module InferenceEnv = State.InferenceEnv
 module SurfacePath = Model.Surface_path
 
 let unsupported_syntax state (origin: Ast.origin) summary =
   State.add_diagnostic
     state
-    (Diagnostics.Diagnostic.UnsupportedSyntax {
-      span = origin.span;
-      kind = origin.kind;
-      summary;
-    })
+    (Diagnostics.Diagnostic.UnsupportedSyntax { span = origin.span; kind = origin.kind; summary })
 
 let unsupported_pattern state (pattern: pattern) =
   unsupported_syntax state pattern.origin "pattern form is not supported by typ yet"
@@ -33,11 +30,13 @@ let parameter_label_to_type_label = fun __tmp1 ->
   | Labeled label -> Type.Label.Labelled (SurfacePath.to_string label)
   | Optional label -> Type.Label.Optional (SurfacePath.to_string label)
 
-let bind_value ~mode state ~name type_ =
+let bind_value ~mode ?(quantifiers = []) state ~name type_ =
   let scheme =
     match mode with
     | Local -> TypeScheme.monomorphic type_
-    | Generalized -> Quantifier.generalize state type_
+    | Generalized ->
+        let scheme = Quantifier.generalize state type_ in
+        { scheme with quantifier = List.append scheme.quantifier quantifiers }
   in
   State.add_value state ~name ~scheme
 
@@ -57,8 +56,7 @@ let record_is_immutable state (fields: record_expression_field list) =
       | None -> false
       | Some info ->
           match info.State.InferenceEnv.owner.definition.kind with
-          | Record declared_fields ->
-              List.all declared_fields ~fn:(fun field -> not field.mutable_)
+          | Record declared_fields -> List.all declared_fields ~fn:(fun field -> not field.mutable_)
           | _ -> false
     )
 
@@ -75,6 +73,14 @@ let rec expression_is_nonexpansive state (expr: expression) =
       record_is_immutable state fields
       && List.all fields ~fn:(fun field -> expression_is_nonexpansive state field.value)
   | _ -> false
+
+let rec bind_simple_binding_pattern (pattern: Ast.pattern) type_ =
+  pattern.type_ <- Some type_;
+  match pattern.kind with
+  | Bind name -> Some name
+  | Constraint { pattern; _ }
+  | Attribute pattern -> bind_simple_binding_pattern pattern type_
+  | _ -> None
 
 let rec bind_pattern ~mode (state: State.t) (pattern: pattern) type_ =
   pattern.type_ <- Some type_;
@@ -153,8 +159,10 @@ and bind_record ~mode state pattern fields type_ =
   | first_field :: _ ->
       match State.get_record_field state ~name:first_field.name with
       | None ->
-          List.for_each fields ~fn:(fun field ->
-            unresolved_name state field.origin ~namespace:"field" field.name)
+          List.for_each
+            fields
+            ~fn:(fun field ->
+              unresolved_name state field.origin ~namespace:"field" field.name)
       | Some info ->
           let (record_type, _) = instantiate_record_field state info in
           unify
@@ -294,11 +302,48 @@ let infer_ident (state: State.t) (expr: expression) ident =
   | None when is_builtin_value ident "fst" || is_builtin_value ident "snd" ->
       let first = fresh () in
       let second = fresh () in
-      let result = if is_builtin_value ident "fst" then first else second in
+      let result =
+        if is_builtin_value ident "fst" then
+          first
+        else
+          second
+      in
       arrow (Type.Tuple [ first; second ]) result
   | None ->
       unresolved_name state expr.origin ~namespace:"value" ident;
       fresh ()
+
+let with_function_type_binders state (fn_decl: fun_decl) ~fn =
+  let scope = HashMap.with_capacity ~size:(List.length fn_decl.type_binders) in
+  List.for_each
+    fn_decl.type_binders
+    ~fn:(fun name ->
+      let type_ =
+        match State.get_type_param state ~name with
+        | Some type_ -> type_
+        | None -> State.fresh_generic state
+      in
+      let _ = HashMap.insert scope ~key:name ~value:type_ in
+      ());
+  State.with_type_params state scope fn
+
+let register_local_exception state (declaration: exception_declaration) =
+  let payload_type = Option.map declaration.payload ~fn:(core_type_to_type state) in
+  let result = Builtin.exn in
+  let (arguments, body) =
+    match payload_type with
+    | None -> (InferenceEnv.Tuple [], result)
+    | Some payload -> (InferenceEnv.Tuple [ payload ], Ast.Type.arrow payload result)
+  in
+  let description: InferenceEnv.constructor_description = {
+    name = declaration.name;
+    scheme = TypeScheme.monomorphic body;
+    result;
+    arguments;
+    instantiate_generics = false;
+  }
+  in
+  State.add_constructor state ~name:declaration.name ~description
 
 let rec check_expression (state: State.t) (expr: expression) expected =
   let expected =
@@ -346,6 +391,7 @@ and infer_expression_node (state: State.t) (expr: expression) =
     | For loop -> infer_for state loop
     | Assert condition -> infer_assert state condition
     | Let letexpr -> infer_let_expr state letexpr
+    | LetException let_exception -> infer_let_exception state let_exception
     | Match match_ -> infer_match state match_
     | Record record -> infer_record state expr record
     | FieldAccess access -> infer_field_access state expr access
@@ -366,16 +412,13 @@ and check_expression_node state (expr: expression) expected =
   | Try try_ -> check_try state try_ expected
   | Record record -> check_record state expr record expected
   | Let let_ -> check_let_expr state let_ expected
+  | LetException let_exception -> check_let_exception state let_exception expected
   | Sequence sequence ->
       let _ = check_expression state sequence.left Builtin.unit in
       check_expression state sequence.right expected
   | _ ->
       let actual = infer_expression_node state expr in
-      unify
-        state
-        ~expected
-        ~actual
-        ~on_error:(expression_constraint_diagnostic expr);
+      unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
       expected
 
 and check_tuple state expr parts expected =
@@ -396,9 +439,10 @@ and check_tuple state expr parts expected =
   match expected_parts with
   | Some expected_parts ->
       List.zip parts expected_parts
-      |> List.for_each ~fn:(fun (part, expected) ->
-        let _ = check_expression state part expected in
-        ());
+      |> List.for_each
+        ~fn:(fun (part, expected) ->
+          let _ = check_expression state part expected in
+          ());
       expected
   | None ->
       let actual = infer_tuple state parts in
@@ -408,8 +452,11 @@ and check_tuple state expr parts expected =
 and check_list state expr items expected =
   let element_type =
     match Unifier.resolve expected with
-    | Type.Apply { ident; arguments = [ element ] }
-      when SurfacePath.equal ident Builtin.list_ident -> Some element
+    | Type.Apply {
+        ident;
+        arguments = [ element ];
+      } when SurfacePath.equal ident Builtin.list_ident ->
+        Some element
     | Type.Var _ ->
         let element = State.fresh_var state in
         unify
@@ -422,9 +469,11 @@ and check_list state expr items expected =
   in
   match element_type with
   | Some element_type ->
-      List.for_each items ~fn:(fun item ->
-        let _ = check_expression state item element_type in
-        ());
+      List.for_each
+        items
+        ~fn:(fun item ->
+          let _ = check_expression state item element_type in
+          ());
       expected
   | None ->
       let actual = infer_list state items in
@@ -454,108 +503,151 @@ and check_match state match_ expected =
 
 and check_try state try_ expected =
   let _ = check_expression state try_.body expected in
-  List.for_each try_.cases ~fn:(fun (case: match_case) ->
-    State.push_scope state;
-    bind_pattern ~mode:Local state case.pattern Builtin.exn;
-    (match case.guard with
-    | None -> ()
-    | Some guard ->
-        let _ = check_expression state guard Builtin.bool in
-        ());
-    let _ = check_expression state case.body expected in
-    State.pop_scope state);
+  List.for_each
+    try_.cases
+    ~fn:(fun (case: match_case) ->
+      State.push_scope state;
+      bind_pattern ~mode:Local state case.pattern Builtin.exn;
+      (
+        match case.guard with
+        | None -> ()
+        | Some guard ->
+            let _ = check_expression state guard Builtin.bool in
+            ()
+      );
+      let _ = check_expression state case.body expected in
+      State.pop_scope state);
   expected
+
+and check_let_exception state (let_exception: let_exception_expression) expected =
+  State.push_local_module_scope state;
+  register_local_exception state let_exception.declaration;
+  let body_type = check_expression state let_exception.body expected in
+  State.pop_local_module_scope state;
+  body_type
 
 and check_let_expr state (let_: let_expression) expected =
   State.push_scope state;
-  List.for_each let_.bindings ~fn:(fun binding ->
-    let _ = infer_let_binding state ~mode:Generalized binding in
-    ());
+  List.for_each
+    let_.bindings
+    ~fn:(fun binding ->
+      let _ = infer_let_binding state ~mode:Generalized binding in
+      ());
   let body = check_expression state let_.body expected in
   State.pop_scope state;
   body
 
 and check_function state (expr: expression) (fn: fun_decl) expected =
-  match fn.body with
-  | Cases cases when fn.parameters = [] ->
-      let expected_arrow =
-        match Unifier.resolve expected with
-        | Type.Arrow arrow -> Some arrow
-        | Type.Var _ ->
-            let parameter = State.fresh_var state in
-            let result = State.fresh_var state in
-            let arrow = Type.arrow parameter result in
-            unify state ~expected ~actual:arrow ~on_error:(expression_constraint_diagnostic expr);
-            Some { Type.label = Type.Label.NoLabel; parameter; result }
-        | _ -> None
-      in
-      (match expected_arrow with
-      | Some arrow ->
-          check_cases state cases arrow.parameter arrow.result;
-          expected
-      | None ->
-          let actual = infer_function state expr fn in
-          unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
-          expected)
-  | _ ->
-      let rec collect expected parameters reversed =
-        match parameters with
-        | [] -> Some (List.reverse reversed, expected)
-        | (parameter: parameter) :: rest ->
-            let label = parameter_label_to_type_label parameter.label in
-            (match Unifier.resolve expected with
-            | Type.Arrow arrow when Type.Label.equal arrow.label label ->
-                collect arrow.result rest ((parameter, arrow.parameter) :: reversed)
+  with_function_type_binders
+    state
+    fn
+    ~fn:(fun state ->
+      match fn.body with
+      | Cases cases when fn.parameters = [] ->
+          let expected_arrow =
+            match Unifier.resolve expected with
+            | Type.Arrow arrow -> Some arrow
             | Type.Var _ ->
-                let parameter_type = State.fresh_var state in
-                let result_type = State.fresh_var state in
-                let arrow = Type.arrow ~label parameter_type result_type in
-                unify state ~expected ~actual:arrow ~on_error:(expression_constraint_diagnostic expr);
-                collect result_type rest ((parameter, parameter_type) :: reversed)
-            | _ -> None)
-      in
-      (match collect expected fn.parameters [] with
-      | None ->
-          let actual = infer_function state expr fn in
-          unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
-          expected
-      | Some (parameters, result_type) ->
-          State.push_scope state;
-          List.for_each parameters ~fn:(fun ((parameter: parameter), parameter_type) ->
-            (match parameter.annotation with
-            | None -> ()
-            | Some annotation ->
-                let annotation_type = core_type_to_type_scoped state annotation in
+                let parameter = State.fresh_var state in
+                let result = State.fresh_var state in
+                let arrow = Type.arrow parameter result in
                 unify
                   state
-                  ~expected:parameter_type
-                  ~actual:annotation_type
-                  ~on_error:(annotation_diagnostic annotation));
-            bind_pattern ~mode:Local state parameter.pattern parameter_type;
-            (match parameter.default with
-            | None -> ()
-            | Some default ->
-                let _ = check_expression state default parameter_type in
-                ()));
-          (match fn.body with
-          | Body body ->
-              let _ = check_expression state body result_type in
-              ()
-          | Cases cases -> check_cases state cases result_type result_type);
-          State.pop_scope state;
-          expected)
+                  ~expected
+                  ~actual:arrow
+                  ~on_error:(expression_constraint_diagnostic expr);
+                Some { Type.label = Type.Label.NoLabel; parameter; result }
+            | _ -> None
+          in
+          (
+            match expected_arrow with
+            | Some arrow ->
+                check_cases state cases arrow.parameter arrow.result;
+                expected
+            | None ->
+                let actual = infer_function state expr fn in
+                unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
+                expected
+          )
+      | _ ->
+          let rec collect expected parameters reversed =
+            match parameters with
+            | [] -> Some (List.reverse reversed, expected)
+            | (parameter: parameter) :: rest ->
+                let label = parameter_label_to_type_label parameter.label in
+                (
+                  match Unifier.resolve expected with
+                  | Type.Arrow arrow when Type.Label.equal arrow.label label ->
+                      collect arrow.result rest ((parameter, arrow.parameter) :: reversed)
+                  | Type.Var _ ->
+                      let parameter_type = State.fresh_var state in
+                      let result_type = State.fresh_var state in
+                      let arrow = Type.arrow ~label parameter_type result_type in
+                      unify
+                        state
+                        ~expected
+                        ~actual:arrow
+                        ~on_error:(expression_constraint_diagnostic expr);
+                      collect result_type rest ((parameter, parameter_type) :: reversed)
+                  | _ -> None
+                )
+          in
+          (
+            match collect expected fn.parameters [] with
+            | None ->
+                let actual = infer_function state expr fn in
+                unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic expr);
+                expected
+            | Some (parameters, result_type) ->
+                State.push_scope state;
+                List.for_each
+                  parameters
+                  ~fn:(fun ((parameter: parameter), parameter_type) ->
+                    (
+                      match parameter.annotation with
+                      | None -> ()
+                      | Some annotation ->
+                          let annotation_type = core_type_to_type_scoped state annotation in
+                          unify
+                            state
+                            ~expected:parameter_type
+                            ~actual:annotation_type
+                            ~on_error:(annotation_diagnostic annotation)
+                    );
+                    bind_pattern ~mode:Local state parameter.pattern parameter_type;
+                    (
+                      match parameter.default with
+                      | None -> ()
+                      | Some default ->
+                          let _ = check_expression state default parameter_type in
+                          ()
+                    ));
+                (
+                  match fn.body with
+                  | Body body ->
+                      let _ = check_expression state body result_type in
+                      ()
+                  | Cases cases -> check_cases state cases result_type result_type
+                );
+                State.pop_scope state;
+                expected
+          ))
 
 and check_cases state cases scrutinee_type result_type =
-  List.for_each cases ~fn:(fun (case: match_case) ->
-    State.push_scope state;
-    bind_pattern ~mode:Local state case.pattern scrutinee_type;
-    (match case.guard with
-    | None -> ()
-    | Some guard ->
-        let _ = check_expression state guard Builtin.bool in
-        ());
-    let _ = check_expression state case.body result_type in
-    State.pop_scope state)
+  List.for_each
+    cases
+    ~fn:(fun (case: match_case) ->
+      State.push_scope state;
+      bind_pattern ~mode:Local state case.pattern scrutinee_type;
+      (
+        match case.guard with
+        | None -> ()
+        | Some guard ->
+            let _ = check_expression state guard Builtin.bool in
+            ()
+      );
+      let _ = check_expression state case.body result_type in
+      State.pop_scope state)
 
 and infer_unknown_record state (fields: record_expression_field list) =
   List.for_each
@@ -626,8 +718,7 @@ and record_field_for_expected_type state expected name =
                 | [] -> None
                 | (field: Ast.record_field_declaration) :: rest -> (
                     match field_name with
-                    | Some name
-                      when String.equal (Model.Surface_path.to_string field.name) name ->
+                    | Some name when String.equal (Model.Surface_path.to_string field.name) name ->
                         let info: State.InferenceEnv.record_field_info = { owner; field } in
                         Some info
                     | _ -> find_field rest
@@ -643,34 +734,38 @@ and record_field_for_expected_type state expected name =
 and check_record state expr record expected =
   match Unifier.resolve expected with
   | Type.Apply _ ->
-      (match record.update with
-      | Some update ->
-          let _ = check_expression state update expected in
-          ()
-      | None -> ());
+      (
+        match record.update with
+        | Some update ->
+            let _ = check_expression state update expected in
+            ()
+        | None -> ()
+      );
       if List.is_empty record.fields && Option.is_none record.update then
         unsupported_syntax state expr.origin "empty record literals are not supported"
       else
-        List.for_each record.fields ~fn:(fun field ->
-          let info =
-            match State.get_record_field state ~name:field.name with
-            | Some info -> Some info
-            | None -> record_field_for_expected_type state expected field.name
-          in
-          match info with
-          | Some info ->
-              let (owner_type, field_type) = instantiate_record_field state info in
-              unify
-                state
-                ~expected
-                ~actual:owner_type
-                ~on_error:(expression_constraint_diagnostic expr);
-              let _ = check_expression state field.value field_type in
-              ()
-          | None ->
-              unresolved_name state field.origin ~namespace:"field" field.name;
-              let _ = infer_expression state field.value in
-              ());
+        List.for_each
+          record.fields
+          ~fn:(fun field ->
+            let info =
+              match State.get_record_field state ~name:field.name with
+              | Some info -> Some info
+              | None -> record_field_for_expected_type state expected field.name
+            in
+            match info with
+            | Some info ->
+                let (owner_type, field_type) = instantiate_record_field state info in
+                unify
+                  state
+                  ~expected
+                  ~actual:owner_type
+                  ~on_error:(expression_constraint_diagnostic expr);
+                let _ = check_expression state field.value field_type in
+                ()
+            | None ->
+                unresolved_name state field.origin ~namespace:"field" field.name;
+                let _ = infer_expression state field.value in
+                ());
       expected
   | _ ->
       let actual = infer_record state expr record in
@@ -721,34 +816,43 @@ and infer_match state match_ =
 
 and infer_cases state cases scrutinee_type =
   let result_type = State.fresh_var state in
-  List.for_each cases ~fn:(fun (case: match_case) ->
-    State.push_scope state;
-    bind_pattern ~mode:Local state case.pattern scrutinee_type;
-    (match case.guard with
-    | Some guard ->
-        let _ = check_expression state guard Builtin.bool in
-        ()
-    | None -> ());
-    let body_type = infer_expression state case.body in
-    unify
-      state
-      ~expected:result_type
-      ~actual:body_type
-      ~on_error:(expression_constraint_diagnostic case.body);
-    State.pop_scope state);
+  List.for_each
+    cases
+    ~fn:(fun (case: match_case) ->
+      State.push_scope state;
+      bind_pattern ~mode:Local state case.pattern scrutinee_type;
+      (
+        match case.guard with
+        | Some guard ->
+            let _ = check_expression state guard Builtin.bool in
+            ()
+        | None -> ()
+      );
+      let body_type = infer_expression state case.body in
+      unify
+        state
+        ~expected:result_type
+        ~actual:body_type
+        ~on_error:(expression_constraint_diagnostic case.body);
+      State.pop_scope state);
   result_type
 
 and infer_let_binding state ~mode (bind: let_binding) =
   (* Infer at a deeper HM level, then generalize only variables that do not
-     escape through the surrounding environment. *)
+     escape through the surrounding environment.
+  *)
   State.push_scope state;
-  let binding_type =
+  let (binding_type, explicit_quantifiers) =
     match bind.type_hint with
-    | None -> infer_expression state bind.expr
+    | None -> (infer_expression state bind.expr, [])
     | Some hint ->
-        let expected = core_type_to_type_scoped state hint in
-        let _ = check_expression state bind.expr expected in
-        expected
+        with_core_type_scope
+          state
+          hint
+          ~fn:(fun state expected ->
+            let _ = check_expression state bind.expr expected in
+            let quantifiers = core_type_quantifier_ids state hint in
+            (expected, quantifiers))
   in
   State.pop_scope state;
   let binding_mode =
@@ -756,7 +860,27 @@ and infer_let_binding state ~mode (bind: let_binding) =
     | Generalized when not (expression_is_nonexpansive state bind.expr) -> Local
     | _ -> mode
   in
-  bind_pattern ~mode:binding_mode state bind.pattern binding_type;
+  let simple_binding_name =
+    if List.is_empty explicit_quantifiers then
+      None
+    else
+      bind_simple_binding_pattern bind.pattern binding_type
+  in
+  (
+    match simple_binding_name with
+    | Some name ->
+        bind_value ~mode:binding_mode ~quantifiers:explicit_quantifiers state ~name binding_type
+    | None ->
+        if not (List.is_empty explicit_quantifiers) then
+          State.add_diagnostic
+            state
+            (Diagnostics.Diagnostic.UnsupportedSyntax {
+              span = bind.origin.span;
+              kind = bind.origin.kind;
+              summary = "explicit universal annotations on destructuring bindings are not supported";
+            });
+        bind_pattern ~mode:binding_mode state bind.pattern binding_type
+  );
   binding_type
 
 and infer_let_expr state (let_: let_expression) =
@@ -768,6 +892,13 @@ and infer_let_expr state (let_: let_expression) =
       ());
   let body_type = infer_expression state let_.body in
   State.pop_scope state;
+  body_type
+
+and infer_let_exception state (let_exception: let_exception_expression) =
+  State.push_local_module_scope state;
+  register_local_exception state let_exception.declaration;
+  let body_type = infer_expression state let_exception.body in
+  State.pop_local_module_scope state;
   body_type
 
 (**
@@ -861,11 +992,7 @@ and infer_infix state expr (infix: infix_operation) =
   let right = infer_expression state infix.right in
   let operator = SurfacePath.to_string infix.operator in
   let unify_operand expected actual source =
-    unify
-      state
-      ~expected
-      ~actual
-      ~on_error:(expression_constraint_diagnostic source)
+    unify state ~expected ~actual ~on_error:(expression_constraint_diagnostic source)
   in
   match operator with
   | "+"
@@ -932,13 +1059,11 @@ and infer_infix state expr (infix: infix_operation) =
 
 and infer_array state items =
   let element = State.fresh_var state in
-  List.for_each items ~fn:(fun item ->
-    let actual = infer_expression state item in
-    unify
-      state
-      ~expected:element
-      ~actual
-      ~on_error:(expression_constraint_diagnostic item));
+  List.for_each
+    items
+    ~fn:(fun item ->
+      let actual = infer_expression state item in
+      unify state ~expected:element ~actual ~on_error:(expression_constraint_diagnostic item));
   Builtin.array element
 
 and infer_sequence state sequence =
@@ -1139,29 +1264,36 @@ and infer_function_param state (param: parameter) =
   (parameter_label_to_type_label param.label, param_type)
 
 and infer_function state expr fn_decl =
-  warn_unerasable_optional_arguments state fn_decl.parameters;
-  State.push_scope state;
-  let params = List.map ~fn:(infer_function_param state) fn_decl.parameters in
-  let body =
-    match fn_decl.body with
-    | Body expr -> infer_expression state expr
-    | Cases cases when fn_decl.parameters = [] ->
-        let argument = State.fresh_var state in
-        let result = infer_cases state cases argument in
-        Ast.Type.arrow argument result
-    | Cases (case :: _) ->
-        unsupported_syntax state case.origin "function-case bodies with explicit parameters are not supported";
-        State.fresh_var state
-    | Cases [] ->
-        unsupported_syntax state expr.origin "empty function-case body is not supported";
-        State.fresh_var state
-  in
-  State.pop_scope state;
-  List.fold_right
-    params
-    ~init:body
-    ~fn:(fun (label, parameter) result ->
-      Ast.Type.arrow ~label parameter result)
+  with_function_type_binders
+    state
+    fn_decl
+    ~fn:(fun state ->
+      warn_unerasable_optional_arguments state fn_decl.parameters;
+      State.push_scope state;
+      let params = List.map ~fn:(infer_function_param state) fn_decl.parameters in
+      let body =
+        match fn_decl.body with
+        | Body expr -> infer_expression state expr
+        | Cases cases when fn_decl.parameters = [] ->
+            let argument = State.fresh_var state in
+            let result = infer_cases state cases argument in
+            Ast.Type.arrow argument result
+        | Cases (case :: _) ->
+            unsupported_syntax
+              state
+              case.origin
+              "function-case bodies with explicit parameters are not supported";
+            State.fresh_var state
+        | Cases [] ->
+            unsupported_syntax state expr.origin "empty function-case body is not supported";
+            State.fresh_var state
+      in
+      State.pop_scope state;
+      List.fold_right
+        params
+        ~init:body
+        ~fn:(fun (label, parameter) result ->
+          Ast.Type.arrow ~label parameter result))
 
 let register_constructor state (decl: type_declaration) (ctr: type_constructor) =
   let description = ConstructorDescription.from_type_constructor state decl ctr in
@@ -1178,21 +1310,28 @@ let register_type_contents state (decl: type_declaration) =
 
 let register_type_declarations state declarations =
   let declarations =
-    List.map declarations ~fn:(fun (source_decl: type_declaration) ->
-      let declaration = {
-        source_decl with
-        name = State.qualify_current_module state source_decl.name;
-      }
-      in
-      (source_decl, declaration))
+    List.map
+      declarations
+      ~fn:(fun (source_decl: type_declaration) ->
+        let declaration = {
+          source_decl with
+          name = State.qualify_current_module state source_decl.name;
+        }
+        in
+        (source_decl, declaration))
   in
-  List.for_each declarations ~fn:(fun ((source_decl: type_declaration), declaration) ->
-    State.add_type state ~name:source_decl.name ~declaration);
-  List.for_each declarations ~fn:(fun (_, (declaration: type_declaration)) ->
-    register_type_contents state declaration)
+  List.for_each
+    declarations
+    ~fn:(fun ((source_decl: type_declaration), declaration) ->
+      State.add_type
+        state
+        ~name:source_decl.name
+        ~declaration);
+  List.for_each
+    declarations
+    ~fn:(fun (_, (declaration: type_declaration)) -> register_type_contents state declaration)
 
-let register_type_decl state (decl: type_declaration) =
-  register_type_declarations state [ decl ]
+let register_type_decl state (decl: type_declaration) = register_type_declarations state [ decl ]
 
 let add_unique_type_variable variables name =
   if List.any variables ~fn:(String.equal name) then
@@ -1201,23 +1340,18 @@ let add_unique_type_variable variables name =
     List.append variables [ name ]
 
 let append_unique_type_variables variables additions =
-  List.fold_left
-    additions
-    ~init:variables
-    ~fn:add_unique_type_variable
+  List.fold_left additions ~init:variables ~fn:add_unique_type_variable
 
 let rec core_type_variables (annotation: core_type) =
   let variables_of_types types =
     List.fold_left
       types
       ~init:[]
-      ~fn:(fun variables type_ ->
-        append_unique_type_variables variables (core_type_variables type_))
+      ~fn:(fun variables type_ -> append_unique_type_variables variables (core_type_variables type_))
   in
   match annotation.kind with
   | Var (Some name) -> [ name ]
-  | Apply { constructor; arguments } ->
-      variables_of_types (constructor :: arguments)
+  | Apply { constructor; arguments } -> variables_of_types (constructor :: arguments)
   | Arrow { parameter; result; _ } -> variables_of_types [ parameter; result ]
   | Tuple parts -> variables_of_types parts
   | ForAll { parameters; body } ->
@@ -1354,7 +1488,8 @@ let rec type_impl_item (state: State.t) (item: structure_item) =
       ()
   | Module declarations -> List.for_each declarations ~fn:(type_module_declaration state)
   | Open module_path -> open_module state item.origin module_path
-  | ModuleType _ -> unsupported_structure_item state item "module type declarations are not supported yet"
+  | ModuleType _ ->
+      unsupported_structure_item state item "module type declarations are not supported yet"
   | Include module_path -> include_module state item.origin module_path
 
 and type_impl (state: State.t) (items: structure_item list) =
@@ -1370,7 +1505,10 @@ and type_module_declaration state (declaration: module_declaration) =
     match (declaration.parameters, declaration.application, declaration.alias) with
     | (_ :: _, _, _)
     | (_, Some _, _) ->
-        unsupported_syntax state declaration.origin "functor and module-application declarations are not supported yet"
+        unsupported_syntax
+          state
+          declaration.origin
+          "functor and module-application declarations are not supported yet"
     | ([], None, Some target) ->
         if not (State.add_module_alias state ~name:declaration.name ~target) then
           unsupported_syntax
@@ -1402,8 +1540,7 @@ let rec type_intf_item state (item: signature_item) =
             ("cannot extend an unavailable type " ^ SurfacePath.to_string extension.name)
     )
   | Exception declaration -> register_exception state declaration
-  | Module declarations ->
-      List.for_each declarations ~fn:(type_signature_module_declaration state)
+  | Module declarations -> List.for_each declarations ~fn:(type_signature_module_declaration state)
   | ModuleType _ ->
       unsupported_signature_item state item "module type declarations are not supported yet"
   | Open module_path -> open_module state item.origin module_path
@@ -1420,7 +1557,10 @@ and type_signature_module_declaration state (declaration: module_declaration) =
   ) with
   | (_ :: _, _, _, _, _, _)
   | (_, Some _, _, _, _, _) ->
-      unsupported_syntax state declaration.origin "functor and module-application declarations are not supported yet"
+      unsupported_syntax
+        state
+        declaration.origin
+        "functor and module-application declarations are not supported yet"
   | ([], None, Some target, None, None, []) ->
       if not (State.add_module_alias state ~name:declaration.name ~target) then
         unsupported_syntax
@@ -1431,14 +1571,9 @@ and type_signature_module_declaration state (declaration: module_declaration) =
       State.push_module state ~name:declaration.name;
       type_intf state signature_items;
       State.pop_module state
-  | _ ->
-      unsupported_syntax
-        state
-        declaration.origin
-        "unsupported module signature form"
+  | _ -> unsupported_syntax state declaration.origin "unsupported module signature form"
 
-and type_intf state (items: signature_item list) =
-  List.for_each items ~fn:(type_intf_item state)
+and type_intf state (items: signature_item list) = List.for_each items ~fn:(type_intf_item state)
 
 let type_implementation state (implementation: Ast.implementation) =
   type_impl state implementation.items

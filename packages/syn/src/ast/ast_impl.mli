@@ -511,7 +511,10 @@ module Pattern: sig
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t; payload: t option }
+    | Exception of {
+        pattern: t;
+        payload: t option;
+      }
     | Error of Node.t
     | Unknown of Node.t
 
@@ -1073,6 +1076,8 @@ module LetExceptionExpr: sig
   val in_token: t -> Token.t option
 
   val body: t -> expr option
+
+  val payload_type: t -> type_expr option
 
   val fold_payload_token: t -> init:'acc -> fn:(Token.t -> 'acc -> 'acc control) -> 'acc
 

@@ -3666,6 +3666,8 @@ module LetExceptionExpr: sig
 
   val body: t -> expr option
 
+  val payload_type: t -> type_expr option
+
   val fold_payload_token: t -> init:'acc -> fn:(token -> 'acc -> 'acc control) -> 'acc
 
   val payload_token_count: t -> int
@@ -3737,28 +3739,34 @@ end = struct
 
   let body = first_expr_child
 
+  let payload_type = first_type_expr_child
+
   let payload_bounds = fun expr ->
     match (of_index expr, in_index expr) with
     | (Some of_index, Some in_index) when of_index < in_index -> Some (of_index + 1, in_index)
     | _ -> None
 
   let fold_payload_token = fun expr ~init ~fn ->
-    match payload_bounds expr with
-    | None -> init
-    | Some (start, stop) ->
-        let rec loop index acc =
-          if index >= stop then
-            acc
-          else
-            match child_token_at expr index with
-            | Some token -> (
-                match fn token acc with
-                | Continue next -> loop (index + 1) next
-                | Return value -> value
-              )
-            | None -> loop (index + 1) acc
-        in
-        loop start init
+    match first_type_expr_child expr with
+    | Some payload_type -> Node.fold_token payload_type ~init ~fn
+    | None -> (
+        match payload_bounds expr with
+        | None -> init
+        | Some (start, stop) ->
+            let rec loop index acc =
+              if index >= stop then
+                acc
+              else
+                match child_token_at expr index with
+                | Some token -> (
+                    match fn token acc with
+                    | Continue next -> loop (index + 1) next
+                    | Return value -> value
+                  )
+                | None -> loop (index + 1) acc
+            in
+            loop start init
+      )
 
   let payload_token_count = fun expr -> count_fold fold_payload_token expr
 
@@ -4066,7 +4074,10 @@ module Pattern: sig
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t; payload: t option }
+    | Exception of {
+        pattern: t;
+        payload: t option;
+      }
     | Error of Node.t
     | Unknown of Node.t
 
@@ -4150,7 +4161,10 @@ end = struct
     | Or of { left: t; right: t }
     | Cons of { head: t; tail: t }
     | Lazy of { pattern: t }
-    | Exception of { pattern: t; payload: t option }
+    | Exception of {
+        pattern: t;
+        payload: t option;
+      }
     | Error of Node.t
     | Unknown of Node.t
 
@@ -5384,8 +5398,7 @@ module TypeDeclaration = struct
       | None -> find_child_node_in node (index + 1) ~matches
 
   let is_polymorphic_variant_type_node = fun node ->
-    node_kind_is node Syntax_kind.VARIANT_TYPE
-    && (
+    node_kind_is node Syntax_kind.VARIANT_TYPE && (
       match child_token_kind_at_node node 0 with
       | Some Syntax_kind.LBRACKET -> true
       | _ -> false
@@ -5481,7 +5494,11 @@ module TypeDeclaration = struct
 
   let parameter_count = fun decl -> count_fold fold_parameter decl
 
-  let manifest = fun decl -> find_child_node_in (member_or_decl decl) 0 ~matches:is_type_manifest_node
+  let manifest = fun decl ->
+    find_child_node_in
+      (member_or_decl decl)
+      0
+      ~matches:is_type_manifest_node
 
   module Member = struct
     type t = member

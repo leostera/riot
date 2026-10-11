@@ -70,7 +70,8 @@ let instantiate state (description: InferenceEnv.constructor_description) =
        registered. Each generic id gets one fresh variable for this
        instantiation, memoized by `fresh_for_generic`.
     *)
-    | Type.Generic id -> fresh_for_generic id
+    | Type.Generic id when description.instantiate_generics -> fresh_for_generic id
+    | Type.Generic _ as type_ -> type_
 
     (*
        Plain solver variables are already local to this checking run. Do not
@@ -123,6 +124,7 @@ let builtin_constructor ident =
     scheme = TypeScheme.monomorphic body;
     result;
     arguments = InferenceEnv.Tuple arguments;
+    instantiate_generics = true;
   }
   in
   if SurfacePath.equal ident Builtin.none_ident then
@@ -229,4 +231,5 @@ let from_type_constructor state (decl: type_declaration) (ctr: type_constructor)
         scheme = Quantifier.generalize_all body;
         result = generalize_type result;
         arguments = generalize_constructor_arguments constructor_arguments;
+        instantiate_generics = true;
       }: InferenceEnv.constructor_description))

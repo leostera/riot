@@ -62,6 +62,7 @@ let constructor_description name type_: Env.constructor_description = {
   scheme = scheme type_;
   result = type_;
   arguments = Env.Tuple [];
+  instantiate_generics = true;
 }
 
 let inline_record_constructor_description
@@ -83,6 +84,7 @@ let inline_record_constructor_description
         ({ declaration = field; type_ = int_type () }: Env.inline_record_field);
       ];
     };
+  instantiate_generics = true;
 }
 
 let constructor_scheme actual = Option.map actual ~fn:(fun description -> description.Env.scheme)

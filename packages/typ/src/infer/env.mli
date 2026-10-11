@@ -65,6 +65,8 @@ type constructor_description = {
   scheme: TypeScheme.t;
   result: Ast.Type.t;
   arguments: constructor_arguments;
+  (** Whether generic variables are instantiated at each constructor use. *)
+  instantiate_generics: bool;
 }
 
 (** Create an empty environment with one root module. *)
@@ -85,6 +87,12 @@ val push_scope: t -> t
    Popping the root value scope is a no-op.
 *)
 val pop_scope: t -> t
+
+(** Push a temporary module-namespace frame for locally scoped declarations. *)
+val push_local_module_scope: t -> t
+
+(** Discard the current temporary module-namespace frame. *)
+val pop_local_module_scope: t -> t
 
 (**
    Enter a nested module.

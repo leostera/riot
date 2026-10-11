@@ -24,7 +24,7 @@ The algorithm is syntax-directed:
 | Function abstraction | check when an arrow is expected; otherwise synthesize | Check/bind each parameter at the expected arrow domain and check the body at the expected result. Synthesis introduces fresh domains and checks the body after those binders enter scope. |
 | Tuple, list, immutable record, constructor payload | check when the expected shape/type is known; otherwise synthesize | Check components against the corresponding expected types. A mismatched shape reports at the introducing expression. |
 | `if`, `match`, `try` | check branches against a common expected result when supplied; otherwise synthesize one branch and check/unify the rest | Conditions and guards check against `bool`; pattern bindings are scoped to one arm. |
-| Sequence / local `let` | check the final/body expression when an expected result is supplied | Earlier sequence operands check against `unit`; local bindings use the let rule below. |
+| Sequence / local `let` / local exception | check the final/body expression when an expected result is supplied | Earlier sequence operands check against `unit`; local bindings use the let rule below, while a local exception constructor is monomorphic and scoped to its body. |
 | Annotation | bridge | Check the expression against the annotation; then require the annotation to agree with any outer expected type. |
 | Assignment, loops, assertions, arrays, field updates | synthesize or check using their declared primitive/mutable type rules | Mutable/expansive bindings are not unrestrictedly generalized. |
 
@@ -48,13 +48,29 @@ that lookup scope; pattern binders survive the scope, while the temporary open
 does not leak to sibling cases or later declarations. An unavailable target is
 reported as an unresolved module.
 
+A local exception expression such as `let exception Stop of string in body`
+registers `Stop` in a temporary constructor scope visible only in `body`. Its
+payload is checked against the declaration's monomorphic payload type, and its
+constructor cannot leak to later expressions or declarations. Type variables
+captured from an enclosing rigid annotation remain rigid through that local
+scope.
+
 ## Rank-1 HM and mutation
 
-A let-bound scheme quantifies only metavariables whose creation level is
-strictly deeper than the environment level at the binding. Unification must
+Implicit let-generalization quantifies only metavariables whose creation
+level is strictly deeper than the environment level at the binding. Unification must
 perform an occurs check and lower every reachable metavariable to the older
-variable's level before linking it. Instantiation replaces each quantified
-variable once per use and preserves sharing within that one instance.
+variable's level before linking it. Each scheme records the exact generic IDs
+it quantifies; instantiation replaces only those IDs once per use and preserves
+sharing within that one instance. Unquantified generics are rigid and remain
+shared across monomorphic bindings.
+
+Explicit top-level locally abstract binders such as `type a.` are checked with
+rigid generic variables (skolemized), not mutable metavariables. The named
+scope remains active while checking the annotated expression, so a local
+exception declared with payload type `a` cannot be reused with an unrelated
+payload type. Local exception constructors are monomorphic over their payload
+type and are removed when their body scope ends.
 
 Generalization is permitted only for nonexpansive values. The current
 conservative value classification accepts literals, identifiers, functions,
@@ -131,8 +147,13 @@ classification documented here. Bidirectional syntax alone is not a soundness
 proof. The declarative rules, unifier/level invariants, trusted initial
 signatures, and rejection of unsupported syntax are all part of that claim.
 Higher-rank polymorphism, GADT refinement, polymorphic variants, objects,
-first-class modules, and functor applications remain unsupported unless the
-tracked source corpus requires them and their rules are added explicitly.
+first-class modules, and functor applications are outside the currently
+implemented fragment. The tracked corpus contains polymorphic-variant and
+first-class-module uses, so those are known parity blockers—not passing or
+excluded inputs—and must receive explicit rules before the gate can be enabled.
+Nested higher-rank `forall` forms are diagnosed rather than approximated. The
+corpus-required top-level locally abstract binders (`type a.`) and monomorphic
+local exception payloads are supported within the rank-1 fragment.
 
 See the companion research note in the private ai-research repository:
 `personal/riot/typ-bidirectional-soundness/`.

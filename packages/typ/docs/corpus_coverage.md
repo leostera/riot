@@ -104,9 +104,14 @@ than evidence of class/object syntax in first-party OCaml implementation code.
   and known application arguments. The bidirectional rule contract is in
   [bidirectional_typing.md](./bidirectional_typing.md).
 - Let-generalization uses HM levels. Unification performs an occurs check and
-  lowers escaping metavariable levels before linking. A conservative
-  nonexpansive-value restriction is active; regressions cover environment
-  capture and a polymorphic-reference escape.
+  lowers escaping metavariable levels before linking. Explicit top-level
+  `type a.` binders are represented by rigid generic variables while their
+  annotated expressions are checked; local exception constructors retain those
+  enclosing types monomorphically and are discarded with their lexical scope.
+  Nested higher-rank polymorphism remains unsupported and produces a diagnostic.
+  A conservative nonexpansive-value restriction is active; regressions cover
+  environment capture, a polymorphic-reference escape, and an attempted boolean
+  payload for a rigid local exception type.
 - Unresolved value, constructor, field, type, type-variable, and module names
   now emit structured source-located errors. Type-constructor arity mismatches are also
   structured errors. Recovery variables may continue traversal but cannot
@@ -119,13 +124,16 @@ than evidence of class/object syntax in first-party OCaml implementation code.
   environment: imports and full library interfaces still need package-aware
   loading.
 - Current focused suites: `~/.riot/bin/riot test -p syn --json`: **1,199
-  passed, 0 failed**; `~/.riot/bin/riot test -p typ --json`: **363 passed, 0
+  passed, 0 failed**; `~/.riot/bin/riot test -p typ --json`: **365 passed, 0
   failed**. Syn coverage includes preserving interval patterns as constructor
-  payloads (for example, `Some '0' .. '9'`). These suites validate focused
-  behavior only.
+  payloads (for example, `Some '0' .. '9'`) and exposing typed payload syntax
+  for local exception expressions. Typ coverage includes lexical local
+  exception scope and monomorphic payloads that retain rigid enclosing type
+  variables; a regression rejects using a boolean payload where an abstract
+  type variable is required. These suites validate focused behavior only.
 - The standalone runner at `packages/typ/examples/corpus_check.ml` enumerated
   **2,404** in-scope tracked files and reported **71 passed, 2,333 failed**:
-  **0 parser failures**, **77 AST-lowering failures**, and **2,256 Typ
+  **0 parser failures**, **71 AST-lowering failures**, and **2,262 Typ
   failures**. This is not the package-aware gate: it checks files independently
   without dependency interfaces, so unresolved imported modules are expected.
   The runner is a diagnostic aid, not evidence of corpus parity. `riot check`

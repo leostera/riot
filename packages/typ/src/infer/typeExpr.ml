@@ -11,7 +11,20 @@ let surface_path parts =
 
 let is_builtin_type name =
   List.any
-    [ "int"; "bool"; "float"; "char"; "string"; "unit"; "exn"; "list"; "array"; "ref"; "option"; "result" ]
+    [
+      "int";
+      "bool";
+      "float";
+      "char";
+      "string";
+      "unit";
+      "exn";
+      "list";
+      "array";
+      "ref";
+      "option";
+      "result";
+    ]
     ~fn:(String.equal name)
 
 let unresolved_type state (annotation: core_type) ident =
@@ -32,14 +45,20 @@ let resolve_type_identifier state (annotation: core_type) ident =
         | [ name ] when is_builtin_type name -> Some ident
         | [ _ ] -> None
         | type_name :: reversed_module_path ->
-            let module_path = reversed_module_path |> List.rev |> surface_path in
+            let module_path =
+              reversed_module_path
+              |> List.rev
+              |> surface_path
+            in
             let type_name = surface_path [ type_name ] in
-            (match State.get_module_path state ~path:module_path with
-            | None -> None
-            | Some summary ->
-                Option.map
-                  (InferenceEnv.module_get_type summary ~name:type_name)
-                  ~fn:(fun declaration -> declaration.name))
+            (
+              match State.get_module_path state ~path:module_path with
+              | None -> None
+              | Some summary ->
+                  Option.map
+                    (InferenceEnv.module_get_type summary ~name:type_name)
+                    ~fn:(fun declaration -> declaration.name)
+            )
       in
       match resolved with
       | Some ident -> ident
@@ -51,10 +70,7 @@ let resolve_type_identifier state (annotation: core_type) ident =
 let unsupported_type state (annotation: core_type) summary =
   State.add_diagnostic
     state
-    (Diagnostics.Diagnostic.UnsupportedType {
-      span = annotation.origin.span;
-      summary;
-    })
+    (Diagnostics.Diagnostic.UnsupportedType { span = annotation.origin.span; summary })
 
 let rec core_type_variables (annotation: core_type) =
   let variables_of_types types =
@@ -66,8 +82,10 @@ let rec core_type_variables (annotation: core_type) =
           (core_type_variables type_)
           ~init:variables
           ~fn:(fun variables name ->
-            if List.any variables ~fn:(String.equal name) then variables
-            else List.append variables [ name ]))
+            if List.any variables ~fn:(String.equal name) then
+              variables
+            else
+              List.append variables [ name ]))
   in
   match annotation.kind with
   | Var (Some name) -> [ name ]
@@ -79,8 +97,10 @@ let rec core_type_variables (annotation: core_type) =
         (core_type_variables body)
         ~init:parameters
         ~fn:(fun variables name ->
-          if List.any variables ~fn:(String.equal name) then variables
-          else List.append variables [ name ])
+          if List.any variables ~fn:(String.equal name) then
+            variables
+          else
+            List.append variables [ name ])
   | PolyVariant fields ->
       fields
       |> List.filter_map ~fn:(fun (field: poly_variant_type_field) -> field.payload)
@@ -111,11 +131,15 @@ let type_constructor_arity state ident =
   | Some declaration -> Some (List.length declaration.parameters)
   | None -> (
       match List.rev (SurfacePath.to_segments ident) with
-      | [ name ] when is_builtin_type name ->
-          (match name with
-          | "list" | "array" | "ref" | "option" -> Some 1
+      | [ name ] when is_builtin_type name -> (
+          match name with
+          | "list"
+          | "array"
+          | "ref"
+          | "option" -> Some 1
           | "result" -> Some 2
-          | _ -> Some 0)
+          | _ -> Some 0
+        )
       | _ -> None
     )
 
@@ -141,12 +165,29 @@ let validate_type_constructor_arity state (annotation: core_type) ident actual =
    without rebuilding the conversion. Constructor positions defer arity checks
    until all source type arguments have been applied.
 *)
-let rec core_type_to_type_internal (state: State.t) ~as_constructor (annotation: core_type) =
+let rec core_type_to_type_internal (state: State.t) ~as_constructor ~root (annotation: core_type) =
   let type_ =
     match annotation.kind with
     (* A bare type name such as `int` or `Result.t`. *)
     | TypeIdent ident ->
-        Type.Apply { ident = resolve_type_identifier state annotation ident; arguments = [] }
+        let ident_segments = SurfacePath.to_segments ident in
+        (
+          match ident_segments with
+          | [ name ] -> (
+              match State.get_type_param state ~name with
+              | Some type_ -> type_
+              | None ->
+                  Type.Apply {
+                    ident = resolve_type_identifier state annotation ident;
+                    arguments = [];
+                  }
+            )
+          | _ ->
+              Type.Apply {
+                ident = resolve_type_identifier state annotation ident;
+                arguments = [];
+              }
+        )
     | Apply { constructor; arguments } -> (
         (*
            Type application is represented source-first as "constructor plus
@@ -154,9 +195,13 @@ let rec core_type_to_type_internal (state: State.t) ~as_constructor (annotation:
            the new arguments. This handles both `int list` and curried-looking
            type application shapes without introducing a separate solver node.
         *)
-        let constructor = core_type_to_type_internal state ~as_constructor:true constructor in
+        let constructor =
+          core_type_to_type_internal state ~as_constructor:true ~root:false constructor
+        in
         let arguments =
-          List.map arguments ~fn:(core_type_to_type_internal state ~as_constructor:false)
+          List.map
+            arguments
+            ~fn:(core_type_to_type_internal state ~as_constructor:false ~root:false)
         in
         match Unifier.resolve constructor with
         | Type.Apply { ident; arguments = existing_arguments } ->
@@ -168,28 +213,45 @@ let rec core_type_to_type_internal (state: State.t) ~as_constructor (annotation:
     | Arrow { label; parameter; result } ->
         Type.Arrow {
           label = arrow_label_to_type_label label;
-          parameter = core_type_to_type_internal state ~as_constructor:false parameter;
-          result = core_type_to_type_internal state ~as_constructor:false result;
+          parameter = core_type_to_type_internal state ~as_constructor:false ~root:false parameter;
+          result = core_type_to_type_internal state ~as_constructor:false ~root:false result;
         }
 
     (* Tuple syntax is already semantic enough for the current solver. *)
     | Tuple parts ->
-        Type.Tuple (List.map parts ~fn:(core_type_to_type_internal state ~as_constructor:false))
+        Type.Tuple (List.map
+          parts
+          ~fn:(core_type_to_type_internal state ~as_constructor:false ~root:false))
     | Parenthesized inner ->
         (*
            Parentheses are syntax-only at this stage. They may still exist in
            the typed tree because the tree is source-shaped, but the solver
            should not see a separate parenthesized type node.
         *)
-        core_type_to_type_internal state ~as_constructor inner
-    | ForAll { body = inner; _ } ->
-        (*
-           TODO(@leostera): model explicit quantifier scope. For now we type
-           the body so annotated examples can continue through the checker;
-           real scoped quantification belongs here when that feature slice
-           lands.
-        *)
-        core_type_to_type_internal state ~as_constructor:false inner
+        core_type_to_type_internal state ~as_constructor ~root inner
+    | ForAll { parameters; body } ->
+        if not root then
+          unsupported_type state annotation "higher-rank polymorphic types are not supported yet";
+        let scope = HashMap.with_capacity ~size:(List.length parameters) in
+        List.for_each
+          parameters
+          ~fn:(fun name ->
+            let type_ =
+              if root then
+                match State.get_type_param state ~name with
+                | Some (Type.Generic _ as generic) -> generic
+                | Some _
+                | None -> State.fresh_generic state
+              else
+                State.fresh_generic state
+            in
+            let _ = HashMap.insert scope ~key:name ~value:type_ in
+            ());
+        State.with_type_params
+          state
+          scope
+          (fun state ->
+            core_type_to_type_internal state ~as_constructor:false ~root:false body)
     | Var (Some name) -> (
         (*
            Type variables inside a declaration first consult the active
@@ -217,32 +279,70 @@ let rec core_type_to_type_internal (state: State.t) ~as_constructor (annotation:
         State.fresh_var state
   in
   annotation.type_ <- Some type_;
-  (match (as_constructor, Unifier.resolve type_) with
-  | (false, Type.Apply { ident; arguments }) ->
-      validate_type_constructor_arity state annotation ident (List.length arguments)
-  | _ -> ());
+  (
+    match (as_constructor, Unifier.resolve type_) with
+    | (false, Type.Apply { ident; arguments }) ->
+        validate_type_constructor_arity state annotation ident (List.length arguments)
+    | _ -> ()
+  );
   type_
 
 let core_type_to_type state annotation =
-  core_type_to_type_internal state ~as_constructor:false annotation
+  core_type_to_type_internal state ~as_constructor:false ~root:true annotation
+
+(** Return the rigid identities bound by the annotation's top-level [type a.] binder. *)
+let core_type_quantifier_ids state annotation =
+  let rec outer_forall (annotation: core_type) =
+    match annotation.kind with
+    | ForAll { parameters; _ } -> parameters
+    | Parenthesized inner -> outer_forall inner
+    | _ -> []
+  in
+  outer_forall annotation
+  |> List.filter_map
+    ~fn:(fun name ->
+      match State.get_type_param state ~name with
+      | Some (Type.Generic id) -> Some id
+      | Some _
+      | None -> None)
 
 (**
-   Convert a source annotation with one shared solver variable per named type
-   variable. This preserves equations such as `'a -> 'a` while leaving the
-   resulting variables available for the surrounding let/signature rule to
-   generalize or constrain.
+   Convert an annotation and run [fn] while its named variables remain in the
+   active type-parameter scope. Top-level [type a.] binders are rigid generics;
+   other named variables are fresh unification variables.
 *)
-let core_type_to_type_scoped state annotation =
+let with_core_type_scope state annotation ~fn =
   let names = core_type_variables annotation in
+  let rigid_names =
+    let rec outer_forall (annotation: core_type) =
+      match annotation.kind with
+      | ForAll { parameters; _ } -> parameters
+      | Parenthesized inner -> outer_forall inner
+      | _ -> []
+    in
+    outer_forall annotation
+  in
   let scope = HashMap.with_capacity ~size:(List.length names) in
-  List.for_each names ~fn:(fun name ->
-    let type_ = State.fresh_var state in
-    let _ = HashMap.insert scope ~key:name ~value:type_ in
-    ());
+  List.for_each
+    names
+    ~fn:(fun name ->
+      let type_ =
+        if List.any rigid_names ~fn:(String.equal name) then
+          State.fresh_generic state
+        else
+          State.fresh_var state
+      in
+      let _ = HashMap.insert scope ~key:name ~value:type_ in
+      ());
   State.with_type_params
     state
     scope
-    (fun state -> core_type_to_type state annotation)
+    (fun state ->
+      let type_ = core_type_to_type state annotation in
+      fn state type_)
+
+let core_type_to_type_scoped state annotation =
+  with_core_type_scope state annotation ~fn:(fun _state type_ -> type_)
 
 let type_declaration_to_type ?(arguments = []) (decl: type_declaration) =
   Type.Apply { ident = decl.name; arguments }

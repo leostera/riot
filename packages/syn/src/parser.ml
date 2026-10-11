@@ -1933,7 +1933,17 @@ and parse_let_expr = fun p ~signature ~stop_at_item ~stop_at_semi ~stop_at_comma
     complete p marker Syntax_kind.LET_MODULE_EXPR
   ) else if at p Syntax_kind.EXCEPTION_KW then (
     bump p;
-    consume_balanced_until p ~closer:Syntax_kind.IN_KW 0;
+    if at p Syntax_kind.IDENT then
+      bump p
+    else
+      Event.Buffer.error p.events (missing_exception_name p);
+    if at p Syntax_kind.OF_KW then (
+      bump p;
+      if is_eof p || at p Syntax_kind.IN_KW then
+        Event.Buffer.error p.events (invalid_type_expression p)
+      else
+        ignore (parse_type_expr p ~allow_leading_poly_type_after_newline:false ~stop_at_arrow:false)
+    );
     expect p Syntax_kind.IN_KW (invalid_expression p);
     ignore (parse_expression p ~signature ~stop_at_item ~stop_at_semi ~stop_at_comma 0);
     complete p marker Syntax_kind.LET_EXCEPTION_EXPR
@@ -2624,6 +2634,7 @@ and type_expr_boundary = fun p ~stop_at_arrow ->
   | Syntax_kind.RBRACE
   | Syntax_kind.BAR_RBRACKET
   | Syntax_kind.END_KW
+  | Syntax_kind.IN_KW
   | Syntax_kind.SEMI -> true
   | Syntax_kind.ARROW when stop_at_arrow -> true
   | kind when leading_trivia_contains_newline p

@@ -48,9 +48,11 @@ let module_member state name lookup =
         |> List.map ~fn:single_segment
       in
       let member_name = single_segment member_name in
-      (match InferenceEnv.get_module_path state.env ~path:module_path with
-      | Some summary -> lookup summary ~name:member_name
-      | None -> None)
+      (
+        match InferenceEnv.get_module_path state.env ~path:module_path with
+        | Some summary -> lookup summary ~name:member_name
+        | None -> None
+      )
 
 let get_value state ~name =
   match InferenceEnv.get_value state.env ~name with
@@ -95,9 +97,10 @@ let get_module state ~name = InferenceEnv.get_module state.env ~name
 let get_module_path state ~path =
   let path =
     Model.Surface_path.to_segments path
-    |> List.map ~fn:(fun segment ->
-      Model.Surface_path.from_parts [ segment ]
-      |> Result.expect ~msg:"module path segment must be non-empty")
+    |> List.map
+      ~fn:(fun segment ->
+        Model.Surface_path.from_parts [ segment ]
+        |> Result.expect ~msg:"module path segment must be non-empty")
   in
   InferenceEnv.get_module_path state.env ~path
 
@@ -141,6 +144,11 @@ let fresh_var state =
   let _ = HashMap.insert state.variable_levels ~key:id ~value:state.level in
   Ast.Type.Var { id; link = None }
 
+let fresh_generic state =
+  let id = state.next_var in
+  state.next_var <- Ast.TypeVar.next id;
+  Ast.Type.Generic id
+
 let current_level state = state.level
 
 let variable_level state (variable: Ast.Type.variable) =
@@ -157,8 +165,7 @@ let lower_variable_level state variable ~to_level =
 let adjust_levels state ~to_level type_ =
   let rec visit type_ =
     match type_ with
-    | Ast.Type.Var ({ link = None; _ } as variable) ->
-        lower_variable_level state variable ~to_level
+    | Ast.Type.Var ({ link = None; _ } as variable) -> lower_variable_level state variable ~to_level
     | Ast.Type.Var { link = Some linked; _ } -> visit linked
     | Ast.Type.Generic _ -> ()
     | Ast.Type.Tuple parts -> List.for_each parts ~fn:visit
@@ -171,6 +178,23 @@ let adjust_levels state ~to_level type_ =
 
 let with_type_params state scope fn =
   let previous = state.type_params in
+  let scope =
+    match previous with
+    | None -> scope
+    | Some previous ->
+        let merged = HashMap.with_capacity ~size:(HashMap.length previous + HashMap.length scope) in
+        HashMap.for_each
+          previous
+          ~fn:(fun name type_ ->
+            let _ = HashMap.insert merged ~key:name ~value:type_ in
+            ());
+        HashMap.for_each
+          scope
+          ~fn:(fun name type_ ->
+            let _ = HashMap.insert merged ~key:name ~value:type_ in
+            ());
+        merged
+  in
   state.type_params <- Some scope;
   let result = fn state in
   state.type_params <- previous;
@@ -189,13 +213,18 @@ let pop_scope state =
   state.env <- InferenceEnv.pop_scope state.env;
   state.level <- Int.max 0 (state.level - 1)
 
+let push_local_module_scope state =
+  state.env <- InferenceEnv.push_local_module_scope state.env
+
+let pop_local_module_scope state =
+  state.env <- InferenceEnv.pop_local_module_scope state.env
+
 let push_module state ~name =
   state.env <- InferenceEnv.push_module state.env ~name;
   state.module_path <- state.module_path @ Model.Surface_path.to_segments name
 
 let pop_module state =
   state.env <- InferenceEnv.pop_module state.env;
-  state.module_path <-
-    match List.rev state.module_path with
-    | [] -> []
-    | _ :: rest -> List.rev rest
+  state.module_path <- match List.rev state.module_path with
+  | [] -> []
+  | _ :: rest -> List.rev rest

@@ -398,7 +398,10 @@ and pattern_kind =
   (** Literal pattern. *)
   | Literal of literal
   (** Character interval pattern, such as ['a' .. 'z']. *)
-  | Interval of { left: pattern; right: pattern }
+  | Interval of {
+      left: pattern;
+      right: pattern;
+    }
   (** Polymorphic variant pattern. *)
   | PolyVariant of poly_variant_pattern
   (** Tuple pattern. *)
@@ -418,7 +421,10 @@ and pattern_kind =
   (** Pattern with attributes preserved as a source-shaped wrapper. *)
   | Attribute of pattern
   (** Pattern resolved with module-local opens, such as [M.(Some value)]. *)
-  | LocalOpen of { module_path: ident; pattern: pattern }
+  | LocalOpen of {
+      module_path: ident;
+      pattern: pattern;
+    }
   (** First-class module pattern. *)
   | FirstClassModule of first_class_module_pattern
 
@@ -587,6 +593,8 @@ and expression_kind =
   | Infix of infix_operation
   (** Local `let` expression. *)
   | Let of let_expression
+  (** Local exception declaration. *)
+  | LetException of let_exception_expression
   (** Local module binding expression. *)
   | LetModule of let_module
   (** Local open expression. *)
@@ -736,6 +744,14 @@ and let_expression = {
   (** Local bindings in source order. *)
   bindings: let_binding list;
   (** Expression body scoped by the binding. *)
+  body: expression;
+}
+
+(** Local exception declaration and expression body. *)
+and let_exception_expression = {
+  (** Exception declared for the body. *)
+  declaration: exception_declaration;
+  (** Expression evaluated in the local exception scope. *)
   body: expression;
 }
 

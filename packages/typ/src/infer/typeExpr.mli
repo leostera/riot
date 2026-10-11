@@ -12,8 +12,14 @@ val arrow_label_to_type_label: Ast.arrow_label -> Ast.Type.Label.t
 (** Convert a source type expression into an inference type and annotate it. *)
 val core_type_to_type: State.t -> Ast.core_type -> Ast.Type.t
 
-(** Convert an annotation while sharing one solver variable per named type variable. *)
+(** Convert an annotation with shared named variables; top-level [type a.] binders stay rigid. *)
 val core_type_to_type_scoped: State.t -> Ast.core_type -> Ast.Type.t
+
+(** The rigid generic identities bound by a top-level [type a.] annotation scope. *)
+val core_type_quantifier_ids: State.t -> Ast.core_type -> Ast.TypeVar.t list
+
+(** Convert an annotation, keeping its named variables in scope for [fn]. *)
+val with_core_type_scope: State.t -> Ast.core_type -> fn:(State.t -> Ast.Type.t -> 'a) -> 'a
 
 (** Build the nominal type represented by a declaration. *)
 val type_declaration_to_type: ?arguments:Ast.Type.t list -> Ast.type_declaration -> Ast.Type.t

@@ -160,8 +160,7 @@ and find_signature_item = fun query parent item ->
       | Ast.Exception declaration -> find_exception_declaration query (Some node) declaration
       | Ast.Module declarations ->
           find_first declarations ~fn:(find_module_declaration query (Some node))
-      | Ast.ModuleType declaration ->
-          find_module_type_declaration query (Some node) declaration
+      | Ast.ModuleType declaration -> find_module_type_declaration query (Some node) declaration
       | Ast.Open _
       | Ast.Include _ -> None)
 
@@ -488,6 +487,11 @@ and find_expression_kind = fun query parent kind ->
     )
   | Ast.Let { bindings; body; _ } -> (
       match find_first bindings ~fn:(find_let_binding query parent) with
+      | Some _ as found -> found
+      | None -> find_expression query parent body
+    )
+  | Ast.LetException { declaration; body } -> (
+      match find_exception_declaration query parent declaration with
       | Some _ as found -> found
       | None -> find_expression query parent body
     )

@@ -162,17 +162,22 @@ let test_multiple_modules_are_copied_recursively _ctx =
   | _ -> Error "expected modules M and N"
 
 let test_infer_signature_exports_typed_declarations _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 type color = Red | Blue
 val choose : color -> color
 val identity : 'a -> 'a
 external primitive : int -> int = "primitive"
-|ocaml} in
+|ocaml}
+  in
   let parse_result = Syn.parse_interface (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -182,31 +187,38 @@ external primitive : int -> int = "primitive"
       in
       match diagnostics with
       | _ :: _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
       | [] ->
           result.intf
           |> render_interface
           |> assert_equal_string
-            ~expected:(
-              "type color = Red | Blue\n"
-              ^ "val choose : color -> color\n"
-              ^ "val identity : 'a -> 'a\n"
-              ^ "val primitive : int -> int\n")
+            ~expected:("type color = Red | Blue\n"
+            ^ "val choose : color -> color\n"
+            ^ "val identity : 'a -> 'a\n"
+            ^ "val primitive : int -> int\n")
 
 let test_infer_nested_modules_and_aliases _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 module M = struct
   type color = Red | Blue
   let choose (value: color) = value
 end
 module Alias = M
 let selected = Alias.choose Alias.Red
-|ocaml} in
+|ocaml}
+  in
   let parse_result = Syn.parse_implementation (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -216,24 +228,32 @@ let selected = Alias.choose Alias.Red
       in
       match diagnostics with
       | _ :: _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
       | [] ->
           result.intf
           |> render_interface
           |> assert_equal_string ~expected:"val selected : M.color\n"
 
 let test_infer_exception_declarations _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 exception Failure
 exception Error of string
 let failure = Failure
 let error = Error "problem"
-|ocaml} in
+|ocaml}
+  in
   let parse_result = Syn.parse_implementation (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -243,14 +263,18 @@ let error = Error "problem"
       in
       match diagnostics with
       | _ :: _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
       | [] ->
           result.intf
           |> render_interface
           |> assert_equal_string ~expected:"val failure : exn\nval error : exn\n"
 
 let test_infer_common_expression_forms _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 exception Failure
 exception Error of string
 let sum a b = a + b
@@ -261,12 +285,16 @@ let loop n = for i = 0 to n do assert (i >= 0) done
 let sequence = print_endline "ok"; ()
 let recovered = try Error "bad" with | Failure -> Error "failed" | Error message -> Error message
 let abort () = raise Failure
-|ocaml} in
+|ocaml}
+  in
   let parse_result = Syn.parse_implementation (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -276,20 +304,22 @@ let abort () = raise Failure
       in
       match diagnostics with
       | _ :: _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
       | [] ->
           result.intf
           |> render_interface
           |> assert_equal_string
-            ~expected:(
-              "val sum : int -> int -> int\n"
-              ^ "val concatenate : string -> string -> string\n"
-              ^ "val values : int list\n"
-              ^ "val total : int\n"
-              ^ "val loop : int -> unit\n"
-              ^ "val sequence : unit\n"
-              ^ "val recovered : exn\n"
-              ^ "val abort : unit -> 'a\n")
+            ~expected:("val sum : int -> int -> int\n"
+            ^ "val concatenate : string -> string -> string\n"
+            ^ "val values : int list\n"
+            ^ "val total : int\n"
+            ^ "val loop : int -> unit\n"
+            ^ "val sequence : unit\n"
+            ^ "val recovered : exn\n"
+            ^ "val abort : unit -> 'a\n")
 
 let test_infix_mismatch_has_operand_span _ctx =
   let source = "let _ = true + 1\n" in
@@ -297,7 +327,10 @@ let test_infix_mismatch_has_operand_span _ctx =
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -306,13 +339,15 @@ let test_infix_mismatch_has_operand_span _ctx =
         |> Iterator.to_list
       in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
-        when span.start = 8 && span.end_ = 12 && String.equal expected "int" && String.equal actual "bool" ->
-          Ok ()
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when span.start = 8
+      && span.end_ = 12
+      && String.equal expected "int"
+      && String.equal actual "bool" -> Ok ()
       | _ ->
-          Error
-            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-            |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let test_raise_rejects_non_exception_values _ctx =
   let source = "let _ = raise 1\n" in
@@ -320,7 +355,10 @@ let test_raise_rejects_non_exception_values _ctx =
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -329,25 +367,32 @@ let test_raise_rejects_non_exception_values _ctx =
         |> Iterator.to_list
       in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
-        when span.start = 14 && span.end_ = 15 && String.equal expected "exn" && String.equal actual "int" ->
-          Ok ()
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when span.start = 14
+      && span.end_ = 15
+      && String.equal expected "exn"
+      && String.equal actual "int" -> Ok ()
       | _ ->
-          Error
-            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-            |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let test_bidirectional_annotations_check_introductions _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 let identity : int -> int = fun value -> value
 let pair : int * bool = (1, true)
 let choose : bool -> int = fun condition -> if condition then 1 else 0
-|ocaml} in
+|ocaml}
+  in
   let parse_result = Syn.parse_implementation (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -359,12 +404,14 @@ let choose : bool -> int = fun condition -> if condition then 1 else 0
       | [] ->
           render_interface result.intf
           |> assert_equal_string
-            ~expected:(
-              "val identity : int -> int\n"
-              ^ "val pair : int * bool\n"
-              ^ "val choose : bool -> int\n")
+            ~expected:("val identity : int -> int\n"
+            ^ "val pair : int * bool\n"
+            ^ "val choose : bool -> int\n")
       | _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let test_bidirectional_function_body_mismatch_is_localized _ctx =
   let source = "let bad : int -> int = fun value -> true\n" in
@@ -373,7 +420,10 @@ let test_bidirectional_function_body_mismatch_is_localized _ctx =
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -382,12 +432,15 @@ let test_bidirectional_function_body_mismatch_is_localized _ctx =
         |> Iterator.to_list
       in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ]
-        when span.start = span_start
-          && String.equal expected "int"
-          && String.equal actual "bool" -> Ok ()
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when span.start
+      = span_start
+      && String.equal expected "int"
+      && String.equal actual "bool" -> Ok ()
       | _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let test_value_restriction_keeps_reference_contents_monomorphic _ctx =
   let source =
@@ -399,7 +452,10 @@ let test_value_restriction_keeps_reference_contents_monomorphic _ctx =
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -408,53 +464,76 @@ let test_value_restriction_keeps_reference_contents_monomorphic _ctx =
         |> Iterator.to_list
       in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
-        when span.start = 94 && span.end_ = 98 -> Ok ()
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ] when span.start = 94
+      && span.end_ = 98 -> Ok ()
       | _ ->
-          Error
-            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-            |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let infer_source_diagnostics source =
   let parse_result = Syn.parse_implementation (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
-      Ok (result.diagnostics.items |> Vector.iter |> Iterator.to_list)
+      Ok (
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      )
 
 let infer_interface_diagnostics source =
   let parse_result = Syn.parse_interface (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
-      Ok (result.diagnostics.items |> Vector.iter |> Iterator.to_list)
+      Ok (
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      )
 
 let has_unresolved_name diagnostics ~namespace ~name =
-  List.any diagnostics ~fn:(function
-    | Typ.Diagnostics.Diagnostic.UnresolvedName
-        { namespace = found_namespace; name = found_name; span } ->
-        String.equal namespace found_namespace
-        && String.equal name found_name
-        && Int.(span.start < span.end_)
-    | _ -> false)
+  List.any
+    diagnostics
+    ~fn:(fun __tmp1 ->
+      match __tmp1 with
+      | Typ.Diagnostics.Diagnostic.UnresolvedName {
+          namespace = found_namespace;
+          name = found_name;
+          span;
+        } ->
+          String.equal namespace found_namespace
+          && String.equal name found_name
+          && Int.(span.start < span.end_)
+      | _ -> false)
 
 let diagnostics_are_empty source =
   match infer_source_diagnostics source with
   | Error message -> Error message
   | Ok [] -> Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
 
 let test_open_module_resolves_exported_members _ctx =
-  diagnostics_are_empty {ocaml|
+  diagnostics_are_empty
+    {ocaml|
 module Packet = struct
   type t = Item of int
   let count = 2
@@ -477,7 +556,8 @@ let local_wins : int = precedence
 |ocaml}
 
 let test_open_precedence_applies_to_type_and_constructor_namespaces _ctx =
-  diagnostics_are_empty {ocaml|
+  diagnostics_are_empty
+    {ocaml|
 type local = Pick of int
 type t = Root
 module M = struct type t = Pick of bool end
@@ -486,7 +566,8 @@ let selected : t = Pick true
 |ocaml}
 
 let test_nested_module_signatures_and_aliases_typecheck _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 type outer = Outer
 module Packed : sig
   type t = Local
@@ -496,18 +577,21 @@ module Alias = Packed
 module TypeOf : module type of Packed
 val selected : Alias.t
 val also_selected : TypeOf.t
-|ocaml} in
+|ocaml}
+  in
   match infer_interface_diagnostics source with
   | Error message -> Error message
   | Ok [] -> Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
 
 let test_include_module_reexports_members _ctx =
   let* () =
-    diagnostics_are_empty {ocaml|
+    diagnostics_are_empty
+      {ocaml|
 module Source = struct
   type t = Item
   let value = Item
@@ -516,7 +600,8 @@ include Source
 let selected : Source.t = value
 |ocaml}
   in
-  match infer_interface_diagnostics {ocaml|
+  match infer_interface_diagnostics
+    {ocaml|
 module Source : sig
   type t = Item
   val value : t
@@ -527,13 +612,15 @@ val selected : t
   | Error message -> Error message
   | Ok [] -> Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
 
 let test_record_field_puns_use_the_last_identifier_segment _ctx =
   let* () =
-    diagnostics_are_empty {ocaml|
+    diagnostics_are_empty
+      {ocaml|
 module MapIter = struct
   type state = { items : int }
 end
@@ -541,7 +628,8 @@ let items = 2
 let qualified : MapIter.state = { MapIter.items }
 |ocaml}
   in
-  diagnostics_are_empty {ocaml|
+  diagnostics_are_empty
+    {ocaml|
 module MapIter = struct
   type state = { items : int }
 end
@@ -553,55 +641,126 @@ let test_record_update_checks_its_base_type _ctx =
   let source = "type point = { x : int }\nlet invalid : point = { 1 with x = 1 }\n" in
   match infer_source_diagnostics source with
   | Error message -> Error message
-  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
-    when Int.(span.start < span.end_) -> Ok ()
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ] when Int.(span.start < span.end_) ->
+      Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
 
 let test_character_interval_patterns_check_character_inputs _ctx =
   let* () =
     diagnostics_are_empty
       "let is_lower = function 'a' .. 'z' -> true | _ -> false\nlet is_digit = function Some '0' .. '9' -> true | _ -> false\n"
   in
-  match infer_source_diagnostics
-    "let invalid = match 1 with 'a' .. 'z' -> true | _ -> false\n"
-  with
+  match infer_source_diagnostics "let invalid = match 1 with 'a' .. 'z' -> true | _ -> false\n" with
   | Error message -> Error message
-  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
-    when Int.(span.start < span.end_) -> Ok ()
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ] when Int.(span.start < span.end_) ->
+      Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
 
 let test_exception_patterns_check_exception_values _ctx =
   let* () =
-    diagnostics_are_empty {ocaml|
+    diagnostics_are_empty
+      {ocaml|
 exception Stop of string
 let classify = function
   | exception Stop message -> message
   | _ -> "value"
 |ocaml}
   in
-  match infer_source_diagnostics {ocaml|
+  match infer_source_diagnostics
+    {ocaml|
 exception Stop of string
 let invalid = function
   | exception Stop true -> true
   | _ -> false
 |ocaml} with
   | Error message -> Error message
-  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
-    when Int.(span.start < span.end_) -> Ok ()
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ] when Int.(span.start < span.end_) ->
+      Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
+
+let test_local_exceptions_scope_their_constructor _ctx =
+  let* () =
+    diagnostics_are_empty
+      {ocaml|
+let classify input =
+  let exception Stop of string in
+  try raise (Stop input) with Stop message -> message
+|ocaml}
+  in
+  match infer_source_diagnostics
+    {ocaml|
+let inside = let exception Local in Local
+let outside = Local
+|ocaml} with
+  | Error message -> Error message
+  | Ok diagnostics when has_unresolved_name diagnostics ~namespace:"constructor" ~name:"Local" ->
+      Ok ()
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
+
+let test_local_exception_payload_is_monomorphic_in_enclosing_types _ctx =
+  let* () =
+    diagnostics_are_empty
+      {ocaml|
+let round_trip : type a. a -> a = fun value ->
+  let exception Local of a in
+  try raise (Local value) with Local restored -> restored
+let int_result = round_trip 1
+let bool_result = round_trip true
+|ocaml}
+  in
+  let* () =
+    match infer_source_diagnostics
+      {ocaml|
+let invalid : type a. a -> a = fun value -> value true
+|ocaml} with
+    | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+    | Ok [ Typ.Diagnostics.Diagnostic.AnnotationMismatch { span; _ } ] when Int.(span.start
+    < span.end_) -> Ok ()
+    | Ok diagnostics ->
+        Error (
+          List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+          |> String.concat "\\n"
+        )
+    | Error message -> Error message
+  in
+  match infer_source_diagnostics
+    {ocaml|
+let invalid : type a. a -> a = fun value ->
+  let exception Local of a in
+  let _ = Local value in
+  let _ = Local true in
+  value
+|ocaml} with
+  | Error message -> Error message
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
+  | Ok [ Typ.Diagnostics.Diagnostic.AnnotationMismatch { span; _ } ] when Int.(span.start
+  < span.end_) -> Ok ()
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
 
 let test_local_open_patterns_scope_module_members _ctx =
   let* () =
-    diagnostics_are_empty {ocaml|
+    diagnostics_are_empty
+      {ocaml|
 module Box = struct
   type 'a t = Box of 'a
 end
@@ -610,7 +769,8 @@ let unbox = function
   | _ -> 0
 |ocaml}
   in
-  match infer_source_diagnostics {ocaml|
+  match infer_source_diagnostics
+    {ocaml|
 module Colors = struct
   type color = Red | Blue
 end
@@ -621,12 +781,14 @@ let leaked = match Colors.Red with | Red -> true | _ -> false
   | Ok diagnostics when has_unresolved_name diagnostics ~namespace:"constructor" ~name:"Red" ->
       Ok ()
   | Ok diagnostics ->
-      Error
-        (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-        |> String.concat "\\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
 
 let test_open_module_scope_does_not_export_imports _ctx =
-  let source = {ocaml|
+  let source =
+    {ocaml|
 module Packet = struct
   let hidden = 1
 end
@@ -635,34 +797,52 @@ module Use = struct
   let visible = hidden
 end
 let missing = hidden
-|ocaml} in
+|ocaml}
+  in
   match infer_source_diagnostics source with
   | Error message -> Error message
   | Ok diagnostics ->
-      if has_unresolved_name diagnostics ~namespace:"value" ~name:"hidden" then Ok ()
+      if has_unresolved_name diagnostics ~namespace:"value" ~name:"hidden" then
+        Ok ()
       else
-        Error
-          (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-          |> String.concat "\n")
+        Error (
+          List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+          |> String.concat "\n"
+        )
 
 let interface_has_type_arity_error source ~expected ~actual =
   let parse_result = Syn.parse_interface (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
-      let diagnostics = result.diagnostics.items |> Vector.iter |> Iterator.to_list in
+      let diagnostics =
+        result.diagnostics.items
+        |> Vector.iter
+        |> Iterator.to_list
+      in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeConstructorArityMismatch
-            { name; expected = found_expected; actual = found_actual; span } ]
-        when String.equal name "wrapper"
-          && Int.equal found_expected expected
-          && Int.equal found_actual actual
-          && Int.(span.start < span.end_) -> Ok ()
+      | [
+          Typ.Diagnostics.Diagnostic.TypeConstructorArityMismatch {
+            name;
+            expected = found_expected;
+            actual = found_actual;
+            span;
+          };
+        ] when String.equal name "wrapper"
+      && Int.equal found_expected expected
+      && Int.equal found_actual actual
+      && Int.(span.start < span.end_) -> Ok ()
       | _ ->
-          Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
 
 let test_type_constructor_arity_is_checked _ctx =
   let* () =
@@ -684,18 +864,16 @@ let test_unresolved_names_are_errors_in_their_namespaces _ctx =
         if has_unresolved_name diagnostics ~namespace ~name then
           Ok ()
         else
-          Error
-            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-            |> String.concat "\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\n"
+          )
   in
   let* () = check "let value = missing_value\n" ~namespace:"value" ~name:"missing_value" in
   let* () = check "let value = Missing 1\n" ~namespace:"constructor" ~name:"Missing" in
   let* () = check "let value : missing_type = 1\n" ~namespace:"type" ~name:"missing_type" in
   let* () = check "open Missing\nlet value = 1\n" ~namespace:"module" ~name:"Missing" in
-  check
-    "type point = { x : int }\nlet value : point = { y = 1 }\n"
-    ~namespace:"field"
-    ~name:"y"
+  check "type point = { x : int }\nlet value : point = { y = 1 }\n" ~namespace:"field" ~name:"y"
 
 let test_generalization_does_not_quantify_an_environment_variable _ctx =
   let source = "let bad x = let id = x in (id 1, id true)\n" in
@@ -703,7 +881,10 @@ let test_generalization_does_not_quantify_an_environment_variable _ctx =
   let model_source = Typ.Model.Source.make ~text:source in
   match Ast.from_parse_result ~source:model_source parse_result with
   | Error diagnostics ->
-      Error (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string |> String.concat "\\n")
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\\n"
+      )
   | Ok ast ->
       let result = Typ.Infer.check ast in
       let diagnostics =
@@ -712,12 +893,13 @@ let test_generalization_does_not_quantify_an_environment_variable _ctx =
         |> Iterator.to_list
       in
       match diagnostics with
-      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ]
-        when span.start = 36 && span.end_ = 40 -> Ok ()
+      | [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; _ } ] when span.start = 36
+      && span.end_ = 40 -> Ok ()
       | _ ->
-          Error
-            (List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
-            |> String.concat "\\n")
+          Error (
+            List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+            |> String.concat "\\n"
+          )
 
 let tests =
   Test.[
@@ -732,22 +914,44 @@ let tests =
     case "common expression forms infer their types" test_infer_common_expression_forms;
     case "infix mismatch points to the invalid operand" test_infix_mismatch_has_operand_span;
     case "raise rejects non-exception values" test_raise_rejects_non_exception_values;
-    case "generalization preserves environment variables" test_generalization_does_not_quantify_an_environment_variable;
-    case "unresolved names are errors by namespace" test_unresolved_names_are_errors_in_their_namespaces;
+    case
+      "generalization preserves environment variables"
+      test_generalization_does_not_quantify_an_environment_variable;
+    case
+      "unresolved names are errors by namespace"
+      test_unresolved_names_are_errors_in_their_namespaces;
     case "open modules resolve exported members" test_open_module_resolves_exported_members;
-    case "nested module signatures and aliases typecheck" test_nested_module_signatures_and_aliases_typecheck;
+    case
+      "nested module signatures and aliases typecheck"
+      test_nested_module_signatures_and_aliases_typecheck;
     case "include re-exports module members" test_include_module_reexports_members;
-    case "open precedence applies to type and constructor namespaces" test_open_precedence_applies_to_type_and_constructor_namespaces;
-    case "record field puns lower their value identifier" test_record_field_puns_use_the_last_identifier_segment;
+    case
+      "open precedence applies to type and constructor namespaces"
+      test_open_precedence_applies_to_type_and_constructor_namespaces;
+    case
+      "record field puns lower their value identifier"
+      test_record_field_puns_use_the_last_identifier_segment;
     case "record update checks its base type" test_record_update_checks_its_base_type;
-    case "character intervals check character inputs" test_character_interval_patterns_check_character_inputs;
+    case
+      "character intervals check character inputs"
+      test_character_interval_patterns_check_character_inputs;
     case "exception patterns match exn values" test_exception_patterns_check_exception_values;
+    case "local exceptions scope their constructor" test_local_exceptions_scope_their_constructor;
+    case
+      "local exception payloads preserve enclosing type variables"
+      test_local_exception_payload_is_monomorphic_in_enclosing_types;
     case "local-open patterns scope module members" test_local_open_patterns_scope_module_members;
     case "open imports are not module exports" test_open_module_scope_does_not_export_imports;
     case "type constructor arity is checked" test_type_constructor_arity_is_checked;
-    case "value restriction keeps reference contents monomorphic" test_value_restriction_keeps_reference_contents_monomorphic;
-    case "bidirectional annotations check introduction forms" test_bidirectional_annotations_check_introductions;
-    case "bidirectional function mismatch is source-located" test_bidirectional_function_body_mismatch_is_localized;
+    case
+      "value restriction keeps reference contents monomorphic"
+      test_value_restriction_keeps_reference_contents_monomorphic;
+    case
+      "bidirectional annotations check introduction forms"
+      test_bidirectional_annotations_check_introductions;
+    case
+      "bidirectional function mismatch is source-located"
+      test_bidirectional_function_body_mismatch_is_localized;
   ]
 
 let main ~args = Test.Cli.main ~name:"typ:infer-module-interface" ~tests ~args ()

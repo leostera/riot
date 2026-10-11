@@ -10,16 +10,24 @@ open Ast
    where `'0` is still a mutable solver var. This means that if we store it as is in the environment,
    the first use will bind it forever: `id true` will bind `'0 <- int` and we can't call `id true`.
 
-   So Generalize grabs that unsolved vars and turns it into a stable generic.
-   This can be reversed with `instantiate`, which turns a generic back into a
-   fresh solver var without affecting the generalized arrow.
+   Generalize grabs those unsolved vars and turns them into stable generics,
+   recording exactly which identities belong to the scheme. `instantiate`
+   freshens only those identities; rigid generics captured from an outer scope
+   remain shared.
 *)
 let generalize_at_level state ~level type_ =
+  let quantifiers = ref [] in
+  let generalize variable =
+    let id = variable.Type.id in
+    if not (List.any !quantifiers ~fn:(TypeVar.equal id)) then
+      quantifiers := id :: !quantifiers;
+    Type.Generic id
+  in
   let rec loop type_ =
     match Unifier.resolve type_ with
-    | Type.Var ({ id; link = None } as variable) ->
+    | Type.Var ({ link = None; _ } as variable) ->
         if Int.(State.variable_level state variable > level) then
-          Type.Generic id
+          generalize variable
         else
           Type.Var variable
     | Type.Var { link = Some linked; _ } -> loop linked
@@ -33,16 +41,22 @@ let generalize_at_level state ~level type_ =
         let arguments = List.map application.arguments ~fn:loop in
         Type.Apply { application with arguments }
   in
-  TypeScheme.monomorphic (loop type_)
+  let scheme = TypeScheme.monomorphic (loop type_) in
+  { scheme with quantifier = List.reverse !quantifiers }
 
-let generalize state type_ =
-  generalize_at_level state ~level:(State.current_level state) type_
+let generalize state type_ = generalize_at_level state ~level:(State.current_level state) type_
 
-(** Explicit source quantifiers and declaration parameters are universally bound. *)
+(** Generalize every free solver variable and record its generic identity. *)
 let generalize_all type_ =
+  let quantifiers = ref [] in
+  let generalize id =
+    if not (List.any !quantifiers ~fn:(TypeVar.equal id)) then
+      quantifiers := id :: !quantifiers;
+    Type.Generic id
+  in
   let rec loop type_ =
     match Unifier.resolve type_ with
-    | Type.Var { id; link = None } -> Type.Generic id
+    | Type.Var { id; link = None } -> generalize id
     | Type.Var { link = Some linked; _ } -> loop linked
     | Type.Generic _ -> type_
     | Type.Tuple parts -> Type.Tuple (List.map parts ~fn:loop)
@@ -51,13 +65,15 @@ let generalize_all type_ =
     | Type.Apply application ->
         Type.Apply { application with arguments = List.map application.arguments ~fn:loop }
   in
-  TypeScheme.monomorphic (loop type_)
+  let scheme = TypeScheme.monomorphic (loop type_) in
+  { scheme with quantifier = List.reverse !quantifiers }
 
 (**
-   Instantiate makes a copy of a type with its generics replaced by fresh
-   variables so the solver can unify them against concrete types.
+   Instantiate makes a copy of a scheme, replacing only its quantified generic
+   identities with fresh variables. Unquantified generics denote rigid variables
+   captured by a local scope and must remain shared.
 *)
-let instantiate state t =
+let instantiate state (t: TypeScheme.t) =
   let substitutions = HashMap.with_capacity ~size:8 in
   let fresh_for_generic id =
     match HashMap.get substitutions ~key:id with
@@ -67,9 +83,11 @@ let instantiate state t =
         let _ = HashMap.insert substitutions ~key:id ~value:type_ in
         type_
   in
+  let is_quantified id = List.any t.quantifier ~fn:(TypeVar.equal id) in
   let rec loop type_ =
     match Unifier.resolve type_ with
-    | Type.Generic id -> fresh_for_generic id
+    | Type.Generic id when is_quantified id -> fresh_for_generic id
+    | Type.Generic _ as type_ -> type_
     | Type.Var _ as type_ -> type_
     | Type.Tuple parts -> Type.Tuple (List.map parts ~fn:loop)
     | Type.Arrow arrow ->
