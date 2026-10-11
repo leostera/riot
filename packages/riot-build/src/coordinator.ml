@@ -241,14 +241,13 @@ let mark_package_cached_in_graph = fun package_graph ~package ~package_key ~hash
         exports;
       }
 
-let finalize_package_success = fun ~session_id ~store ~runtime ->
+let persist_package_artifact = fun ~store ~runtime ~ocamlc_warnings ->
+  let ( let* ) result fn = Result.and_then result ~fn in
   let runtime_package_name = Package_name.to_string runtime.package.name in
-  let ocamlc_warnings = collect_ocamlc_warnings runtime.completed_actions in
-  Riot_store.Store.materialize_package_exports
+  let* () = Riot_store.Store.materialize_package_exports
     store
     ~exports:runtime.export_entries
-    ~target_dir:runtime.target_dir
-  |> Result.expect ~msg:("Failed to materialize package exports for " ^ runtime_package_name);
+    ~target_dir:runtime.target_dir in
   let sandbox_dir = Sandbox.get_dir runtime.sandbox in
   let package_outputs =
     collect_package_artifact_outputs
@@ -256,7 +255,7 @@ let finalize_package_success = fun ~session_id ~store ~runtime ->
       ~outputs:(Action_graph.nodes runtime.action_graph
         |> List.flat_map ~fn:(fun (node: Action_node.t) -> node.value.outs))
   in
-  let artifact = Riot_store.Store.save
+  Riot_store.Store.save
     store
     ~package:runtime_package_name
     ~ocamlc_warnings
@@ -264,7 +263,8 @@ let finalize_package_success = fun ~session_id ~store ~runtime ->
     ~hash:runtime.hash
     ~sandbox_dir
     ~outs:package_outputs
-  |> Result.expect ~msg:("Failed to save package hash artifact for " ^ runtime_package_name) in
+
+let complete_package_artifact = fun ~session_id ~runtime ~ocamlc_warnings artifact ->
   let all_cached =
     HashMap.iter runtime.completed_actions
     |> Iter.Iterator.to_list
@@ -301,6 +301,16 @@ let finalize_package_success = fun ~session_id ~store ~runtime ->
   match status with
   | `Cached -> (Package_builder.Cached artifact, ocamlc_warnings)
   | `Fresh -> (Built artifact, ocamlc_warnings)
+
+let finalize_package_success = fun ~session_id ~store ~runtime ->
+  let ocamlc_warnings = collect_ocamlc_warnings runtime.completed_actions in
+  match persist_package_artifact ~store ~runtime ~ocamlc_warnings with
+  | Error error ->
+      (Package_builder.Failed (ExecutionFailed {
+        message = "Failed to finalize package " ^ Package_name.to_string runtime.package.name
+          ^ ": " ^ Riot_store.Store.error_message error;
+      }), [])
+  | Ok artifact -> complete_package_artifact ~session_id ~runtime ~ocamlc_warnings artifact
 
 let build_workspace_actions = fun ~(workspace:Workspace.t) ~toolchain ~store ~package_graph ~target ~build_ctx ~session_id ~nodes ->
   let profile_name = build_ctx.Build_ctx.profile.name in
@@ -884,8 +894,16 @@ let build_workspace_actions = fun ~(workspace:Workspace.t) ~toolchain ~store ~pa
                 Package_builder.Built artifact
             | Package_builder.Skipped _ ->
                 panic "Unexpected skipped status during success finalization"
-            | Package_builder.Failed _ ->
-                panic "Unexpected failed status during success finalization"
+            | Package_builder.Failed error ->
+                mark_package_failed_in_graph package_graph ~package:runtime.package
+                  ~package_key ~hash:runtime.hash
+                  ~error:(Package_builder.package_error_to_string error);
+                Telemetry.emit (BuildFailed {
+                  session_id; package = runtime.package;
+                  target = Workspace_planner.Package runtime.package.name;
+                  error = package_error_to_telemetry_error error;
+                });
+                Package_builder.Failed error
           in
           let result =
             Package_builder.{

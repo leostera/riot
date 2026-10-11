@@ -31,6 +31,8 @@
 
 24. Public build runtime execution holds a shared `riot-store` build-root guard through execution, promotion, generation bookkeeping, and result preparation. `BuildLock.acquire` also guards its callback, including reentrant calls; independent builds/targets retain shared access. Bare `BuildLock.wait` is only a low-level lane lock, not a complete build-root lifetime guard. Cleanup requires the corresponding exclusive sibling lock and must not delete active work.
 
+25. Package finalization must preserve typed store errors as `Package_builder.Failed (ExecutionFailed ...)`, emit `BuildFailed`, mark the graph node failed, and return the package result. Do not use `Result.expect` for export materialization or package-artifact publication: raising there can strand the coordinator. Keep the blocked-output-directory regression in `coordinator_tests`.
+
 ## Validate
 
 `timeout 30 riot build riot-build`

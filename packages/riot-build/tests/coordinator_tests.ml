@@ -206,11 +206,47 @@ let test_failed_dependency_updates_package_graph = fun _ctx ->
   | Ok x -> x
   | Error _ -> Error "tempdir creation failed"
 
+let test_package_export_failure_returns_result = fun _ctx ->
+  match Fs.with_tempdir ~prefix:"coordinator_export_failure" (fun tmpdir ->
+    write_package ~root:tmpdir ~name:"a" ~lib_body:"let a = 1" ~deps:[];
+    write_workspace ~root:tmpdir [ "a" ];
+    with_workspace tmpdir (fun workspace ->
+      let toolchain = Riot_toolchain.init ~config:Riot_model.Toolchain_config.default
+        |> Result.expect ~msg:"toolchain init failed" in
+      let store = Riot_store.Store.create ~workspace in
+      let build_ctx = make_build_ctx () in
+      let out_dir = Riot_dirs.out_dir_in_workspace ~workspace ~profile:"debug"
+        ~target:(Build_ctx.target_triplet build_ctx) in
+      Fs.create_dir_all out_dir |> Result.expect ~msg:"create output parent failed";
+      let blocked = Path.(out_dir / Path.v "a") in
+      Fs.write "preserve this obstruction" blocked |> Result.expect ~msg:"write obstruction failed";
+      match Coordinator.build_workspace ~workspace ~toolchain ~store
+        ~target:Riot_planner.Workspace_planner.All
+        ~scope:Riot_planner.Package_graph.Runtime ~concurrency:2
+        ~build_ctx ~session_id:build_ctx.session_id with
+      | Error _ -> Error "export failure escaped package result accounting"
+      | Ok result ->
+          match result.results with
+          | [{ status = Package_builder.Failed (ExecutionFailed { message }); _ }]
+            when result.failed_count = 1 && String.contains message "Failed to finalize package a" ->
+              let key = Riot_planner.Package_graph.package_key ~package_name:"a"
+                Riot_planner.Package_graph.Runtime in
+              (match Riot_planner.Package_graph.get_node_by_key result.package_graph key with
+              | Some { value = Riot_planner.Package_graph.Failed _; _ } ->
+                  (match Fs.read blocked with
+                  | Ok "preserve this obstruction" -> Ok ()
+                  | _ -> Error "failed finalization changed the obstruction")
+              | _ -> Error "failed finalization left a successful package graph node")
+          | _ -> Error "export failure did not return exactly one failed package")) with
+  | Ok result -> result
+  | Error error -> Error ("export-failure fixture: " ^ IO.error_message error)
+
 let tests =
   Test.[
     case ~size:Large "build_workspace: two packages succeed" test_build_workspace_two_packages_success;
     case "build_workspace: serial orchestration succeeds" test_build_workspace_respects_serial_package_orchestration;
     case "build_workspace: dependency failure updates package graph" test_failed_dependency_updates_package_graph;
+    case ~size:Large "build_workspace: export failure returns failed result" test_package_export_failure_returns_result;
   ]
 
 let name = "Coordinator Tests"
