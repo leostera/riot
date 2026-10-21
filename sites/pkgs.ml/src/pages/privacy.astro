@@ -1,30 +1,19 @@
 ---
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SiteLayout from "@/layouts/SiteLayout.astro";
 
 const lastUpdated = "April 4, 2026";
 ---
 
 <SiteLayout
-  title="Privacy Notice · pkgs.ml"
-  description="Privacy notice for pkgs.ml"
+  title="Privacy notice · pkgs.ml"
+  description="What data pkgs.ml collects, why, and how long it keeps it."
 >
-  <section class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-    <div class="grid gap-4">
-      <nav class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <a href="/" class="hover:text-foreground">All packages</a>
-        <span>/</span>
-        <span class="text-foreground">privacy</span>
-      </nav>
-
-      <Card className="rounded-md shadow-none">
-        <CardHeader className="border-b border-border">
-          <CardTitle className="text-base">Privacy Notice for pkgs.ml</CardTitle>
-          <CardDescription>
-            Last updated: {lastUpdated}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-8 py-4 text-base leading-7 text-muted-foreground">
+  <article class="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+    <header class="mb-8 grid gap-1 border-b border-kumo-hairline pb-6">
+      <h1 class="text-2xl font-semibold text-kumo-strong">Privacy notice</h1>
+      <p class="text-kumo-subtle">Last updated {lastUpdated}</p>
+    </header>
+        <div class="grid gap-8 leading-6 text-kumo-default [&_h2]:text-base [&_h2]:text-kumo-strong [&_h3]:text-kumo-strong [&_a]:text-kumo-link [&_code]:rounded [&_code]:bg-kumo-tint [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em]">
           <section class="grid gap-3">
             <p>
               pkgs.ml is Riot's OCaml package registry. This notice explains what data pkgs.ml
@@ -47,7 +36,7 @@ const lastUpdated = "April 4, 2026";
             </p>
             <p>
               Privacy questions and requests can be sent to{" "}
-              <a class="text-foreground hover:text-primary" href="mailto:privacy@pkgs.ml">
+              <a class="hover:underline" href="mailto:privacy@pkgs.ml">
                 privacy@pkgs.ml
               </a>.
             </p>
@@ -348,8 +337,6 @@ const lastUpdated = "April 4, 2026";
               updated" date.
             </p>
           </section>
-        </CardContent>
-      </Card>
-    </div>
-  </section>
+        </div>
+  </article>
 </SiteLayout>

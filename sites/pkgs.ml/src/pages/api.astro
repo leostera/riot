@@ -390,7 +390,7 @@ const schemaSections: SchemaSection[] = [
         <h1 class="font-heading text-2xl font-semibold text-foreground">
           pkgs.ml API
         </h1>
-        <p class="max-w-3xl text-base leading-7 text-muted-foreground">
+        <p class="max-w-3xl leading-6 text-kumo-subtle">
           The registry exposes two public surfaces: the control plane on <code>api.pkgs.ml</code>
           for publishing, search, auth, views, events, and stats; and the read plane on{" "}
           <code>cdn.pkgs.ml</code> for the sparse index, package artifacts, and Riot/OCaml
@@ -410,7 +410,7 @@ const schemaSections: SchemaSection[] = [
               Authenticated and query-style routes served from {config.registryBaseUrl}.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 py-4 text-base text-muted-foreground">
+          <CardContent className="grid gap-3 py-4 text-kumo-subtle">
             <p>
               Use the control plane to search packages, fetch package views, list events, create
               API tokens, and publish artifacts.
@@ -429,7 +429,7 @@ const schemaSections: SchemaSection[] = [
               Sparse index and immutable download URLs served from {config.indexBaseUrl}.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 py-4 text-base text-muted-foreground">
+          <CardContent className="grid gap-3 py-4 text-kumo-subtle">
             <p>
               Use the CDN surface to bootstrap the sparse index, read package shard documents, and
               download published artifacts.
@@ -539,7 +539,7 @@ const schemaSections: SchemaSection[] = [
               How third-party clients should think about the registry surface.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 py-4 text-base text-muted-foreground">
+          <CardContent className="grid gap-3 py-4 text-kumo-subtle">
             <p>
               For package resolution, start from the sparse index config on <code>cdn.pkgs.ml</code>,
               then read package documents from the shard path and fetch package artifacts by joining{" "}
@@ -573,7 +573,7 @@ const schemaSections: SchemaSection[] = [
                   <p class="text-sm text-muted-foreground">
                     <code>{section.route}</code>
                   </p>
-                  <p class="text-base text-muted-foreground">{section.description}</p>
+                  <p class="text-kumo-subtle">{section.description}</p>
                 </div>
 
                 <div class="overflow-x-auto rounded-md border border-border">

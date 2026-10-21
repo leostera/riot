@@ -30,7 +30,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
             <h1 class="font-heading text-2xl font-semibold text-foreground">
               Registry activity
             </h1>
-            <p class="text-base text-muted-foreground">
+            <p class="text-kumo-subtle">
               Publish, verification, indexing, and post-publish pipeline events across the registry.
             </p>
           </div>
@@ -45,12 +45,12 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
         feed.events.length === 0 ? (
           <div
             id="activity-empty"
-            class="rounded-md border border-border bg-card px-4 py-5 text-base text-muted-foreground"
+            class="rounded-md border border-border bg-card px-4 py-5 text-kumo-subtle"
           >
             No registry activity has been recorded yet.
           </div>
         ) : (
-          <div id="activity-empty" class="hidden rounded-md border border-border bg-card px-4 py-5 text-base text-muted-foreground">
+          <div id="activity-empty" class="hidden rounded-md border border-border bg-card px-4 py-5 text-kumo-subtle">
             No registry activity has been recorded yet.
           </div>
         )
@@ -76,7 +76,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                     <time class="shrink-0 text-xs text-muted-foreground" datetime={event.created_at}>
                       {formatEventTimestampCompact(event.created_at)}
                     </time>
-                    <span class:list={["inline-flex items-center rounded-sm border px-2 py-0.5 text-[11px] font-medium", eventTone(event.event_type)]}>
+                    <span class:list={["inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-medium", eventTone(event.event_type)]}>
                       {eventLabel(event.event_type)}
                     </span>
                     {
@@ -403,7 +403,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <time class="shrink-0 text-xs text-muted-foreground" datetime="${escapeHtml(event.created_at)}">${escapeHtml(formatTimestamp(event.created_at, true))}</time>
-              <span class="inline-flex items-center rounded-sm border px-2 py-0.5 text-[11px] font-medium ${eventTone(event.event_type)}">${escapeHtml(eventLabel(event.event_type))}</span>
+              <span class="inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-medium ${eventTone(event.event_type)}">${escapeHtml(eventLabel(event.event_type))}</span>
               ${packageMarkup}
               ${factsSummary}
             </div>

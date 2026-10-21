@@ -99,19 +99,19 @@ const latestUpdate = ownerView?.latest_update_at
                 <CardContent className="grid gap-3 py-4 sm:grid-cols-2 xl:grid-cols-4">
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Latest installable</div>
-                    <div class="text-base font-medium text-foreground">v{pkg.latest_version}</div>
+                    <div class="font-medium text-kumo-strong">v{pkg.latest_version}</div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Published versions</div>
-                    <div class="text-base font-medium text-foreground">{pkg.release_count}</div>
+                    <div class="font-medium text-kumo-strong">{pkg.release_count}</div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Yanked versions</div>
-                    <div class="text-base font-medium text-foreground">{pkg.yanked_release_count}</div>
+                    <div class="font-medium text-kumo-strong">{pkg.yanked_release_count}</div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Updated</div>
-                    <div class="text-base font-medium text-foreground">
+                    <div class="font-medium text-kumo-strong">
                       {new Date(pkg.updated_at).toLocaleDateString("en")}
                     </div>
                   </div>
@@ -152,18 +152,18 @@ const latestUpdate = ownerView?.latest_update_at
                               <div class="flex flex-wrap gap-2">
                                 {
                                   release.yanked ? (
-                                    <span class="rounded-full border border-amber-700/20 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                                    <span class="rounded-full border border-amber-700/20 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
                                       Yanked
                                     </span>
                                   ) : (
-                                    <span class="rounded-full border border-emerald-700/20 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900">
+                                    <span class="rounded-full border border-emerald-700/20 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-900">
                                       Active
                                     </span>
                                   )
                                 }
                                 {
                                   pkg.latest_version === release.version && !release.yanked ? (
-                                    <span class="rounded-full border border-sky-700/20 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900">
+                                    <span class="rounded-full border border-sky-700/20 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900">
                                       Latest
                                     </span>
                                   ) : null

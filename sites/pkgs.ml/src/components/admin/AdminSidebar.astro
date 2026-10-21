@@ -39,14 +39,14 @@ const navItems = [
         <>
           <div class="grid gap-1">
             <div class="text-sm text-muted-foreground">Published packages</div>
-            <div class="text-base font-medium text-foreground">
+            <div class="font-medium text-kumo-strong">
               {packageCount} package{packageCount === 1 ? "" : "s"}
             </div>
           </div>
 
           <div class="grid gap-1">
             <div class="text-sm text-muted-foreground">Latest update</div>
-            <div class="text-base text-foreground">{latestUpdateLabel}</div>
+            <div class="text-kumo-default">{latestUpdateLabel}</div>
           </div>
         </>
       ) : null

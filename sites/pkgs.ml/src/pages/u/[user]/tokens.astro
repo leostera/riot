@@ -116,7 +116,7 @@ const tokenResponse = await fetchApiTokens(Astro.request);
                     class="grid gap-3 rounded-md border border-border bg-background px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                   >
                     <div class="grid gap-1">
-                      <div class="text-base font-medium text-foreground">{token.name}</div>
+                      <div class="font-medium text-kumo-strong">{token.name}</div>
                       <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                         <span>Created {new Date(token.created_at).toLocaleDateString("en")}</span>
                         <span>
@@ -155,7 +155,7 @@ const tokenResponse = await fetchApiTokens(Astro.request);
     <div class="grid gap-4 p-5">
       <div class="grid gap-1">
         <div class="text-base font-semibold text-foreground">New publish token created</div>
-        <p class="text-base text-muted-foreground">
+        <p class="text-kumo-subtle">
           Save this token now. It will not be shown again after you close this dialog.
         </p>
       </div>

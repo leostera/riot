@@ -118,7 +118,7 @@ const renderedEvents = events.map((event) => {
               <div class="mt-3">
                 {
                   renderedEvents.length === 0 ? (
-                    <p class="text-base text-muted-foreground">{emptyMessage}</p>
+                    <p class="text-kumo-subtle">{emptyMessage}</p>
                   ) : (
                     <ul class="grid gap-2">
                       {renderedEvents.map((renderedEvent) => (
@@ -136,7 +136,7 @@ const renderedEvents = events.map((event) => {
             <div class="hidden md:block">
               {
                 renderedEvents.length === 0 ? (
-                  <p class="text-base text-muted-foreground">{emptyMessage}</p>
+                  <p class="text-kumo-subtle">{emptyMessage}</p>
                 ) : (
                   <ul class="grid gap-2">
                     {renderedEvents.map((renderedEvent) => (
@@ -161,7 +161,7 @@ const renderedEvents = events.map((event) => {
             <div class="mt-3">
               {
                 renderedEvents.length === 0 ? (
-                  <p class="text-base text-muted-foreground">{emptyMessage}</p>
+                  <p class="text-kumo-subtle">{emptyMessage}</p>
                 ) : (
                   <ul class="grid gap-2">
                     {renderedEvents.map((renderedEvent) => (
@@ -178,7 +178,7 @@ const renderedEvents = events.map((event) => {
         )
       ) : (
         renderedEvents.length === 0 ? (
-          <p class="text-base text-muted-foreground">{emptyMessage}</p>
+          <p class="text-kumo-subtle">{emptyMessage}</p>
         ) : (
           <ul class="grid gap-2">
             {renderedEvents.map((renderedEvent) => (

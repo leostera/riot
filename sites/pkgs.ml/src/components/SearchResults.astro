@@ -59,20 +59,20 @@ function formatUpdatedAt(value: string): string {
                   <div class="flex min-w-0 flex-wrap items-center gap-2">
                     <a
                       href={`/p/${result.package_name}`}
-                      class="text-base font-semibold text-foreground hover:text-primary"
+                      class="font-semibold text-kumo-strong hover:text-kumo-brand"
                     >
                       {result.package_name}
                     </a>
-                    <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                       v{result.latest_version}
                     </span>
                   </div>
 
-                  <div class="text-[11px] text-muted-foreground sm:text-right">
+                  <div class="text-xs text-muted-foreground sm:text-right">
                     {result.release_count} version{result.release_count === 1 ? "" : "s"}
                   </div>
 
-                  <div class="text-[11px] text-muted-foreground sm:text-right">
+                  <div class="text-xs text-muted-foreground sm:text-right">
                     {result.license || "License pending"}
                   </div>
                 </div>
@@ -82,12 +82,12 @@ function formatUpdatedAt(value: string): string {
                     {result.description || "No package description has been published yet."}
                   </p>
 
-                  <div class="text-[11px] text-muted-foreground sm:text-right">
+                  <div class="text-xs text-muted-foreground sm:text-right">
                     Last updated: {formatUpdatedAt(result.updated_at)}
                   </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {result.repository ? (
                     <a
                       class="hover:text-foreground"

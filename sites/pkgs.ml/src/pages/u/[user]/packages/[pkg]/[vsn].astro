@@ -93,23 +93,23 @@ const dependencyCount = release?.dependencies.length ?? 0;
                     <div class="grid gap-2">
                       <div class="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-base">{pkg.package_name}</CardTitle>
-                        <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                           v{version}
                         </span>
                         {
                           releaseSummary.yanked ? (
-                            <span class="rounded-full border border-amber-700/20 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                            <span class="rounded-full border border-amber-700/20 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
                               Yanked
                             </span>
                           ) : (
-                            <span class="rounded-full border border-emerald-700/20 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900">
+                            <span class="rounded-full border border-emerald-700/20 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-900">
                               Active
                             </span>
                           )
                         }
                         {
                           pkg.latest_version === version && !releaseSummary.yanked ? (
-                            <span class="rounded-full border border-sky-700/20 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-900">
+                            <span class="rounded-full border border-sky-700/20 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900">
                               Latest
                             </span>
                           ) : null
@@ -145,21 +145,21 @@ const dependencyCount = release?.dependencies.length ?? 0;
                 <CardContent className="grid gap-3 py-4 sm:grid-cols-2 xl:grid-cols-4">
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Published</div>
-                    <div class="text-base font-medium text-foreground">
+                    <div class="font-medium text-kumo-strong">
                       {new Date(releaseSummary.published_at).toLocaleDateString("en")}
                     </div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Dependencies</div>
-                    <div class="text-base font-medium text-foreground">{dependencyCount}</div>
+                    <div class="font-medium text-kumo-strong">{dependencyCount}</div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">Examples</div>
-                    <div class="text-base font-medium text-foreground">{examples?.examples.length ?? 0}</div>
+                    <div class="font-medium text-kumo-strong">{examples?.examples.length ?? 0}</div>
                   </div>
                   <div class="grid gap-1 rounded-md border border-border bg-muted/20 px-4 py-3">
                     <div class="text-sm text-muted-foreground">README</div>
-                    <div class="text-base font-medium text-foreground">
+                    <div class="font-medium text-kumo-strong">
                       {readme ? readme.readme_path : "Missing"}
                     </div>
                   </div>

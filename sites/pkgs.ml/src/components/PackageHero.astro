@@ -162,7 +162,7 @@ const summaryFacts = [
 const installFact = facts.find((fact) => fact.label === "Install");
 const tomlFact = facts.find((fact) => fact.label === "riot.toml");
 const readmeProseClass =
-  "readme-prose min-w-0 w-full max-w-none break-words px-2 py-2 leading-7 text-foreground sm:px-4 lg:px-5 " +
+  "readme-prose min-w-0 w-full max-w-none break-words px-5 py-4 leading-[1.7] text-kumo-default lg:px-6 " +
   "[&_a]:text-kumo-link [&_a]:underline [&_a]:decoration-current/30 [&_a]:underline-offset-4 " +
   "[&_a]:break-all " +
   "[&_blockquote]:my-5 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground " +
@@ -183,19 +183,19 @@ const readmeProseClass =
   "[&_ul]:my-4 [&_ul]:pl-5 [&_ul]:list-disc";
 ---
 
-<section class="w-full px-4 py-4 sm:px-6 xl:px-8">
-  <div class="mx-auto grid w-full max-w-6xl gap-3">
-    <nav class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-      <a href="/" class="hover:text-foreground">Packages</a>
-      <span>&gt;</span>
-      <a href={`/u/${owner}`} class="hover:text-foreground">{owner}</a>
-      <span>&gt;</span>
-      <a href={packageHref} class="hover:text-foreground">{document.name}</a>
-      <span>&gt;</span>
+<section class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+  <div class="grid w-full gap-4">
+    <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 text-kumo-subtle">
+      <a href="/" class="hover:text-kumo-default">Packages</a>
+      <span aria-hidden="true">/</span>
+      <a href={`/u/${owner}`} class="hover:text-kumo-default">{owner}</a>
+      <span aria-hidden="true">/</span>
+      <a href={packageHref} class="hover:text-kumo-default">{document.name}</a>
+      <span aria-hidden="true">/</span>
       <label class="sr-only" for="package-version-select">Select version</label>
       <select
         id="package-version-select"
-        class="min-w-28 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground outline-none ring-0"
+        class="h-7 min-w-28 rounded-md border border-kumo-line bg-kumo-base px-2 font-mono text-xs text-kumo-strong focus:border-kumo-brand focus:outline-none"
         data-package-name={document.name}
       >
       {
@@ -210,56 +210,53 @@ const readmeProseClass =
 
     {
       release.yanked ? (
-        <div class="rounded-md border border-amber-700/20 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div class="rounded-lg bg-kumo-warning-tint px-4 py-3 text-kumo-strong ring ring-kumo-warning/30">
           This release was yanked{release.yanked_by_github_login ? ` by @${release.yanked_by_github_login}` : ""}.
           Installing it should be treated as unsupported, even though the package page remains available for reference.
         </div>
       ) : null
     }
 
-    <div class="grid gap-4 rounded-md border border-border bg-card px-4 py-4 lg:flex lg:items-start lg:gap-4">
+    <div class="grid gap-6 lg:flex lg:items-start lg:gap-8">
       {
         hasReadme ? (
           <div class="grid gap-4 lg:hidden">
             <div class="grid gap-3 border-b border-border pb-4">
               <div class="grid gap-2">
                 <div class="flex flex-wrap items-center gap-2">
-                  <h1 class="text-xl font-semibold text-foreground">{document.name}</h1>
-                  <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <h1 class="text-xl font-semibold text-kumo-strong font-mono">{document.name}</h1>
+                  <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                     v{selectedVersion}
                   </span>
                 </div>
 
-                <p class="text-base leading-7 text-muted-foreground">
+                <p class="leading-6 text-kumo-subtle">
                   {summaryDescription}
                 </p>
               </div>
 
-              <div class="grid gap-1 text-sm text-muted-foreground">
-                <a href={release.repo_url} target="_blank" rel="noreferrer" class="hover:text-foreground">Repository</a>
-                <a href={docsHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open docs</a>
-                <a href={playgroundHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open in playground</a>
+              <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <a href={release.repo_url} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Repository</a>
+                <a href={docsHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open docs</a>
+                <a href={playgroundHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open in playground</a>
                 {
                   release.homepage ? (
-                    <a href={release.homepage} target="_blank" rel="noreferrer" class="hover:text-foreground">Homepage</a>
+                    <a href={release.homepage} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Homepage</a>
                   ) : null
                 }
               </div>
 
               <div class="grid gap-2">
-                <div class="text-sm font-medium text-muted-foreground">
-                  Install
-                </div>
-                <div class="grid gap-2">
+                                <div class="grid gap-2">
                   <div class="grid gap-1">
-                    <div class="text-sm text-muted-foreground">{installFact?.label}</div>
-                    <code class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-sm text-foreground">
+                    <div class="text-kumo-subtle">{installFact?.label}</div>
+                    <code class="overflow-x-auto rounded-md bg-kumo-recessed px-2.5 py-1.5 font-mono text-[13px] text-kumo-strong ring ring-kumo-hairline">
                       {installFact?.value}
                     </code>
                   </div>
                   <div class="grid gap-1">
-                    <div class="text-sm text-muted-foreground">{tomlFact?.label}</div>
-                    <code class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-sm text-foreground">
+                    <div class="text-kumo-subtle">{tomlFact?.label}</div>
+                    <code class="overflow-x-auto rounded-md bg-kumo-recessed px-2.5 py-1.5 font-mono text-[13px] text-kumo-strong ring ring-kumo-hairline">
                       {tomlFact?.value}
                     </code>
                   </div>
@@ -269,13 +266,13 @@ const readmeProseClass =
               <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 {summaryFacts.map((fact) => (
                   <div class="grid gap-1">
-                    <dt class="text-sm text-muted-foreground">{fact.label}</dt>
-                    <dd class="text-foreground">{fact.value}</dd>
+                    <dt class="text-kumo-subtle">{fact.label}</dt>
+                    <dd class="text-kumo-strong tabular-nums">{fact.value}</dd>
                   </div>
                 ))}
 
                 <div class="grid gap-1">
-                  <dt class="text-sm text-muted-foreground">Owner</dt>
+                  <dt class="text-kumo-subtle">Owner</dt>
                   <dd>
                     <GitHubAvatar
                       login={owner}
@@ -293,7 +290,7 @@ const readmeProseClass =
                     <div class="text-sm text-muted-foreground">Categories</div>
                     <div class="flex flex-wrap gap-1">
                       {categories.map((category) => (
-                        <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
+                        <span class="rounded-md bg-kumo-tint px-1.5 py-0.5 font-mono text-xs text-kumo-strong">
                           {category}
                         </span>
                       ))}
@@ -312,7 +309,7 @@ const readmeProseClass =
                       {examplesList.map((example) => (
                         <a
                           href={packageExamplePlayHref(document.name, selectedVersion, example.path)}
-                          class="text-sm text-accent-foreground hover:text-foreground"
+                          class="font-mono text-[13px] text-kumo-link hover:underline"
                         >
                           {packageExampleLabel(example.path)}
                         </a>
@@ -330,8 +327,8 @@ const readmeProseClass =
         {
           hasReadme ? (
             <div class="grid min-w-0 gap-3">
-              <details class="group min-w-0 overflow-hidden rounded-sm border border-border bg-background/40 md:hidden">
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm font-medium text-foreground marker:hidden">
+              <details class="group min-w-0 overflow-hidden rounded-lg bg-kumo-base ring ring-kumo-hairline md:hidden">
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-2.5 font-mono text-xs text-kumo-subtle marker:hidden">
                   <span>README</span>
                   <span class="text-xs text-muted-foreground group-open:hidden">Expand</span>
                   <span class="hidden text-xs text-muted-foreground group-open:inline">Collapse</span>
@@ -345,8 +342,8 @@ const readmeProseClass =
                 </div>
               </details>
 
-              <div class="hidden min-w-0 overflow-hidden rounded-sm border border-border bg-background/40 md:block">
-                <div class="border-b border-border px-4 py-3 text-sm font-medium text-foreground">
+              <div class="hidden min-w-0 overflow-hidden rounded-lg bg-kumo-base ring ring-kumo-hairline md:block">
+                <div class="border-b border-kumo-hairline px-4 py-2.5 font-mono text-xs text-kumo-subtle">
                   README
                 </div>
                 <div class="min-w-0 max-w-full overflow-hidden">
@@ -357,23 +354,23 @@ const readmeProseClass =
           ) : (
             <div class="grid gap-2">
               <div class="flex flex-wrap items-center gap-2">
-                <h1 class="text-xl font-semibold text-foreground">{document.name}</h1>
-                <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <h1 class="text-xl font-semibold text-kumo-strong font-mono">{document.name}</h1>
+                <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                   v{selectedVersion}
                 </span>
               </div>
 
-              <p class="max-w-3xl text-base leading-7 text-muted-foreground">
+              <p class="max-w-3xl leading-6 text-kumo-subtle">
                 {summaryDescription}
               </p>
 
-              <div class="grid gap-1 text-sm text-muted-foreground">
-                <a href={release.repo_url} target="_blank" rel="noreferrer" class="hover:text-foreground">Repository</a>
-                <a href={docsHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open docs</a>
-                <a href={playgroundHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open in playground</a>
+              <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <a href={release.repo_url} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Repository</a>
+                <a href={docsHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open docs</a>
+                <a href={playgroundHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open in playground</a>
                 {
                   release.homepage ? (
-                    <a href={release.homepage} target="_blank" rel="noreferrer" class="hover:text-foreground">Homepage</a>
+                    <a href={release.homepage} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Homepage</a>
                   ) : null
                 }
               </div>
@@ -383,7 +380,7 @@ const readmeProseClass =
       </div>
 
       <aside class:list={[
-        "grid gap-3 border-t border-border pt-3 lg:w-[360px] lg:flex-none lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0",
+        "grid gap-5 border-t border-kumo-hairline pt-5 lg:w-[320px] lg:flex-none lg:border-t-0 lg:pt-0",
         hasReadme ? "hidden lg:grid" : "",
       ]}>
         {
@@ -391,24 +388,24 @@ const readmeProseClass =
             <div class="grid gap-3 border-b border-border pb-3">
               <div class="grid gap-2">
                 <div class="flex flex-wrap items-center gap-2">
-                  <h1 class="text-xl font-semibold text-foreground">{document.name}</h1>
-                  <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <h1 class="text-xl font-semibold text-kumo-strong font-mono">{document.name}</h1>
+                  <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                     v{selectedVersion}
                   </span>
                 </div>
 
-                <p class="text-base leading-7 text-muted-foreground">
+                <p class="leading-6 text-kumo-subtle">
                   {summaryDescription}
                 </p>
               </div>
 
-              <div class="grid gap-1 text-sm text-muted-foreground">
-                <a href={release.repo_url} target="_blank" rel="noreferrer" class="hover:text-foreground">Repository</a>
-                <a href={docsHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open docs</a>
-                <a href={playgroundHref} target="_blank" rel="noreferrer" class="hover:text-foreground">Open in playground</a>
+              <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <a href={release.repo_url} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Repository</a>
+                <a href={docsHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open docs</a>
+                <a href={playgroundHref} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Open in playground</a>
                 {
                   release.homepage ? (
-                    <a href={release.homepage} target="_blank" rel="noreferrer" class="hover:text-foreground">Homepage</a>
+                    <a href={release.homepage} target="_blank" rel="noreferrer" class="text-kumo-link hover:underline">Homepage</a>
                   ) : null
                 }
               </div>
@@ -417,35 +414,32 @@ const readmeProseClass =
         }
 
         <div class="grid gap-2">
-          <div class="text-sm font-medium text-muted-foreground">
-            Install
-          </div>
-          <div class="grid gap-2">
+                    <div class="grid gap-2">
             <div class="grid gap-1">
-              <div class="text-sm text-muted-foreground">{installFact?.label}</div>
-              <code class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-sm text-foreground">
+              <div class="text-kumo-subtle">{installFact?.label}</div>
+              <code class="overflow-x-auto rounded-md bg-kumo-recessed px-2.5 py-1.5 font-mono text-[13px] text-kumo-strong ring ring-kumo-hairline">
                 {installFact?.value}
               </code>
             </div>
             <div class="grid gap-1">
-              <div class="text-sm text-muted-foreground">{tomlFact?.label}</div>
-              <code class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-sm text-foreground">
+              <div class="text-kumo-subtle">{tomlFact?.label}</div>
+              <code class="overflow-x-auto rounded-md bg-kumo-recessed px-2.5 py-1.5 font-mono text-[13px] text-kumo-strong ring ring-kumo-hairline">
                 {tomlFact?.value}
               </code>
             </div>
           </div>
         </div>
 
-        <dl class="grid gap-y-3 text-sm">
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
           {summaryFacts.map((fact) => (
             <div class="grid gap-1">
-              <dt class="text-sm text-muted-foreground">{fact.label}</dt>
-              <dd class="text-foreground">{fact.value}</dd>
+              <dt class="text-kumo-subtle">{fact.label}</dt>
+              <dd class="text-kumo-strong tabular-nums">{fact.value}</dd>
             </div>
           ))}
 
           <div class="grid gap-1">
-            <dt class="text-sm text-muted-foreground">Owner</dt>
+            <dt class="text-kumo-subtle">Owner</dt>
             <dd>
               <GitHubAvatar
                 login={owner}
@@ -458,11 +452,11 @@ const readmeProseClass =
 
           {
             categories.length > 0 ? (
-              <div class="grid gap-1">
-                <dt class="text-sm text-muted-foreground">Categories</dt>
+              <div class="col-span-2 grid gap-1">
+                <dt class="text-kumo-subtle">Categories</dt>
                 <dd class="flex flex-wrap gap-1">
                   {categories.map((category) => (
-                    <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
+                    <span class="rounded-md bg-kumo-tint px-1.5 py-0.5 font-mono text-xs text-kumo-strong">
                       {category}
                     </span>
                   ))}
@@ -473,13 +467,13 @@ const readmeProseClass =
 
           {
             examplesList.length > 0 ? (
-              <div class="grid gap-1">
-                <dt class="text-sm text-muted-foreground">Examples</dt>
-                <dd class="grid gap-1">
+              <div class="col-span-2 grid gap-1">
+                <dt class="text-kumo-subtle">Examples</dt>
+                <dd class="flex flex-wrap gap-x-3 gap-y-1">
                   {examplesList.map((example) => (
                     <a
                       href={packageExamplePlayHref(document.name, selectedVersion, example.path)}
-                      class="text-sm text-accent-foreground hover:text-foreground"
+                      class="font-mono text-[13px] text-kumo-link hover:underline"
                     >
                       {packageExampleLabel(example.path)}
                     </a>

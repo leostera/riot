@@ -69,19 +69,19 @@ const latestUpdate = ownerView?.latest_update_at
                 <CardContent className="grid gap-4 py-4">
                   <div class="grid gap-1">
                     <div class="text-sm text-muted-foreground">Published packages</div>
-                    <div class="text-base font-medium text-foreground">
+                    <div class="font-medium text-kumo-strong">
                       {ownerView?.package_count ?? packages.length} package{(ownerView?.package_count ?? packages.length) === 1 ? "" : "s"}
                     </div>
                   </div>
 
                   <div class="grid gap-1">
                     <div class="text-sm text-muted-foreground">Latest update</div>
-                    <div class="text-base text-foreground">{latestUpdate}</div>
+                    <div class="text-kumo-default">{latestUpdate}</div>
                   </div>
 
                   <div class="grid gap-1">
                     <div class="text-sm text-muted-foreground">Source provider</div>
-                    <div class="text-base text-foreground">GitHub</div>
+                    <div class="text-kumo-default">GitHub</div>
                   </div>
 
                   <div class="grid gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
@@ -153,11 +153,11 @@ const latestUpdate = ownerView?.latest_update_at
                           <div class="flex flex-wrap items-center gap-2">
                             <a
                               href={`/p/${result.package_name}`}
-                              class="text-base font-semibold text-foreground hover:text-primary"
+                              class="font-semibold text-kumo-strong hover:text-kumo-brand"
                             >
                               {result.package_name}
                             </a>
-                            <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span class="rounded-md border border-kumo-line px-1.5 py-px font-mono text-xs text-kumo-subtle">
                               v{result.latest_version}
                             </span>
                           </div>
@@ -167,7 +167,7 @@ const latestUpdate = ownerView?.latest_update_at
                           </p>
 
                           <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                            <span>{result.subdir || "repo root"}</span>
+                            {result.subdir && result.subdir !== "." ? <span class="font-mono text-[13px]">{result.subdir}</span> : null}
                             <span>
                               {result.release_count} version{result.release_count === 1 ? "" : "s"}
                             </span>

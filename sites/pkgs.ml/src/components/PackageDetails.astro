@@ -64,7 +64,7 @@ const recentEvents = events.slice(0, 12);
       </CardHeader>
       <CardContent className="grid gap-4 py-3">
         <div class="grid gap-1">
-          <div class="text-[11px] font-medium text-muted-foreground">
+          <div class="text-xs font-medium text-muted-foreground">
             Total installs
           </div>
           <div class="text-2xl font-semibold text-foreground">
@@ -79,7 +79,7 @@ const recentEvents = events.slice(0, 12);
               stackedDownloads={downloads.stacked_downloads}
             />
           ) : (
-            <p class="text-base text-muted-foreground">No install data has been recorded for this package yet.</p>
+            <p class="text-kumo-subtle">No install data has been recorded for this package yet.</p>
           )
         }
       </CardContent>
@@ -120,11 +120,11 @@ const recentEvents = events.slice(0, 12);
               ) : (
                 <ul class="grid gap-2">
                   {dependencyRows.map((dependency) => (
-                    <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 text-base last:border-b-0 last:pb-0">
+                    <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
                       <a href={`/p/${dependency.package_name}`} class="font-medium text-foreground hover:text-primary">
                         {dependency.package_name}
                       </a>
-                      <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                      <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground">
                         {dependency.requirement}
                       </code>
                     </li>
@@ -142,11 +142,11 @@ const recentEvents = events.slice(0, 12);
             ) : (
               <ul class="grid gap-2">
                 {dependencyRows.map((dependency) => (
-                  <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 text-base last:border-b-0 last:pb-0">
+                  <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
                     <a href={`/p/${dependency.package_name}`} class="font-medium text-foreground hover:text-primary">
                       {dependency.package_name}
                     </a>
-                    <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                    <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground">
                       {dependency.requirement}
                     </code>
                   </li>
@@ -180,11 +180,11 @@ const recentEvents = events.slice(0, 12);
                 ) : (
                   <ul class="grid gap-2">
                     {relations?.dependents.map((dependent) => (
-                      <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 text-base last:border-b-0 last:pb-0">
+                      <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
                         <a href={`/p/${dependent.package_name}`} class="font-medium text-foreground hover:text-primary">
                           {dependent.package_name}
                         </a>
-                        <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                        <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground">
                           {dependent.requirement}
                         </code>
                       </li>
@@ -202,11 +202,11 @@ const recentEvents = events.slice(0, 12);
               ) : (
                 <ul class="grid gap-2">
                   {relations?.dependents.map((dependent) => (
-                    <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 text-base last:border-b-0 last:pb-0">
+                    <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
                       <a href={`/p/${dependent.package_name}`} class="font-medium text-foreground hover:text-primary">
                         {dependent.package_name}
                       </a>
-                      <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+                      <code class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-xs text-foreground">
                         {dependent.requirement}
                       </code>
                     </li>
