@@ -19,6 +19,15 @@ type node_payload_namespace =
 val node_payload_namespace_to_string: node_payload_namespace -> string
 
 (** Artifact witness - proof that build outputs have been stored *)
+
+(** Why a stored artifact entry failed verification. *)
+type integrity_failure =
+  | UnsafeEntryPath
+  | EntryMissing
+  | EntryNotRegularFile
+  | EntrySizeMismatch of { expected: int; actual: int }
+  | EntryHashMismatch of { expected: string; actual: string }
+  | EntryUnreadable of { cause: string }
 type error =
   | HashNotFound of {
       hash: Std.Crypto.hash;
@@ -101,8 +110,15 @@ type error =
   | ExportSourceMissing of {
       path: Std.Path.t;
     }
+  | ArtifactIntegrityFailed of {
+      hash_dir: Std.Path.t;
+      path: Std.Path.t;
+      failure: integrity_failure;
+    }
 
 val error_message: error -> string
+
+val integrity_failure_message: integrity_failure -> string
 
 type export_entry = Manifest.export_entry = {
   (** Public export name looked up by CLI flows such as `riot run`. *)

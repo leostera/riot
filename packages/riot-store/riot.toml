@@ -18,3 +18,7 @@ serde-bin = "*"
 [[bin]]
 name = "store_tests"
 path = "tests/store_tests.ml"
+
+[[bin]]
+name = "store_integrity_tests"
+path = "tests/store_integrity_tests.ml"

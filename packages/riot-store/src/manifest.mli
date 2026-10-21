@@ -51,6 +51,9 @@ val create_from_entries:
   files:file_entry list ->
   t
 
+(** SHA512 hex digest of a file, or [None] when it cannot be read. *)
+val hash_file: Path.t -> string option
+
 (** Save manifest to a JSON file. *)
 val save: t -> path:Path.t -> (unit, string) result
 

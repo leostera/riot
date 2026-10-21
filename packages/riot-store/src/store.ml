@@ -61,6 +61,15 @@ and artifact_cache = {
   artifacts: (string, Artifact.t) ConcurrentHashMap.t;
 }
 
+(** Why a stored artifact entry failed verification. *)
+type integrity_failure =
+  | UnsafeEntryPath
+  | EntryMissing
+  | EntryNotRegularFile
+  | EntrySizeMismatch of { expected: int; actual: int }
+  | EntryHashMismatch of { expected: string; actual: string }
+  | EntryUnreadable of { cause: string }
+
 type error =
   | HashNotFound of {
       hash: Crypto.hash;
@@ -143,12 +152,27 @@ type error =
   | ExportSourceMissing of {
       path: Path.t;
     }
+  | ArtifactIntegrityFailed of {
+      hash_dir: Path.t;
+      path: Path.t;
+      failure: integrity_failure;
+    }
 
 type export_entry = Manifest.export_entry = {
   name: string;
   path: Path.t;
   action_hash: string;
 }
+
+let integrity_failure_message = fun failure ->
+  match failure with
+  | UnsafeEntryPath -> "entry path escapes the artifact directory"
+  | EntryMissing -> "entry is missing"
+  | EntryNotRegularFile -> "entry is not a regular file"
+  | EntrySizeMismatch { expected; actual } ->
+      "expected " ^ Int.to_string expected ^ " bytes, found " ^ Int.to_string actual
+  | EntryHashMismatch { expected; actual } -> "expected sha512 " ^ expected ^ ", found " ^ actual
+  | EntryUnreadable { cause } -> "entry could not be read: " ^ cause
 
 let error_message = fun __tmp1 ->
   match __tmp1 with
@@ -241,6 +265,12 @@ let error_message = fun __tmp1 ->
       "Export source is missing from the store: "
       ^ Path.to_string path
       ^ " (cache is corrupted; try `riot clean`)"
+  | ArtifactIntegrityFailed { hash_dir; path; failure } ->
+      "Cached artifact failed verification: "
+      ^ Path.to_string Path.(hash_dir / path)
+      ^ " ("
+      ^ integrity_failure_message failure
+      ^ ")"
 
 let create_artifact_cache = fun () -> { artifacts = ConcurrentHashMap.with_capacity ~size:4_096 }
 
@@ -387,17 +417,224 @@ let path_exists = fun path ->
   |> Result.unwrap_or ~default:false
 
 let export_source_path = fun store (entry: export_entry) ->
-  if Path.is_absolute entry.path then
+  if
+    Path.is_absolute entry.path
+    || List.any (String.split_on_char '/' (Path.to_string entry.path)) ~fn:(String.equal "..")
+  then
     None
   else
     match hash_of_hex entry.action_hash with
     | None -> None
     | Some action_hash -> Some Path.(get_action_hash_dir store action_hash / entry.path)
 
+(* Artifact integrity.
+
+   A cache hit is only reported when every manifest entry is a contained,
+   regular file whose size and SHA512 match the manifest. Hashing every file on
+   every lookup would make warm builds read the whole cache, so a successful
+   verification is recorded in a `verified.bin` sidecar as a stat fingerprint
+   (size, mtime, inode) per entry. Later lookups trust an entry without hashing
+   only when its fingerprint is unchanged and its mtime is older than the
+   recorded verification time by at least [racy_margin_ns]; a file modified
+   within the same timestamp tick as its verification is always re-hashed (the
+   same "racy clean" rule git uses for its index).
+*)
+
+let verified_path = fun hash_dir -> Path.(hash_dir / Path.v "verified.bin")
+
+let verified_header = "riot-store-verified:v1"
+
+let racy_margin_ns = 1_000_000_000L
+
+type entry_fingerprint = {
+  size: int;
+  modified_ns: int64;
+  ino: int;
+}
+
+let fingerprint_equal = fun (left: entry_fingerprint) (right: entry_fingerprint) ->
+  left.size = right.size && Int64.equal left.modified_ns right.modified_ns && left.ino = right.ino
+
+let seconds_to_ns = fun seconds -> Int64.from_float (seconds *. 1_000_000_000.0)
+
+let now_ns = fun () ->
+  Time.SystemTime.duration_since_epoch ()
+  |> Time.Duration.to_nanos
+
+(* Entry paths are manifest data, so they must not be trusted to stay inside
+   the artifact directory: reject absolute paths, empty or parent components,
+   and characters the sidecar format cannot represent.
+*)
+
+let is_safe_entry_path = fun path ->
+  let raw = Path.to_string path in
+  (not (String.equal raw ""))
+  && (not (Path.is_absolute path))
+  && Option.is_none (String.index_of raw ~char:'\n')
+  && Option.is_none (String.index_of raw ~char:'\t')
+  && List.all
+    (String.split_on_char '/' raw)
+    ~fn:(fun component -> not (String.equal component "" || String.equal component ".."))
+
+type verification_record = {
+  verified_at_ns: int64;
+  entries: (string * entry_fingerprint) list;
+}
+
+let parse_verification_record = fun content ->
+  match String.split_on_char '\n' content with
+  | header :: verified_at :: lines when String.equal header verified_header -> (
+      let parse_line line =
+        match String.split_on_char '\t' line with
+        | [ size; modified_ns; ino; path ] -> (
+            match (Int.parse size, Int64.parse modified_ns, Int.parse ino) with
+            | (Some size, Some modified_ns, Some ino) -> Some (path, { size; modified_ns; ino })
+            | _ -> None
+          )
+        | _ -> None
+      in
+      match Int64.parse verified_at with
+      | None -> None
+      | Some verified_at_ns ->
+          let entries =
+            lines
+            |> List.filter ~fn:(fun line -> not (String.equal line ""))
+            |> List.filter_map ~fn:parse_line
+          in
+          Some { verified_at_ns; entries }
+    )
+  | _ -> None
+
+let load_verification_record = fun hash_dir ->
+  match Fs.read_to_string (verified_path hash_dir) with
+  | Ok content -> parse_verification_record content
+  | Error _ -> None
+
+let render_verification_record = fun record ->
+  let lines =
+    List.map
+      record.entries
+      ~fn:(fun (path, fingerprint) ->
+        Int.to_string fingerprint.size
+        ^ "\t"
+        ^ Int64.to_string fingerprint.modified_ns
+        ^ "\t"
+        ^ Int.to_string fingerprint.ino
+        ^ "\t"
+        ^ path)
+  in
+  String.concat "\n" (verified_header :: Int64.to_string record.verified_at_ns :: lines) ^ "\n"
+
+let verification_temp_counter = Sync.Atomic.make 0
+
+(* Best effort: a failed write only means the next lookup re-hashes. *)
+
+let save_verification_record = fun hash_dir record ->
+  let nonce =
+    Sync.Atomic.fetch_and_add verification_temp_counter 1
+    |> Int.to_string
+  in
+  let pid =
+    Process.id ()
+    |> Int32.to_string
+  in
+  let temp = Path.(hash_dir / Path.v ("verified.bin.tmp." ^ pid ^ "." ^ nonce)) in
+  match Fs.write (render_verification_record record) temp with
+  | Error _ -> ()
+  | Ok () -> (
+      match Fs.rename ~src:temp ~dst:(verified_path hash_dir) with
+      | Ok () -> ()
+      | Error _ -> ignore (Fs.remove_file temp)
+    )
+
+let fingerprint_entry = fun hash_dir (entry: Manifest.file_entry) ->
+  if not (is_safe_entry_path entry.path) then
+    Error UnsafeEntryPath
+  else
+    let path = Path.(hash_dir / entry.path) in
+    match Fs.symlink_metadata path with
+    | Error cause -> (
+        match Fs.exists path with
+        | Ok true -> Error (EntryUnreadable { cause = IO.error_message cause })
+        | Ok false
+        | Error _ -> Error EntryMissing
+      )
+    | Ok metadata ->
+        if not (Fs.Metadata.is_file metadata) || Fs.Metadata.is_symlink metadata then
+          Error EntryNotRegularFile
+        else
+          let size = Fs.Metadata.len metadata in
+          if size != entry.size then
+            Error (EntrySizeMismatch { expected = entry.size; actual = size })
+          else
+            Ok {
+              size;
+              modified_ns = seconds_to_ns (Fs.Metadata.modified metadata);
+              ino = Fs.Metadata.ino metadata;
+            }
+
+let is_trusted = fun record ~path fingerprint ->
+  match record with
+  | None -> false
+  | Some record -> (
+      match List.find record.entries ~fn:(fun (recorded, _) -> String.equal recorded path) with
+      | Some (_, recorded) ->
+          fingerprint_equal recorded fingerprint
+          && Int64.compare fingerprint.modified_ns (Int64.sub record.verified_at_ns racy_margin_ns)
+          = Order.LT
+      | None -> false
+    )
+
+let check_entry_contents = fun hash_dir (entry: Manifest.file_entry) ->
+  match Manifest.hash_file Path.(hash_dir / entry.path) with
+  | None -> Error (EntryUnreadable { cause = "failed to hash file" })
+  | Some actual when String.equal actual entry.hash -> Ok ()
+  | Some actual -> Error (EntryHashMismatch { expected = entry.hash; actual })
+
+(**
+   Verify every entry of an artifact directory, recording a fresh verification
+   when any entry had to be re-hashed.
+*)
+let verify_entries = fun hash_dir (entries: Manifest.file_entry list) ->
+  let record = load_verification_record hash_dir in
+  let started_at_ns = now_ns () in
+  let rec loop rehashed acc remaining =
+    match remaining with
+    | [] -> Ok (rehashed, List.reverse acc)
+    | (entry: Manifest.file_entry) :: rest -> (
+        let fail failure =
+          Error (ArtifactIntegrityFailed { hash_dir; path = entry.path; failure })
+        in
+        match fingerprint_entry hash_dir entry with
+        | Error failure -> fail failure
+        | Ok fingerprint ->
+            let key = Path.to_string entry.path in
+            if is_trusted record ~path:key fingerprint then
+              loop rehashed ((key, fingerprint) :: acc) rest
+            else
+              match check_entry_contents hash_dir entry with
+              | Error failure -> fail failure
+              | Ok () -> loop true ((key, fingerprint) :: acc) rest
+      )
+  in
+  match loop false [] entries with
+  | Error _ as err -> err
+  | Ok (false, _) -> Ok ()
+  | Ok (true, fingerprints) ->
+      save_verification_record hash_dir { verified_at_ns = started_at_ns; entries = fingerprints };
+      Ok ()
+
+let entries_verified = fun hash_dir entries -> Result.is_ok (verify_entries hash_dir entries)
+
+let first_unsafe_entry = fun (files: Manifest.file_entry list) ->
+  List.find
+    files
+    ~fn:(fun (entry: Manifest.file_entry) -> not (is_safe_entry_path entry.path))
+
 let manifest_files_exist = fun hash_dir (manifest: Manifest.t) ->
-  List.all
+  entries_verified
+    hash_dir
     manifest.files
-    ~fn:(fun (entry: Manifest.file_entry) -> path_exists Path.(hash_dir / entry.path))
 
 let manifest_exports_exist = fun store (manifest: Manifest.t) ->
   List.all
@@ -499,6 +736,12 @@ let exists = fun store hash ->
 (** Promote artifacts from store to target directory *)
 let promote_files = fun ~preserve_permissions ~hash_dir ~files ~target_dir ->
   let* () =
+    match first_unsafe_entry files with
+    | Some entry ->
+        Error (ArtifactIntegrityFailed { hash_dir; path = entry.path; failure = UnsafeEntryPath })
+    | None -> Ok ()
+  in
+  let* () =
     Fs.create_dir_all target_dir
     |> Result.map_err ~fn:(fun cause -> CreateTargetDirFailed { path = target_dir; cause })
   in
@@ -536,6 +779,7 @@ let promote = fun store input_hash ~target_dir ->
         | Error _ -> Error (HashNotFound { hash = input_hash })
       )
   in
+  let* () = verify_entries hash_dir manifest.files in
   promote_files ~preserve_permissions:true ~hash_dir ~files:manifest.files ~target_dir
 
 (** Store artifacts from sandbox to content-addressable store *)
@@ -618,6 +862,16 @@ let store_file_sources = fun
         ~files:(List.reverse stored_files_with_sizes)
     in
     let manifest_path = manifest_path temp_dir in
+    (* Manifest.create drops files it cannot hash; never commit such a manifest. *)
+    let* () =
+      if List.length manifest.Manifest.files = List.length stored_files_with_sizes then
+        Ok ()
+      else
+        Error (SaveManifestFailed {
+          path = manifest_path;
+          cause = "failed to hash one or more stored outputs";
+        })
+    in
     let* () =
       Manifest.save manifest ~path:manifest_path
       |> Result.map_err ~fn:(fun cause -> SaveManifestFailed { path = manifest_path; cause })
@@ -683,9 +937,9 @@ let load_manifest = fun store ~hash ->
   | Error _ -> None
 
 let artifact_files_exist = fun hash_dir (artifact: Artifact.t) ->
-  List.all
+  entries_verified
+    hash_dir
     artifact.files
-    ~fn:(fun (entry: Manifest.file_entry) -> path_exists Path.(hash_dir / entry.path))
 
 let artifact_exports_exist = fun store (artifact: Artifact.t) ->
   List.all
@@ -1101,11 +1355,13 @@ let promote_action = fun ?(preserve_permissions = true) store input_hash ~target
         | Error _ -> Error (HashNotFound { hash = input_hash })
       )
   in
+  let* () = verify_entries hash_dir manifest.files in
   promote_files ~preserve_permissions ~hash_dir ~files:manifest.files ~target_dir
 
 let promote_action_artifact = fun
   ?(preserve_permissions = true) store (artifact: Artifact.t) ~target_dir ->
   let hash_dir = get_action_hash_dir store artifact.input_hash in
+  let* () = verify_entries hash_dir artifact.files in
   promote_files ~preserve_permissions ~hash_dir ~files:artifact.files ~target_dir
 
 let promote_action_artifact_files = fun
@@ -1132,7 +1388,9 @@ let promote_action_artifact_files = fun
   in
   match missing with
   | Some file -> Error (DeclaredOutputMissing { path = Path.(hash_dir / file) })
-  | None -> promote_files ~preserve_permissions ~hash_dir ~files:selected ~target_dir
+  | None ->
+      let* () = verify_entries hash_dir artifact.files in
+      promote_files ~preserve_permissions ~hash_dir ~files:selected ~target_dir
 
 (** Get absolute paths to artifact files in immutable cache *)
 let get_artifact_paths = fun store artifact ->
@@ -1200,6 +1458,9 @@ let materialize_package_exports = fun store ~exports ~target_dir ->
   let copy_one (entry: export_entry) =
     match export_source_path store entry with
     | None -> Error (ExportPathMustBeRelative { path = entry.path })
+    | Some _ when not (is_safe_entry_path (Path.v entry.name))
+    || Option.is_some (String.index_of entry.name ~char:'/') ->
+        Error (ExportPathMustBeRelative { path = Path.v entry.name })
     | Some src ->
         let dst = Path.(target_dir / Path.v entry.name) in
         match Fs.exists src with
