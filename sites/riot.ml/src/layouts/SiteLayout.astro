@@ -1,4 +1,6 @@
 ---
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "../styles/globals.css";
 
 interface Props {
@@ -8,123 +10,50 @@ interface Props {
 
 const {
   title = "Riot",
-  description = "Riot is a stack for building applications in OCaml.",
+  description = "Riot is an opinionated OCaml stack: one CLI, an actor runtime, a new standard library, and the pkgs.ml registry.",
 } = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, "https://riot.ml");
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="alternate" type="text/plain" href="/llms.txt" title="For agents" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500;600;700&family=Martian+Mono:wght@400;500;600;700;800;900&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="Riot for agents" />
+    <meta name="theme-color" content="#fbf8f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0d10" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Riot" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:creator" content="@leostera" />
     <script is:inline>
       (() => {
-        const key = "riot-theme";
-        const root = document.documentElement;
-        const stored = (() => {
-          try {
-            return window.localStorage.getItem(key);
-          } catch {
-            return null;
-          }
-        })();
-        const prefersLight = window.matchMedia?.(
-          "(prefers-color-scheme: light)",
-        )?.matches;
-        const theme =
-          stored === "dark" || stored === "light"
-            ? stored
-            : prefersLight
-              ? "light"
-              : "dark";
-
-        root.dataset.theme = theme;
+        let stored = null;
+        try {
+          stored = window.localStorage.getItem("riot-theme");
+        } catch {}
+        const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+        document.documentElement.dataset.mode =
+          stored === "dark" || stored === "light" ? stored : prefersDark ? "dark" : "light";
       })();
     </script>
     <title>{title}</title>
     <meta name="description" content={description} />
   </head>
   <body>
-    <aside class="tech-demo-banner" aria-label="Tech demo notice">
-      <div class="tech-demo-banner__inner">
-        <strong class="tech-demo-banner__label">tech-demo</strong>
-        <span class="tech-demo-banner__copy">
-          Riot is an in-progress preview. Commands, packages, APIs, and docs may change before release.
-        </span>
-      </div>
-    </aside>
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-kumo-base focus:px-3 focus:py-2 focus:ring focus:ring-kumo-line"
+    >
+      Skip to content
+    </a>
     <slot />
-    <script>
-      type RiotTheme = "light" | "dark";
-
-      const themeKey = "riot-theme";
-      const root = document.documentElement;
-      const themeToggles =
-        document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]");
-
-      const setStoredTheme = (theme: RiotTheme) => {
-        try {
-          window.localStorage.setItem(themeKey, theme);
-        } catch {
-          return;
-        }
-      };
-
-      const syncThemeControls = (theme: RiotTheme) => {
-        themeToggles.forEach((toggle) => {
-          const isDark = theme === "dark";
-          toggle.setAttribute("aria-checked", isDark ? "true" : "false");
-          toggle.dataset.state = isDark ? "checked" : "unchecked";
-          toggle.setAttribute(
-            "aria-label",
-            isDark ? "Switch to light mode" : "Switch to dark mode",
-          );
-          const icon = toggle.querySelector("[data-theme-icon]");
-          if (icon) icon.textContent = isDark ? "☾" : "☼";
-        });
-      };
-
-      const setTheme = (theme: RiotTheme, persist = true) => {
-        root.dataset.theme = theme;
-        if (persist) setStoredTheme(theme);
-        syncThemeControls(theme);
-      };
-
-      const initialTheme = (
-        root.dataset.theme ||
-        (window.matchMedia?.("(prefers-color-scheme: light)")?.matches
-          ? "light"
-          : "dark")
-      ) as RiotTheme;
-
-      setTheme(initialTheme, false);
-
-      themeToggles.forEach((toggle) => {
-        toggle.addEventListener("click", () => {
-          setTheme(root.dataset.theme === "dark" ? "light" : "dark");
-        });
-      });
-
-      document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((button) => {
-        button.addEventListener("click", async () => {
-          const text = button.getAttribute("data-copy");
-          if (!text) return;
-          await navigator.clipboard.writeText(text);
-          const previous = button.textContent;
-          button.textContent = "copied";
-          window.setTimeout(() => {
-            button.textContent = previous;
-          }, 1200);
-        });
-      });
-    </script>
   </body>
 </html>

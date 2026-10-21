@@ -1,1109 +1,417 @@
 ---
-import HeroAsciinemaPlayer from "../components/HeroAsciinemaPlayer.astro";
-import SiteLayout from "../layouts/SiteLayout.astro";
+import { Badge, LayerCard, Link, LinkButton, Text } from "@cloudflare/kumo";
 import {
-  Bot,
-  Cloud,
-  Cpu,
-  Database,
-  Globe,
-  PanelsTopLeft,
-  SquareTerminal,
-  Wrench,
-} from "lucide-astro";
+  ArrowRightIcon,
+  BrowserIcon,
+  CloudIcon,
+  CpuIcon,
+  DatabaseIcon,
+  GithubLogoIcon,
+  PackageIcon,
+  RobotIcon,
+  StackIcon,
+  TerminalWindowIcon,
+  WrenchIcon,
+} from "@phosphor-icons/react";
+import { CodeSample } from "../components/CodeSample";
+import { CommandExplorer } from "../components/CommandExplorer";
+import HeroAsciinemaPlayer from "../components/HeroAsciinemaPlayer.astro";
+import { InlineText } from "../components/InlineText";
+import { InstallCommand } from "../components/InstallCommand";
+import { ThemeToggle } from "../components/ThemeToggle";
+import SiteLayout from "../layouts/SiteLayout.astro";
 
-const installCommand = "curl -sSL https://get.riot.ml | sh";
-const introCastUrl = "/riot.cast";
+const links = {
+  packageDocs: "https://docs.pkgs.ml",
+  packages: "https://pkgs.ml",
+  source: "https://github.com/leostera/riot",
+  sponsor: "https://github.com/sponsors/leostera",
+  author: "https://x.com/leostera",
+  llms: "/llms.txt",
+};
+
+const nav = [
+  { label: "Workflow", href: "#workflow" },
+  { label: "For agents", href: "#agents" },
+  { label: "What you can build", href: "#build" },
+  { label: "Packages", href: links.packages },
+];
+
+const pillars = [
+  {
+    icon: TerminalWindowIcon,
+    title: "One CLI",
+    body: "Build, test, format, lint, fuzz, benchmark, document, and publish with `riot`.",
+  },
+  {
+    icon: CpuIcon,
+    title: "Actor runtime",
+    body: "A multicore actor runtime with supervision and message passing, built in.",
+  },
+  {
+    icon: StackIcon,
+    title: "New standard library",
+    body: "A modern, practical standard library designed for systems and services.",
+  },
+  {
+    icon: PackageIcon,
+    title: "pkgs.ml registry",
+    body: "Search, add, and publish packages, with docs generated for every release.",
+  },
+];
+
+const useCases = [
+  {
+    icon: CpuIcon,
+    title: "Multicore applications",
+    body: "Spawn and supervise actors with `std/actor` and let the runtime in `std/runtime` use every core you have.",
+  },
+  {
+    icon: CloudIcon,
+    title: "Networked services",
+    body: "Actors, supervision, and real IO. `std/IO` includes `ioSlice` for zero-copy work when bytes need to move fast.",
+  },
+  {
+    icon: BrowserIcon,
+    title: "Web applications",
+    body: "Build web apps with `suri`, including LiveView support in `suri/liveview` and typed domain logic.",
+  },
+  {
+    icon: DatabaseIcon,
+    title: "Database-backed systems",
+    body: "Typed queries with `sqlx`, PostgreSQL through `postgres`, and `sqlite` when a file is all you need.",
+  },
+  {
+    icon: TerminalWindowIcon,
+    title: "Command-line tools",
+    body: "Fast CLIs with structured output and clear errors that people and agents can both drive.",
+  },
+  {
+    icon: StackIcon,
+    title: "Terminal UIs",
+    body: "Keyboard-driven terminal interfaces with `minttea` and `gooey`, with structured state and native ergonomics.",
+  },
+  {
+    icon: WrenchIcon,
+    title: "Developer tooling",
+    body: "Formatters, linters, code generators, and release tools, written with the toolchain they plug into.",
+  },
+  {
+    icon: RobotIcon,
+    title: "Agentic workflows",
+    body: "Workflows agents can run, inspect, and repair: JSON output, stable diagnostics, and recoverable failures.",
+  },
+];
+
+const agentPoints = [
+  "Every `riot init` workspace ships with a `.agents` folder and the Riot skill already in place.",
+  "Commands support `--json`, so agents read build results, diagnostics, and test runs as data instead of scraping prose.",
+  "The skill links workflows for testing, fuzzing, benchmarking, and snapshots, so agents run the right loop instead of guessing.",
+  "`/llms.txt` gives agents on the web a map of Riot and pkgs.ml.",
+];
+
+const agentSample = `$ riot init app && cd app
+$ ls .agents/skills
+riot-ml
+
+$ riot build --json
+$ riot test --json
+$ riot search std --json`;
 ---
 
 <SiteLayout
-  title="Riot · OCaml stack"
-  description="Riot is my stack and tooling for building applications in OCaml."
+  title="Riot · An opinionated OCaml stack"
+  description="Riot is one CLI for building, testing, and shipping OCaml, with a multicore actor runtime, a new standard library, and the pkgs.ml package registry."
 >
-  <div class="site-shell">
-    <header class="site-header">
-      <div class="site-brand" aria-label="Riot home">
-        <a href="#top">Riot</a>
-        <small>by <a href="https://x.com/leostera">@leostera</a></small>
-      </div>
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="#why-riot">Why Riot?</a>
-        <a href="#possible">What’s Possible</a>
-        <a href="https://pkgs.ml">Packages</a>
-        <a href="https://github.com/leostera/riot">Source</a>
-        <a href="/llms.txt">Agents</a>
-      </nav>
-      <button
-        class="theme-toggle"
-        type="button"
-        data-state="unchecked"
-        data-theme-toggle
-        role="switch"
-        aria-checked="false"
-        aria-label="Toggle dark mode"
-      >
-        <span class="theme-toggle__track" aria-hidden="true">
-          <span class="theme-toggle__thumb" data-theme-icon>☼</span>
-        </span>
-      </button>
-    </header>
-
-    <main id="top">
-      <section class="landing-hero" aria-labelledby="hero-title">
-        <div class="landing-hero__copy">
-          <div class="hero-flag" aria-hidden="true">🏴‍☠️</div>
-          <h1 id="hero-title">Riot</h1>
-          <p class="landing-hero__lede">There are many OCaml stacks, this one is mine.</p>
-
-          <div class="command-strip" aria-label="Install Riot command">
-            <code>{installCommand}</code>
-            <button type="button" data-copy={installCommand}>copy</button>
-          </div>
-
-          <HeroAsciinemaPlayer castUrl={introCastUrl} />
-
-          <a class="hero-agent-link" href="/llms.txt">Riot for agents → llms.txt</a>
-        </div>
-      </section>
-
-      <section class="landing-section landing-section--why" id="why-riot" aria-labelledby="why-riot-title">
-        <div class="section-heading">
-          <h2 id="why-riot-title">Why Riot?</h2>
-          <div class="why-riot-copy">
-            <p>
-              Riot is a tech-demo of a stack and tooling for building applications in OCaml.
-              It is heavily opinionated, and designed from the ground up to get
-              out of your way and help you ship great software with agents.
-            </p>
-            <p>
-              It comes with a single tool for all your needs, a modern package
-              registry, a multi-core ready actor-model runtime, a whole new
-              standard library, and first-class support for agentic work.
-            </p>
-            <p>
-              Riot is also a tool: <code>riot</code> — and it's the only tool
-              you need in this stack.
-            </p>
-            <p>It covers your usual SDLC needs:</p>
-          </div>
-        </div>
-        <div class="riot-command-grid" aria-label="Riot command surfaces">
-          <div
-            class="riot-command-tabs"
-            data-command-tabs
-            aria-label="Riot command details"
-          >
-            <div
-              class="riot-command-tablist"
-              role="tablist"
-              aria-orientation="vertical"
-              aria-label="Riot commands"
-            >
-              <button class="riot-command-tab" type="button" role="tab" id="riot-agents-tab" aria-selected="true" aria-controls="riot-agents-panel" tabindex="0">
-                <code>.agents</code>
-                <span>Agent friendly</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-build-tab" aria-selected="false" aria-controls="riot-build-panel" tabindex="-1">
-                <code>riot build</code>
-                <span>Easy, fast builds</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-fmt-tab" aria-selected="false" aria-controls="riot-fmt-panel" tabindex="-1">
-                <code>riot fmt</code>
-                <span>One house style</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-fix-tab" aria-selected="false" aria-controls="riot-fix-panel" tabindex="-1">
-                <code>riot fix</code>
-                <span>Linting and codemods</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-test-tab" aria-selected="false" aria-controls="riot-test-panel" tabindex="-1">
-                <code>riot test</code>
-                <span>Testing</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-fuzz-tab" aria-selected="false" aria-controls="riot-fuzz-panel" tabindex="-1">
-                <code>riot fuzz</code>
-                <span>Coverage-guided fuzzing</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-snapshots-tab" aria-selected="false" aria-controls="riot-snapshots-panel" tabindex="-1">
-                <code>riot snapshots</code>
-                <span>Snapshot review</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-bench-tab" aria-selected="false" aria-controls="riot-bench-panel" tabindex="-1">
-                <code>riot bench</code>
-                <span>Benchmarking</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-packages-tab" aria-selected="false" aria-controls="riot-packages-panel" tabindex="-1">
-                <code>pkgs.ml</code>
-                <span>Package registry</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-new-tab" aria-selected="false" aria-controls="riot-new-panel" tabindex="-1">
-                <code>riot init / new</code>
-                <span>Golden-path scaffolding</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-toolchain-tab" aria-selected="false" aria-controls="riot-toolchain-panel" tabindex="-1">
-                <code>riot toolchain</code>
-                <span>OCaml toolchains</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-doc-tab" aria-selected="false" aria-controls="riot-doc-panel" tabindex="-1">
-                <code>riot doc</code>
-                <span>Documentation</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-run-tab" aria-selected="false" aria-controls="riot-run-panel" tabindex="-1">
-                <code>riot run</code>
-                <span>Run executables</span>
-              </button>
-              <button class="riot-command-tab" type="button" role="tab" id="riot-package-commands-tab" aria-selected="false" aria-controls="riot-package-commands-panel" tabindex="-1">
-                <code>riot pkg:cmd</code>
-                <span>Package provider commands</span>
-              </button>
-            </div>
-
-            <div class="riot-command-panels">
-              <article class="riot-command-panel" role="tabpanel" id="riot-agents-panel" aria-labelledby="riot-agents-tab">
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>.agents/skills/riot-ml</code>
-                  </div>
-                  <a class="riot-command-panel__learn" href="/llms.txt">[learn more]</a>
-                </div>
-                <h3>Agent friendly</h3>
-                <p>
-                  Riot ships with agent-facing instructions, not just human
-                  docs. The <code>riot-ml</code> skill tells agents how to use
-                  the stack, which commands to prefer, where workflows live, and
-                  how to keep package discovery grounded in <code>pkgs.ml</code>.
-                </p>
-                <ul>
-                  <li>Every new Riot project created with <code>riot init</code> includes an <code>.agents</code> folder with the Riot skill already there. Start the project, then use your agent.</li>
-                  <li>The local skill explains how to build, test, benchmark, run, format, fix, fuzz, and maintain Riot projects.</li>
-                  <li>Riot commands prefer structured output with <code>--json</code>, so agents can inspect build results, diagnostics, test runs, package metadata, and registry flows without scraping prose.</li>
-                  <li>The skill links deeper workflow references for testing, fuzzing, benchmarking, snapshots, and package lookup, so agents can run the right loop instead of guessing.</li>
-                  <li><code>/llms.txt</code> is the public discovery map for agents that find Riot from the web; inside a Riot workspace, the local skill is the starting point.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="Riot agent workflow examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Start with agents included</span>
-                      <p>A new Riot workspace already has the local agent instructions it needs.</p>
-                    </figcaption>
-                    <pre><code>$ riot init app
-$ cd app
-$ ls .agents/skills</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Use structured command output</span>
-                      <p>JSON output turns command results into data an agent can route, summarize, or repair from.</p>
-                    </figcaption>
-                    <pre><code>$ riot build --json
-$ riot test --json
-$ riot bench --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Find packages without guessing</span>
-                      <p>Use the package registry and its agent guide when a workflow needs dependencies or package docs.</p>
-                    </figcaption>
-                    <pre><code>$ riot search std --json
-$ curl https://pkgs.ml/llms.txt</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-build-panel" aria-labelledby="riot-build-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot build</code>
-                  </div>
-                </div>
-                <h3>Easy, fast builds</h3>
-                <p>
-                  Riot builds packages. A package is the unit of the build, and
-                  each package is defined by a plain <code>riot.toml</code> file.
-                </p>
-                <ul>
-                  <li>Riot implements a new package-aware build system, so package boundaries, dependencies, targets, and generated artifacts all belong to the same model.</li>
-                  <li><code>riot.toml</code> is ordinary TOML: no S-expressions, no separate configuration language, and no hidden build folklore.</li>
-                  <li>Build one package, the whole workspace, debug builds, release builds, and cross targets from the same command.</li>
-                  <li>Target selection supports exact triples and broad patterns like <code>linux</code>.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot build examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Build everything</span>
-                      <p>Build every package in the workspace with the default debug profile.</p>
-                    </figcaption>
-                    <pre><code>$ riot build</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Build one package</span>
-                      <p>Narrow the build to one package when you know the slice you are working on.</p>
-                    </figcaption>
-                    <pre><code>$ riot build -p std</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Build release artifacts</span>
-                      <p>Use the release profile when you need optimized output or want to catch release-mode differences.</p>
-                    </figcaption>
-                    <pre><code>$ riot build --release</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Cross-compile to Linux</span>
-                      <p>Select a target pattern or exact triple from the targets declared in your toolchain config.</p>
-                    </figcaption>
-                    <pre><code>$ riot build -x linux</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-fmt-panel" aria-labelledby="riot-fmt-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot fmt</code>
-                  </div>
-                </div>
-                <h3>One house style</h3>
-                <p>
-                  <code>riot fmt</code> is a fast zero-config formatter optimized
-                  for readability and minimizing diffs.
-                </p>
-                <ul>
-                  <li>There is one house style, and no options. Done.</li>
-                  <li>Formatting is part of the stack, not a project-by-project bikeshed.</li>
-                  <li>Output should be readable first and stable enough that reviews show the actual change.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot fmt examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Format the workspace</span>
-                      <p>Rewrite files in place. The default path is the one you use locally.</p>
-                    </figcaption>
-                    <pre><code>$ riot fmt</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Format one path</span>
-                      <p>Point the formatter at a package, directory, or file when the work is narrow.</p>
-                    </figcaption>
-                    <pre><code>$ riot fmt packages/std/src</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Check in CI</span>
-                      <p>Ask Riot to report formatting drift without rewriting files.</p>
-                    </figcaption>
-                    <pre><code>$ riot fmt --check --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>What the rewrite feels like</span>
-                      <p>The formatter should make intent easier to read and keep the diff boring.</p>
-                    </figcaption>
-                    <pre><code>- let  greeting name=print_endline("hello, "^name)
-+ let greeting = fun name ->
-+   print_endline ("hello, " ^ name)</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-fix-panel" aria-labelledby="riot-fix-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot fix</code>
-                  </div>
-                </div>
-                <h3>Linting and codemods</h3>
-                <p>
-                  <code>riot fix</code> is an extensible linter with automated
-                  fixes, codemods, and package-provided rules.
-                </p>
-                <ul>
-                  <li>Riot fix should not just tell you something is wrong. When Riot knows the fix, it shows the edit and can apply it.</li>
-                  <li>Packages can register lint rules and fixes, then workspaces or packages can enable those rules in <code>riot.toml</code>.</li>
-                  <li>This is what makes upgrades smoother: the package that changed can ship the rule that helps your code move with it.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot fix examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Check without editing</span>
-                      <p>Use the default check mode when you want diagnostics but not file changes.</p>
-                    </figcaption>
-                    <pre><code>$ riot fix --check</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Apply safe fixes</span>
-                      <p>Let Riot perform the edits it can prove are clear package-owned replacements.</p>
-                    </figcaption>
-                    <pre><code>$ riot fix --apply</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Explain a rule</span>
-                      <p>Every rule should have a stable id and an explanation that helps you decide what to do.</p>
-                    </figcaption>
-                    <pre><code>$ riot fix --explain class-case-module-names</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Emit JSON</span>
-                      <p>Use structured diagnostics when an agent or CI job needs exact fields instead of prose.</p>
-                    </figcaption>
-                    <pre><code>$ riot fix --check --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Human-readable warning</span>
-                      <p>The human path still names the problem, points at the source, and gives the next action.</p>
-                    </figcaption>
-                    <pre><code>packages/quant/tests/fair_value_tests.ml:
-[warning] class-case-module-names
-
-Module names should use ClassCase instead of underscores
-
-  3 | module Fair_value = Quant.Fair_value
-    |        ^^^^^^^^^^
-
-  -> Rename Fair_value to FairValue
-
-  For more information about this warning, try riot fix --explain class-case-module-names</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-test-panel" aria-labelledby="riot-test-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot test</code>
-                  </div>
-                </div>
-                <h3>Testing</h3>
-                <p>
-                  Unit tests, property tests, snapshot tests, and fuzz cases live
-                  under one test runner.
-                </p>
-                <ul>
-                  <li>Use unit tests for exact behavior, property tests for broad invariants, and snapshots for generated output that needs review.</li>
-                  <li>Fuzz cases declared with the test API replay under <code>riot test</code>, so weird inputs found later become part of the ordinary regression loop.</li>
-                  <li>Package and suite filters keep the local loop tight when you only need one slice of the workspace.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot test examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run everything</span>
-                      <p>Run the whole workspace when you want the broad answer.</p>
-                    </figcaption>
-                    <pre><code>$ riot test</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run one package</span>
-                      <p>Keep the loop tight by selecting the package you are actively changing.</p>
-                    </figcaption>
-                    <pre><code>$ riot test -p blink</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Filter by suite or case</span>
-                      <p>Narrow by substring when a failure points at one test family.</p>
-                    </figcaption>
-                    <pre><code>$ riot test -p blink -f retry</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>List without running</span>
-                      <p>Inspect the available suites and cases before choosing a focused run.</p>
-                    </figcaption>
-                    <pre><code>$ riot test --list --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Mixed test output</span>
-                      <p>One runner can report unit, property, and fuzz-style cases in the same stream.</p>
-                    </figcaption>
-                    <pre><code>prop blink::client_property_tests::property: retry delay is monotonic until max ... ok (63us)
-prop blink::client_property_tests::property: budget allows capacity per window ... ok (139us)
-prop blink::client_property_tests::property: retryable statuses match status class ... ok (125us)
-test blink::client_tests::return all statuses keeps response body ... ok (978us)
-test blink::client_tests::retries retryable statuses ... ok (990us)
-test blink::client_tests::failure telemetry callback ... ok (943us)
-fuzz blink::client_tests::connect budget blocks ... ok (399ms)</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-fuzz-panel" aria-labelledby="riot-fuzz-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot fuzz</code>
-                  </div>
-                </div>
-                <h3>Coverage-guided fuzzing</h3>
-                <p>
-                  <code>riot fuzz</code> runs coverage-guided fuzzing campaigns
-                  against narrow boundaries such as parsers, codecs, protocol
-                  handlers, and CLI parsers.
-                </p>
-                <ul>
-                  <li>A fuzz case is an ordinary <code>Std.Test</code> case declared with <code>Test.fuzz</code>, with seeds, corpus files, and mutator hints.</li>
-                  <li>Generated coverage-increasing inputs are stored under <code>.riot/fuzzing/&lt;package&gt;/&lt;suite&gt;/&lt;case&gt;/corpus/</code> as local state.</li>
-                  <li>Crashes are saved under <code>crashes/</code>, with captured stdout, stderr, and status in <code>crash-artifacts/</code> for triage.</li>
-                  <li>A real finding should become a small durable regression: an inline seed, a curated fixture, or a minimized tracked crash input.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot fuzz examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>List fuzz cases</span>
-                      <p>Discover the fuzz targets in a workspace before guessing selectors.</p>
-                    </figcaption>
-                    <pre><code>$ riot fuzz --list --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run a bounded campaign</span>
-                      <p>Spend ten minutes exploring one package boundary with coverage feedback.</p>
-                    </figcaption>
-                    <pre><code>$ riot fuzz -p blink -f retry --duration 10m --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Replay a crash</span>
-                      <p>A saved crash is not useful until you can replay it against one selected fuzz case.</p>
-                    </figcaption>
-                    <pre><code>$ riot fuzz -p blink -f retry --replay .riot/fuzzing/blink/client/retry/crashes/id-000001 --json</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Minimize corpus</span>
-                      <p>Delete coverage-redundant local inputs so the corpus stays useful instead of just large.</p>
-                    </figcaption>
-                    <pre><code>$ riot fuzz minimize-corpus -p blink -f retry --json</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-snapshots-panel" aria-labelledby="riot-snapshots-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot snapshots</code>
-                  </div>
-                </div>
-                <h3>Snapshot review</h3>
-                <p>
-                  Snapshot testing checks generated output by comparing it
-                  against a saved expected file. When the output changes, the
-                  test writes a new candidate so you can inspect the diff and
-                  decide whether the change is correct.
-                </p>
-                <p>
-                  <code>riot snapshots</code> is the review loop for those
-                  candidates: approve the new expected output, reject it, or
-                  leave it pending until you understand what changed.
-                </p>
-                <ul>
-                  <li>Use snapshots for output where the full shape matters: formatter output, diagnostics, generated docs, parser fixtures, and text reports.</li>
-                  <li>Snapshot candidates are written as pending files, so generated changes do not silently replace the expected behavior.</li>
-                  <li>Interactive review lets you approve, reject, ignore, or quit without manually hunting through fixture paths.</li>
-                  <li>The goal is not to bless every diff. The goal is to make expected-output changes visible, reviewable, and boring to manage.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot snapshots examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Review interactively</span>
-                      <p>Walk each pending snapshot and decide whether to approve, reject, ignore, or quit.</p>
-                    </figcaption>
-                    <pre><code>$ riot snapshots review</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Approve a slice</span>
-                      <p>Promote pending expected files after you have reviewed that package or test area.</p>
-                    </figcaption>
-                    <pre><code>$ riot snapshots approve packages/std</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Reject a bad update</span>
-                      <p>Delete generated candidates when the new output is not the intended behavior.</p>
-                    </figcaption>
-                    <pre><code>$ riot snapshots reject packages/std/tests/parser</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-bench-panel" aria-labelledby="riot-bench-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot bench</code>
-                  </div>
-                </div>
-                <h3>Benchmarking</h3>
-                <p>
-                  <code>riot bench</code> runs small and large benchmarks, then
-                  records and compares runs from the same toolchain.
-                </p>
-                <ul>
-                  <li>Benchmark suites run through Riot, so they use the same package, profile, and toolchain model as the rest of the workspace.</li>
-                  <li><code>--record</code> persists a run under <code>.riot/bench</code> when you want history, and <code>--compare</code> brings previous comparable runs into the current report.</li>
-                  <li>Use release profile benchmarks when the performance question is about optimized code.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot bench examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run benchmarks</span>
-                      <p>Run every selected benchmark once with the suite defaults.</p>
-                    </figcaption>
-                    <pre><code>$ riot bench</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Focus on one package</span>
-                      <p>Benchmark only the package and cases that are relevant to the change.</p>
-                    </figcaption>
-                    <pre><code>$ riot bench -p std -f parser</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Record a release run</span>
-                      <p>Persist an optimized run when you want future comparisons to have a baseline.</p>
-                    </figcaption>
-                    <pre><code>$ riot bench -p std -f parser --release --record</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Compare against history</span>
-                      <p>Show previous comparable runs beside the current result.</p>
-                    </figcaption>
-                    <pre><code>$ riot bench -p std -f parser --compare 5 --json</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-packages-panel" aria-labelledby="riot-packages-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot add</code>
-                    <code>riot rm</code>
-                    <code>riot update</code>
-                    <code>riot publish</code>
-                    <code>riot yank</code>
-                    <code>riot search</code>
-                    <code>riot login</code>
-                    <code>riot logout</code>
-                  </div>
-                </div>
-                <h3>Package registry</h3>
-                <p>
-                  <code>pkgs.ml</code> is the Riot package registry: package
-                  index, publish flow, search surface, generated docs, and
-                  public usage stats.
-                </p>
-                <ul>
-                  <li>The registry is powered by GitHub and Cloudflare, but the workflow stays in Riot: add, remove, update, publish, yank, search, login, and logout.</li>
-                  <li>Publishing a package can generate documentation and make it available under docs.pkgs.ml.</li>
-                  <li>The registry tracks useful public statistics, like downloads and version usage, so maintainers can see what still needs support.</li>
-                  <li>Package operations stay scriptable for local workflows and agents with <code>--json</code> where automation needs it.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="pkgs.ml command examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Search the registry</span>
-                      <p>Find a package before you add it, from the same command surface as the rest of the stack.</p>
-                    </figcaption>
-                    <pre><code>$ riot search std</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Add a dependency</span>
-                      <p>Edit the package manifest and lockfile without leaving the Riot workflow.</p>
-                    </figcaption>
-                    <pre><code>$ riot add std</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Refresh dependencies</span>
-                      <p>Ask the solver and registry index for the newest compatible package set.</p>
-                    </figcaption>
-                    <pre><code>$ riot update</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Publish a release</span>
-                      <p>Run the package release path, including the checks Riot owns before upload.</p>
-                    </figcaption>
-                    <pre><code>$ riot publish</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Yank a bad version</span>
-                      <p>Mark a published version as unsuitable without deleting the history users need.</p>
-                    </figcaption>
-                    <pre><code>$ riot yank std@0.6.0</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-new-panel" aria-labelledby="riot-new-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot init</code>
-                    <code>riot new</code>
-                  </div>
-                </div>
-                <h3>Golden-path scaffolding</h3>
-                <p>
-                  <code>riot init</code> and <code>riot new</code> create
-                  workspaces and packages from the blessed path instead of
-                  assembling boilerplate by hand.
-                </p>
-                <ul>
-                  <li><code>riot init</code> starts a workspace with the files Riot expects, including package manifests and the OCaml toolchain config.</li>
-                  <li><code>riot new</code> adds a package inside an existing workspace without making you remember the directory shape.</li>
-                  <li>The first generated project should already feel like Riot: a package, a manifest, a test loop, and a clear next command.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot init and riot new examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Create a workspace</span>
-                      <p>Start from the top-level shape Riot expects instead of making files by hand.</p>
-                    </figcaption>
-                    <pre><code>$ riot init app
-$ cd app</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Add a package</span>
-                      <p>Create a new package inside a workspace and keep it on the blessed path.</p>
-                    </figcaption>
-                    <pre><code>$ riot new packages/api</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Generated shape</span>
-                      <p>The important part is not the exact tree. It is that package manifests, source, tests, and toolchains have obvious homes.</p>
-                    </figcaption>
-                    <pre><code>app/
-  ocaml-toolchain.toml
-  riot.toml
-
-  packages/
-    app/
-      riot.toml
-      src/
-      tests/</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-toolchain-panel" aria-labelledby="riot-toolchain-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot toolchain</code>
-                  </div>
-                </div>
-                <h3>OCaml toolchains</h3>
-                <p>
-                  Riot ships vendored, precompiled OCaml toolchains and
-                  compilers for supported architectures.
-                </p>
-                <ul>
-                  <li>A workspace declares the OCaml version and target set in <code>ocaml-toolchain.toml</code>.</li>
-                  <li>Riot provisions and validates the toolchain under <code>~/.riot/toolchains</code>, including cross-toolchain components when targets need them.</li>
-                  <li>Builds, docs, tests, benches, fuzzing, and package commands use the same toolchain decision.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot toolchain examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Declare the toolchain</span>
-                      <p>The workspace records the OCaml version and target set it needs.</p>
-                    </figcaption>
-                    <pre><code># ocaml-toolchain.toml
-[toolchain]
-version = "5.5.0-riot.1"
-targets = ["aarch64-apple-darwin", "x86_64-unknown-linux-gnu"]</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>List project toolchains</span>
-                      <p>See which host and target toolchains are present for the current project.</p>
-                    </figcaption>
-                    <pre><code>$ riot toolchain list</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Install missing toolchains</span>
-                      <p>Download and validate the toolchains the workspace asks for.</p>
-                    </figcaption>
-                    <pre><code>$ riot toolchain install</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>See what Riot publishes</span>
-                      <p>Inspect the set of prebuilt OCaml toolchains available for install.</p>
-                    </figcaption>
-                    <pre><code>$ riot toolchain list-available</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-doc-panel" aria-labelledby="riot-doc-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot doc</code>
-                  </div>
-                </div>
-                <h3>Documentation</h3>
-                <p>
-                  <code>riot doc</code> generates package documentation locally
-                  for your packages and dependencies.
-                </p>
-                <ul>
-                  <li>Documentation is written in Markdown in source comments and package docs, then generated into static pages.</li>
-                  <li>Generated docs follow Riot's Jolly Roger, so package docs, API reference pages, and registry docs share one readable style.</li>
-                  <li>Publishing to pkgs.ml can publish docs under docs.pkgs.ml as part of the package flow.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot doc examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Generate workspace docs</span>
-                      <p>Build documentation locally so you can read what users will read.</p>
-                    </figcaption>
-                    <pre><code>$ riot doc</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Generate one package</span>
-                      <p>Focus docs generation on the package you are changing.</p>
-                    </figcaption>
-                    <pre><code>$ riot doc -p std</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Generate release docs</span>
-                      <p>Use the release docs shape when preparing what will be published.</p>
-                    </figcaption>
-                    <pre><code>$ riot doc --all --release</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Choose output and JSON</span>
-                      <p>Send docs somewhere specific and expose structured progress to automation.</p>
-                    </figcaption>
-                    <pre><code>$ riot doc -p std --output _build/doc/std --json</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-run-panel" aria-labelledby="riot-run-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot run</code>
-                  </div>
-                </div>
-                <h3>Run executables</h3>
-                <p>
-                  <code>riot run</code> runs Riot executables from your
-                  workspace, GitHub repos, and URLs.
-                </p>
-                <ul>
-                  <li>Run local workspace binaries without manually finding the build output path.</li>
-                  <li>Disambiguate by package when a workspace has more than one runnable target.</li>
-                  <li>Run remote sources for project generators, scaffolding helpers, and one-off tools.</li>
-                  <li>Forward runtime arguments after <code>--</code> so the command remains scriptable.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="riot run examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run a local binary</span>
-                      <p>Build and run a workspace executable without looking up where the artifact lives.</p>
-                    </figcaption>
-                    <pre><code>$ riot run app</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Disambiguate by package</span>
-                      <p>Choose the package when several workspace packages expose runnable binaries.</p>
-                    </figcaption>
-                    <pre><code>$ riot run -p web server -- --port 8080</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run a remote source</span>
-                      <p>Use Riot itself to run a source-addressed tool or one-off workflow from a repo.</p>
-                    </figcaption>
-                    <pre><code>$ riot run https://github.com/owner/tool</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>List runnable targets</span>
-                      <p>Expose runnable binaries as data for scripts, editors, and agents.</p>
-                    </figcaption>
-                    <pre><code>$ riot run --list --json</code></pre>
-                  </figure>
-                </div>
-              </article>
-
-              <article class="riot-command-panel" role="tabpanel" id="riot-package-commands-panel" aria-labelledby="riot-package-commands-tab" hidden>
-                <div class="riot-command-panel__top">
-                  <div class="riot-command-panel__commands">
-                    <code>riot &lt;pkg&gt;:&lt;cmd&gt;</code>
-                  </div>
-                </div>
-                <h3>Package provider commands</h3>
-                <p>
-                  Packages can register first-class Riot commands, so
-                  dependencies can extend your workflow without becoming
-                  separate global tools.
-                </p>
-                <ul>
-                  <li>A package can declare commands in <code>riot.toml</code>; Riot discovers them from the workspace and runs them as <code>riot package:command</code>.</li>
-                  <li>Riot builds the package before executing the command, so provider commands stay in sync with the package version you depend on.</li>
-                  <li>That makes package-specific workflows feel native: migrations, code generation, asset compilation, schema checks, and project upgrades can all live behind Riot.</li>
-                </ul>
-                <div class="riot-command-examples" aria-label="package provider command examples">
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Install a provider</span>
-                      <p>Adding the package brings its command surface into the workspace.</p>
-                    </figcaption>
-                    <pre><code>$ riot add sqlx</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Run package-owned workflow</span>
-                      <p>The package command feels native, but the package still owns the domain behavior.</p>
-                    </figcaption>
-                    <pre><code>$ riot sqlx:migrate</code></pre>
-                  </figure>
-                  <figure class="riot-command-example">
-                    <figcaption>
-                      <span>Forward provider args</span>
-                      <p>Arguments after <code>--</code> go to the provider command, so commands can stay small and composable.</p>
-                    </figcaption>
-                    <pre><code>$ riot sqlx:prepare -- --database app_dev</code></pre>
-                  </figure>
-                </div>
-              </article>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="landing-section landing-section--possible" id="possible" aria-labelledby="possible-title">
-        <div class="section-heading">
-          <h2 id="possible-title">What’s possible in Riot?</h2>
-          <p>
-            Riot is for building OCaml software as one piece: tools, services,
-            databases, packages, experiments, and systems that need to stay
-            understandable while they grow.
-          </p>
-        </div>
-
-        <div class="feature-row feature-row--wrap possible-grid">
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Cpu />
-            </span>
-            <h3>Multi-core applications</h3>
-            <p>
-              Build actor-oriented systems on top of the runtime in
-              <code>std/runtime</code> and the actor interface exposed through
-              <code>std/actor</code>. Spawn work, supervise it, and let Riot use
-              the cores you have.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <SquareTerminal />
-            </span>
-            <h3>Command line interfaces</h3>
-            <p>
-              Build fast CLIs with structured output, clear errors, and the kind
-              of terminal behavior agents and humans can both drive.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Cloud />
-            </span>
-            <h3>Cloud and networked services</h3>
-            <p>
-              Use actors, supervision, message passing, and a practical standard
-              library to build services that do real IO. The <code>std/IO</code>
-              surface includes <code>ioSlice</code> for zero-copy operations
-              when bytes need to move without extra copying.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Wrench />
-            </span>
-            <h3>Developer tooling</h3>
-            <p>
-              Write formatters, linters, code generators, release tools,
-              migration scripts, and project automation with the same toolchain
-              they plug into.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <PanelsTopLeft />
-            </span>
-            <h3>TUI applications</h3>
-            <p>
-              Build terminal interfaces with Riot packages like
-              <code>minttea</code> and <code>gooey</code>: structured state,
-              keyboard-driven UI, and native terminal ergonomics.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Globe />
-            </span>
-            <h3>Web applications</h3>
-            <p>
-              Build web surfaces with <code>suri</code>, including LiveView
-              support in <code>suri/liveview</code>, typed domain logic, and
-              agent-friendly APIs without giving up the ergonomics of OCaml.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Database />
-            </span>
-            <h3>Database-backed systems</h3>
-            <p>
-              Build typed database flows with <code>sqlx</code>, connect to
-              PostgreSQL through <code>postgres</code>, and use
-              <code>sqlite</code> when the right database is a local file.
-            </p>
-          </article>
-
-          <article class="feature-card">
-            <span class="feature-card__icon" aria-hidden="true">
-              <Bot />
-            </span>
-            <h3>Agentic workflows</h3>
-            <p>
-              Create workflows that can be run, inspected, repaired, and
-              repeated by agents: JSON output, stable diagnostics, clear command
-              boundaries, and recoverable failure modes.
-            </p>
-          </article>
-        </div>
-      </section>
-
-    </main>
-
-    <footer class="site-footer">
-      <nav class="site-footer__links" aria-label="Footer navigation">
-        <a href="https://pkgs.ml">Packages</a>
-        <a href="https://github.com/leostera/riot">Source</a>
-        <a href="/llms.txt">Agents</a>
-        <a href="https://x.com/leostera">@leostera</a>
-        <a href="https://github.com/sponsors/leostera">Sponsor</a>
-      </nav>
-    </footer>
+  <div class="border-b border-kumo-hairline bg-kumo-elevated">
+    <p class="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-2 text-center text-[13px] text-kumo-strong sm:px-6">
+      <Badge variant="beta">Tech preview</Badge>
+      <span>Commands, packages, and APIs may change before 1.0.</span>
+    </p>
   </div>
-</SiteLayout>
 
-<script>
-  document.querySelectorAll("[data-command-tabs]").forEach((root) => {
-    const mobileQuery = window.matchMedia("(max-width: 860px)");
-    const tabList = root.querySelector<HTMLElement>(".riot-command-tablist");
-    const panelContainer = root.querySelector<HTMLElement>(".riot-command-panels");
-    const tabs = Array.from(
-      root.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-    );
-    const panels = Array.from(
-      root.querySelectorAll<HTMLElement>('[role="tabpanel"]'),
-    );
-    const initialPanelOrder = panels.slice();
-
-    const activate = (tab: HTMLButtonElement) => {
-      tabs.forEach((item) => {
-        const selected = item === tab;
-        item.setAttribute("aria-selected", selected ? "true" : "false");
-        item.setAttribute("aria-expanded", selected ? "true" : "false");
-        item.setAttribute("tabindex", mobileQuery.matches ? "0" : selected ? "0" : "-1");
-      });
-
-      panels.forEach((panel) => {
-        panel.hidden = panel.id !== tab.getAttribute("aria-controls");
-      });
-    };
-
-    const syncLayoutMode = () => {
-      if (!tabList || !panelContainer) return;
-
-      root.setAttribute("data-command-mode", mobileQuery.matches ? "accordion" : "tabs");
-
-      if (mobileQuery.matches) {
-        tabList.removeAttribute("role");
-        tabList.removeAttribute("aria-orientation");
-        tabs.forEach((tab) => {
-          const panel = root.querySelector<HTMLElement>(
-            `#${tab.getAttribute("aria-controls")}`,
-          );
-          tab.setAttribute("role", "button");
-          tab.setAttribute("tabindex", "0");
-          if (panel) {
-            panel.removeAttribute("role");
-            tab.insertAdjacentElement("afterend", panel);
-          }
-        });
-      } else {
-        tabList.setAttribute("role", "tablist");
-        tabList.setAttribute("aria-orientation", "vertical");
-        tabs.forEach((tab) => {
-          tab.setAttribute("role", "tab");
-        });
-        initialPanelOrder.forEach((panel) => {
-          panel.setAttribute("role", "tabpanel");
-          panelContainer.append(panel);
-        });
+  <header class="sticky top-0 z-40 border-b border-kumo-hairline bg-kumo-canvas/85 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+      <a href="/" class="flex items-center gap-2 text-kumo-strong" aria-label="Riot home">
+        <span aria-hidden="true" class="text-lg leading-none">🏴‍☠️</span>
+        <span class="font-mono text-[15px] font-semibold">riot</span>
+      </a>
+      <nav aria-label="Primary" class="hidden items-center gap-1 md:flex">
+        {
+          nav.map((item) => (
+            <a
+              href={item.href}
+              class="rounded-md px-2.5 py-1.5 text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
+            >
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+      <div class="ml-auto flex items-center gap-1">
+        <LinkButton
+          href={links.source}
+          variant="ghost"
+          shape="square"
+          aria-label="Riot on GitHub"
+          title="Riot on GitHub"
+        >
+          <GithubLogoIcon size={16} />
+        </LinkButton>
+        <ThemeToggle client:load />
+        <LinkButton href={links.packages} variant="primary" size="sm" className="ml-1 hidden sm:inline-flex">
+          Browse packages
+        </LinkButton>
+      </div>
+    </div>
+    <nav aria-label="Primary" class="flex gap-1 overflow-x-auto border-t border-kumo-hairline px-3 py-1.5 md:hidden">
+      {
+        nav.map((item) => (
+          <a href={item.href} class="shrink-0 rounded-md px-2.5 py-1 text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default">
+            {item.label}
+          </a>
+        ))
       }
+    </nav>
+  </header>
 
-      const selected =
-        tabs.find((tab) => tab.getAttribute("aria-selected") === "true") ??
-        tabs[0];
-      if (selected) activate(selected);
-    };
+  <main id="main">
+    <!-- Hero -->
+    <section class="relative isolate overflow-hidden" aria-labelledby="hero-title">
+      <div class="riot-hero-backdrop absolute inset-0 -z-10" aria-hidden="true"></div>
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 pt-16 pb-20 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:pt-24 lg:pb-28">
+        <div class="grid gap-8">
+          <div class="grid gap-4">
+            <p class="font-mono text-[13px] text-kumo-brand">There are many OCaml stacks. This one is mine.</p>
+            <h1
+              id="hero-title"
+              class="text-4xl leading-[1.08] font-semibold text-kumo-strong sm:text-5xl lg:text-[3.5rem]"
+            >
+              The OCaml stack that gets out of your way.
+            </h1>
+            <p class="max-w-xl text-base leading-relaxed text-kumo-strong sm:text-lg">
+              Riot is one CLI for building, testing, and shipping OCaml, with a multicore actor
+              runtime, a new standard library, and the pkgs.ml registry. Opinionated by design,
+              and built to be driven by you or your agents.
+            </p>
+          </div>
 
-    tabs.forEach((tab, index) => {
-      tab.addEventListener("click", () => activate(tab));
-      tab.addEventListener("keydown", (event: KeyboardEvent) => {
-        if (mobileQuery.matches) return;
+          <div class="grid gap-3">
+            <InstallCommand client:load />
+            <p class="text-[13px] text-kumo-subtle">
+              macOS and Linux. Installs to <code class="riot-inline-code">~/.riot/bin</code>.
+            </p>
+          </div>
 
-        const last = tabs.length - 1;
-        const keyMap: Record<string, number> = {
-          ArrowDown: index === last ? 0 : index + 1,
-          ArrowRight: index === last ? 0 : index + 1,
-          ArrowUp: index === 0 ? last : index - 1,
-          ArrowLeft: index === 0 ? last : index - 1,
-          Home: 0,
-          End: last,
-        };
-        const nextIndex = keyMap[event.key];
+          <div class="flex flex-wrap gap-2">
+            <LinkButton href="#workflow" variant="primary" icon={TerminalWindowIcon}>
+              See the workflow
+            </LinkButton>
+            <LinkButton href={links.source} variant="secondary" icon={GithubLogoIcon}>
+              View on GitHub
+            </LinkButton>
+          </div>
+        </div>
 
-        if (nextIndex === undefined) return;
-        event.preventDefault();
-        const next = tabs[nextIndex];
-        if (!next) return;
-        next.focus();
-        activate(next);
-      });
-    });
+        <HeroAsciinemaPlayer castUrl="/riot.cast" title="curl -sSL https://get.riot.ml | sh" />
+      </div>
+    </section>
 
-    syncLayoutMode();
-    mobileQuery.addEventListener("change", syncLayoutMode);
-  });
-</script>
+    <!-- Pillars -->
+    <section aria-label="What Riot includes" class="border-y border-kumo-hairline bg-kumo-base">
+      <div class="mx-auto grid max-w-6xl gap-px bg-kumo-hairline sm:grid-cols-2 lg:grid-cols-4">
+        {
+          pillars.map((pillar) => (
+            <div class="grid content-start gap-3 bg-kumo-base px-6 py-7">
+              <span class="flex size-8 items-center justify-center rounded-lg bg-kumo-tint text-kumo-brand">
+                <pillar.icon size={18} />
+              </span>
+              <div class="grid gap-1">
+                <Text variant="heading" as="h2">
+                  {pillar.title}
+                </Text>
+                <Text variant="secondary">
+                  <InlineText text={pillar.body} />
+                </Text>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Commands -->
+    <section id="workflow" class="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:py-24 sm:px-6" aria-labelledby="workflow-title">
+      <div class="grid max-w-2xl gap-3">
+        <p class="font-mono text-[13px] text-kumo-brand">riot --help</p>
+        <h2 id="workflow-title" class="text-3xl leading-tight font-semibold text-kumo-strong sm:text-4xl">
+          One tool for the whole loop
+        </h2>
+        <p class="text-base leading-relaxed text-kumo-strong">
+          From a fresh workspace to a published package, every step is a <code class="riot-inline-code">riot</code>
+          command with the same flags, the same toolchain, and structured output when you need it.
+        </p>
+      </div>
+      <CommandExplorer client:visible />
+    </section>
+
+    <!-- Agents -->
+    <section id="agents" class="border-y border-kumo-hairline bg-kumo-base" aria-labelledby="agents-title">
+      <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:py-24 sm:px-6 lg:grid-cols-2">
+        <div class="grid gap-6">
+          <div class="grid gap-3">
+            <p class="font-mono text-[13px] text-kumo-brand">.agents/skills/riot-ml</p>
+            <h2 id="agents-title" class="text-3xl leading-tight font-semibold text-kumo-strong sm:text-4xl">
+              Agents are first-class users
+            </h2>
+            <p class="text-base leading-relaxed text-kumo-strong">
+              Riot ships instructions for agents alongside the docs for people, so the tools you
+              already use know how to build, test, and ship a Riot project from the first prompt.
+            </p>
+          </div>
+          <ul class="grid gap-3">
+            {
+              agentPoints.map((point) => (
+                <li class="flex items-start gap-3">
+                  <span class="flex h-lh items-center text-kumo-brand" aria-hidden="true">
+                    <ArrowRightIcon size={14} weight="bold" />
+                  </span>
+                  <span class="text-kumo-default">
+                    <InlineText text={point} />
+                  </span>
+                </li>
+              ))
+            }
+          </ul>
+          <div class="flex flex-wrap gap-2">
+            <LinkButton href={links.llms} variant="secondary" icon={RobotIcon}>
+              Read llms.txt
+            </LinkButton>
+            <LinkButton href="https://pkgs.ml/llms.txt" variant="ghost">
+              pkgs.ml for agents
+            </LinkButton>
+          </div>
+        </div>
+        <LayerCard>
+          <LayerCard.Secondary className="flex items-center justify-between">
+            <span>Agent-ready from the first command</span>
+            <Badge variant="outline" className="font-mono">--json</Badge>
+          </LayerCard.Secondary>
+          <LayerCard.Primary className="p-0">
+            <CodeSample code={agentSample} className="rounded-none bg-transparent px-5 py-4 ring-0" />
+          </LayerCard.Primary>
+        </LayerCard>
+      </div>
+    </section>
+
+    <!-- Use cases -->
+    <section id="build" class="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:py-24 sm:px-6" aria-labelledby="build-title">
+      <div class="grid max-w-2xl gap-3">
+        <h2 id="build-title" class="text-3xl leading-tight font-semibold text-kumo-strong sm:text-4xl">
+          What you can build with Riot
+        </h2>
+        <p class="text-base leading-relaxed text-kumo-strong">
+          Tools, services, databases, and experiments, built as one codebase that stays understandable
+          as it grows.
+        </p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          useCases.map((useCase) => (
+            <LayerCard className="h-full">
+              <LayerCard.Primary className="grid h-full content-start gap-3 px-5 py-4">
+                <span class="text-kumo-brand" aria-hidden="true">
+                  <useCase.icon size={20} />
+                </span>
+                <div class="grid gap-1">
+                  <Text variant="heading" as="h3">
+                    {useCase.title}
+                  </Text>
+                  <Text variant="secondary">
+                    <InlineText text={useCase.body} />
+                  </Text>
+                </div>
+              </LayerCard.Primary>
+            </LayerCard>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Closing CTA -->
+    <section class="px-4 pb-16 sm:px-6 sm:pb-24" aria-labelledby="cta-title">
+      <div class="mx-auto grid max-w-6xl justify-items-center gap-6 rounded-2xl bg-kumo-contrast px-6 py-16 text-center">
+        <div class="grid gap-2">
+          <h2 id="cta-title" class="text-3xl font-semibold text-kumo-inverse sm:text-4xl">Start a Riot project</h2>
+          <p class="text-base text-kumo-inverse/70">Install the CLI, run <code class="font-mono text-[0.9em]">riot init</code>, and you're building.</p>
+        </div>
+        <div class="w-full max-w-md text-left">
+          <InstallCommand client:load />
+        </div>
+        <div class="flex flex-wrap justify-center gap-2">
+          <LinkButton href={links.packages} variant="primary" icon={PackageIcon}>
+            Browse packages
+          </LinkButton>
+          <LinkButton href={links.source} variant="secondary" icon={GithubLogoIcon}>
+            Star on GitHub
+          </LinkButton>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-kumo-hairline">
+    <div class="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_repeat(3,1fr)]">
+      <div class="grid content-start gap-2">
+        <span class="flex items-center gap-2 text-kumo-strong">
+          <span aria-hidden="true" class="text-base leading-none">🏴‍☠️</span>
+          <span class="font-mono font-semibold">riot</span>
+        </span>
+        <Text variant="secondary" size="sm">
+          An opinionated OCaml stack by <Link href={links.author}>@leostera</Link>.
+        </Text>
+      </div>
+      {
+        [
+          {
+            title: "Product",
+            items: [
+              ["Package registry", links.packages],
+              ["Package docs", links.packageDocs],
+            ],
+          },
+          {
+            title: "Project",
+            items: [
+              ["Source code", links.source],
+              ["Sponsor", links.sponsor],
+              ["@leostera", links.author],
+            ],
+          },
+          {
+            title: "For agents",
+            items: [
+              ["riot.ml/llms.txt", links.llms],
+              ["pkgs.ml/llms.txt", "https://pkgs.ml/llms.txt"],
+            ],
+          },
+        ].map((column) => (
+          <nav aria-label={column.title} class="grid content-start gap-2">
+            <Text variant="heading" as="h2">
+              {column.title}
+            </Text>
+            <ul class="grid gap-1.5">
+              {column.items.map(([label, href]) => (
+                <li>
+                  <a href={href} class="text-kumo-subtle hover:text-kumo-default">
+                    {label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
+    </div>
+  </footer>
+</SiteLayout>

@@ -56,6 +56,7 @@ const body = [
   "    toolchain      Manage OCaml toolchains",
   "    update         Re-resolve the workspace graph, update locked package versions, and rewrite riot.lock",
   "    upgrade        Upgrade the globally installed riot binary",
+  "    yank           Mark a published package version as yanked",
   "    version        Show riot version",
   "",
   "See 'riot <command> --help' for more information on a specific command.",

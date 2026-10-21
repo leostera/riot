@@ -4,47 +4,46 @@ interface Props {
   title?: string;
 }
 
-const {
-  castUrl,
-  title,
-} = Astro.props;
+const { castUrl, title = "Installing Riot" } = Astro.props;
 ---
 
-<div class="asciinema-shell">
-  {
-    typeof title === "string" && title.length > 0 ? (
-      <p class="asciinema-title">{title}</p>
-    ) : null
-  }
-  <div class="asciinema-frame">
-    <div
-      data-asciinema-player
-      data-cast-url={castUrl}
-    ></div>
+<figure
+  class="overflow-hidden rounded-xl bg-[var(--riot-terminal)] shadow-lg ring ring-kumo-line"
+  aria-label={title}
+>
+  <figcaption class="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
+    <span class="flex gap-1.5" aria-hidden="true">
+      <span class="size-2.5 rounded-full bg-white/15"></span>
+      <span class="size-2.5 rounded-full bg-white/15"></span>
+      <span class="size-2.5 rounded-full bg-white/15"></span>
+    </span>
+    <span class="flex-1 text-center font-mono text-xs text-white/50">{title}</span>
+    <span class="w-10" aria-hidden="true"></span>
+  </figcaption>
+  <div class="riot-terminal p-1">
+    <div data-asciinema-player data-cast-url={castUrl}></div>
   </div>
-</div>
+</figure>
 
 <script>
   import * as AsciinemaPlayer from "asciinema-player";
 
-  const mounts = document.querySelectorAll<HTMLElement>("[data-asciinema-player]");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  for (const mount of mounts) {
+  for (const mount of document.querySelectorAll<HTMLElement>("[data-asciinema-player]")) {
     const src = mount.dataset.castUrl;
-    const initialized = mount.dataset.playerInitialized === "true";
-
-    if (initialized || typeof src !== "string" || src.length === 0) {
-      continue;
-    }
+    if (mount.dataset.playerInitialized === "true" || !src) continue;
 
     AsciinemaPlayer.create(src, mount, {
-      autoPlay: true,
+      autoPlay: !reduceMotion,
       preload: true,
+      theme: "riot",
       poster: "npt:0:01",
       fit: "width",
-      controls: false,
+      controls: reduceMotion,
       speed: 1.05,
       idleTimeLimit: 1.2,
+      terminalFontFamily: "'JetBrains Mono Variable', ui-monospace, monospace",
     });
 
     mount.dataset.playerInitialized = "true";
