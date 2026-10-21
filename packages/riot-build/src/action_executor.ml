@@ -664,8 +664,29 @@ let execute_node = fun
         ~planned_hash
         ~dependency_output_hashes:(dependency_output_hashes completed node)
     in
-    (
+    (* A cached action only counts as a hit once its verified files are in the
+       sandbox; an artifact that fails verification is rebuilt, not trusted.
+    *)
+    let cached_artifact =
       match Riot_store.Store.get_action store action_input_hash with
+      | None -> None
+      | Some artifact -> (
+          match Riot_store.Store.promote_action
+            store
+            artifact.Riot_store.Artifact.input_hash
+            ~target_dir:sandbox_dir with
+          | Ok () -> Some artifact
+          | Error err ->
+              Log.debug
+                ("[EXECUTOR] Rebuilding action after cached artifact was rejected: "
+                ^ G.Node_id.to_string (Action_node.id node)
+                ^ ": "
+                ^ Riot_store.Store.error_message err);
+              None
+        )
+    in
+    (
+      match cached_artifact with
       | Some artifact ->
           emit_build_event
             ~on_event
@@ -678,15 +699,6 @@ let execute_node = fun
                 hash = Crypto.Digest.hex action_input_hash;
               }
             );
-          let _ =
-            Riot_store.Store.promote_action
-              store
-              artifact.Riot_store.Artifact.input_hash
-              ~target_dir:sandbox_dir
-            |> Result.expect
-              ~msg:("Failed to materialize cached action artifact: "
-              ^ G.Node_id.to_string (Action_node.id node))
-          in
           let completed_at = Instant.now () in
           let duration = Instant.duration_since ~earlier:start completed_at in
           emit_build_event

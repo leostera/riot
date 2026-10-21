@@ -1112,7 +1112,10 @@ let tests = let open Test in
   case
     "build core: output prefers dev scope and merges exports"
     test_output_prefers_dev_scope_and_merges_exports;
-  case "build core: build returns successful output" test_build_returns_successful_output;
+  case
+    ~size:Large
+    "build core: build returns successful output"
+    test_build_returns_successful_output;
   case
     ~size:Large
     "build core: build uses all packages when none are requested"
@@ -1121,6 +1124,7 @@ let tests = let open Test in
     "build core: default build resolution targets workspace members only"
     test_default_build_resolution_targets_workspace_members_only;
   case
+    ~size:Large
     "build core: build returns outputs for requested packages"
     test_build_returns_outputs_for_requested_packages;
   case "build core: build reports missing single package" test_build_reports_missing_single_package;
@@ -1169,7 +1173,7 @@ let tests = let open Test in
   case
     "build core: rejects negative jobs requests with clear message"
     test_build_rejects_negative_jobs_with_message;
-  case "build core: accepts positive jobs requests" test_build_accepts_positive_jobs;
+  case ~size:Large "build core: accepts positive jobs requests" test_build_accepts_positive_jobs;
 ]
 
 let name = "Riot Build Core Tests"

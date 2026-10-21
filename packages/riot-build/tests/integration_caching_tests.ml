@@ -261,12 +261,48 @@ let test_dependency_change_invalidates_cached_compile_actions = fun _ctx ->
   | Ok result -> result
   | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
 
+let test_execute_rebuilds_corrupted_cached_action = fun _ctx ->
+  match Fs.with_tempdir
+    ~prefix:"integration_cache_corrupted"
+    (fun tmpdir ->
+      let workspace = make_workspace tmpdir in
+      let store = Riot_store.Store.create ~workspace in
+      let package = make_package ~root:tmpdir ~name:"pkg" in
+      let (graph1, node1) = make_graph_with_write ~package ~content:"cached output" in
+      let (result1, _, _, _) = execute_graph ~workspace ~store ~package ~graph:graph1 in
+      match Action_scheduler.find_result result1 node1 with
+      | Some { status = Action_scheduler.Executed artifact; _ } -> (
+          (* Same-size tampering: only content verification can notice it. *)
+          let cached_output =
+            Path.(Riot_store.Store.action_hash_dir_of store artifact.input_hash / Path.v "out.txt")
+          in
+          let _ =
+            Fs.write "tampered!!!!!" cached_output
+            |> Result.expect ~msg:"failed to tamper with cached output"
+          in
+          let fresh_store = Riot_store.Store.create ~workspace in
+          let (graph2, node2) = make_graph_with_write ~package ~content:"cached output" in
+          let (result2, _, content2, _) =
+            execute_graph ~workspace ~store:fresh_store ~package ~graph:graph2
+          in
+          match (Action_scheduler.find_result result2 node2, content2) with
+          | (Some { status = Action_scheduler.Executed _; _ }, Ok "cached output") -> Ok ()
+          | (Some { status = Action_scheduler.Cached _; _ }, _) ->
+              Error "corrupted cached action must not be reported as a cache hit"
+          | (_, Ok content) -> Error ("expected rebuilt output, got: " ^ content)
+          | _ -> Error "expected corrupted cached action to be rebuilt"
+        )
+      | _ -> Error "expected first run to execute") with
+  | Ok result -> result
+  | Error err -> Error ("tempdir creation failed: " ^ IO.error_message err)
+
 let tests =
   Test.[
     case
       "equivalent action graph reuses cached artifact"
       test_execute_reuses_cache_for_equivalent_graph;
     case "changed action graph misses cache" test_execute_cache_misses_when_action_changes;
+    case "corrupted cached action is rebuilt" test_execute_rebuilds_corrupted_cached_action;
     case
       ~size:Large
       "dependency change invalidates cached compile actions"

@@ -1032,6 +1032,7 @@ let tests = let open Test in
     test_manifest_build_dependency_path_change_invalidates_package_cache;
   case "build runtime: rejects invalid parallelism" test_execute_rejects_invalid_parallelism;
   case
+    ~size:Large
     "build runtime: execute does not record cache generation when disabled"
     test_execute_does_not_record_cache_generation_when_disabled;
   case

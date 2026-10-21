@@ -17,3 +17,5 @@
 11. Actor-owned helpers should defer actor creation until runtime use so test binaries and embedded callers can boot their runtime first.
 12. Keep planner failures typed through the public build error path so `riot-cli` can render useful structured diagnostics.
 13. Cached action/package results carry full `Riot_store.Artifact.t` values. Use `artifact.input_hash` for store paths and export materialization; use `artifact.output_hash` only when strengthening downstream invalidation.
+14. An action cache hit only counts once `promote_action` into the sandbox succeeds. If integrity verification rejects the cached artifact, log it and rebuild the action instead of failing the build.
+15. Tests that run real builds or compiler invocations must be `~size:Large`. Small tests get a 500ms runner deadline that full builds cannot reliably meet under suite load.

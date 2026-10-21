@@ -114,8 +114,11 @@ let test_second_build_reuses_action_cache_path = fun _ctx ->
 
 let tests = let open Test in
 [
-  case "cache: fresh build, no cache" test_fresh_build_no_cache;
-  case "cache: second build, action cache path" test_second_build_reuses_action_cache_path;
+  case ~size:Large "cache: fresh build, no cache" test_fresh_build_no_cache;
+  case
+    ~size:Large
+    "cache: second build, action cache path"
+    test_second_build_reuses_action_cache_path;
 ]
 
 let name = "Cache Tests"
