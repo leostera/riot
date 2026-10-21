@@ -1,35 +1,44 @@
 ---
-title: Package Docs
-description: Generated package documentation for packages published through pkgs.ml.
+title: Package docs
+description: Generated API documentation for OCaml packages published on pkgs.ml.
 template: splash
 hero:
-  tagline: Versioned package docs live under /p/<package>/<version>/.
+  tagline: API reference for every package published on pkgs.ml, generated with riot doc and versioned per release.
   actions:
-    - text: What lives here
-      link: /overview/what-lives-here/
-      icon: right-arrow
-    - text: Example route
-      link: /p/std/0.1.0/
-      variant: minimal
-    - text: Browse the registry
+    - text: Find a package
       link: https://pkgs.ml
       icon: external
+    - text: How docs are built
+      link: /overview/what-lives-here/
+      icon: right-arrow
       variant: minimal
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
 
-This site is reserved for generated package documentation. Human-oriented
-registry docs, APIs, stats, and package discovery remain on `pkgs.ml`.
-
-<CardGrid stagger>
-  <Card title="Generated package docs" icon="seti:book">
-    Versioned docs are served at paths like `/p/<package>/<version>/`.
+<CardGrid>
+  <Card title="Versioned by release" icon="document">
+    Each release has its own docs at `/p/<package>/<version>/`, so links keep
+    pointing at the API you read.
   </Card>
-  <Card title="Registry UI" icon="seti:search">
-    Use `pkgs.ml` today for search, package pages, stats, activity, and account management.
+  <Card title="Generated from source" icon="seti:ocaml">
+    Pages come from `riot doc`: modules, types, values, and functions, with
+    their doc comments and signatures.
   </Card>
-  <Card title="Registry API" icon="seti:terminal">
-    Use `api.pkgs.ml` and `cdn.pkgs.ml` for machine-readable package metadata and artifacts.
+  <Card title="Find packages on pkgs.ml" icon="magnifier">
+    Search, install counts, release history, and accounts live on
+    [pkgs.ml](https://pkgs.ml). Each package page links here.
   </Card>
 </CardGrid>
+
+## Generate docs locally
+
+Run `riot doc` in any Riot workspace to build the same pages for your own
+packages before you publish.
+
+```sh
+riot doc
+```
+
+See [how docs are built](/overview/what-lives-here/) for routes and the
+publishing pipeline.

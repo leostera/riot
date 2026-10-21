@@ -1,54 +1,37 @@
 ---
-title: What lives here
-description: Scope of docs.pkgs.ml and how it differs from pkgs.ml.
+title: How docs are built
+description: Routes, versioning, and the pipeline behind docs.pkgs.ml.
 ---
 
-`docs.pkgs.ml` is reserved for generated package documentation.
+`docs.pkgs.ml` serves generated API documentation for packages published on
+[pkgs.ml](https://pkgs.ml). Search, package pages, stats, and accounts stay on
+pkgs.ml.
 
-That means this site should eventually host:
+## Routes
 
-- rendered package API docs
-- module and type documentation
-- versioned package docs
-- static package-doc sites under `/p/<package>/<version>/`
-
-This site should **not** be the main human registry UI. For that, use:
-
-- `pkgs.ml` for search, package pages, stats, activity, and account management
-- `api.pkgs.ml` for control-plane API access
-- `cdn.pkgs.ml` for sparse index and immutable package artifact downloads
-
-## Route shape
-
-Package docs are expected to be served from:
+Every published version gets its own docs:
 
 ```text
-docs.pkgs.ml/p/<package>/<version>/
+https://docs.pkgs.ml/p/<package>/<version>/
 ```
 
-and backed by generated static files stored in the package CDN bucket at keys
-like:
+Module pages live below that root, for example
+`/p/std/<version>/Std/List/index.html`.
 
-```text
-docs/<package>/<version>/index.html
-docs/<package>/<version>/...
-```
+## Publishing pipeline
 
-## Current status
+1. You publish a release with `riot publish`.
+2. The docs worker records the release and queues it for processing.
+3. A sandboxed runner installs Riot, runs `riot build` to verify the package,
+   and runs `riot doc` to generate the HTML.
+4. The generated files are stored in the package CDN and served from this
+   domain.
 
-The domain now acts as a worker-backed forwarding surface for those generated
-docs paths.
+If you open a version before its docs are ready, the page reports the current
+pipeline status instead.
 
-When a package is published, the docs worker first records that release in a D1
-table of releases to process.
+## Related services
 
-A timer-driven worker then claims queued releases and stages two
-container-oriented pipeline requests:
-
-- a docs build request that will eventually run `riot doc`
-- a build verification request that will install Riot in a clean sandbox and run
-  `riot build`
-
-Those requests are stored in R2 and indexed in D1 so a future container-backed
-runner can claim them without guessing the contract. The actual runner is still
-the next step.
+- [pkgs.ml](https://pkgs.ml): search, package pages, stats, and accounts.
+- `api.pkgs.ml`: the registry API used by the Riot CLI.
+- `cdn.pkgs.ml`: the sparse index and package artifacts.

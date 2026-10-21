@@ -6,8 +6,10 @@ export default defineConfig({
   site: "https://docs.pkgs.ml",
   integrations: [
     starlight({
-      title: "pkgs Docs",
-      description: "Generated package documentation surface for Riot packages published through pkgs.ml.",
+      title: "docs.pkgs.ml",
+      customCss: ["./src/styles/riot.css"],
+      description: "Generated API documentation for OCaml packages published on pkgs.ml.",
+      favicon: "/favicon.svg",
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/leostera/riot" },
       ],
@@ -15,7 +17,7 @@ export default defineConfig({
         {
           label: "Overview",
           items: [
-            { label: "What lives here", slug: "overview/what-lives-here" },
+            { label: "How docs are built", slug: "overview/what-lives-here" },
           ],
         },
       ],
