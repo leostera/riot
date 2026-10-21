@@ -413,6 +413,12 @@ type output_mode =
 type invocation = {
   cwd: Path.t;
   env: (string * string) list;
+  (* Directory of the compiler binary. Cross toolchains ship their binutils
+     there (for example [x86_64-linux-gnu-as]) and the compiler finds them by
+     name through [PATH], so [run] prepends it. It is deliberately not part of
+     [to_string], so command identity does not depend on the caller's [PATH].
+  *)
+  tool_dir: Path.t option;
   command_string: string;
   output_mode: output_mode;
 }
@@ -471,10 +477,18 @@ let make_include_flags = fun dirs ->
   |> List.map ~fn:(fun dir -> "-I " ^ dir)
   |> String.concat " "
 
-let make_invocation = fun ?(output_mode = Normal) ~cwd command_string ->
+let make_invocation = fun ?(output_mode = Normal) t ~cwd command_string ->
   {
     cwd;
     env = [ ("OCAML_COLOR", "always"); ];
+    tool_dir =
+      (* Only absolute compiler paths: a bare name resolved through [PATH]
+         must not add the working directory to [PATH].
+      *)
+      if Path.is_absolute t then
+        Path.parent t
+      else
+        None;
     command_string;
     output_mode;
   }
@@ -568,7 +582,7 @@ let build_invocation = fun
     Log.info ("[OCAMLC] objects/sources: " ^ sources_str);
     Log.info ("[OCAMLC] Full command: " ^ command_string)
   );
-  make_invocation ~cwd command_string
+  make_invocation t ~cwd command_string
 
 let compile_interface = fun t ~cwd ~includes ~flags ~output source ->
   let includes_with_dot = Path.v "." :: includes in
@@ -591,7 +605,10 @@ let compile_interface = fun t ~cwd ~includes ~flags ~output source ->
     else
       [ Path.to_string source ]
   in
-  make_invocation ~cwd (String.concat " " ([ base_command t ] @ args))
+  make_invocation
+    t
+    ~cwd
+    (String.concat " " ([ base_command t ] @ args))
 
 let compile_impl = fun t ~cwd ~includes ~flags ?(bin_annot = true) ?cmi_file ~output source ->
   let includes_with_dot = Path.v "." :: includes in
@@ -638,7 +655,10 @@ let compile_impl = fun t ~cwd ~includes ~flags ?(bin_annot = true) ?cmi_file ~ou
       ) @ [ "-o"; Path.to_string output ]
     ) @ source_args
   in
-  make_invocation ~cwd (String.concat " " ([ base_command t ] @ args))
+  make_invocation
+    t
+    ~cwd
+    (String.concat " " ([ base_command t ] @ args))
 
 let compile_sources = fun t ~cwd ~includes ~flags sources ->
   let includes_with_dot = Path.v "." :: includes in
@@ -662,6 +682,7 @@ let generate_interface = fun t ~cwd ~includes ~flags ~output source ->
   in
   make_invocation
     ~output_mode:(WriteStdoutToFile output)
+    t
     ~cwd
     (String.concat " " ([ base_command t ] @ args))
 
@@ -767,9 +788,20 @@ let to_string = fun invocation ->
   in
   "cd " ^ Path.to_string invocation.cwd ^ " && " ^ env_prefix ^ invocation.command_string
 
+let run_env = fun invocation ->
+  match invocation.tool_dir with
+  | None -> invocation.env
+  | Some tool_dir ->
+      let path =
+        match Env.get Env.String ~var:"PATH" with
+        | Some current when not (String.equal current "") -> Path.to_string tool_dir ^ ":" ^ current
+        | _ -> Path.to_string tool_dir
+      in
+      invocation.env @ [ ("PATH", path) ]
+
 let run = fun invocation ->
   Log.debug ("[OCAMLC] Running command: " ^ to_string invocation);
-  let cmd = run_in_dir ~cwd:invocation.cwd ~env:invocation.env invocation.command_string in
+  let cmd = run_in_dir ~cwd:invocation.cwd ~env:(run_env invocation) invocation.command_string in
   match Command.output cmd with
   | Ok output when output.Command.status = 0 -> (
       let diagnostics = Diagnostic.parse output.Command.stderr in

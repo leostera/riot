@@ -9,7 +9,7 @@
 3. When adding flags, verify whether they belong to host, target, or package profile configuration.
 4. For cross builds, prefer the installed toolchain’s bundled compiler/sysroot or explicit env overrides before falling back to host PATH discovery.
 5. Treat cross toolchains as incomplete until the bundled C toolchain and sysroot are present, not just the OCaml binaries.
-6. Toolchain downloads should replace existing installs atomically enough to keep stale archives separate from new contents.
+6. Toolchain downloads must download and extract into a per-process staging directory beside the final path, verify the manifest there, and only then replace the existing install with a rename. Never extract directly into the final toolchain path; an interrupted install must not leave a partial toolchain behind. Use `curl -f` so HTTP errors fail instead of producing a bogus tarball.
 7. Toolchain cache fingerprints must change when installed compiler artifacts or bundled sysroot markers change, even if the install path stays the same.
 8. Toolchains shipped in release archives should include `manifest.json` with a stable `toolchain_fingerprint`, and toolchain cache hashing should prefer this manifest over probing files on disk.
 9. Prepared compiler invocations should stay opaque to callers; keep execution semantics in `riot-toolchain`.
@@ -19,3 +19,4 @@
 13. Reuse `Riot_model.Ocaml_compiler` for shared warning/flag vocabulary and string parsing/rendering.
 14. Published toolchain discovery should come from the shared CDN `ocaml/manifest.json`; keep availability parsing in `riot-toolchain`, not in CLI code.
 15. Inside riot packages, target identities should stay typed as `Riot_model.Target.t` / `Std.System.TargetTriple.t`. Only stringify targets at external boundaries such as URLs, filesystem layout, shell commands, or published manifest rows.
+16. `Ocamlc.run` prepends the absolute compiler's directory to `PATH`, because cross toolchains ship their binutils (for example `x86_64-linux-gnu-as`) beside the compiler and it resolves them by bare name. Keep `PATH` out of `Ocamlc.to_string` and the invocation identity so cache keys do not depend on the caller's environment.

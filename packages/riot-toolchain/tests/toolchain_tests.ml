@@ -409,8 +409,53 @@ let test_list_toolchains_returns_typed_targets = fun _ctx ->
           Ok ()
     | _ -> Error "expected host and cross targets to both be present"
 
+(* Cross compilers invoke their binutils by bare name (for example
+   [x86_64-linux-gnu-as]); the toolchain ships them next to the compiler.
+*)
+
+let test_run_finds_tools_beside_the_compiler = fun _ctx ->
+  match Fs.with_tempdir
+    ~prefix:"riot_toolchain_tool_dir"
+    (fun dir ->
+      let compiler = Path.(dir / Path.v "fake-ocamlopt") in
+      let tool = Path.(dir / Path.v "riot-fake-cross-as") in
+      let write_script path body =
+        match Fs.write ("#!/bin/sh\n" ^ body ^ "\n") path with
+        | Error err -> Error (IO.error_message err)
+        | Ok () ->
+            Fs.set_permissions path Fs.Permissions.executable
+            |> Result.map_err ~fn:IO.error_message
+      in
+      match write_script tool "exit 0" with
+      | Error _ as err -> err
+      | Ok () -> (
+          match write_script compiler "exec riot-fake-cross-as \"$@\"" with
+          | Error _ as err -> err
+          | Ok () -> (
+              let invocation =
+                Riot_toolchain.Ocamlc.compile_impl
+                  (Riot_toolchain.Ocamlc.make compiler)
+                  ~cwd:dir
+                  ~includes:[]
+                  ~flags:[]
+                  ~output:(Path.v "foo.cmx")
+                  (Path.v "foo.ml")
+              in
+              if String.contains (Riot_toolchain.Ocamlc.to_string invocation) "PATH=" then
+                Error "expected PATH to stay out of the invocation identity"
+              else
+                match Riot_toolchain.Ocamlc.run invocation with
+                | Riot_toolchain.Ocamlc.Success _ -> Ok ()
+                | Riot_toolchain.Ocamlc.Failed { message; _ } ->
+                    Error ("expected the compiler to find its sibling tool: " ^ message)
+            )
+        )) with
+  | Ok result -> result
+  | Error err -> Error (IO.error_message err)
+
 let tests =
   Test.[
+    case "ocamlc run finds tools beside the compiler" test_run_finds_tools_beside_the_compiler;
     case
       "compile impl disables no-cmi-file by default"
       test_compile_impl_disables_no_cmi_file_by_default;

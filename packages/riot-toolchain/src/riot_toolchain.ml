@@ -341,6 +341,69 @@ let reset_toolchain_install = fun path ->
       ^ ": "
       ^ IO.error_message err)
 
+let install_staging_path = fun toolchain_path ->
+  let nonce =
+    Random.bits ()
+    |> Result.expect ~msg:"failed to generate toolchain staging nonce"
+  in
+  Path.(Path.dirname toolchain_path
+  / Path.v
+    ("."
+    ^ Path.basename toolchain_path
+    ^ ".staging-"
+    ^ Int32.to_string (Process.id ())
+    ^ "-"
+    ^ Int.to_string nonce))
+
+(* Replace [toolchain_path] with the verified [staging] tree. The old install
+   is renamed aside first so the final path only ever holds a complete
+   toolchain. When several installers race (parallel test suites, concurrent
+   builds), a loser whose rename fails accepts the winner's install as long as
+   it carries a manifest; callers validate the result afterwards.
+*)
+
+let swap_in_toolchain = fun ~staging ~toolchain_path ~target ->
+  let retired = Path.v (Path.to_string staging ^ ".retired") in
+  let installed_by_someone_else () =
+    match read_manifest_fingerprint toolchain_path with
+    | Some fingerprint -> not (String.equal (String.trim fingerprint) "")
+    | None -> false
+  in
+  let move_error err =
+    Error ("Failed to move toolchain into place at "
+    ^ Path.to_string toolchain_path
+    ^ " for "
+    ^ target_to_string target
+    ^ ": "
+    ^ IO.error_message err)
+  in
+  let looks_complete () =
+    installed_by_someone_else () && match Fs.is_dir Path.(toolchain_path / Path.v "bin") with
+    | Ok true -> true
+    | _ -> false
+  in
+  (* Callers only download after validation failed, so a complete-looking
+     install here was finished by a concurrent installer. Keep it rather than
+     yanking a toolchain that other builds may already be using.
+  *)
+  if looks_complete () then
+    Ok ()
+  else
+    let _ =
+      (* Missing is fine: there was no previous install, or a concurrent
+         installer already retired it.
+      *)
+      Fs.rename ~src:toolchain_path ~dst:retired
+    in
+    let result =
+      match Fs.rename ~src:staging ~dst:toolchain_path with
+      | Ok () -> Ok ()
+      | Error _ when installed_by_someone_else () -> Ok ()
+      | Error err -> move_error err
+    in
+    let _ = reset_toolchain_install retired in
+    result
+
 let download_and_install_toolchain = fun version ~host ~target ->
   let toolchain_path = get_toolchain_path_for_target version target in
   let base_url = ocaml_download_base_url () in
@@ -362,55 +425,80 @@ let download_and_install_toolchain = fun version ~host ~target ->
   in
   println
     ("📥 Downloading OCaml " ^ version ^ " for " ^ target_name ^ " (" ^ description ^ ")...");
-  (* Create parent directories *)
-  (
-    match Path.parent toolchain_path with
-    | Some parent ->
-        let _ = Fs.create_dir_all parent in
-        ()
-    | None -> ()
-  );
-  (* Download URL *)
-  let temp_dir = Path.(Riot_model.Riot_dirs.dot_riot / Path.v "tmp") in
-  let _ = Fs.create_dir_all temp_dir in
-  let tar_path = Path.(temp_dir / Path.v tar_filename) in
-  (* Download using curl *)
-  let download_cmd =
-    Command.make ~args:[ "-L"; "-o"; Path.to_string tar_path; binary_url; ] "curl"
-  in
-  match Command.output download_cmd with
-  | Error (Command.SystemError msg) -> Error ("Failed to download toolchain: " ^ msg)
-  | Ok output when output.Command.status != 0 ->
-      Error ("Failed to download toolchain from " ^ binary_url ^ "\nHTTP error or file not found")
-  | Ok _ ->
-      println "✓ Download complete, extracting...";
-      (
-        match reset_toolchain_install toolchain_path with
-        | Error msg -> Error msg
-        | Ok () ->
-            (* Create toolchain directory *)
-            let _ = Fs.create_dir_all toolchain_path in
-            (* Extract using tar *)
-            let extract_cmd =
-              Command.make
-                ~args:[ "-xzf"; Path.to_string tar_path; "-C"; Path.to_string toolchain_path; ]
-                "tar"
-            in
-            match Command.output extract_cmd with
-            | Error (Command.SystemError msg) -> Error ("Failed to extract toolchain: " ^ msg)
-            | Ok output when output.Command.status != 0 ->
-                Error "Failed to extract toolchain tarball"
-            | Ok _ -> (
-                match ensure_manifest_present toolchain_path target (Version version) with
-                | Error msg -> Error msg
-                | Ok () ->
-                    (* Clean up tarball *)
-                    let _ = Fs.remove_file tar_path in
-                    println
-                      ("✓ OCaml " ^ version ^ " (" ^ target_name ^ ") installed successfully");
-                    Ok ()
+  match Path.parent toolchain_path with
+  | None -> Error ("Toolchain path has no parent: " ^ Path.to_string toolchain_path)
+  | Some install_dir -> (
+      match Fs.create_dir_all install_dir with
+      | Error err ->
+          Error ("Failed to create toolchain directory "
+          ^ Path.to_string install_dir
+          ^ ": "
+          ^ IO.error_message err)
+      | Ok () -> (
+          (* Download and extract into a per-process staging directory beside
+             the final path, then rename it into place. An interrupted or
+             concurrent install never leaves a half-extracted toolchain at
+             [toolchain_path], and installers never share a tarball path.
+          *)
+          let staging = install_staging_path toolchain_path in
+          let tar_path = Path.(install_dir / Path.v (Path.basename staging ^ "-" ^ tar_filename)) in
+          let cleanup () =
+            let _ = Fs.remove_file tar_path in
+            let _ = Fs.remove_dir_all staging in
+            ()
+          in
+          let result =
+            match Fs.create_dir staging with
+            | Error err ->
+                Error ("Failed to create toolchain staging directory "
+                ^ Path.to_string staging
+                ^ ": "
+                ^ IO.error_message err)
+            | Ok () -> (
+                (* [-f] turns HTTP errors into a failing exit status instead of
+                   saving the error page as the tarball.
+                *)
+                let download_cmd =
+                  Command.make ~args:[ "-fsSL"; "-o"; Path.to_string tar_path; binary_url; ] "curl"
+                in
+                match Command.output download_cmd with
+                | Error (Command.SystemError msg) -> Error ("Failed to download toolchain: " ^ msg)
+                | Ok output when output.Command.status != 0 ->
+                    Error ("Failed to download toolchain from "
+                    ^ binary_url
+                    ^ ": "
+                    ^ String.trim output.Command.stderr)
+                | Ok _ -> (
+                    println "✓ Download complete, extracting...";
+                    let extract_cmd =
+                      Command.make
+                        ~args:[ "-xzf"; Path.to_string tar_path; "-C"; Path.to_string staging; ]
+                        "tar"
+                    in
+                    match Command.output extract_cmd with
+                    | Error (Command.SystemError msg) ->
+                        Error ("Failed to extract toolchain: " ^ msg)
+                    | Ok output when output.Command.status != 0 ->
+                        Error ("Failed to extract toolchain tarball: "
+                        ^ String.trim output.Command.stderr)
+                    | Ok _ -> (
+                        match ensure_manifest_present staging target (Version version) with
+                        | Error msg -> Error msg
+                        | Ok () -> swap_in_toolchain ~staging ~toolchain_path ~target
+                      )
+                  )
               )
-      )
+          in
+          cleanup ();
+          (
+            match result with
+            | Ok () ->
+                println ("✓ OCaml " ^ version ^ " (" ^ target_name ^ ") installed successfully")
+            | Error _ -> ()
+          );
+          result
+        )
+    )
 
 let init = fun ~config ->
   let version = config.Riot_model.Toolchain_config.version in
