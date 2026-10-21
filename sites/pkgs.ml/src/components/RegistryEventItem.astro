@@ -88,12 +88,12 @@ const {
     <div class="grid gap-4 border-t border-border px-4 py-3">
       <dl class="grid gap-3 sm:grid-cols-2">
         <div class="grid gap-1">
-          <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">When</dt>
+          <dt class="text-xs font-medium text-muted-foreground">When</dt>
           <dd class="text-sm text-foreground">{formatEventTimestamp(event.created_at)}</dd>
         </div>
 
         <div class="grid gap-1">
-          <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Event</dt>
+          <dt class="text-xs font-medium text-muted-foreground">Event</dt>
           <dd>
             <span
               class:list={[
@@ -109,7 +109,7 @@ const {
         {
           event.package_name ? (
             <div class="grid gap-1">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Package</dt>
+              <dt class="text-xs font-medium text-muted-foreground">Package</dt>
               <dd class="text-sm text-foreground">{event.package_name}</dd>
             </div>
           ) : null
@@ -118,7 +118,7 @@ const {
         {
           event.package_version ? (
             <div class="grid gap-1">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Version</dt>
+              <dt class="text-xs font-medium text-muted-foreground">Version</dt>
               <dd class="text-sm text-foreground">{event.package_version}</dd>
             </div>
           ) : null
@@ -127,7 +127,7 @@ const {
         {
           event.package_locator ? (
             <div class="grid gap-1 sm:col-span-2">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Locator</dt>
+              <dt class="text-xs font-medium text-muted-foreground">Locator</dt>
               <dd class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-xs text-foreground">
                 {event.package_locator}
               </dd>
@@ -138,7 +138,7 @@ const {
         {
           targetHref ? (
             <div class="grid gap-1 sm:col-span-2">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inspect</dt>
+              <dt class="text-xs font-medium text-muted-foreground">Inspect</dt>
               <dd>
                 <a href={targetHref} class="text-sm font-medium text-accent-foreground hover:text-foreground">
                   {inspectLabel}
@@ -152,7 +152,7 @@ const {
       {
         failureSummary ? (
           <div class="grid gap-2">
-            <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</div>
+            <div class="text-xs font-medium text-muted-foreground">Summary</div>
             <pre class="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-3 py-3 text-xs leading-6 text-foreground">{failureSummary}</pre>
           </div>
         ) : null
@@ -161,7 +161,7 @@ const {
       {
         facts.length > 0 ? (
           <div class="grid gap-2">
-            <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facts</div>
+            <div class="text-xs font-medium text-muted-foreground">Facts</div>
             <div class="flex flex-wrap gap-2 text-sm text-muted-foreground">
               {facts.map((fact) => (
                 <span class="rounded-sm border border-border bg-muted px-2 py-0.5">
@@ -176,7 +176,7 @@ const {
       {
         resultKey || logsKey ? (
           <div class="grid gap-2">
-            <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Artifacts</div>
+            <div class="text-xs font-medium text-muted-foreground">Artifacts</div>
             <div class="grid gap-2">
               {
                 resultKey ? (
@@ -206,7 +206,7 @@ const {
       {
         payloadJson ? (
           <div class="grid gap-2">
-            <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payload</div>
+            <div class="text-xs font-medium text-muted-foreground">Payload</div>
             <pre class="max-h-[28rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-3 py-3 text-xs leading-6 text-foreground">{payloadJson}</pre>
           </div>
         ) : null

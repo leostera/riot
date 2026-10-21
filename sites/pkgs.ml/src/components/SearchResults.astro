@@ -33,7 +33,7 @@ function formatUpdatedAt(value: string): string {
   <div class="grid gap-4">
     <div class="grid gap-1 border-b border-border pb-4">
       <div class="grid gap-1">
-        <h1 class="text-lg font-semibold tracking-tight text-foreground">Search OCaml packages</h1>
+        <h1 class="text-lg font-semibold text-foreground">Search OCaml packages</h1>
         <p class="text-sm text-muted-foreground">
           {response.count} result{response.count === 1 ? "" : "s"} for <code>{query}</code>
         </p>
@@ -59,7 +59,7 @@ function formatUpdatedAt(value: string): string {
                   <div class="flex min-w-0 flex-wrap items-center gap-2">
                     <a
                       href={`/p/${result.package_name}`}
-                      class="text-base font-semibold tracking-tight text-foreground hover:text-primary"
+                      class="text-base font-semibold text-foreground hover:text-primary"
                     >
                       {result.package_name}
                     </a>

@@ -32,9 +32,9 @@ describe("pkgs.ml live e2e", () => {
 
     const html = await response.text();
     expect(html).toContain("pkgs.ml");
-    expect(html).toContain("The Riot Community&apos;s Package Registry");
+    expect(html).toContain("Find OCaml packages for Riot");
     expect(html).toContain('name="q"');
-    expect(html).toContain("Login with GitHub");
+    expect(html).toContain("Log in with GitHub");
     expect(html).toContain(
       `${publicRegistryBaseUrl}/v1/auth/github/start?return_to=${encodeURIComponent(`${pkgsBaseUrl}/`)}`,
     );
@@ -42,10 +42,10 @@ describe("pkgs.ml live e2e", () => {
 
   liveTest("homepage popular categories only showcases existing categories", async () => {
     const categories = await fetchCategoriesView();
-    const html = await pollText(`${pkgsBaseUrl}/`, (page) => page.includes("Popular categories"));
+    const html = await pollText(`${pkgsBaseUrl}/`, (page) => page.includes("Categories"));
 
     if (categories.categories.length === 0) {
-      expect(html).toContain("No categories have been published yet.");
+      expect(html).toContain("No categories yet.");
       return;
     }
 
@@ -62,7 +62,7 @@ describe("pkgs.ml live e2e", () => {
     const html = await pollText(`${pkgsBaseUrl}/`, (page) => page.includes("Popular packages"));
 
     if (popular.packages.length === 0) {
-      expect(html).toContain("No popular packages available yet.");
+      expect(html).toContain("No popular packages yet.");
       return;
     }
 
@@ -77,7 +77,7 @@ describe("pkgs.ml live e2e", () => {
     const html = await pollText(`${pkgsBaseUrl}/`, (page) => page.includes("Recently updated"));
 
     if (recent.packages.length === 0) {
-      expect(html).toContain("No package releases have been indexed yet.");
+      expect(html).toContain("No releases have been indexed yet.");
       return;
     }
 
@@ -161,7 +161,7 @@ describe("pkgs.ml live e2e", () => {
         html.includes(`v${publication.package_version}`) &&
         html.includes(`riot add ${publication.package_name}`),
     );
-    expect(packageHtml).toContain("Discover Packages");
+    expect(packageHtml).toContain("Packages");
     expect(packageHtml).toContain(`riot add ${publication.package_name}`);
 
     const versionHtml = await pollText(
@@ -237,7 +237,7 @@ describe("pkgs.ml live e2e", () => {
 
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain("API Tokens");
+    expect(html).toContain("API tokens");
     expect(html).toContain("Manage API tokens");
   });
 
@@ -276,7 +276,7 @@ describe("pkgs.ml live e2e", () => {
     );
     expect(revisitResponse.status).toBe(200);
     const revisitHtml = await revisitResponse.text();
-    expect(revisitHtml).toContain("API Tokens");
+    expect(revisitHtml).toContain("API tokens");
     expect(revisitHtml).not.toContain("New publish token created");
     expect(revisitHtml).not.toContain(plaintextToken);
 

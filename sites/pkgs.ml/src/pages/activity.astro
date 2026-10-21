@@ -27,7 +27,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
       <div class="grid gap-2 border-b border-border pb-4">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div class="grid gap-1">
-            <h1 class="font-heading text-2xl font-semibold tracking-tight text-foreground">
+            <h1 class="font-heading text-2xl font-semibold text-foreground">
               Registry activity
             </h1>
             <p class="text-base text-muted-foreground">
@@ -112,12 +112,12 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
               <div class="grid gap-4 border-t border-border px-4 py-3">
                 <dl class="grid gap-3 sm:grid-cols-2">
                   <div class="grid gap-1">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">When</dt>
+                    <dt class="text-xs font-medium text-muted-foreground">When</dt>
                     <dd class="text-sm text-foreground">{formatEventTimestamp(event.created_at)}</dd>
                   </div>
 
                   <div class="grid gap-1">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Event</dt>
+                    <dt class="text-xs font-medium text-muted-foreground">Event</dt>
                     <dd>
                       <span class:list={["inline-flex w-fit items-center rounded-sm border px-2 py-0.5 text-xs font-medium", eventTone(event.event_type)]}>
                         {eventLabel(event.event_type)}
@@ -128,7 +128,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                   {
                     event.package_name ? (
                       <div class="grid gap-1">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Package</dt>
+                        <dt class="text-xs font-medium text-muted-foreground">Package</dt>
                         <dd class="text-sm text-foreground">{event.package_name}</dd>
                       </div>
                     ) : null
@@ -137,7 +137,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                   {
                     event.package_version ? (
                       <div class="grid gap-1">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Version</dt>
+                        <dt class="text-xs font-medium text-muted-foreground">Version</dt>
                         <dd class="text-sm text-foreground">{event.package_version}</dd>
                       </div>
                     ) : null
@@ -146,7 +146,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                   {
                     event.package_locator ? (
                       <div class="grid gap-1 sm:col-span-2">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Locator</dt>
+                        <dt class="text-xs font-medium text-muted-foreground">Locator</dt>
                         <dd class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-xs text-foreground">
                           {event.package_locator}
                         </dd>
@@ -157,7 +157,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                   {
                     targetHref ? (
                       <div class="grid gap-1 sm:col-span-2">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inspect</dt>
+                        <dt class="text-xs font-medium text-muted-foreground">Inspect</dt>
                         <dd>
                           <a href={targetHref} class="text-sm font-medium text-primary hover:text-foreground">
                             Open package activity
@@ -171,7 +171,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                 {
                   facts.length > 0 ? (
                     <div class="grid gap-2">
-                      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facts</div>
+                      <div class="text-xs font-medium text-muted-foreground">Facts</div>
                       <div class="flex flex-wrap gap-2 text-sm text-muted-foreground">
                         {facts.map((fact) => (
                           <span class="rounded-sm border border-border bg-muted px-2 py-0.5">
@@ -186,7 +186,7 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
                 {
                   payloadJson ? (
                     <div class="grid gap-2">
-                      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payload</div>
+                      <div class="text-xs font-medium text-muted-foreground">Payload</div>
                       <pre class="overflow-x-auto rounded-md border border-border bg-muted px-3 py-3 text-xs leading-6 text-foreground">{payloadJson}</pre>
                     </div>
                   ) : null
@@ -376,25 +376,25 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
       : "";
     const payloadEntries = Object.entries(event.payload ?? {}).filter(([, value]) => value !== undefined);
     const payloadMarkup = payloadEntries.length > 0
-      ? `<div class="grid gap-2"><div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payload</div><pre class="overflow-x-auto rounded-md border border-border bg-muted px-3 py-3 text-xs leading-6 text-foreground">${escapeHtml(JSON.stringify(event.payload, null, 2))}</pre></div>`
+      ? `<div class="grid gap-2"><div class="text-xs font-medium text-muted-foreground">Payload</div><pre class="overflow-x-auto rounded-md border border-border bg-muted px-3 py-3 text-xs leading-6 text-foreground">${escapeHtml(JSON.stringify(event.payload, null, 2))}</pre></div>`
       : "";
     const factsMarkup = facts.length > 0
-      ? `<div class="grid gap-2"><div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Facts</div><div class="flex flex-wrap gap-2 text-sm text-muted-foreground">${facts.map((fact) => `<span class="rounded-sm border border-border bg-muted px-2 py-0.5">${escapeHtml(fact)}</span>`).join("")}</div></div>`
+      ? `<div class="grid gap-2"><div class="text-xs font-medium text-muted-foreground">Facts</div><div class="flex flex-wrap gap-2 text-sm text-muted-foreground">${facts.map((fact) => `<span class="rounded-sm border border-border bg-muted px-2 py-0.5">${escapeHtml(fact)}</span>`).join("")}</div></div>`
       : "";
     const packageMarkup = href
       ? `<span class="min-w-0 text-sm font-medium text-foreground md:hidden">${escapeHtml(packageLabel(event))}</span><a href="${escapeHtml(href)}" class="hidden min-w-0 text-sm font-medium text-foreground hover:text-primary md:inline-flex">${escapeHtml(packageLabel(event))}</a>`
       : `<span class="min-w-0 text-sm font-medium text-foreground">${escapeHtml(packageLabel(event))}</span>`;
     const inspectMarkup = href
-      ? `<div class="grid gap-1 sm:col-span-2"><dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inspect</dt><dd><a href="${escapeHtml(href)}" class="text-sm font-medium text-primary hover:text-foreground">Open package activity</a></dd></div>`
+      ? `<div class="grid gap-1 sm:col-span-2"><dt class="text-xs font-medium text-muted-foreground">Inspect</dt><dd><a href="${escapeHtml(href)}" class="text-sm font-medium text-primary hover:text-foreground">Open package activity</a></dd></div>`
       : "";
     const locatorMarkup = typeof event.package_locator === "string" && event.package_locator.length > 0
-      ? `<div class="grid gap-1 sm:col-span-2"><dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Locator</dt><dd class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-xs text-foreground">${escapeHtml(event.package_locator)}</dd></div>`
+      ? `<div class="grid gap-1 sm:col-span-2"><dt class="text-xs font-medium text-muted-foreground">Locator</dt><dd class="overflow-x-auto rounded-sm border border-border bg-muted px-2 py-1 text-xs text-foreground">${escapeHtml(event.package_locator)}</dd></div>`
       : "";
     const packageField = event.package_name
-      ? `<div class="grid gap-1"><dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Package</dt><dd class="text-sm text-foreground">${escapeHtml(event.package_name)}</dd></div>`
+      ? `<div class="grid gap-1"><dt class="text-xs font-medium text-muted-foreground">Package</dt><dd class="text-sm text-foreground">${escapeHtml(event.package_name)}</dd></div>`
       : "";
     const versionField = event.package_version
-      ? `<div class="grid gap-1"><dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Version</dt><dd class="text-sm text-foreground">${escapeHtml(event.package_version)}</dd></div>`
+      ? `<div class="grid gap-1"><dt class="text-xs font-medium text-muted-foreground">Version</dt><dd class="text-sm text-foreground">${escapeHtml(event.package_version)}</dd></div>`
       : "";
 
     return `
@@ -415,11 +415,11 @@ const initialAfter = feed.events.length > 0 ? feed.events[0]?.event_id ?? "" : "
         <div class="grid gap-4 border-t border-border px-4 py-3">
           <dl class="grid gap-3 sm:grid-cols-2">
             <div class="grid gap-1">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">When</dt>
+              <dt class="text-xs font-medium text-muted-foreground">When</dt>
               <dd class="text-sm text-foreground">${escapeHtml(formatTimestamp(event.created_at))}</dd>
             </div>
             <div class="grid gap-1">
-              <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Event</dt>
+              <dt class="text-xs font-medium text-muted-foreground">Event</dt>
               <dd><span class="inline-flex w-fit items-center rounded-sm border px-2 py-0.5 text-xs font-medium ${eventTone(event.event_type)}">${escapeHtml(eventLabel(event.event_type))}</span></dd>
             </div>
             ${packageField}

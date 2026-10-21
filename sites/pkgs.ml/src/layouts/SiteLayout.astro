@@ -14,7 +14,7 @@ interface Props {
 
 const {
   title,
-  description = "OCaml package discovery and publishing.",
+  description = "Search, explore, and publish OCaml packages for Riot.",
   showNavSearch = true,
   navSearchQuery = "",
 } = Astro.props;
@@ -23,22 +23,39 @@ const currentUrl = Astro.url.toString();
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="pkgs.ml for agents" />
+    <meta name="theme-color" content="#fbf8f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0d10" media="(prefers-color-scheme: dark)" />
+    <meta property="og:site_name" content="pkgs.ml" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <script is:inline>
+      (() => {
+        let stored = null;
+        try {
+          stored = localStorage.getItem("pkgs-theme");
+        } catch {}
+        const dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const root = document.documentElement;
+        root.dataset.mode = dark ? "dark" : "light";
+        root.classList.toggle("dark", dark);
+      })();
+    </script>
     <title>{title}</title>
     <meta name="description" content={description} />
   </head>
   <body class="bg-background text-foreground antialiased">
     <div class="flex min-h-screen flex-col bg-background text-foreground">
-      <aside class="border-b-2 border-[#151317] bg-[#ffc43d] text-center text-[#151317] shadow-[0_4px_0_rgba(21,19,23,0.12)] [&_*]:text-[#151317]" aria-label="Tech demo notice">
-        <div class="mx-auto flex min-h-10 w-full max-w-6xl flex-col items-center justify-center gap-1 px-4 py-2 sm:flex-row sm:gap-3 sm:px-6">
-          <strong class="font-heading text-base font-black leading-none text-[#151317]">tech-demo</strong>
-          <span class="text-xs font-bold leading-snug text-[#151317]">
-            pkgs.ml is an in-progress preview. Registry data, accounts, publishing, and docs may change before release.
-          </span>
-        </div>
+      <aside class="border-b border-kumo-hairline bg-kumo-elevated" aria-label="Preview notice">
+        <p class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-2 text-center text-[13px] text-kumo-strong sm:px-6">
+          <span class="rounded-full border border-dashed border-kumo-line px-2 py-px text-xs font-medium text-kumo-brand">Tech preview</span>
+          <span>Registry data, accounts, publishing, and docs may change before release.</span>
+        </p>
       </aside>
       <TopNav
         showSearch={showNavSearch}

@@ -1,15 +1,56 @@
-<footer class="border-t border-border bg-background/90">
-  <div class="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-    <div>pkgs.ml · Riot’s OCaml package registry</div>
-    <div class="grid gap-2 sm:flex sm:flex-wrap sm:gap-3">
-      <a class="hover:text-foreground" href="/login">Login</a>
-      <a class="hover:text-foreground" href="/?q=kernel">Search</a>
-      <a class="hover:text-foreground" href="/activity">Activity</a>
-      <a class="hover:text-foreground" href="/stats">Stats</a>
-      <a class="hover:text-foreground" href="/api">API</a>
-      <a class="hover:text-foreground" href="/llms.txt">LLMs</a>
-      <a class="hover:text-foreground" href="/privacy">Privacy</a>
-      <a class="hover:text-foreground" href="https://github.com/leostera/riot" target="_blank" rel="noreferrer">GitHub</a>
+---
+const columns = [
+  {
+    title: "Registry",
+    links: [
+      ["Activity", "/activity"],
+      ["Stats", "/stats"],
+      ["Package docs", "https://docs.pkgs.ml"],
+    ],
+  },
+  {
+    title: "Developers",
+    links: [
+      ["API", "/api"],
+      ["For agents", "/llms.txt"],
+      ["Log in", "/login"],
+    ],
+  },
+  {
+    title: "Riot",
+    links: [
+      ["riot.ml", "https://riot.ml"],
+      ["Source code", "https://github.com/leostera/riot"],
+      ["Privacy", "/privacy"],
+    ],
+  },
+];
+---
+
+<footer class="border-t border-kumo-hairline">
+  <div class="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.5fr_repeat(3,1fr)]">
+    <div class="grid content-start gap-1.5">
+      <span class="flex items-center gap-2 text-kumo-strong">
+        <span aria-hidden="true">📦</span>
+        <span class="font-mono font-semibold">pkgs.ml</span>
+      </span>
+      <p class="text-[13px] text-kumo-subtle">The package registry for the Riot OCaml stack.</p>
     </div>
+    {
+      columns.map((column) => (
+        <nav aria-label={column.title} class="grid content-start gap-2">
+          <h2 class="font-semibold text-kumo-strong">{column.title}</h2>
+          <ul class="grid gap-1.5">
+            {column.links.map(([label, href]) => (
+              <li>
+                <a href={href} class="text-kumo-subtle hover:text-kumo-default">
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))
+    }
   </div>
 </footer>

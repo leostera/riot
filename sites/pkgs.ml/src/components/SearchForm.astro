@@ -11,7 +11,7 @@ interface Props {
 
 const {
   query = "",
-  placeholder = "Search packages, libraries, and tools",
+  placeholder = "Search packages",
   large = false,
   autofocus = false,
 } = Astro.props;
@@ -20,6 +20,7 @@ const {
 <form
   action="/"
   method="get"
+  role="search"
   class:list={[
     "flex items-center gap-2",
     large ? "mx-auto w-full max-w-[600px]" : "w-full",
@@ -31,8 +32,8 @@ const {
     value={query}
     placeholder={placeholder}
     class:list={[
-      "min-w-0 flex-1 rounded-md bg-background text-base shadow-none",
-      large ? "h-11 px-3.5 text-base" : "h-9 px-3 text-base",
+      "min-w-0 flex-1",
+      large ? "h-11 px-3.5" : "h-9 px-3",
     ]}
     autoFocus={autofocus}
     autoComplete="off"
@@ -42,7 +43,7 @@ const {
     type="submit"
     class:list={[
       buttonVariants({ variant: "default", size: "default" }),
-      large ? "h-11 rounded-md shadow-none" : "h-9 rounded-md shadow-none px-4",
+      large ? "h-11 px-5" : "h-9 px-4",
     ]}
   >
     Search

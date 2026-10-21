@@ -84,10 +84,10 @@ export default function StatsMetricChart({ metric, window }: Props) {
     <div className="grid gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="grid gap-1">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Window total</div>
+          <div className="text-xs text-muted-foreground">Window total</div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-semibold tracking-tight text-foreground">
+          <div className="text-lg font-semibold text-foreground">
             {fullNumber.format(metric.total)}
           </div>
         </div>

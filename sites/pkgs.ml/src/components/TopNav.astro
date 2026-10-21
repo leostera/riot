@@ -22,11 +22,11 @@ const loginUrl = buildGitHubLoginUrl(currentUrl);
 const logoutUrl = buildLogoutUrl(currentUrl);
 ---
 
-<header class="relative z-40 border-b border-border bg-background/95">
-  <div class="mx-auto flex w-full max-w-6xl min-w-0 flex-nowrap items-center gap-2 px-4 py-3 sm:gap-3 sm:px-6">
-    <a href="/" class="flex min-w-0 shrink items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+<header class="sticky top-0 z-40 border-b border-kumo-hairline bg-kumo-canvas/85 backdrop-blur-md">
+  <div class="mx-auto flex w-full max-w-6xl min-w-0 flex-nowrap items-center gap-2 h-14 px-4 sm:gap-3 sm:px-6">
+    <a href="/" class="flex min-w-0 shrink items-center gap-2 text-kumo-strong">
       <span aria-hidden="true">📦</span>
-      <span class="truncate">pkgs.ml</span>
+      <span class="truncate font-mono text-[15px] font-semibold">pkgs.ml</span>
     </a>
 
     {
@@ -38,17 +38,17 @@ const logoutUrl = buildLogoutUrl(currentUrl);
               placeholder="Search packages, descriptions, owners, or repositories..."
             />
           </div>
-          <nav class="hidden shrink-0 items-center gap-3 text-sm text-muted-foreground xl:flex">
-            <a href="/activity" class="hover:text-foreground">Activity</a>
-            <a href="/stats" class="hover:text-foreground">Stats</a>
-            <a href="/llms.txt" class="hover:text-foreground">LLMs</a>
+          <nav class="hidden shrink-0 items-center gap-1 text-kumo-subtle xl:flex">
+            <a href="/activity" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">Activity</a>
+            <a href="/stats" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">Stats</a>
+            <a href="/llms.txt" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">For agents</a>
           </nav>
         </div>
       ) : (
-        <nav class="hidden min-w-0 flex-1 items-center justify-center gap-3 text-sm text-muted-foreground lg:flex">
-          <a href="/activity" class="hover:text-foreground">Activity</a>
-          <a href="/stats" class="hover:text-foreground">Stats</a>
-          <a href="/llms.txt" class="hover:text-foreground">LLMs</a>
+        <nav class="hidden min-w-0 flex-1 items-center justify-center gap-1 text-kumo-subtle lg:flex">
+          <a href="/activity" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">Activity</a>
+          <a href="/stats" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">Stats</a>
+          <a href="/llms.txt" class="rounded-md px-2.5 py-1.5 hover:bg-kumo-tint hover:text-kumo-default">For agents</a>
         </nav>
       )
     }
@@ -76,7 +76,7 @@ const logoutUrl = buildLogoutUrl(currentUrl);
           }
         </summary>
 
-        <div class="absolute right-0 top-full z-50 mt-2 min-w-[260px] overflow-hidden rounded-md border border-border bg-background shadow-sm">
+        <div class="absolute right-0 top-full z-50 mt-2 min-w-[260px] overflow-hidden rounded-lg bg-kumo-base shadow-lg ring ring-kumo-line">
           <div class="grid text-sm">
             {
               showSearch ? (
@@ -87,19 +87,19 @@ const logoutUrl = buildLogoutUrl(currentUrl);
                   />
                 </div>
               ) : (
-                <a href="/" class="px-3 py-2 text-foreground hover:bg-muted">
+                <a href="/" class="px-3 py-2 text-foreground hover:bg-kumo-tint">
                   Search
                 </a>
               )
             }
-            <a href="/activity" class="px-3 py-2 text-foreground hover:bg-muted">
+            <a href="/activity" class="px-3 py-2 text-foreground hover:bg-kumo-tint">
               Activity
             </a>
-            <a href="/stats" class="px-3 py-2 text-foreground hover:bg-muted">
+            <a href="/stats" class="px-3 py-2 text-foreground hover:bg-kumo-tint">
               Stats
             </a>
-            <a href="/llms.txt" class="px-3 py-2 text-foreground hover:bg-muted">
-              LLMs
+            <a href="/llms.txt" class="px-3 py-2 text-foreground hover:bg-kumo-tint">
+              For agents
             </a>
             {
               session.authenticated && session.user ? (
@@ -107,29 +107,29 @@ const logoutUrl = buildLogoutUrl(currentUrl);
                   <div class="border-t border-border" />
                   <a
                     href={`/u/${session.user.github_login}`}
-                    class="px-3 py-2 text-foreground hover:bg-muted"
+                    class="px-3 py-2 text-foreground hover:bg-kumo-tint"
                   >
-                    My Profile
+                    Your profile
                   </a>
                   <a
                     href={`/u/${session.user.github_login}/tokens`}
-                    class="px-3 py-2 text-foreground hover:bg-muted"
+                    class="px-3 py-2 text-foreground hover:bg-kumo-tint"
                 >
-                  API Tokens
+                  API tokens
                   </a>
                   <form action={logoutUrl} method="post" class="border-t border-border">
                     <button
                       type="submit"
-                      class="block w-full px-3 py-2 text-left text-foreground hover:bg-muted"
+                      class="block w-full px-3 py-2 text-left text-foreground hover:bg-kumo-tint"
                     >
-                      Logout
+                      Log out
                     </button>
                   </form>
                 </>
               ) : (
                 <>
-                  <a href={loginUrl} class="border-t border-border px-3 py-2 text-foreground hover:bg-muted">
-                    Login with GitHub
+                  <a href={loginUrl} class="border-t border-border px-3 py-2 text-foreground hover:bg-kumo-tint">
+                    Log in with GitHub
                   </a>
                 </>
               )
@@ -142,13 +142,13 @@ const logoutUrl = buildLogoutUrl(currentUrl);
         <button
           type="button"
           class:list={[
-            buttonVariants({ variant: "outline", size: "icon-sm" }),
-            "rounded-md text-muted-foreground",
+            buttonVariants({ variant: "ghost", size: "icon-sm" }),
           ]}
           aria-label="Toggle theme"
           data-theme-toggle
         >
-          <span aria-hidden="true">☼</span>
+          <svg aria-hidden="true" data-icon="sun" class="hidden size-4" viewBox="0 0 256 256" fill="currentColor"><path d="M120 40V16a8 8 0 0 1 16 0v24a8 8 0 0 1-16 0Zm72 88a64 64 0 1 1-64-64 64.07 64.07 0 0 1 64 64Zm-16 0a48 48 0 1 0-48 48 48.05 48.05 0 0 0 48-48ZM58.34 69.66a8 8 0 0 0 11.32-11.32l-16-16a8 8 0 0 0-11.32 11.32Zm0 116.68-16 16a8 8 0 0 0 11.32 11.32l16-16a8 8 0 0 0-11.32-11.32ZM192 72a8 8 0 0 0 5.66-2.34l16-16a8 8 0 0 0-11.32-11.32l-16 16A8 8 0 0 0 192 72Zm5.66 114.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32-11.32ZM48 128a8 8 0 0 0-8-8H16a8 8 0 0 0 0 16h24a8 8 0 0 0 8-8Zm80 80a8 8 0 0 0-8 8v24a8 8 0 0 0 16 0v-24a8 8 0 0 0-8-8Zm112-88h-24a8 8 0 0 0 0 16h24a8 8 0 0 0 0-16Z"/></svg>
+          <svg aria-hidden="true" data-icon="moon" class="size-4" viewBox="0 0 256 256" fill="currentColor"><path d="M233.54 142.23a8 8 0 0 0-8-2 88.08 88.08 0 0 1-109.8-109.8 8 8 0 0 0-10-10 104.84 104.84 0 0 0-52.91 37A104 104 0 0 0 136 224a103.09 103.09 0 0 0 62.52-20.88 104.84 104.84 0 0 0 37-52.91 8 8 0 0 0-1.98-7.98Zm-44.64 48.11A88 88 0 0 1 65.66 67.11a89 89 0 0 1 31.4-26A106 106 0 0 0 96 56a104.11 104.11 0 0 0 104 104 106 106 0 0 0 14.92-1.06 89 89 0 0 1-26.02 31.4Z"/></svg>
           <span class="sr-only">Toggle theme</span>
         </button>
 
@@ -169,26 +169,26 @@ const logoutUrl = buildLogoutUrl(currentUrl);
                 />
               </summary>
 
-              <div class="absolute right-0 top-full z-50 mt-2 min-w-[192px] overflow-hidden rounded-md border border-border bg-background shadow-sm">
+              <div class="absolute right-0 top-full z-50 mt-2 min-w-[192px] overflow-hidden rounded-lg bg-kumo-base shadow-lg ring ring-kumo-line">
                 <div class="grid text-sm">
                   <a
                     href={`/u/${session.user.github_login}`}
-                    class="px-3 py-2 text-foreground hover:bg-muted"
+                    class="px-3 py-2 text-foreground hover:bg-kumo-tint"
                   >
-                    My Profile
+                    Your profile
                   </a>
                   <a
                     href={`/u/${session.user.github_login}/tokens`}
-                    class="px-3 py-2 text-foreground hover:bg-muted"
+                    class="px-3 py-2 text-foreground hover:bg-kumo-tint"
                   >
-                    API Tokens
+                    API tokens
                   </a>
                   <form action={logoutUrl} method="post" class="border-t border-border">
                     <button
                       type="submit"
-                      class="block w-full px-3 py-2 text-left text-foreground hover:bg-muted"
+                      class="block w-full px-3 py-2 text-left text-foreground hover:bg-kumo-tint"
                     >
-                      Logout
+                      Log out
                     </button>
                   </form>
                 </div>
@@ -202,7 +202,7 @@ const logoutUrl = buildLogoutUrl(currentUrl);
                 "rounded-md",
               ]}
             >
-              Login with GitHub
+              Log in with GitHub
             </a>
           )
         }
@@ -214,28 +214,27 @@ const logoutUrl = buildLogoutUrl(currentUrl);
   const root = document.documentElement;
   const buttons = Array.from(document.querySelectorAll("[data-theme-toggle]"));
 
-  const applyTheme = (theme) => {
-    root.classList.toggle("dark", theme === "dark");
-    root.style.colorScheme = theme;
-    localStorage.setItem("pkgs-theme", theme);
-
+  const syncIcons = (theme) => {
     for (const button of buttons) {
-      const icon = button.querySelector("span[aria-hidden='true']");
-      if (icon) {
-        icon.textContent = theme === "dark" ? "☾" : "☼";
-      }
+      button.querySelector("[data-icon=sun]")?.classList.toggle("hidden", theme !== "dark");
+      button.querySelector("[data-icon=moon]")?.classList.toggle("hidden", theme === "dark");
     }
   };
 
-  const initialTheme =
-    localStorage.getItem("pkgs-theme") ??
-    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const applyTheme = (theme) => {
+    root.dataset.mode = theme;
+    root.classList.toggle("dark", theme === "dark");
+    try {
+      localStorage.setItem("pkgs-theme", theme);
+    } catch {}
+    syncIcons(theme);
+  };
 
-  applyTheme(initialTheme);
+  syncIcons(root.dataset.mode === "dark" ? "dark" : "light");
 
   for (const button of buttons) {
     button.addEventListener("click", () => {
-      applyTheme(root.classList.contains("dark") ? "light" : "dark");
+      applyTheme(root.dataset.mode === "dark" ? "light" : "dark");
       const details = button.closest("details");
       if (details instanceof HTMLDetailsElement) {
         details.open = false;

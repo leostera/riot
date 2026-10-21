@@ -1,12 +1,6 @@
 ---
+import { Badge, LayerCard, Text } from "@cloudflare/kumo";
 import SearchForm from "./SearchForm.astro";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import type {
   CategoriesIndexDocument,
   PopularPackagesDocument,
@@ -23,149 +17,136 @@ interface Props {
 
 const { categories, popular, recent, stats } = Astro.props;
 const number = new Intl.NumberFormat("en-US");
+const date = new Intl.DateTimeFormat("en", { year: "numeric", month: "short", day: "numeric" });
+
+const statItems = stats
+  ? [
+      { label: "Package installs", value: stats.total_package_downloads },
+      { label: "Riot installs", value: stats.total_riot_downloads },
+      { label: "OCaml installs", value: stats.total_ocaml_downloads },
+    ]
+  : [];
+
+const showcaseCategories = (categories?.categories ?? []).slice(0, 6);
+const popularPackages = (popular?.packages ?? []).slice(0, 6);
+const recentPackages = (recent?.packages ?? []).slice(0, 6);
 ---
 
-<section class="border-b border-border">
-  <div class="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
-    <div class="mx-auto grid max-w-3xl gap-5 text-center">
-      <h1 class="font-heading text-2xl font-semibold tracking-tight text-foreground">
-        The Riot Community&apos;s Package Registry
-      </h1>
-
-      <SearchForm
-        large
-        autofocus
-        placeholder="Search packages, descriptions, owners, or repositories..."
-      />
-
-      {
-        stats ? (
-          <div class="grid gap-2 sm:grid-cols-3">
-            <div class="rounded-md border border-border bg-card px-4 py-3 text-left">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Riot installs
-              </div>
-              <div class="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                {number.format(stats.total_riot_downloads)}
-              </div>
-            </div>
-            <div class="rounded-md border border-border bg-card px-4 py-3 text-left">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                OCaml installs
-              </div>
-              <div class="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                {number.format(stats.total_ocaml_downloads)}
-              </div>
-            </div>
-            <div class="rounded-md border border-border bg-card px-4 py-3 text-left">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Package installs
-              </div>
-              <div class="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                {number.format(stats.total_package_downloads)}
-              </div>
-            </div>
-          </div>
-        ) : null
-      }
+<section class="relative isolate overflow-hidden border-b border-kumo-hairline">
+  <div
+    aria-hidden="true"
+    class="absolute inset-0 -z-10 [background-image:radial-gradient(50rem_24rem_at_50%_-20%,color-mix(in_oklab,var(--color-kumo-brand)_12%,transparent),transparent_70%)]"
+  >
+  </div>
+  <div class="mx-auto grid w-full max-w-3xl gap-8 px-4 pt-16 pb-14 text-center sm:px-6 sm:pt-20">
+    <div class="grid gap-3">
+      <h1 class="text-3xl leading-tight font-semibold text-kumo-strong sm:text-4xl">Find OCaml packages for Riot</h1>
+      <p class="mx-auto max-w-xl text-base text-kumo-strong">
+        Search the registry, read generated docs, and add a dependency with
+        <code class="riot-inline-code">riot add</code>.
+      </p>
     </div>
+
+    <SearchForm large autofocus placeholder="Search by name, description, or owner" />
+
+    {
+      statItems.length > 0 ? (
+        <dl class="grid grid-cols-3 divide-x divide-kumo-hairline overflow-hidden rounded-lg bg-kumo-base ring ring-kumo-hairline">
+          {statItems.map((item) => (
+            <div class="grid gap-0.5 px-3 py-3 sm:px-5">
+              <dt class="text-xs text-kumo-subtle sm:text-[13px]">{item.label}</dt>
+              <dd class="text-lg font-semibold text-kumo-strong tabular-nums sm:text-xl">{number.format(item.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null
+    }
   </div>
 </section>
 
-<section class="py-8">
-  <div class="mx-auto grid w-full max-w-6xl gap-4 px-4 sm:grid-cols-3 sm:px-6">
-    <Card size="sm" className="rounded-md shadow-none">
-      <CardHeader className="border-b border-border">
-        <CardTitle className="text-base">Popular categories</CardTitle>
-        <CardDescription>Jump into the ecosystem through common areas of development.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+<section class="py-10">
+  <div class="mx-auto grid w-full max-w-6xl gap-4 px-4 sm:px-6 lg:grid-cols-3">
+    <LayerCard>
+      <LayerCard.Secondary>Popular packages</LayerCard.Secondary>
+      <LayerCard.Primary className="p-0">
         {
-          (categories?.categories.length ?? 0) === 0 ? (
-            <p class="text-sm leading-6 text-muted-foreground">No categories have been published yet.</p>
+          popularPackages.length === 0 ? (
+            <p class="px-4 py-3 text-kumo-subtle">No popular packages yet.</p>
           ) : (
-            categories?.categories.slice(0, 6).map((category) => (
-              <article class="grid gap-1 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
-                <div class="text-base font-medium text-foreground">{category.name}</div>
-                <p class="text-sm leading-6 text-muted-foreground">
-                  {category.package_count} package{category.package_count === 1 ? "" : "s"}
-                </p>
-                <div class="flex flex-wrap gap-1">
-                  {category.packages.slice(0, 3).map((packageName) => (
-                    <a
-                      href={`/p/${packageName}`}
-                      class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-                    >
-                      {packageName}
-                    </a>
-                  ))}
-                </div>
-              </article>
-            ))
+            <ul class="divide-y divide-kumo-hairline">
+              {popularPackages.map((item) => (
+                <li>
+                  <a href={item.package_path} class="flex items-start justify-between gap-3 px-4 py-3 hover:bg-kumo-tint">
+                    <span class="grid min-w-0 gap-0.5">
+                      <span class="font-medium text-kumo-strong">{item.package_name}</span>
+                      <span class="truncate text-kumo-subtle">{item.description ?? "OCaml package"}</span>
+                    </span>
+                    <Badge variant="outline" className="shrink-0 font-mono">v{item.latest_version}</Badge>
+                  </a>
+                </li>
+              ))}
+            </ul>
           )
         }
-      </CardContent>
-    </Card>
+      </LayerCard.Primary>
+    </LayerCard>
 
-    <Card size="sm" className="rounded-md shadow-none">
-      <CardHeader className="border-b border-border">
-        <CardTitle className="text-base">Popular packages</CardTitle>
-        <CardDescription>Packages with the strongest usage signal in the registry.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-2">
+    <LayerCard>
+      <LayerCard.Secondary>Recently updated</LayerCard.Secondary>
+      <LayerCard.Primary className="p-0">
         {
-          (popular?.packages.length ?? 0) === 0 ? (
-            <p class="text-sm leading-6 text-muted-foreground">No popular packages available yet.</p>
+          recentPackages.length === 0 ? (
+            <p class="px-4 py-3 text-kumo-subtle">No releases have been indexed yet.</p>
           ) : (
-            popular?.packages.slice(0, 6).map((item) => (
-              <article class="grid gap-1 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="grid gap-1">
-                    <a href={item.package_path} class="text-base font-medium text-foreground hover:text-primary">
-                      {item.package_name}
-                    </a>
-                    <p class="text-sm leading-6 text-muted-foreground">
-                      {item.description ?? "Published OCaml package"}
-                    </p>
+            <ul class="divide-y divide-kumo-hairline">
+              {recentPackages.map((item) => (
+                <li>
+                  <a href={item.package_path} class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-kumo-tint">
+                    <span class="font-medium text-kumo-strong">{item.package_name}</span>
+                    <span class="shrink-0 text-[13px] text-kumo-subtle tabular-nums">
+                      <span class="font-mono text-[0.9em]">v{item.latest_version}</span> · {date.format(new Date(item.updated_at))}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </LayerCard.Primary>
+    </LayerCard>
+
+    <LayerCard>
+      <LayerCard.Secondary>Categories</LayerCard.Secondary>
+      <LayerCard.Primary className="p-0">
+        {
+          showcaseCategories.length === 0 ? (
+            <p class="px-4 py-3 text-kumo-subtle">No categories yet.</p>
+          ) : (
+            <ul class="divide-y divide-kumo-hairline">
+              {showcaseCategories.map((category) => (
+                <li class="grid gap-2 px-4 py-3">
+                  <div class="flex items-baseline justify-between gap-3">
+                    <Text bold>{category.name}</Text>
+                    <span class="text-[13px] text-kumo-subtle tabular-nums">
+                      {category.package_count} package{category.package_count === 1 ? "" : "s"}
+                    </span>
                   </div>
-                  <span class="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    v{item.latest_version}
-                  </span>
-                </div>
-              </article>
-            ))
+                  <div class="flex flex-wrap gap-1.5">
+                    {category.packages.slice(0, 4).map((packageName) => (
+                      <a
+                        href={`/p/${packageName}`}
+                        class="rounded-md bg-kumo-tint px-1.5 py-0.5 font-mono text-xs text-kumo-strong hover:bg-kumo-fill"
+                      >
+                        {packageName}
+                      </a>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )
         }
-      </CardContent>
-    </Card>
-
-    <Card size="sm" className="rounded-md shadow-none">
-      <CardHeader className="border-b border-border">
-        <CardTitle className="text-base">Recently updated</CardTitle>
-        <CardDescription>Fresh registry activity and package updates.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        {
-          (recent?.packages.length ?? 0) === 0 ? (
-            <p class="text-sm leading-6 text-muted-foreground">No package releases have been indexed yet.</p>
-          ) : (
-            recent?.packages.slice(0, 6).map((item) => (
-              <article class="grid gap-1 border-b border-border/70 pb-2 last:border-b-0 last:pb-0">
-                <a href={item.package_path} class="text-base font-medium text-foreground hover:text-primary">
-                  {item.package_name}
-                </a>
-                <p class="text-sm leading-6 text-muted-foreground">
-                  v{item.latest_version} · updated {new Intl.DateTimeFormat("en", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  }).format(new Date(item.updated_at))}
-                </p>
-              </article>
-            ))
-          )
-        }
-      </CardContent>
-    </Card>
+      </LayerCard.Primary>
+    </LayerCard>
   </div>
 </section>
