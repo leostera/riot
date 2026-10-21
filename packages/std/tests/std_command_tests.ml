@@ -13,6 +13,9 @@ let streamed_stdout_payload = "first line\nsecond line\nthird line\n"
 type Runtime.Message.t +=
   | Parallel_command_finished of (int * (unit, string) result)
 
+type Message.t +=
+  | Scheduler_failure_ready
+
 let self_executable = fun () ->
   match Env.args with
   | exe :: _ -> exe
@@ -243,6 +246,36 @@ let test_command_output_handles_parallel_fast_exit_commands = fun _ctx ->
   in
   collect worker_count []
 
+(* Scheduler diagnostics must reach stderr, not vanish and not pollute stdout. *)
+
+let test_scheduler_exception_is_reported_on_stderr = fun _ctx ->
+  let cmd = Command.make (self_executable ()) ~args:[ "scheduler-failure" ] in
+  match Command.output cmd with
+  | Error (Command.SystemError message) -> Error message
+  | Ok output ->
+      if not (String.equal output.stdout "") then
+        Error ("scheduler exception diagnostics leaked into stdout: " ^ output.stdout)
+      else if not (String.contains output.stderr "scheduler-diagnostic-regression") then
+        Error ("scheduler swallowed the process exception diagnostic, stderr: " ^ output.stderr)
+      else if not (String.contains output.stderr "[Scheduler]") then
+        Error "scheduler exception diagnostic lost its context"
+      else
+        Ok ()
+
+let test_scheduler_trace_preserves_stdout_payload = fun _ctx ->
+  let cmd = Command.make (self_executable ()) ~args:[ "scheduler-trace" ] in
+  match Command.output cmd with
+  | Error (Command.SystemError message) -> Error message
+  | Ok output ->
+      if not (Int.equal output.status 0) then
+        Error ("scheduler trace helper failed with status " ^ Int.to_string output.status)
+      else if not (String.equal output.stdout "trace-payload") then
+        Error ("scheduler trace changed stdout payload: " ^ output.stdout)
+      else if not (String.contains output.stderr "[Scheduler.Trace] shutdown") then
+        Error "enabled scheduler tracing produced no shutdown diagnostic"
+      else
+        Ok ()
+
 let meta_tests = [
   Test.case
     "command output drains stdout and stderr without deadlock"
@@ -267,6 +300,10 @@ let meta_tests = [
     ~size:Large
     "command output handles parallel fast exit commands"
     test_command_output_handles_parallel_fast_exit_commands;
+  Test.case "scheduler exceptions report on stderr" test_scheduler_exception_is_reported_on_stderr;
+  Test.case
+    "scheduler tracing preserves stdout payload"
+    test_scheduler_trace_preserves_stdout_payload;
 ]
 
 let capture_main = fun () ->
@@ -293,6 +330,26 @@ let main ~args =
   match args with
   | _ :: "capture-both-streams" :: _ -> capture_main ()
   | _ :: "capture-stdout-lines" :: _ -> capture_stdout_lines_main ()
+  | _ :: "scheduler-failure" :: _ ->
+      let parent = self () in
+      let _child =
+        spawn
+          (fun () ->
+            send parent Scheduler_failure_ready;
+            raise (Failure "scheduler-diagnostic-regression"))
+      in
+      receive
+        ~selector:(fun msg ->
+          match msg with
+          | Scheduler_failure_ready -> Select ()
+          | _ -> Skip)
+        ();
+      sleep (Time.Duration.from_millis 200);
+      Ok ()
+  | _ :: "scheduler-trace" :: _ ->
+      Runtime.enable_trace ();
+      print "trace-payload";
+      Ok ()
   | _ -> meta_main ~args
 
 let () = Runtime.run ~main ~args:Env.args ()
