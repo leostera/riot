@@ -1131,6 +1131,7 @@ describe("riot package registry routes", () => {
 
   test("stats dashboard exposes timeseries, top packages, and recent releases", async () => {
     const { env, db } = makeEnv();
+    const recentDownloadAt = new Date(Date.now() - 60_000).toISOString();
 
     await publishArtifact(env, await makePackageArtifact({
       packageName: "kernel",
@@ -1156,7 +1157,7 @@ describe("riot package registry routes", () => {
       artifact_sha256: "kernelsha",
       source_archive_key: "sources/kernel/0.0.1/kernelsha.tar.gz",
       riot_agent: "riot-docs-pipeline@1.0",
-      downloaded_at: "2026-04-04T08:45:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
     await writePackageDownloadRecord(db as unknown as D1Database, {
       download_id: crypto.randomUUID(),
@@ -1165,7 +1166,7 @@ describe("riot package registry routes", () => {
       artifact_sha256: "kernelsha",
       source_archive_key: "sources/kernel/0.0.1/kernelsha.tar.gz",
       riot_agent: "riot-cli@0.0.5",
-      downloaded_at: "2026-04-04T09:00:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
     await writePackageDownloadRecord(db as unknown as D1Database, {
       download_id: crypto.randomUUID(),
@@ -1174,7 +1175,7 @@ describe("riot package registry routes", () => {
       artifact_sha256: "kernelsha",
       source_archive_key: "sources/kernel/0.0.1/kernelsha.tar.gz",
       riot_agent: "riot-cli@0.0.5",
-      downloaded_at: "2026-04-04T09:15:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
     await writePackageDownloadRecord(db as unknown as D1Database, {
       download_id: crypto.randomUUID(),
@@ -1183,21 +1184,21 @@ describe("riot package registry routes", () => {
       artifact_sha256: "stdsha",
       source_archive_key: "sources/std/0.1.0/stdsha.tar.gz",
       riot_agent: "riot-cli@0.0.5",
-      downloaded_at: "2026-04-04T10:00:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
     await writeBinaryDownloadRecord(db as unknown as D1Database, {
       download_id: crypto.randomUUID(),
       binary_name: "riot",
       object_key: "riot/riot-v0.1.0-aarch64-apple-darwin.tar.gz",
       riot_agent: "riot-docs-pipeline@1.0",
-      downloaded_at: "2026-04-04T10:30:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
     await writeBinaryDownloadRecord(db as unknown as D1Database, {
       download_id: crypto.randomUUID(),
       binary_name: "riot",
       object_key: "riot/riot-v0.1.0-aarch64-apple-darwin.tar.gz",
       riot_agent: "riot-cli@0.0.5",
-      downloaded_at: "2026-04-04T11:00:00.000Z",
+      downloaded_at: recentDownloadAt,
     });
 
     const response = await handleRequest(

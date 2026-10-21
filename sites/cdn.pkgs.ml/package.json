@@ -12,7 +12,7 @@
     "@cloudflare/workers-types": "^4.20260503.1",
     "@types/bun": "latest",
     "typescript": "^5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.100.0"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2"

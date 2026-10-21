@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "cf dev",
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check && tsc --noEmit",
@@ -42,7 +42,8 @@
     "@astrojs/check": "^0.9.8",
     "@cloudflare/workers-types": "^4.20260503.1",
     "@types/bun": "latest",
+    "cf": "^1.0.0-beta.19",
     "typescript": "^5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.100.0"
   }
 }

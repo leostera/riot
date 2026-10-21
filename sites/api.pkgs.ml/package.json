@@ -16,7 +16,7 @@
     "@types/bun": "latest",
     "@types/semver": "^7.7.1",
     "typescript": "^5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.100.0"
   },
   "dependencies": {
     "arctic": "^3.7.0",

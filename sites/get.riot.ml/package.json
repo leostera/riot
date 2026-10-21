@@ -4,13 +4,14 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev": "cf dev",
+    "deploy": "cf deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260503.1",
     "@types/bun": "latest",
+    "cf": "^1.0.0-beta.19",
     "typescript": "^5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.100.0"
   }
 }
