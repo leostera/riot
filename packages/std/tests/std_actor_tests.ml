@@ -4,6 +4,7 @@ type Message.t +=
   | Actor_self_reply of Pid.t
   | Actor_ready of Pid.t
   | Actor_stop
+  | Actor_sleeper_done of int
 
 let await = fun ~what selector ->
   try Ok (receive ~selector ~timeout:(Time.Duration.from_secs 1) ()) with
@@ -87,6 +88,55 @@ let test_actor_spawn_link_reports_abnormal_exit = fun _ctx ->
   | Ok () -> Ok ()
   | Error _ as err -> err
 
+(* Receive timeouts must wake the process even when the timer fires while the
+   process is still installing it or has not parked yet. Zero-length sleeps make
+   the reactor fire the timer in the same tick that schedules it, which used to
+   lose the wakeup and leave the sleeper parked forever.
+*)
+
+let test_sleep_timeouts_always_wake = fun _ctx ->
+  let parent = self () in
+  let sleepers = 16 in
+  let iterations = 400 in
+  for index = 0 to sleepers - 1 do
+    ignore
+      (
+        Actor.spawn
+          (fun () ->
+            for _ = 1 to iterations do
+              sleep (Time.Duration.from_nanos 0)
+            done;
+            send parent (Actor_sleeper_done index);
+            Ok ())
+      )
+  done;
+  let rec collect finished =
+    if finished = sleepers then
+      Ok ()
+    else
+      match (
+        try
+          Ok (
+            receive
+              ~selector:(fun __tmp1 ->
+                match __tmp1 with
+                | Actor_sleeper_done _ -> Select ()
+                | _ -> Skip)
+              ~timeout:(Time.Duration.from_secs 20)
+              ()
+          )
+        with
+        | Receive_timeout -> Error ()
+      ) with
+      | Ok () -> collect (finished + 1)
+      | Error () ->
+          Error (Int.to_string (sleepers - finished)
+          ^ " of "
+          ^ Int.to_string sleepers
+          ^ " sleepers never woke from a receive timeout")
+  in
+  collect 0
+
 let tests =
   Test.[
     case "Actor.self inside spawned actor differs from parent" test_actor_self_in_spawned_actor;
@@ -94,6 +144,7 @@ let tests =
     case
       "Actor.spawn_link reports abnormal exit when trapping exits"
       test_actor_spawn_link_reports_abnormal_exit;
+    case ~size:Large "sleep timeouts always wake the sleeper" test_sleep_timeouts_always_wake;
   ]
 
 let main ~args = Test.Cli.main ~name:"Actor" ~tests ~args ()

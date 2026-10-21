@@ -116,13 +116,15 @@ let remove_file = fun path ->
   |> convert_kernel_result
 
 let remove_dir_all = fun path ->
+  (* Inspect entries with [symlink_metadata] so a symlink to a directory is
+     unlinked instead of followed. Following it would delete the target's
+     contents, possibly outside [path], and then fail to [rmdir] the link.
+  *)
   let rec remove_recursive path =
-    match is_directory path with
+    match symlink_metadata path with
     | Error e -> Error e
-    | Ok false ->
-        (* It's a file *)
-        remove_file path
-    | Ok true -> (
+    | Ok meta when not (Metadata.is_dir meta) -> remove_file path
+    | Ok _ -> (
         (* It's a directory *)
         match ReadDir.open_dir path with
         | Error e -> Error e

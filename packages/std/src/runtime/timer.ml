@@ -22,8 +22,12 @@ type t = {
   mutable status: status;
 }
 
-let make = fun ~now ~duration_nanos ~mode ~action ->
-  let id = Timer_id.make () in
+let make = fun ?id ~now ~duration_nanos ~mode ~action () ->
+  let id =
+    match id with
+    | Some id -> id
+    | None -> Timer_id.make ()
+  in
   let expires_at = Int64.add now duration_nanos in
   {
     id;

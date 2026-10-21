@@ -204,6 +204,9 @@ val mark_syscall_timeout_fired: t -> unit
 (** Atomically read and clear the receive-timeout fired state. *)
 val take_receive_timeout_fired: t -> bool
 
+(** Whether the current receive timeout has fired, without consuming it. *)
+val receive_timeout_fired: t -> bool
+
 (** Atomically read and clear the syscall-timeout fired state. *)
 val take_syscall_timeout_fired: t -> bool
 

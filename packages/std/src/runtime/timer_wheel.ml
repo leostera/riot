@@ -62,9 +62,20 @@ let create = fun ~config ->
     timers_by_id = Runtime_hashmap.create ();
   }
 
+(* Slots are visited starting at [current_slot + 1], so a timer that is due
+   within the current slot (or already due) must go into the next slot. Placing
+   it in [current_slot] would delay it by a full rotation.
+*)
+
 let calculate_slot = fun t expires_at ->
   let delta = Int64.sub expires_at t.current_time in
-  let ticks = Int64.div delta t.slot_duration in
+  let ticks =
+    let ticks = Int64.add (Int64.div delta t.slot_duration) 1L in
+    match Int64.compare ticks 1L with
+    | Order.LT -> 1L
+    | Order.EQ
+    | Order.GT -> ticks
+  in
   if (
     match Int64.compare ticks (Int64.from_int t.num_slots) with
     | Order.LT -> true
@@ -86,8 +97,8 @@ let schedule_timer = fun t timer ->
   | Some slot -> set_slot t ~at:slot ~value:(timer :: get_slot t ~at:slot)
   | None -> t.overflow := timer :: !(t.overflow)
 
-let add_timer = fun t ~now ~duration_nanos ~mode ~action ->
-  let timer = Timer.make ~now ~duration_nanos ~mode ~action in
+let add_timer = fun ?id t ~now ~duration_nanos ~mode ~action ->
+  let timer = Timer.make ?id ~now ~duration_nanos ~mode ~action () in
   schedule_timer t timer;
   timer.id
 
@@ -116,9 +127,14 @@ let tick = fun t ~now ->
     (* Calculate which slot corresponds to 'now' *)
     let ticks_elapsed = Int64.div (Int64.sub now t.current_time) t.slot_duration in
     let ticks_to_process = Int.min (Int64.to_int ticks_elapsed) t.num_slots in
-    (* Process slots from current_slot to new slot *)
+    (* [current_time] only advances by whole slots. Jumping it to [now] would
+       drop the sub-slot remainder, and a reactor that ticks faster than the
+       slot duration would then never advance the wheel at all.
+    *)
+    let advanced_to = Int64.add t.current_time (Int64.mul ticks_elapsed t.slot_duration) in
     for _i = 1 to ticks_to_process do
       t.current_slot <- (t.current_slot + 1) mod t.num_slots;
+      t.current_time <- Int64.add t.current_time t.slot_duration;
       let timers = get_slot t ~at:t.current_slot in
       set_slot t ~at:t.current_slot ~value:[];
       (* Check each timer in this slot *)
@@ -155,8 +171,7 @@ let tick = fun t ~now ->
         | Some slot -> set_slot t ~at:slot ~value:(timer :: get_slot t ~at:slot)
         | None -> still_overflow := timer :: !still_overflow);
   t.overflow := !still_overflow;
-  (* Update current time *)
-  t.current_time <- now;
+  t.current_time <- advanced_to;
   !expired
 
 let next_expiration = fun t ~now ->

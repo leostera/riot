@@ -6,8 +6,9 @@ type t
 (** Create a timing wheel with the given configuration. *)
 val create: config:Config.t -> t
 
-(** Add a timer to the wheel and return its identifier. *)
+(** Add a timer to the wheel and return its identifier ([id] when given). *)
 val add_timer:
+  ?id:Timer.id ->
   t ->
   now:int64 ->
   duration_nanos:int64 ->

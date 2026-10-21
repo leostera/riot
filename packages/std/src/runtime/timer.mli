@@ -35,7 +35,12 @@ type t = {
 }
 
 (** Create a timer with the given clock state, duration, mode, and action. *)
-val make: now:int64 -> duration_nanos:int64 -> mode:mode -> action:action -> t
+
+(**
+   Create a pending timer. Pass [id] when the caller must know the identifier
+   before the timer can fire, for example to record it on a process first.
+*)
+val make: ?id:id -> now:int64 -> duration_nanos:int64 -> mode:mode -> action:action -> unit -> t
 
 (** Return `true` if the timer has been cancelled. *)
 val is_cancelled: t -> bool

@@ -331,6 +331,8 @@ let mark_syscall_timeout_fired = fun t -> Runtime_atomic.set t.syscall_timeout_f
 
 let take_receive_timeout_fired = fun t -> Runtime_atomic.exchange t.receive_timeout_fired false
 
+let receive_timeout_fired = fun t -> Runtime_atomic.get t.receive_timeout_fired
+
 let take_syscall_timeout_fired = fun t -> Runtime_atomic.exchange t.syscall_timeout_fired false
 
 (* Process links and monitors *)

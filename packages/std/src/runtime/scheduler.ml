@@ -501,15 +501,21 @@ let has_pending_reactor_commands = fun t ->
     t
     (fun () -> not (Queue.is_empty t.reactor_commands))
 
-let add_timer = fun t ~now ~duration_nanos ~mode ~action ->
+let add_timer = fun ?id t ~now ~duration_nanos ~mode ~action ->
+  let id =
+    match id with
+    | Some id -> id
+    | None -> Timer_id.make ()
+  in
   if Atomic.get t.stop then
-    Timer_id.make ()
+    id
   else
     let reply = make_response () in
     push_reactor_command
       t
       (
         Add_timer {
+          id;
           now;
           duration_nanos;
           mode;
@@ -653,21 +659,29 @@ let clear_syscall_timeout = fun t proc ->
       Runtime_process.clear_syscall_timeout proc;
       cancel_timer t timer_id
 
+(* Timeout timers are recorded on the process before the reactor learns about
+   them. Otherwise a short timer can fire before the process knows its id, the
+   reactor cannot mark it fired, and the process parks with no timer left.
+*)
+
 let install_receive_timeout = fun t proc secs ->
   match Runtime_process.receive_timeout proc with
   | Some _ -> ()
   | None ->
       let now = monotonic_time_nanos () in
       let duration_nanos = Int64.from_float (secs *. 1_000_000_000.0) in
-      let timer_id =
+      let timer_id = Timer_id.make () in
+      Runtime_process.set_receive_timeout proc timer_id;
+      let _ =
         add_timer
+          ~id:timer_id
           t
           ~now
           ~duration_nanos
           ~mode:Runtime_timer.One_shot
           ~action:(Runtime_timer.Wake_process proc)
       in
-      Runtime_process.set_receive_timeout proc timer_id
+      ()
 
 let install_syscall_timeout = fun t proc secs ->
   match Runtime_process.syscall_timeout proc with
@@ -675,15 +689,18 @@ let install_syscall_timeout = fun t proc secs ->
   | None ->
       let now = monotonic_time_nanos () in
       let duration_nanos = Int64.from_float (secs *. 1_000_000_000.0) in
-      let timer_id =
+      let timer_id = Timer_id.make () in
+      Runtime_process.set_syscall_timeout proc timer_id;
+      let _ =
         add_timer
+          ~id:timer_id
           t
           ~now
           ~duration_nanos
           ~mode:Runtime_timer.One_shot
           ~action:(Runtime_timer.Wake_process proc)
       in
-      Runtime_process.set_syscall_timeout proc timer_id
+      ()
 
 let handle_receive = fun k t proc ~selector ~timeout ->
   let open Proc_state in
@@ -698,8 +715,14 @@ let handle_receive = fun k t proc ~selector ~timeout ->
       | Proc_effect.Infinity -> ()
       | Proc_effect.After secs -> install_receive_timeout t proc secs
     );
+    (* After publishing [Waiting_message], recheck everything that could have
+       tried to wake us while we were still [Running]: a timer that fired in
+       that window marked itself fired but could not reschedule us.
+    *)
     if Runtime_process.try_mark_awaiting_message proc then
-      if Runtime_process.mailbox_count proc = 0 then
+      if
+        Runtime_process.mailbox_count proc = 0 && not (Runtime_process.receive_timeout_fired proc)
+      then
         k Suspend
       else
         (
@@ -1199,13 +1222,14 @@ let process_timers = fun t ->
 let handle_reactor_command = fun t cmd ->
   match cmd with
   | Add_timer {
+      id;
       now;
       duration_nanos;
       mode;
       action;
       reply;
     } ->
-      let timer_id = Timer_wheel.add_timer t.timer_wheel ~now ~duration_nanos ~mode ~action in
+      let timer_id = Timer_wheel.add_timer ~id t.timer_wheel ~now ~duration_nanos ~mode ~action in
       resolve_response reply timer_id
   | Cancel_timer timer_id -> Timer_wheel.cancel_timer t.timer_wheel timer_id
   | Register_io {

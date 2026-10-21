@@ -58,8 +58,12 @@ val shutdown: t -> status:int -> unit
 (** Start worker domains and the reactor, then run until shutdown. *)
 val run: config:Config.t -> main:(unit -> (unit, Process.exit_reason) Kernel.result) -> int
 
-(** Register a timer in the reactor-owned timer wheel. *)
+(**
+   Register a timer in the reactor-owned timer wheel. [id] lets callers record
+   the identifier before the reactor can fire the timer.
+*)
 val add_timer:
+  ?id:Timer.id ->
   t ->
   now:int64 ->
   duration_nanos:int64 ->

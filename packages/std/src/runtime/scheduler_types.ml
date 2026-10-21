@@ -57,6 +57,7 @@ type 'a response = {
 
 type reactor_command =
   | Add_timer of {
+      id: Runtime_timer.id;
       now: int64;
       duration_nanos: int64;
       mode: Runtime_timer.mode;

@@ -154,6 +154,34 @@ let test_with_tempdir_retries_collisions_under_concurrency = fun _ctx ->
   spawn_workers workers;
   collect workers []
 
+let test_remove_dir_all_unlinks_symlinked_directories = fun _ctx ->
+  with_tempdir
+    "std_fs_remove_dir_all"
+    (fun tempdir ->
+      let outside = Path.(tempdir / Path.v "outside") in
+      let kept = Path.(outside / Path.v "kept.txt") in
+      let tree = Path.(tempdir / Path.v "tree") in
+      let inner = Path.(tree / Path.v "lib") in
+      let inner_file = Path.(inner / Path.v "inner.txt") in
+      let io = Result.map_err ~fn:IO.error_message in
+      let* () = io (Fs.create_dir_all outside) in
+      let* () = io (Fs.write "keep me" kept) in
+      let* () = io (Fs.create_dir_all inner) in
+      let* () = io (Fs.write "inner" inner_file) in
+      (* Relative link inside the tree, like a sysroot's lib64 -> lib. *)
+      let* () = io (Fs.symlink ~src:(Path.v "lib") ~dst:Path.(tree / Path.v "lib64")) in
+      (* Absolute link that escapes the tree. *)
+      let* () = io (Fs.symlink ~src:outside ~dst:Path.(tree / Path.v "escape")) in
+      let* () = io (Fs.remove_dir_all tree) in
+      let* tree_exists = io (Fs.exists tree) in
+      let* kept_payload = io (Fs.read_to_string kept) in
+      if tree_exists then
+        Error "expected remove_dir_all to remove the tree"
+      else if not (String.equal kept_payload "keep me") then
+        Error "expected remove_dir_all to leave symlink targets outside the tree intact"
+      else
+        Ok ())
+
 let tests = [
   Test.case "Fs.write persists complete payloads" test_fs_write_roundtrips_large_binary_payload;
   Test.case "Fs.copy overwrites existing destinations" test_fs_copy_overwrites_existing_destination;
@@ -162,6 +190,9 @@ let tests = [
   Test.case
     "Fs.with_tempdir retries collisions under concurrency"
     test_with_tempdir_retries_collisions_under_concurrency;
+  Test.case
+    "Fs.remove_dir_all unlinks symlinked directories"
+    test_remove_dir_all_unlinks_symlinked_directories;
 ]
 
 let main ~args = Test.Cli.main ~name:"std_fs_tests" ~tests ~args ()
