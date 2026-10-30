@@ -3,6 +3,10 @@ open Kernel
 
 (** The reason a process exited. *)
 type exit_reason = exn
+
+(** A monitor target was already absent from the runtime registry. *)
+exception No_process of Pid.t
+
 (** Opaque reference to a monitor registration. *)
 type monitor_ref
 (** Process flags. *)
@@ -221,6 +225,9 @@ val link: t -> Pid.t -> unit
 
 (** Remove a bidirectional link. *)
 val unlink: t -> Pid.t -> unit
+
+(** Allocate a fresh monitor reference without recording a relation. *)
+val make_monitor_ref: unit -> monitor_ref
 
 (** Monitor a process and return the monitor reference. *)
 val monitor: t -> Pid.t -> monitor_ref

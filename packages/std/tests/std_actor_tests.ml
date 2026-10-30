@@ -5,6 +5,7 @@ type Message.t +=
   | Actor_ready of Pid.t
   | Actor_stop
   | Actor_sleeper_done of int
+  | Actor_go
 
 let await = fun ~what selector ->
   try Ok (receive ~selector ~timeout:(Time.Duration.from_secs 1) ()) with
@@ -137,6 +138,86 @@ let test_sleep_timeouts_always_wake = fun _ctx ->
   in
   collect 0
 
+let wait_down = fun reference pid ->
+  receive
+    ~timeout:(Time.Duration.from_secs 1)
+    ~selector:(fun msg ->
+      match msg with
+      | Runtime.Actor.DOWN { ref; pid = actual; reason } when ref = reference
+      && Pid.equal actual pid -> Select reason
+      | _ -> Skip)
+    ()
+
+let is_completed_down = fun child reason ->
+  match reason with
+  | Ok () -> true
+  | Error (Runtime.Actor.No_process pid) -> Pid.equal pid child
+  | Error _ -> false
+
+(* Exit can win the race with monitor registration. Monitoring an actor that
+   already exited (or is gone) must still deliver DOWN, never panic or park.
+*)
+
+let test_monitor_after_completion_returns_down = fun _ctx ->
+  let child = Actor.spawn (fun () -> Ok ()) in
+  let first = Runtime.Actor.monitor child in
+  let _ = wait_down first child in
+  let late = Runtime.Actor.monitor child in
+  match wait_down late child with
+  | reason when is_completed_down child reason -> Ok ()
+  | _ -> Error "late monitor returned an unrelated failure reason"
+  | exception Receive_timeout -> Error "late monitor never delivered DOWN"
+
+let test_monitor_completion_races_return_unique_down = fun _ctx ->
+  let rec loop remaining references =
+    if remaining = 0 then
+      Ok ()
+    else
+      let child = Actor.spawn (fun () -> Ok ()) in
+      let reference = Runtime.Actor.monitor child in
+      if List.any references ~fn:(fun previous -> previous = reference) then
+        Error "monitor registration reused a reference"
+      else
+        match wait_down reference child with
+        | reason when is_completed_down child reason ->
+            loop (remaining - 1) (reference :: references)
+        | _ -> Error "monitor race returned an unrelated failure"
+        | exception Receive_timeout -> Error "monitor race lost DOWN"
+  in
+  loop 256 []
+
+let test_demonitor_before_completion_removes_relation = fun _ctx ->
+  let child =
+    Actor.spawn
+      (fun () ->
+        receive
+          ~selector:(fun msg ->
+            match msg with
+            | Actor_go -> Select ()
+            | _ -> Skip)
+          ();
+        Ok ())
+  in
+  let removed = Runtime.Actor.monitor child in
+  Runtime.Actor.demonitor removed;
+  let retained = Runtime.Actor.monitor child in
+  send child Actor_go;
+  match wait_down retained child with
+  | exception Receive_timeout -> Error "retained monitor never delivered DOWN"
+  | _ -> (
+      try
+        receive
+          ~timeout:(Time.Duration.from_millis 30)
+          ~selector:(fun msg ->
+            match msg with
+            | Runtime.Actor.DOWN { ref; _ } when ref = removed -> Select ()
+            | _ -> Skip)
+          ();
+        Error "demonitored relation delivered DOWN"
+      with
+      | Receive_timeout -> Ok ()
+    )
+
 let tests =
   Test.[
     case "Actor.self inside spawned actor differs from parent" test_actor_self_in_spawned_actor;
@@ -144,6 +225,14 @@ let tests =
     case
       "Actor.spawn_link reports abnormal exit when trapping exits"
       test_actor_spawn_link_reports_abnormal_exit;
+    case "monitoring a completed actor returns DOWN" test_monitor_after_completion_returns_down;
+    case
+      ~size:Large
+      "monitor completion races return unique references and DOWN"
+      test_monitor_completion_races_return_unique_down;
+    case
+      "demonitor before completion removes the relation"
+      test_demonitor_before_completion_removes_relation;
     case ~size:Large "sleep timeouts always wake the sleeper" test_sleep_timeouts_always_wake;
   ]
 

@@ -43,6 +43,10 @@ end
 module Actor: sig
   (** The reason an actor exited. *)
   type exit_reason = exn
+
+  (** A monitor target was already absent from the runtime registry. *)
+  exception No_process of Pid.t
+
   (** Actor flags. *)
   type flag =
     | TrapExit of bool
@@ -113,7 +117,12 @@ module Actor: sig
   (** Unlink the current actor from another actor. *)
   val unlink: Pid.t -> unit
 
-  (** Monitor another actor. *)
+  (**
+     Monitor another actor. Always returns a fresh reference. An absent target
+     immediately delivers [DOWN] with [Error (No_process pid)]; a target whose
+     exit is already recorded delivers its recorded reason. Neither path
+     records a dangling live relation.
+  *)
   val monitor: Pid.t -> Monitor.t
 
   (** Stop monitoring an actor. *)

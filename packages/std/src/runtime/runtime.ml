@@ -24,6 +24,8 @@ module Actor = struct
 
   type exit_reason = Proc.exit_reason
 
+  exception No_process = Proc.No_process
+
   type flag = Proc.flag =
     | TrapExit of bool
 
@@ -63,12 +65,25 @@ module Actor = struct
   let monitor = fun pid ->
     with_current_relations
       (fun t current ->
+        (* Exit can win the race with registration. Deliver DOWN right away
+           with a fresh reference instead of panicking or attaching a monitor
+           to a target whose relations were already drained.
+        *)
+        let completed reason =
+          let ref = Proc.make_monitor_ref () in
+          Proc.send_message current (Proc.Messages.DOWN { ref; pid; reason });
+          ref
+        in
         match Scheduler.get_process t pid with
-        | None -> panic ("Cannot monitor non-existent processs " ^ Pid.to_string pid)
+        | None -> completed (Error (Proc.No_process pid))
         | Some target ->
-            let ref = Proc.monitor current pid in
-            Proc.add_monitored_by target (Proc.pid current) ref;
-            ref)
+            match Proc.state target with
+            | Proc.Exited reason -> completed reason
+            | Proc.Finalized -> completed (Error (Proc.No_process pid))
+            | _ ->
+                let ref = Proc.monitor current pid in
+                Proc.add_monitored_by target (Proc.pid current) ref;
+                ref)
 
   let demonitor = fun ref ->
     with_current_relations

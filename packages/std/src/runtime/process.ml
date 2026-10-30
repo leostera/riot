@@ -5,6 +5,8 @@ module Runtime_atomic = Kernel.Sync.Atomic
 
 type exit_reason = exn
 
+exception No_process of Pid.t
+
 type monitor_ref =
   | Monitor_ref of int
 
