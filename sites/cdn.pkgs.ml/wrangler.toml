@@ -20,15 +20,15 @@ preview_database_id = "3a482dd8-a28f-4f87-a143-46153d492819"
 
 [observability]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01
 
 [observability.logs]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01
 persist = true
 invocation_logs = true
 
 [observability.traces]
 enabled = true
 persist = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01

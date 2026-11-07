@@ -61,15 +61,15 @@ new_sqlite_classes = ["DocsPipelineContainer"]
 
 [observability]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01
 
 [observability.logs]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01
 persist = true
 invocation_logs = true
 
 [observability.traces]
 enabled = false
 persist = true
-head_sampling_rate = 1
+head_sampling_rate = 0.01
