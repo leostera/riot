@@ -3,6 +3,7 @@
   "publisher": "riot-ml",
   "repository": "https://github.com/leostera/riot/",
   "displayName": "Riot ML",
+  "license": "LICENSE.md",
   "description": "VS Code integration for Riot",
   "version": "0.0.1",
   "engines": {
