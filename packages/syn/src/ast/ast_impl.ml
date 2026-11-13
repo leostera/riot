@@ -2606,6 +2606,8 @@ module Expr: sig
         target: t;
         field: Ident.t;
       }
+    | ArrayIndex of { target: t; index: t }
+    | StringIndex of { target: t; index: t }
     | PolyVariant of {
         tag: token;
         payload: t option;
@@ -2745,6 +2747,8 @@ end = struct
         target: t;
         field: Ident.t;
       }
+    | ArrayIndex of { target: t; index: t }
+    | StringIndex of { target: t; index: t }
     | PolyVariant of {
         tag: token;
         payload: t option;
@@ -3110,8 +3114,22 @@ end = struct
     | Syntax_kind.RECORD_EXPR
     | Syntax_kind.RECORD_UPDATE_EXPR ->
         Record { base = record_expr_base expr; fields = record_expr_fields expr }
-    | Syntax_kind.ARRAY_INDEX_EXPR -> Unknown expr
-    | Syntax_kind.STRING_INDEX_EXPR -> Unknown expr
+    | Syntax_kind.ARRAY_INDEX_EXPR -> (
+        match (
+          normalize_expr_option (nth_expr_child expr 0),
+          normalize_expr_option (nth_expr_child expr 1)
+        ) with
+        | (Some target, Some index) -> ArrayIndex { target; index }
+        | _ -> Unknown expr
+      )
+    | Syntax_kind.STRING_INDEX_EXPR -> (
+        match (
+          normalize_expr_option (nth_expr_child expr 0),
+          normalize_expr_option (nth_expr_child expr 1)
+        ) with
+        | (Some target, Some index) -> StringIndex { target; index }
+        | _ -> Unknown expr
+      )
     | Syntax_kind.TYPED_EXPR -> (
         match (
           normalize_expr_option (first_expr_child expr),

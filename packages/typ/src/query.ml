@@ -417,6 +417,12 @@ and find_expression_kind = fun query parent kind ->
       | None -> find_first fields ~fn:(find_record_expression_field query parent)
     )
   | Ast.FieldAccess { receiver; _ } -> find_expression query parent receiver
+  | Ast.ArrayIndex { target; index }
+  | Ast.StringIndex { target; index } -> (
+      match find_expression query parent target with
+      | Some _ as found -> found
+      | None -> find_expression query parent index
+    )
   | Ast.Assign { target; value } -> (
       match find_expression query parent target with
       | Some _ as found -> found

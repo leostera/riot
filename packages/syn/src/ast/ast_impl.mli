@@ -861,6 +861,8 @@ module Expr: sig
         target: t;
         field: Ident.t;
       }
+    | ArrayIndex of { target: t; index: t }
+    | StringIndex of { target: t; index: t }
     | PolyVariant of {
         tag: Token.t;
         payload: t option;

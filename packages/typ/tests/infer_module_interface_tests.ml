@@ -531,6 +531,16 @@ let diagnostics_are_empty source =
         |> String.concat "\n"
       )
 
+let test_external_attributes_are_ignored_by_typechecking _ctx =
+  match infer_interface_diagnostics "external primitive : int -> int = \"primitive\" [@@noalloc]\n" with
+  | Ok [] -> Ok ()
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Error message -> Error message
+
 let test_open_module_resolves_exported_members _ctx =
   diagnostics_are_empty
     {ocaml|
@@ -689,6 +699,59 @@ let invalid = function
         List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
         |> String.concat "\\n"
       )
+
+let test_string_and_array_indexing_typecheck _ctx =
+  diagnostics_are_empty
+    {ocaml|
+let character (text : string) (index : int) : char = text.[index]
+let element (items : int array) (index : int) : int = items.(index)
+let set (items : int array) (index : int) (value : int) = items.(index) <- value
+|ocaml}
+
+let test_array_index_rejects_incompatible_assigned_value _ctx =
+  match infer_source_diagnostics "let set (items : int array) = items.(0) <- true\n" with
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when Int.(span.start
+  < span.end_) ->
+      if String.equal expected "int" && String.equal actual "bool" then
+        Ok ()
+      else
+        Error ("unexpected array assignment mismatch: " ^ expected ^ " vs " ^ actual)
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Error message -> Error message
+
+let test_string_index_rejects_noninteger_index _ctx =
+  match infer_source_diagnostics "let character text = text.[true]\n" with
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when Int.(span.start
+  < span.end_) ->
+      if String.equal expected "int" && String.equal actual "bool" then
+        Ok ()
+      else
+        Error ("unexpected string-index mismatch: " ^ expected ^ " vs " ^ actual)
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Error message -> Error message
+
+let test_array_index_rejects_noninteger_index _ctx =
+  match infer_source_diagnostics "let element items = items.(1.0)\n" with
+  | Ok [ Typ.Diagnostics.Diagnostic.TypeMismatch { span; expected; actual } ] when Int.(span.start
+  < span.end_) ->
+      if String.equal expected "int" && String.equal actual "float" then
+        Ok ()
+      else
+        Error ("unexpected array-index mismatch: " ^ expected ^ " vs " ^ actual)
+  | Ok diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Error message -> Error message
 
 let test_match_case_in_record_field_types_cleanly _ctx =
   diagnostics_are_empty
@@ -916,6 +979,9 @@ let tests =
     case "local values do not become exports" test_local_values_do_not_become_exports;
     case "multiple modules are copied recursively" test_multiple_modules_are_copied_recursively;
     case "signature exports typed declarations" test_infer_signature_exports_typed_declarations;
+    case
+      "external attributes do not affect typechecking"
+      test_external_attributes_are_ignored_by_typechecking;
     case "nested modules and aliases expose typed members" test_infer_nested_modules_and_aliases;
     case "exception declarations provide constructor types" test_infer_exception_declarations;
     case "common expression forms infer their types" test_infer_common_expression_forms;
@@ -939,6 +1005,12 @@ let tests =
       "record field puns lower their value identifier"
       test_record_field_puns_use_the_last_identifier_segment;
     case "record update checks its base type" test_record_update_checks_its_base_type;
+    case "array and string indexing typecheck" test_string_and_array_indexing_typecheck;
+    case "string indexing rejects non-integer indices" test_string_index_rejects_noninteger_index;
+    case "array indexing rejects non-integer indices" test_array_index_rejects_noninteger_index;
+    case
+      "array indexing rejects incompatible assigned values"
+      test_array_index_rejects_incompatible_assigned_value;
     case
       "match case stays inside record field boundary"
       test_match_case_in_record_field_types_cleanly;

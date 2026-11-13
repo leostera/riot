@@ -395,6 +395,8 @@ and infer_expression_node (state: State.t) (expr: expression) =
     | Match match_ -> infer_match state match_
     | Record record -> infer_record state expr record
     | FieldAccess access -> infer_field_access state expr access
+    | ArrayIndex indexed -> infer_array_index state indexed
+    | StringIndex indexed -> infer_string_index state indexed
     | _ ->
         unsupported_syntax state expr.origin "expression form is not supported by typ yet";
         State.fresh_var state
@@ -810,6 +812,41 @@ and infer_field_access state expr access =
         ~on_error:(expression_constraint_diagnostic access.receiver);
       field_type
 
+and infer_array_index state indexed = infer_array_index_element state indexed
+
+and infer_array_index_element state indexed =
+  let target_type = infer_expression state indexed.target in
+  let element_type = State.fresh_var state in
+  unify
+    state
+    ~expected:(Builtin.array element_type)
+    ~actual:target_type
+    ~on_error:(expression_constraint_diagnostic indexed.target);
+  let index_type = infer_expression state indexed.index in
+  unify
+    state
+    ~expected:Builtin.int
+    ~actual:index_type
+    ~on_error:(expression_constraint_diagnostic indexed.index);
+  element_type
+
+and infer_string_index state indexed = infer_string_index_character state indexed
+
+and infer_string_index_character state indexed =
+  let target_type = infer_expression state indexed.target in
+  unify
+    state
+    ~expected:Builtin.string
+    ~actual:target_type
+    ~on_error:(expression_constraint_diagnostic indexed.target);
+  let index_type = infer_expression state indexed.index in
+  unify
+    state
+    ~expected:Builtin.int
+    ~actual:index_type
+    ~on_error:(expression_constraint_diagnostic indexed.index);
+  Builtin.char
+
 and infer_match state match_ =
   let scrutinee_type = infer_expression state match_.scrutinee in
   infer_cases state match_.cases scrutinee_type
@@ -1073,6 +1110,22 @@ and infer_sequence state sequence =
 and infer_assignment state assignment =
   let value_type = infer_expression state assignment.value in
   match assignment.target.kind with
+  | ArrayIndex indexed ->
+      let element_type = infer_array_index_element state indexed in
+      unify
+        state
+        ~expected:element_type
+        ~actual:value_type
+        ~on_error:(expression_constraint_diagnostic assignment.value);
+      Builtin.unit
+  | StringIndex indexed ->
+      let element_type = infer_string_index_character state indexed in
+      unify
+        state
+        ~expected:element_type
+        ~actual:value_type
+        ~on_error:(expression_constraint_diagnostic assignment.value);
+      Builtin.unit
   | FieldAccess access -> (
       let receiver_type = infer_expression state access.receiver in
       match State.get_record_field state ~name:access.field with

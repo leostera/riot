@@ -167,6 +167,86 @@ let test_from_syn_keeps_constructor_expression_payloads _ctx =
       assert_path_string ~expected:"Some" ident
   | _ -> Error "expected Some 1 to lower as constructor expression with payload"
 
+let test_from_syn_keeps_nested_constructor_patterns _ctx =
+  let text = "let use = function | Outer Inner value -> value\n" in
+  let parse_result = Syn.parse ~filename:(Path.v "test.ml") (source_slice text) in
+  let source = Typ.Model.Source.make ~text in
+  let rec describe_pattern (pattern: Ast.pattern) =
+    match pattern.kind with
+    | Constructor { ident; payload } ->
+        let payload =
+          match payload with
+          | Some payload -> describe_pattern payload
+          | None -> ""
+        in
+        "C(" ^ SurfacePath.to_string ident ^ "," ^ payload ^ ")"
+    | Bind ident -> "B(" ^ SurfacePath.to_string ident ^ ")"
+    | _ -> "other"
+  in
+  match Ast.from_parse_result ~source parse_result with
+  | Error diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Ok (Implementation { items = [ item ]; _ }) -> (
+      match item.kind with
+      | Let { bindings = [ binding ]; _ } -> (
+          match binding.expr.kind with
+          | Function { body = Cases [ case ]; _ } -> (
+              match case.pattern.kind with
+              | Constructor { ident = outer; payload = Some inner } -> (
+                  match inner.kind with
+                  | Constructor { ident = inner_constructor; payload = Some binding } -> (
+                      match binding.kind with
+                      | Bind name ->
+                          (match assert_path_string ~expected:"Outer" outer with
+                          | Error _ as error -> error
+                          | Ok () -> (
+                              match assert_path_string ~expected:"Inner" inner_constructor with
+                              | Error _ as error -> error
+                              | Ok () -> assert_path_string ~expected:"value" name
+                            ))
+                      | _ -> Error ("unexpected nested payload: " ^ describe_pattern binding)
+                    )
+                  | _ -> Error "expected nested constructor payload"
+                )
+              | _ -> Error "expected outer constructor pattern with payload"
+            )
+          | _ -> Error "expected function cases"
+        )
+      | _ -> Error "expected one let binding"
+    )
+  | Ok _ -> Error "expected a function with a nested constructor pattern"
+
+let test_from_syn_keeps_package_types _ctx =
+  let text =
+    {ocaml|module type S = sig type t end
+type 'a packed = (module S with type t = 'a)|ocaml}
+  in
+  let parse_result = Syn.parse ~filename:(Path.v "test.ml") (source_slice text) in
+  let source = Typ.Model.Source.make ~text in
+  match Ast.from_parse_result ~source parse_result with
+  | Error diagnostics ->
+      Error (
+        List.map diagnostics ~fn:Typ.Diagnostics.Diagnostic.to_string
+        |> String.concat "\n"
+      )
+  | Ok ast ->
+      match ast with
+      | Implementation {
+          items = [
+              _;
+              {
+                kind = Type [ { definition = { kind = Alias { kind = Package package; _ }; _ }; _ } ];
+                _;
+              };
+          ];
+          _;
+        } ->
+          assert_path_string ~expected:"S" package.module_type
+      | _ -> Error "expected package type to lower with its module type"
+
 let test_fuzz_parse_lower_and_infer = fun _ctx source ->
   let parse_result = Syn.parse ~filename:(Path.v "fuzz.ml") (source_slice source) in
   let model_source = Typ.Model.Source.make ~text:source in
@@ -317,6 +397,10 @@ let tests =
     case
       "from syn keeps constructor expression payloads"
       test_from_syn_keeps_constructor_expression_payloads;
+    case
+      "from syn keeps nested constructor patterns"
+      test_from_syn_keeps_nested_constructor_patterns;
+    case "from syn keeps package types" test_from_syn_keeps_package_types;
     fuzz
       ~size:Large
       "parse lower and infer arbitrary implementation input"

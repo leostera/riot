@@ -571,6 +571,10 @@ and expression_kind =
   | Record of record_expression
   (** Record or object field access. *)
   | FieldAccess of field_access
+  (** Array element lookup. *)
+  | ArrayIndex of index_expression
+  (** String character lookup. *)
+  | StringIndex of index_expression
   (** Assignment expression. *)
   | Assign of assignment
   (** Sequencing expression. *)
@@ -655,6 +659,14 @@ and field_access = {
   receiver: expression;
   (** Field being accessed. *)
   field: ident;
+}
+
+(** Indexed expression payload. *)
+and index_expression = {
+  (** Expression producing the array or string. *)
+  target: expression;
+  (** Integer index expression. *)
+  index: expression;
 }
 
 (** Assignment payload. *)

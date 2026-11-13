@@ -2733,6 +2733,26 @@ let test_match_case_stops_at_record_field_separator = fun _ctx ->
     )
   | None -> Error "expected record field value"
 
+let test_indexing_expression_views _ctx =
+  let root =
+    parse_ml "let character = text.[index]\nlet element = items.(index)\n"
+    |> Result.expect ~msg:"expected indexed expressions"
+  in
+  let expression_at index =
+    nth_structure_item root index
+    |> require_some ~msg:"expected indexed let binding"
+    |> binding_of_structure_item
+    |> Result.expect ~msg:"expected indexed binding"
+    |> body_of_binding
+    |> Result.expect ~msg:"expected indexed expression"
+  in
+  match (Ast.Expr.view (expression_at 0), Ast.Expr.view (expression_at 1)) with
+  | (
+      Ast.Expr.StringIndex { target = _; index = _ },
+      Ast.Expr.ArrayIndex { target = _; index = _ }
+    ) -> Ok ()
+  | _ -> Error "expected Syn to distinguish string and array indexing"
+
 let test_record_field_special_form_boundaries = fun _ctx ->
   let source =
     "let generator = {\n  run =\n    fun rnd size ->\n      let rec try_gen () =\n        match build rnd size with\n        | Some value -> value\n        | None -> try_gen ()\n      in\n      try_gen ();\n}\nlet next = 1\n"
@@ -4290,6 +4310,7 @@ let tests =
     case
       "ast keeps match case bodies within record field boundaries"
       test_match_case_stops_at_record_field_separator;
+    case "ast exposes array and string indexing" test_indexing_expression_views;
     case
       "ast keeps record field special-form bodies within the field boundary"
       test_record_field_special_form_boundaries;

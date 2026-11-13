@@ -440,6 +440,8 @@ and expression_kind =
   | PolyVariant of poly_variant_expression
   | Record of record_expression
   | FieldAccess of field_access
+  | ArrayIndex of index_expression
+  | StringIndex of index_expression
   | Assign of assignment
   | Sequence of sequence
   | If of conditional
@@ -487,6 +489,11 @@ and record_expression_field = {
 and field_access = {
   receiver: expression;
   field: ident;
+}
+
+and index_expression = {
+  target: expression;
+  index: expression;
 }
 
 and assignment = {
@@ -853,9 +860,17 @@ let drop_final_rparen = fun tokens ->
   | _ -> tokens
 
 let type_source_from_tokens = fun tokens ->
-  tokens
-  |> List.map ~fn:token_text
-  |> String.concat " "
+  let rec render acc tokens =
+    match tokens with
+    | quote :: name :: rest when token_kind_is quote Syn.SyntaxKind.QUOTE
+    && token_kind_is name Syn.SyntaxKind.IDENT ->
+        render ((token_text quote ^ token_text name) :: acc) rest
+    | token :: rest -> render (token_text token :: acc) rest
+    | [] ->
+        List.reverse acc
+        |> String.concat " "
+  in
+  render [] tokens
 
 let module_application_from_module_expr = fun node ->
   match Syn.Ast.ModuleExpr.cast node with
@@ -1052,8 +1067,11 @@ type build_context = {
 let make_build_context = fun () -> { poly_variant_type_aliases = [] }
 
 let poly_variant_type_fields_from_node = fun origin node ->
-  poly_variant_tag_names_from_node node
-  |> List.map ~fn:(fun tag -> ({ origin; tag; payload = None }: poly_variant_type_field))
+  if not Syn.SyntaxKind.(Syn.Ast.Node.kind node = VARIANT_TYPE) then
+    []
+  else
+    poly_variant_tag_names_from_node node
+    |> List.map ~fn:(fun tag -> ({ origin; tag; payload = None }: poly_variant_type_field))
 
 let poly_variant_inherited_type_names_from_node = fun node ->
   let (names, _) =
@@ -1075,7 +1093,12 @@ let find_poly_variant_type_alias = fun context name ->
     ~fn:(fun (alias_name, _) -> SurfacePath.equal alias_name name)
 
 let inherited_poly_variant_type_fields_from_node = fun context origin node ->
-  let names = poly_variant_inherited_type_names_from_node node in
+  let names =
+    if Syn.SyntaxKind.(Syn.Ast.Node.kind node = VARIANT_TYPE) then
+      poly_variant_inherited_type_names_from_node node
+    else
+      []
+  in
   if List.is_empty names then
     []
   else
@@ -1188,15 +1211,26 @@ let rec build_core_type = fun context (type_expr: Syn.Ast.TypeExpr.t) ->
           })
     | Syn.Ast.TypeExpr.Alias { typ; _ } -> build_core_type context typ
     | Syn.Ast.TypeExpr.Unknown node -> (
-        match poly_variant_type_fields_from_node origin node with
-        | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
-        | [] -> (
-            match inherited_poly_variant_type_fields_from_node context origin node with
+        let tokens =
+          Syn.Ast.Node.fold_token node ~init:[] ~fn:(fun token tokens -> Continue (token :: tokens))
+          |> List.reverse
+        in
+        match tokens_after_token_kind Syn.SyntaxKind.MODULE_KW tokens with
+        | Some tokens ->
+            let tokens = drop_final_rparen tokens in
+            let package_type = build_package_type_from_ascription_tokens context origin tokens in
+            make_core_type origin (Package package_type)
+        | None -> (
+            match poly_variant_type_fields_from_node origin node with
             | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
             | [] -> (
-                match Syn.Ast.TypeExpr.inner_without_attribute_suffix type_expr with
-                | Some inner -> build_core_type context inner
-                | None -> unsupported_node node (node_summary node)
+                match inherited_poly_variant_type_fields_from_node context origin node with
+                | _ :: _ as fields -> make_core_type origin (PolyVariant fields)
+                | [] -> (
+                    match Syn.Ast.TypeExpr.inner_without_attribute_suffix type_expr with
+                    | Some inner -> build_core_type context inner
+                    | None -> unsupported_node node (node_summary node)
+                  )
               )
           )
       )
@@ -1458,6 +1492,41 @@ and build_first_class_module_pattern = fun context origin (syntax_pattern: Syn.A
       package_type = first_class_package_type_from_tokens context origin ?binder tokens;
     })
 
+and build_construct_pattern_chain context origin syntax_pattern =
+  let rec flatten syntax_pattern =
+    let node = Syn.Ast.Pattern.as_node syntax_pattern in
+    if Syn.SyntaxKind.(Syn.Ast.Node.kind node = CONSTRUCT_PATTERN) then
+      Syn.Ast.Pattern.fold_child_pattern
+        syntax_pattern
+        ~init:[]
+        ~fn:(fun child patterns -> Continue (child :: patterns))
+      |> List.reverse
+      |> List.flat_map ~fn:flatten
+    else
+      [ syntax_pattern ]
+  in
+  let rec build = function
+    | [] -> build_failed origin "constructor pattern has no head"
+    | [ syntax_pattern ] -> build_pattern context syntax_pattern
+    | syntax_pattern :: rest ->
+        let constructor =
+          match Syn.Ast.Pattern.view syntax_pattern with
+          | Syn.Ast.Pattern.Constructor { constructor; payload = None } ->
+              ident_from_syn_ident constructor
+          | Syn.Ast.Pattern.Ident { ident } -> ident_from_syn_ident ident
+          | _ -> build_failed origin "constructor application head is not a constructor"
+        in
+        let payload = build rest in
+        let constructor_origin = origin_from_node (Syn.Ast.Pattern.as_node syntax_pattern) in
+        let constructor_origin = {
+          constructor_origin with
+          span = Syn.Span.union constructor_origin.span payload.origin.span;
+        }
+        in
+        make_pattern constructor_origin (Constructor { ident = constructor; payload = Some payload })
+  in
+  build (flatten syntax_pattern)
+
 and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
   let origin = origin_from_node (Syn.Ast.Pattern.as_node syntax_pattern) in
   (
@@ -1571,6 +1640,8 @@ and build_pattern = fun context (syntax_pattern: Syn.Ast.Pattern.t) ->
     | Syn.Ast.Pattern.Error node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Unknown node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = LOCAL_OPEN_PATTERN) ->
         build_local_open_pattern context origin syntax_pattern
+    | Syn.Ast.Pattern.Unknown node when Syn.SyntaxKind.(Syn.Ast.Node.kind node = CONSTRUCT_PATTERN) ->
+        build_construct_pattern_chain context origin syntax_pattern
     | Syn.Ast.Pattern.Unknown node -> unsupported_node node (node_summary node)
     | Syn.Ast.Pattern.Array _
     | Syn.Ast.Pattern.Lazy _ ->
@@ -1794,6 +1865,20 @@ and build_expression = fun context (syntax_expression: Syn.Ast.Expr.t) ->
         }
         in
         make_expression origin (FieldAccess { receiver; field = ident_from_syn_ident field })
+    | Syn.Ast.Expr.ArrayIndex { target; index } ->
+        make_expression
+          origin
+          (ArrayIndex {
+            target = build_expression context target;
+            index = build_expression context index;
+          })
+    | Syn.Ast.Expr.StringIndex { target; index } ->
+        make_expression
+          origin
+          (StringIndex {
+            target = build_expression context target;
+            index = build_expression context index;
+          })
     | Syn.Ast.Expr.Assign { target; value; _ } ->
         make_expression
           origin
@@ -2499,7 +2584,8 @@ and build_structure_item = fun context (item: Syn.Ast.StructureItem.t) ->
 and build_structure_item_option = fun context (item: Syn.Ast.StructureItem.t) ->
   match Syn.Ast.StructureItem.view item with
   | Error _
-  | Unknown _ -> None
+  | Unknown _
+  | Attribute _ -> None
   | _ -> Some (build_structure_item context item)
 
 and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
@@ -2545,7 +2631,8 @@ and build_signature_item = fun context (item: Syn.Ast.SignatureItem.t) ->
 and build_signature_item_option = fun context (item: Syn.Ast.SignatureItem.t) ->
   match Syn.Ast.SignatureItem.view item with
   | Error _
-  | Unknown _ -> None
+  | Unknown _
+  | Attribute _ -> None
   | _ -> Some (build_signature_item context item)
 
 let from_parse_result = fun ~source:_ (parse_result: Syn.Parser.parse_result) ->
